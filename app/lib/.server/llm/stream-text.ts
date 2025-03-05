@@ -28,6 +28,7 @@ export async function streamText(props: {
   contextFiles?: FileMap;
   summary?: string;
   messageSliceId?: number;
+  vectorDbExamples?: FileMap;
 }) {
   const {
     messages,
@@ -40,6 +41,7 @@ export async function streamText(props: {
     contextOptimization,
     contextFiles,
     summary,
+    vectorDbExamples,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -116,6 +118,17 @@ ${codeContext}
 ---
 `;
 
+    if (vectorDbExamples && Object.keys(vectorDbExamples).length > 0) {
+      const examplesContext = createFilesContext(vectorDbExamples, true);
+      systemPrompt = `${systemPrompt}
+Below are relevant code examples that might help with the current request:
+EXAMPLES:
+---
+${examplesContext}
+---
+`;
+    }
+
     if (summary) {
       systemPrompt = `${systemPrompt}
       below is the chat history till now
@@ -138,8 +151,6 @@ ${props.summary}
   }
 
   logger.info(`Sending llm call to ${provider.name} with model ${modelDetails.name}`);
-
-  // console.log(systemPrompt,processedMessages);
 
   return await _streamText({
     model: provider.getModelInstance({

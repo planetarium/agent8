@@ -1,5 +1,7 @@
+import { openai } from '@ai-sdk/openai';
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { useLoaderData, useSearchParams, useFetcher } from '@remix-run/react';
+import { embed } from 'ai';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { ClientOnly } from 'remix-utils/client-only';
@@ -24,34 +26,83 @@ interface Record {
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1', 10);
+  const searchQuery = url.searchParams.get('query') || '';
+  const searchMode = url.searchParams.get('mode') || 'match';
   const from = (page - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
 
-  const { count } = await supabase.from('codebase').select('*', { count: 'exact', head: true });
+  let data: any[] = [];
+  let count = 0;
+  let error = null;
 
-  // 페이지에 해당하는 레코드 조회
-  const { data, error } = await supabase
-    .from('codebase')
-    .select('id, server_code, client_code, description, metadata, created_at')
-    .order('id', { ascending: false })
-    .range(from, to);
+  try {
+    if (searchMode === 'similarity' && searchQuery) {
+      const { embedding } = await embed({
+        model: openai.embedding('text-embedding-ada-002'),
+        value: searchQuery,
+      });
 
-  if (error) {
-    return json({
-      records: [],
-      totalPages: 0,
-      currentPage: page,
-      error: error.message,
-    });
+      const { data: similarityData, error: similarityError } = await supabase.rpc('match_codebase', {
+        query_embedding: embedding,
+        match_count: 10,
+        filter: {},
+      });
+
+      console.log(similarityData);
+
+      if (similarityError) {
+        throw similarityError;
+      }
+
+      data = similarityData || [];
+      count = data.length;
+    } else {
+      // 일반 검색 또는 전체 목록
+      let query = supabase
+        .from('codebase')
+        .select('id, server_code, client_code, description, metadata, created_at', { count: 'exact' });
+
+      // 검색어가 있으면 description에서 매칭
+      if (searchQuery && searchMode === 'match') {
+        query = query.ilike('description', `%${searchQuery}%`);
+      }
+
+      // 전체 개수 조회
+      const { data: countResult, error: countError } = await supabase
+        .from('codebase')
+        .select('count', { count: 'exact', head: true });
+
+      if (countError) {
+        throw countError;
+      }
+
+      const totalCount = countResult?.[0]?.count || 0;
+
+      count = totalCount || 0;
+
+      // 페이지에 해당하는 레코드 조회
+      const { data: pageData, error: dataError } = await query.order('id', { ascending: false }).range(from, to);
+
+      if (dataError) {
+        throw dataError;
+      }
+
+      data = pageData || [];
+    }
+  } catch (e: any) {
+    error = e.message;
+    data = [];
   }
 
-  const totalPages = Math.ceil((count || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(count / ITEMS_PER_PAGE);
 
   return json({
-    records: data || [],
+    records: data,
     totalPages,
     currentPage: page,
-    error: null,
+    searchQuery,
+    searchMode,
+    error,
   });
 }
 
@@ -60,6 +111,8 @@ interface ThemedContentProps {
   records: Record[];
   totalPages: number;
   currentPage: number;
+  searchQuery: string;
+  searchMode: string;
   clientCode: string;
   setClientCode: (code: string) => void;
   serverCode: string;
@@ -72,6 +125,9 @@ interface ThemedContentProps {
   handleInsert: (e: React.FormEvent) => Promise<void>;
   handleDelete: (id: string) => Promise<void>;
   handlePageChange: (page: number) => void;
+  handleSearch: (e: React.FormEvent) => void;
+  setSearchQuery: (query: string) => void;
+  setSearchMode: (mode: string) => void;
   refreshData: () => void;
 }
 
@@ -80,6 +136,8 @@ function ThemedContent({
   records,
   totalPages,
   currentPage,
+  searchQuery,
+  searchMode,
   clientCode,
   setClientCode,
   serverCode,
@@ -92,6 +150,9 @@ function ThemedContent({
   handleInsert,
   handleDelete,
   handlePageChange,
+  handleSearch,
+  setSearchQuery,
+  setSearchMode,
   refreshData,
 }: ThemedContentProps) {
   const isDarkMode = true;
@@ -160,10 +221,60 @@ function ThemedContent({
         </form>
       </div>
 
+      {/* 검색 폼 */}
+      <div className={`${styles.bgClass} p-4 rounded-lg mb-8 border ${styles.borderClass}`}>
+        <h2 className={`text-xl font-semibold mb-4 ${styles.textClass}`}>Search Records</h2>
+        <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
+          <div className="flex-grow">
+            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Search Query</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Enter search terms"
+              className={`w-full p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} ${styles.textClass}`}
+            />
+          </div>
+          <div>
+            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Search Mode</label>
+            <select
+              value={searchMode}
+              onChange={(e) => setSearchMode(e.target.value)}
+              className={`p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} ${styles.textClass}`}
+            >
+              <option value="match">Keyword Match</option>
+              <option value="similarity">Similarity Search</option>
+            </select>
+          </div>
+          <div>
+            <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+              Search
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSearchMode('match');
+                refreshData();
+              }}
+              className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded"
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* 레코드 목록 */}
       <div className={`${styles.bgClass} p-4 rounded-lg border ${styles.borderClass}`}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className={`text-xl font-semibold ${styles.textClass}`}>Records</h2>
+          <h2 className={`text-xl font-semibold ${styles.textClass}`}>
+            Records{' '}
+            {searchQuery &&
+              `- Search: "${searchQuery}" (${searchMode === 'match' ? 'Keyword Match' : 'Similarity Search'})`}
+          </h2>
           <button
             onClick={refreshData}
             className="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded text-sm"
@@ -266,12 +377,21 @@ function ThemedContent({
 }
 
 export default function vectorDBManager() {
-  const { records, totalPages, currentPage, error } = useLoaderData<typeof loader>();
+  const {
+    records,
+    totalPages,
+    currentPage,
+    searchQuery: initialSearchQuery,
+    searchMode: initialSearchMode,
+    error,
+  } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<{
     records: Record[];
     totalPages: number;
     currentPage: number;
+    searchQuery: string;
+    searchMode: string;
     error: string | null;
   }>();
   const isDarkMode = true;
@@ -281,6 +401,8 @@ export default function vectorDBManager() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('code');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
+  const [searchMode, setSearchMode] = useState(initialSearchMode || 'match');
 
   // 페이지 로드 시 테마 설정
   useEffect(() => {
@@ -295,14 +417,31 @@ export default function vectorDBManager() {
 
   // 페이지 변경 핸들러
   const handlePageChange = (newPage: number) => {
-    searchParams.set('page', newPage.toString());
-    setSearchParams(searchParams);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('page', newPage.toString());
+    setSearchParams(newParams);
+  };
+
+  // 검색 핸들러
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const newParams = new URLSearchParams();
+    newParams.set('page', '1'); // 검색 시 첫 페이지로 이동
+
+    if (searchQuery) {
+      newParams.set('query', searchQuery);
+    }
+
+    newParams.set('mode', searchMode);
+    setSearchParams(newParams);
   };
 
   // 데이터 새로고침 함수
   const refreshData = () => {
-    // useFetcher를 사용하여 현재 페이지 데이터를 다시 로드
-    fetcher.load(`/vector-db?page=${currentPage}`);
+    // 현재 검색 조건으로 데이터를 다시 로드
+    const queryString = searchParams.toString();
+    fetcher.load(`/vector-db${queryString ? `?${queryString}` : ''}`);
   };
 
   // 레코드 삽입 핸들러
@@ -399,6 +538,8 @@ export default function vectorDBManager() {
             records={(fetcher.data?.records || records) as Record[]}
             totalPages={fetcher.data?.totalPages || totalPages}
             currentPage={fetcher.data?.currentPage || currentPage}
+            searchQuery={searchQuery}
+            searchMode={searchMode}
             clientCode={clientCode}
             setClientCode={setClientCode}
             serverCode={serverCode}
@@ -411,6 +552,9 @@ export default function vectorDBManager() {
             handleInsert={handleInsert}
             handleDelete={handleDelete}
             handlePageChange={handlePageChange}
+            handleSearch={handleSearch}
+            setSearchQuery={setSearchQuery}
+            setSearchMode={setSearchMode}
             refreshData={refreshData}
           />
         )}

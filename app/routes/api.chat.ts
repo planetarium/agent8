@@ -11,6 +11,7 @@ import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
+import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -72,6 +73,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
+        let vectorDbExamples: FileMap = {};
 
         if (messages.length > 3) {
           messageSliceId = messages.length - 3;
@@ -119,6 +121,46 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             summary,
             chatId: messages.slice(-1)?.[0]?.id,
           } as ContextAnnotation);
+
+          // Search vector database for relevant code examples
+          logger.debug('Searching Vector Database for Examples');
+          dataStream.writeData({
+            type: 'progress',
+            label: 'vectordb',
+            status: 'in-progress',
+            order: progressCounter++,
+            message: 'Searching for Code Examples',
+          } satisfies ProgressAnnotation);
+
+          vectorDbExamples = await searchVectorDB({
+            messages: [...messages],
+            env: context.cloudflare?.env,
+            apiKeys,
+            files,
+            providerSettings,
+            promptId,
+            contextOptimization,
+            summary,
+            onFinish(resp) {
+              if (resp.usage) {
+                logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
+                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+              }
+            },
+          });
+
+          const exampleCount = Object.keys(vectorDbExamples).length;
+          logger.debug(`Found ${exampleCount} relevant code examples`);
+
+          dataStream.writeData({
+            type: 'progress',
+            label: 'vectordb',
+            status: 'complete',
+            order: progressCounter++,
+            message: `Found ${exampleCount} Code Examples`,
+          } satisfies ProgressAnnotation);
 
           // Update context buffer
           logger.debug('Updating Context Buffer');
@@ -178,6 +220,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           // logger.debug('Code Files Selected');
         }
+
+        dataStream.writeData({
+          type: 'progress',
+          label: 'KARL TEST',
+          status: 'in-progress',
+          order: progressCounter++,
+          message: 'KARL TEST',
+        } satisfies ProgressAnnotation);
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        dataStream.writeData({
+          type: 'progress',
+          label: 'KARL TEST',
+          status: 'complete',
+          order: progressCounter++,
+          message: 'KARL TEST',
+        } satisfies ProgressAnnotation);
 
         // Stream the text
         const options: StreamingOptions = {
@@ -242,6 +301,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               contextFiles: filteredFiles,
               summary,
               messageSliceId,
+              vectorDbExamples,
             });
 
             result.mergeIntoDataStream(dataStream);
@@ -281,6 +341,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           contextFiles: filteredFiles,
           summary,
           messageSliceId,
+          vectorDbExamples,
         });
 
         (async () => {
