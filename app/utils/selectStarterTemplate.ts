@@ -197,10 +197,15 @@ export async function getTemplates(templateName: string, title?: string) {
     return null;
   }
 
-  const githubRepo = template.githubRepo;
-  const files = await getGitHubRepoContent(githubRepo);
+  const files = await getGitHubRepoContent(template.githubRepo, template.path);
 
   let filteredFiles = files;
+
+  //remove default path from files
+  filteredFiles = filteredFiles.map((x) => ({
+    ...x,
+    path: x.path.replace(template.path + '/', ''),
+  }));
 
   /*
    * ignoring common unwanted files
