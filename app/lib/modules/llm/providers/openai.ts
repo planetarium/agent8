@@ -57,7 +57,7 @@ export default class OpenAIProvider extends BaseProvider {
       name: m.id,
       label: `${m.id}`,
       provider: this.name,
-      maxTokenAllowed: m.context_window || 32000,
+      maxTokenAllowed: m.context_window || 16384,
     }));
   }
 
