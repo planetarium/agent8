@@ -1,11 +1,11 @@
 import { openai } from '@ai-sdk/openai';
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { useLoaderData, useSearchParams, useFetcher } from '@remix-run/react';
+import { createClient } from '@supabase/supabase-js';
 import { embed } from 'ai';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { ClientOnly } from 'remix-utils/client-only';
-import { supabase } from '~/utils/supabase';
 
 // 페이지당 항목 수
 const ITEMS_PER_PAGE = 20;
@@ -23,7 +23,14 @@ interface Record {
 }
 
 // 로더 함수: 데이터 조회 및 페이징 처리
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.cloudflare?.env as Env;
+  console.log(context.cloudflare, env);
+
+  const supabase = createClient(
+    env!.SUPABASE_URL || process.env.SUPABASE_URL!,
+    env!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1', 10);
   const searchQuery = url.searchParams.get('query') || '';

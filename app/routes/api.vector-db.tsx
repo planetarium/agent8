@@ -1,9 +1,17 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { embed } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { supabase } from '~/utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { createOpenAI } from '@ai-sdk/openai';
 
-export async function action({ request }: LoaderFunctionArgs) {
+export async function action({ request, context }: LoaderFunctionArgs) {
+  const env = context.cloudflare.env as Env;
+  const supabase = createClient(
+    env.SUPABASE_URL || process.env.SUPABASE_URL!,
+    env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+  const openai = createOpenAI({
+    apiKey: env.OPENAI_API_KEY || process?.env?.OPENAI_API_KEY,
+  });
   const formData = await request.formData();
   const intent = formData.get('intent');
 
