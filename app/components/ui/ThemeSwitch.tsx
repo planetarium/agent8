@@ -1,29 +1,10 @@
-import { useStore } from '@nanostores/react';
-import { memo, useEffect, useState } from 'react';
-import { themeStore, toggleTheme } from '~/lib/stores/theme';
-import { IconButton } from './IconButton';
+import { memo } from 'react';
 
 interface ThemeSwitchProps {
   className?: string;
 }
 
-export const ThemeSwitch = memo(({ className }: ThemeSwitchProps) => {
-  const theme = useStore(themeStore);
-  const [domLoaded, setDomLoaded] = useState(false);
-
-  useEffect(() => {
-    setDomLoaded(true);
-  }, []);
-
-  return (
-    domLoaded && (
-      <IconButton
-        className={className}
-        icon={theme === 'dark' ? 'i-ph-sun-dim-duotone' : 'i-ph-moon-stars-duotone'}
-        size="xl"
-        title="Toggle Theme"
-        onClick={toggleTheme}
-      />
-    )
-  );
+// 항상 다크 테마를 사용하므로 테마 전환 버튼을 렌더링하지 않습니다
+export const ThemeSwitch = memo((_props: ThemeSwitchProps) => {
+  return null;
 });

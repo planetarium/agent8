@@ -9,16 +9,16 @@ export function themeIsDark() {
   return themeStore.get() === 'dark';
 }
 
-export const DEFAULT_THEME = 'light';
+export const DEFAULT_THEME = 'dark';
 
 export const themeStore = atom<Theme>(initStore());
 
 function initStore() {
   if (!import.meta.env.SSR) {
-    const persistedTheme = localStorage.getItem(kTheme) as Theme | undefined;
-    const themeAttribute = document.querySelector('html')?.getAttribute('data-theme');
+    localStorage.setItem(kTheme, 'dark');
+    document.querySelector('html')?.setAttribute('data-theme', 'dark');
 
-    return persistedTheme ?? (themeAttribute as Theme) ?? DEFAULT_THEME;
+    return 'dark' as Theme;
   }
 
   return DEFAULT_THEME;
@@ -26,18 +26,19 @@ function initStore() {
 
 export function toggleTheme() {
   const currentTheme = themeStore.get();
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-  // Update the theme store
+  if (currentTheme === 'dark') {
+    return;
+  }
+
+  const newTheme: Theme = 'dark';
+
   themeStore.set(newTheme);
 
-  // Update localStorage
   localStorage.setItem(kTheme, newTheme);
 
-  // Update the HTML attribute
   document.querySelector('html')?.setAttribute('data-theme', newTheme);
 
-  // Update user profile if it exists
   try {
     const userProfile = localStorage.getItem('bolt_user_profile');
 
