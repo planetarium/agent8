@@ -6,6 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { createDefaultEnv } from '~/lib/webcontainer/defaultEnv';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -70,6 +71,7 @@ export class ActionRunner {
   runnerId = atom<string>(`${Date.now()}`);
   actions: ActionsMap = map({});
   onAlert?: (alert: ActionAlert) => void;
+  #envFileCreated = false;
 
   constructor(
     webcontainerPromise: Promise<WebContainer>,
@@ -147,6 +149,16 @@ export class ActionRunner {
     this.#updateAction(actionId, { status: 'running' });
 
     try {
+      if (!this.#envFileCreated) {
+        try {
+          const webcontainerInstance = await this.#webcontainer;
+          await createDefaultEnv(webcontainerInstance);
+          this.#envFileCreated = true;
+        } catch (error) {
+          console.warn('Failed to create .env file before action execution:', error);
+        }
+      }
+
       switch (action.type) {
         case 'shell': {
           await this.#runShellAction(action);
