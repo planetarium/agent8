@@ -6,7 +6,6 @@ export const loader = async ({ request: _request }: LoaderFunctionArgs) => {
     JSON.stringify({
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
     }),
     {
       status: 200,
