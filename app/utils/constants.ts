@@ -6,7 +6,7 @@ export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
-export const DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
+export const DEFAULT_MODEL = 'claude-3-7-sonnet-20250219';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 
 const llmManager = LLMManager.getInstance(import.meta.env);
@@ -32,5 +32,23 @@ export const STARTER_TEMPLATES: Template[] = [
     githubRepo: 'planetarium/agent8-templates',
     path: 'basic-vite-react',
     tags: ['vite', 'react', 'typescript', 'minimal'],
+  },
+  {
+    name: 'basic-2d-game',
+    label: 'Basic 2D Game Template',
+    description:
+      'Template for creating 2D games using Phaser with React integration. Ideal for platformers, top-down games, and side-scrollers with physics, sprites, and animations.',
+    githubRepo: 'planetarium/agent8-templates',
+    path: 'basic-2d',
+    tags: ['vite', 'react', 'typescript', 'phaser'],
+  },
+  {
+    name: 'basic-3d-game',
+    label: 'Basic 3D Game Template',
+    description:
+      'Template for building 3D games using Three.js and react-three-fiber. Perfect for creating immersive 3D environments, first-person experiences, and interactive 3D visualizations.',
+    githubRepo: 'planetarium/agent8-templates',
+    path: 'basic-3d',
+    tags: ['vite', 'react', 'typescript', 'three.js'],
   },
 ];
