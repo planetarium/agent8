@@ -18,6 +18,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
+import { chatId as chatIdStore } from '~/lib/persistence';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -59,6 +60,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isPushDialogOpen, setIsPushDialogOpen] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
   const showWorkbench = useStore(workbenchStore.showWorkbench);
@@ -83,6 +85,80 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   useEffect(() => {
     workbenchStore.setDocuments(files);
   }, [files]);
+
+  const onRun = useCallback(async () => {
+    setSelectedView('code');
+
+    const shell = workbenchStore.boltTerminal;
+
+    await shell.ready();
+
+    await shell.executeCommand(Date.now().toString(), 'npm install && npm run dev');
+  }, []);
+
+  const onPublish = useCallback(async () => {
+    try {
+      setIsPublishing(true);
+      setSelectedView('code');
+
+      // WebContainer 터미널에 접근
+      const shell = workbenchStore.boltTerminal;
+      const chatId = chatIdStore.get();
+
+      // 터미널이 준비되었는지 확인
+      await shell.ready();
+
+      await shell.executeCommand(Date.now().toString(), 'npm install');
+
+      await shell.waitTillOscCode('prompt');
+
+      const buildResult = await shell.executeCommand(Date.now().toString(), 'npm run build');
+
+      await shell.waitTillOscCode('prompt');
+
+      console.log('[Publish] Build Result:', buildResult);
+
+      if (buildResult?.exitCode === 2) {
+        console.log('[Publish] Build Failed:', buildResult.output);
+        toast.error('Failed to build');
+
+        // 빌드 에러 발생 시 actionAlert 설정
+        workbenchStore.actionAlert.set({
+          type: 'build',
+          title: 'Build Error',
+          description: 'Failed to build the project',
+          content: buildResult.output || 'Unknown build error',
+          source: 'terminal',
+        });
+
+        return;
+      }
+
+      const result = await shell.executeCommand(Date.now().toString(), 'npx -y @agent8/deploy');
+
+      await shell.waitTillOscCode('prompt');
+
+      console.log('[Publish] Result:', result);
+
+      if (result?.exitCode === 0) {
+        toast.success('Publish completed successfully');
+
+        // 퍼블리시된 URL 설정
+        const publishedUrl = `https://agent8-games.verse8.io/${chatId}/index.html`;
+        workbenchStore.setPublishedUrl(publishedUrl);
+
+        // 퍼블리시 완료 후 Preview 탭으로 전환
+        setSelectedView('preview');
+      } else {
+        toast.error('Failed to publish');
+      }
+    } catch (error) {
+      console.error('Error executing publish command:', error);
+      toast.error('Failed to execute publish command');
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [workbenchStore.boltTerminal, setSelectedView]);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
     workbenchStore.setCurrentDocumentContent(update.content);
@@ -144,6 +220,39 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
             <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
               <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
                 <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                <button
+                  onClick={() => {
+                    onRun();
+                  }}
+                  className={classNames(
+                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
+                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
+                  )}
+                >
+                  <div className="i-ph:play" />
+                  <span>Run</span>
+                </button>
+                <button
+                  onClick={() => {
+                    onPublish();
+                  }}
+                  className={classNames(
+                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
+                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive',
+                    {
+                      'opacity-50 cursor-not-allowed flex items-center': isPublishing,
+                    },
+                  )}
+                >
+                  {isPublishing ? (
+                    <>
+                      <div className="i-ph:spinner animate-spin mr-2" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <span className="relative z-10">Publish</span>
+                  )}
+                </button>
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
                   <div className="flex overflow-y-auto">

@@ -121,19 +121,11 @@ export async function deleteById(db: IDBDatabase, id: string): Promise<void> {
   });
 }
 
-export async function getNextId(db: IDBDatabase): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction('chats', 'readonly');
-    const store = transaction.objectStore('chats');
-    const request = store.getAllKeys();
+export async function getNextId(_: IDBDatabase): Promise<string> {
+  const timestamp = Date.now().toString(16);
+  const randomPart = Math.random().toString(36).substring(2, 8);
 
-    request.onsuccess = () => {
-      const highestId = request.result.reduce((cur, acc) => Math.max(+cur, +acc), 0);
-      resolve(String(+highestId + 1));
-    };
-
-    request.onerror = () => reject(request.error);
-  });
+  return `${timestamp}-${randomPart}`;
 }
 
 export async function getUrlId(db: IDBDatabase, id: string): Promise<string> {

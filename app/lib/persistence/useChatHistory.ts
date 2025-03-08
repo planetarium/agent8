@@ -64,12 +64,41 @@ export function useChatHistory() {
               : storedMessages.messages;
 
             setInitialMessages(filteredMessages);
-            setUrlId(storedMessages.urlId);
-            description.set(storedMessages.description);
+            setUrlId(storedMessages.urlId || mixedId); // urlId가 없으면 mixedId 사용
+            description.set(storedMessages.description || `Chat ${mixedId}`);
             chatId.set(storedMessages.id);
             chatMetadata.set(storedMessages.metadata);
           } else {
-            navigate('/', { replace: true });
+            // 새 채팅 생성 - 임의 ID 사용
+            setInitialMessages([]);
+
+            const defaultDescription = `New Chat ${mixedId}`;
+            description.set(defaultDescription);
+
+            chatId.set(mixedId);
+
+            setUrlId(mixedId);
+
+            // 새 채팅 정보를 DB에 저장
+            setMessages(db, mixedId, [], mixedId, defaultDescription)
+              .then(() => {
+                console.log('Successfully saved new chat:', {
+                  id: mixedId,
+                  urlId: mixedId,
+                });
+                toast.success('Created new chat');
+
+                // 중요: 저장 후 다시 확인
+                return getMessages(db, mixedId);
+              })
+              .then((verifyMessages) => {
+                console.log('Verification after save:', verifyMessages);
+              })
+              .catch((error) => {
+                console.error('Failed to create new chat:', error);
+                logStore.logError('Failed to create new chat', error);
+                toast.error('Failed to create new chat');
+              });
           }
 
           setReady(true);
@@ -79,7 +108,7 @@ export function useChatHistory() {
           toast.error(error.message);
         });
     }
-  }, []);
+  }, [mixedId, searchParams]);
 
   return {
     ready: !mixedId || ready,

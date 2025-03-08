@@ -551,6 +551,11 @@ export class WorkbenchStore {
       throw error; // Rethrow the error for further handling
     }
   }
+
+  // 퍼블리시된 URL 설정 메서드 추가
+  setPublishedUrl(url: string) {
+    this.#previewsStore.setPublishedUrl(url);
+  }
 }
 
 export const workbenchStore = new WorkbenchStore();

@@ -52,6 +52,7 @@ export class PreviewsStore {
     // Listen for storage sync messages
     this.#storageChannel.onmessage = (event) => {
       const { storage, source } = event.data;
+      console.log('[Preview] Storage sync message received:', storage, source);
 
       if (storage && source !== this._getTabId()) {
         this._syncStorage(storage);
@@ -188,6 +189,8 @@ export class PreviewsStore {
 
     // Listen for port events
     webcontainer.on('port', (port, type, url) => {
+      console.log('[Preview] Port event received:', port, type, url);
+
       let previewInfo = this.#availablePreviews.get(port);
 
       if (type === 'close' && previewInfo) {
@@ -197,18 +200,15 @@ export class PreviewsStore {
         return;
       }
 
-      const previews = this.previews.get();
-
       if (!previewInfo) {
         previewInfo = { port, ready: type === 'open', baseUrl: url };
         this.#availablePreviews.set(port, previewInfo);
-        previews.push(previewInfo);
       }
 
       previewInfo.ready = type === 'open';
       previewInfo.baseUrl = url;
 
-      this.previews.set([...previews]);
+      this.previews.set([previewInfo]);
 
       if (type === 'open') {
         this.broadcastUpdate(url);
@@ -290,6 +290,24 @@ export class PreviewsStore {
     }, this.#REFRESH_DELAY);
 
     this.#refreshTimeouts.set(previewId, timeout);
+  }
+
+  // 퍼블리시된 URL 설정 메서드 추가
+  setPublishedUrl(url: string) {
+    const port = 80;
+    let previewInfo = this.#availablePreviews.get(port);
+
+    if (!previewInfo) {
+      previewInfo = { port, ready: true, baseUrl: url };
+      this.#availablePreviews.set(port, previewInfo);
+    }
+
+    previewInfo.baseUrl = url;
+    previewInfo.ready = true;
+
+    this.previews.set([previewInfo]);
+
+    this.broadcastUpdate(url);
   }
 }
 

@@ -223,21 +223,21 @@ export const Preview = memo(() => {
   const openInNewWindow = (size: WindowSize) => {
     if (activePreview?.baseUrl) {
       const match = activePreview.baseUrl.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
+      let previewUrl = activePreview.baseUrl;
 
       if (match) {
         const previewId = match[1];
-        const previewUrl = `/webcontainer/preview/${previewId}`;
-        const newWindow = window.open(
-          previewUrl,
-          '_blank',
-          `noopener,noreferrer,width=${size.width},height=${size.height},menubar=no,toolbar=no,location=no,status=no`,
-        );
+        previewUrl = `/webcontainer/preview/${previewId}`;
+      }
 
-        if (newWindow) {
-          newWindow.focus();
-        }
-      } else {
-        console.warn('[Preview] Invalid WebContainer URL:', activePreview.baseUrl);
+      const newWindow = window.open(
+        previewUrl,
+        '_blank',
+        `noopener,noreferrer,width=${size.width},height=${size.height},menubar=no,toolbar=no,location=no,status=no`,
+      );
+
+      if (newWindow) {
+        newWindow.focus();
       }
     }
   };
