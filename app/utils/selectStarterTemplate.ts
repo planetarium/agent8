@@ -8,11 +8,6 @@ const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
 
 Available templates:
-<template>
-  <name>blank</name>
-  <description>Empty starter for simple scripts and trivial tasks that don't require a full template setup</description>
-  <tags>basic, script</tags>
-</template>
 ${templates
   .map(
     (template) => `
@@ -34,25 +29,16 @@ Response Format:
 Examples:
 
 <example>
-User: I need to build a todo app
+User: I need to build a 2d platformer game
 Response:
 <selection>
-  <templateName>react-basic-starter</templateName>
-  <title>Simple React todo application</title>
-</selection>
-</example>
-
-<example>
-User: Write a script to generate numbers from 1 to 100
-Response:
-<selection>
-  <templateName>blank</templateName>
-  <title>script to generate numbers from 1 to 100</title>
+  <templateName>basic-2d</templateName>
+  <title>Simple 2d platformer game</title>
 </selection>
 </example>
 
 Instructions:
-1. For trivial tasks and simple scripts, always recommend the blank template
+1. For trivial tasks and simple scripts, always recommend the basic-vite-react template
 2. For more complex projects, recommend templates from the provided list
 3. Follow the exact XML format
 4. Consider both technical requirements and tags
