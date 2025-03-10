@@ -18,7 +18,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
-import { chatId as chatIdStore } from '~/lib/persistence';
+import { chatId as chatIdStore, description as descriptionStore } from '~/lib/persistence';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -144,8 +144,32 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
         toast.success('Publish completed successfully');
 
         // 퍼블리시된 URL 설정
-        const publishedUrl = `https://agent8-games.verse8.io/${chatId}/index.html`;
+        const publishedUrl = `https://agent8-games.verse8.io/${chatId}/index.html?buildAt=${Date.now()}`;
         workbenchStore.setPublishedUrl(publishedUrl);
+
+        // 상위 창에 배포 정보 전달
+        try {
+          if (window.parent && window.parent !== window) {
+            const title = descriptionStore.get() || 'Game Project';
+
+            window.parent.postMessage(
+              {
+                type: 'PUBLISH_GAME',
+                payload: {
+                  title,
+                  playUrl: publishedUrl,
+                },
+              },
+              '*',
+            );
+
+            console.log('[Publish] Sent deployment info to parent window');
+          }
+        } catch (error) {
+          console.error('[Publish] Error sending message to parent:', error);
+
+          // 부모 창 통신 실패는 배포 성공에 영향을 주지 않으므로 오류만 기록
+        }
 
         // 퍼블리시 완료 후 Preview 탭으로 전환
         setSelectedView('preview');
