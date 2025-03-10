@@ -31,6 +31,7 @@ import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
+import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 
 const TEXTAREA_MIN_HEIGHT = 76;
@@ -42,6 +43,7 @@ interface BaseChatProps {
   showChat?: boolean;
   chatStarted?: boolean;
   isStreaming?: boolean;
+  onStreamingChange?: (streaming: boolean) => void;
   messages?: Message[];
   description?: string;
   enhancingPrompt?: boolean;
@@ -65,6 +67,7 @@ interface BaseChatProps {
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
   data?: JSONValue[] | undefined;
+  actionRunner?: ActionRunner;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -76,6 +79,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       showChat = true,
       chatStarted = false,
       isStreaming = false,
+      onStreamingChange,
       model,
       setModel,
       provider,
@@ -98,6 +102,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       actionAlert,
       clearAlert,
       data,
+      actionRunner,
     },
     ref,
   ) => {
@@ -121,6 +126,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     useEffect(() => {
       console.log(transcript);
     }, [transcript]);
+
+    useEffect(() => {
+      onStreamingChange?.(isStreaming);
+    }, [isStreaming, onStreamingChange]);
 
     useEffect(() => {
       if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -300,7 +309,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
+        <div ref={scrollRef} className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
           <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
             {!chatStarted && (
               <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
@@ -314,40 +323,39 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
             <div
               className={classNames('pt-6 px-2 sm:px-6', {
-                'h-full flex flex-col pb-4 overflow-y-auto': chatStarted,
+                'h-full flex flex-col': chatStarted,
               })}
               ref={scrollRef}
             >
               <ClientOnly>
                 {() => {
                   return chatStarted ? (
-                    <div className="flex-1 w-full max-w-chat pb-6 mx-auto z-1">
-                      <Messages
-                        ref={messageRef}
-                        className="flex flex-col "
-                        messages={messages}
-                        isStreaming={isStreaming}
-                      />
-                    </div>
+                    <Messages
+                      ref={messageRef}
+                      className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                      messages={messages}
+                      isStreaming={isStreaming}
+                    />
                   ) : null;
                 }}
               </ClientOnly>
               <div
-                className={classNames('flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt', {
+                className={classNames('flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt mb-6', {
                   'sticky bottom-2': chatStarted,
-                  'position-absolute': chatStarted,
                 })}
               >
-                {actionAlert && (
-                  <ChatAlert
-                    alert={actionAlert}
-                    clearAlert={() => clearAlert?.()}
-                    postMessage={(message) => {
-                      sendMessage?.({} as any, message);
-                      clearAlert?.();
-                    }}
-                  />
-                )}
+                <div className="bg-bolt-elements-background-depth-2">
+                  {actionAlert && (
+                    <ChatAlert
+                      alert={actionAlert}
+                      clearAlert={() => clearAlert?.()}
+                      postMessage={(message) => {
+                        sendMessage?.({} as any, message);
+                        clearAlert?.();
+                      }}
+                    />
+                  )}
+                </div>
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
                 <div
                   className={classNames(
@@ -401,15 +409,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             apiKeys={apiKeys}
                             modelLoading={isModelLoading}
                           />
-                          {(providerList || []).length > 0 && provider && !LOCAL_PROVIDERS.includes(provider.name) && (
-                            <APIKeyManager
-                              provider={provider}
-                              apiKey={apiKeys[provider.name] || ''}
-                              setApiKey={(key) => {
-                                onApiKeysChange(provider.name, key);
-                              }}
-                            />
-                          )}
+                          {(providerList || []).length > 0 &&
+                            provider &&
+                            (!LOCAL_PROVIDERS.includes(provider.name) || 'OpenAILike') && (
+                              <APIKeyManager
+                                provider={provider}
+                                apiKey={apiKeys[provider.name] || ''}
+                                setApiKey={(key) => {
+                                  onApiKeysChange(provider.name, key);
+                                }}
+                              />
+                            )}
                         </div>
                       )}
                     </ClientOnly>
@@ -581,16 +591,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
               </div>
             </div>
-            {!chatStarted && (
-              <div className="flex flex-col justify-center mt-6 gap-5">
+            <div className="flex flex-col justify-center gap-5">
+              {!chatStarted && (
                 <div className="flex justify-center gap-2">
                   <div className="flex items-center gap-2">
                     {/* {ImportButtons(importChat)} */}
                     {/* <GitCloneButton importChat={importChat} className="min-w-[120px]" /> */}
                   </div>
                 </div>
-
-                {ExamplePrompts((event, messageInput) => {
+              )}
+              {!chatStarted &&
+                ExamplePrompts((event, messageInput) => {
                   if (isStreaming) {
                     handleStop?.();
                     return;
@@ -598,11 +609,18 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                   handleSendMessage?.(event, messageInput);
                 })}
-                {/* <StarterTemplates /> */}
-              </div>
-            )}
+              {/* <StarterTemplates /> */}
+            </div>
           </div>
-          <ClientOnly>{() => <Workbench chatStarted={chatStarted} isStreaming={isStreaming} />}</ClientOnly>
+          <ClientOnly>
+            {() => (
+              <Workbench
+                actionRunner={actionRunner ?? ({} as ActionRunner)}
+                chatStarted={chatStarted}
+                isStreaming={isStreaming}
+              />
+            )}
+          </ClientOnly>
         </div>
       </div>
     );
