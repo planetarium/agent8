@@ -22,7 +22,7 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
-import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTemplate';
+import { selectStarterTemplate } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
@@ -33,6 +33,30 @@ const toastAnimation = cssTransition({
 });
 
 const logger = createScopedLogger('Chat');
+
+async function fetchTemplateFromAPI(templateName: string, title?: string) {
+  try {
+    const params = new URLSearchParams();
+    params.append('templateName', templateName);
+
+    if (title) {
+      params.append('title', title);
+    }
+
+    const response = await fetch(`/api/template?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch template: ${response.status}`);
+    }
+
+    const result = (await response.json()) as { data: { assistantMessage: string; userMessage: string } };
+
+    return result.data;
+  } catch (error) {
+    console.error('Error fetching template from API:', error);
+    throw error;
+  }
+}
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -307,14 +331,12 @@ export const ChatImpl = memo(
           });
 
           if (template !== 'blank') {
-            const temResp = await getTemplates(template, title).catch((e) => {
+            const temResp = await fetchTemplateFromAPI(template, title).catch((e) => {
               if (e.message.includes('rate limit')) {
                 toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
               } else {
                 toast.warning('Failed to import starter template\n Continuing with blank template');
               }
-
-              return null;
             });
 
             if (temResp) {
