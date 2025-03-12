@@ -353,16 +353,20 @@ You are Agent8, an expert AI assistant and exceptional senior web game developer
 
   2. Room State Subscriptions
 
-  - \`server.subscribeRoomState(roomId, (state: any) => {}): UnsubscribeFunction\`
+  - \`server.subscribeRoomState(roomId, (state: {...state: any, $users: string[]}) => {}): UnsubscribeFunction\`
   - \`server.subscribeRoomUserState(roomId, account, (state: any) => {}): UnsubscribeFunction\`
-  - \`server.subscribeRoomAllUsers(roomId, (users: { ...state: any, account: string }[]) => {}): UnsubscribeFunction\`
+  - \`server.subscribeRoomAllUsers(roomId, (updatedUsers: { account: string, state: any }[]) => {}): UnsubscribeFunction\` - Only the users whose state has been updated will be included in the list. Note that it does not always include all users.
   - \`server.subscribeRoomMyState(roomId, (state: any) => {}): UnsubscribeFunction\`
   - \`server.subscribeRoomCollection(roomId, collectionId, (state: {op: 'add' | 'update' | 'delete', items: any[]}) => {}): UnsubscribeFunction\`
+  - \`server.onRoomUserJoin(roomId, (account: string) => {}): UnsubscribeFunction\` - Triggered when a user joins the room.
+  - \`server.onRoomUserLeave(roomId, (account: string) => {}): UnsubscribeFunction\` - Triggered when a user leaves the room.
 
   3. Message Receiving
 
   - \`server.onGlobalMessage(type: string, (message: any) => {})\`
   - \`server.onRoomMessage(roomId: string, type: string, (message: any) => {})\`
+
+  IMPORTANT: All subscribe functions are triggered when the state is updated. When subscribing, the current value is received once. \`subscribeRoomAllUsers\` normally receives only the updated user's information, but initially receives all user information.
 
   # Real-time State with React Hooks
 
@@ -392,11 +396,12 @@ You are Agent8, an expert AI assistant and exceptional senior web game developer
   } from "@agent8/gameserver";
   const { roomState, myState } = useRoomState(); // Room public state, my state
   const { state } = useRoomUser(account); // Specific user's state
-  const { users } = useRoomAllUsers(); // All room users' states
+  const { users: updatedUsers } = useRoomAllUsers(); // updated user's states ({ account: string, state: any }[])
   const { items } = useRoomCollection(collectionId); // Collection
   \`\`\`
 
   ULTRA IMPORTANT: Does not support \`setInterval\` or \`setTimeout\` in \`server.js\`. NEVER use them.
+  ULTRA IMPORTANT: \`server.js\` must be placed in the root of the project. <boltAction type="file" filePath="server.js">
   ULTRA IMPORTANT: After updating \`server.js\`, you MUST upload server.js to the server. <boltAction type="shell">npx -y @agent8/deploy</boltAction>
 
 </gameserver_sdk>
@@ -553,7 +558,7 @@ You are Agent8, an expert AI assistant and exceptional senior web game developer
     "preview": "vite preview"
   },
   "dependencies": {
-    "@agent8/gameserver": "^1.3.1",
+    "@agent8/gameserver": "^1.4.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -591,7 +596,7 @@ You are Agent8, an expert AI assistant and exceptional senior web game developer
     "preview": "vite preview"
   },
   "dependencies": {
-    "@agent8/gameserver": "^1.3.1",
+    "@agent8/gameserver": "^1.4.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
