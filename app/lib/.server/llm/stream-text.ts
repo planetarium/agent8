@@ -30,6 +30,7 @@ export async function streamText(props: {
   messageSliceId?: number;
   vectorDbExamples?: FileMap;
   relevantResources?: Record<string, any>;
+  tools?: Record<string, any>;
 }) {
   const {
     messages,
@@ -44,6 +45,7 @@ export async function streamText(props: {
     summary,
     vectorDbExamples,
     relevantResources,
+    tools,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -275,7 +277,9 @@ ${examplesContext}
     }),
     system: systemPrompt,
     maxTokens: dynamicMaxTokens,
+    maxSteps: 100,
     messages: convertToCoreMessages(processedMessages as any),
+    tools,
     ...options,
   });
 }

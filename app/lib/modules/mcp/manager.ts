@@ -12,18 +12,42 @@ export class MCPManager {
   private static _instance: MCPManager;
   private _toolset: ToolSet | null = null;
   private _config: MCPConfig = { mcpServers: {} };
+  private _initialized: boolean = false;
 
   private constructor(private readonly _env: Record<string, string | undefined> = {}) {
     this._loadConfigFromEnvironment();
   }
 
   /**
-   * Returns MCPManager instance
-   * @param env Environment variables object (optional)
+   * Returns MCPManager instance with initialized tools
+   * Works in both Cloudflare and local development environments
+   * @param contextOrEnv Cloudflare context object or environment variables object
    */
-  static getInstance(env: Record<string, string | undefined> = {}): MCPManager {
+  static async getInstance(contextOrEnv?: any): Promise<MCPManager> {
+    // Handle different types of inputs and extract environment variables
+    let envVars: Record<string, string | undefined> = {};
+
+    if (contextOrEnv) {
+      if (contextOrEnv.cloudflare?.env) {
+        // If Cloudflare context is provided, extract env from it
+        envVars = contextOrEnv.cloudflare.env as unknown as Record<string, string | undefined>;
+      } else if (typeof contextOrEnv === 'object') {
+        // If direct env object is provided
+        envVars = contextOrEnv;
+      }
+    }
+
+    // Fallback to process.env in Node.js environments
+    if (Object.keys(envVars).length === 0 && typeof process !== 'undefined') {
+      envVars = process.env;
+    }
+
     if (!MCPManager._instance) {
-      MCPManager._instance = new MCPManager(env);
+      MCPManager._instance = new MCPManager(envVars);
+    }
+
+    if (!MCPManager._instance._initialized) {
+      await MCPManager._instance.initializeTools();
     }
 
     return MCPManager._instance;
@@ -83,6 +107,11 @@ export class MCPManager {
    * Converts MCP servers to AI SDK tools
    */
   async initializeTools(): Promise<Record<string, any>> {
+    if (this._initialized) {
+      logger.info('MCP toolset already initialized');
+      return this.tools;
+    }
+
     try {
       // Create ToolSetConfig based on MCP server settings
       const toolSetConfig = {
@@ -100,6 +129,7 @@ export class MCPManager {
       // Create ToolSet
       const toolset = await createToolSet(toolSetConfig);
       this._toolset = toolset;
+      this._initialized = true;
       logger.info(`MCP toolset initialization completed: ${Object.keys(toolset.tools).length} tools loaded`);
 
       return toolset.tools;

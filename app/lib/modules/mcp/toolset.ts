@@ -64,6 +64,9 @@ export async function createToolSet(config: ToolSetConfig): Promise<ToolSet> {
           toolName = `${serverName}_${toolName}`;
         }
 
+        // Replace spaces with dashes due to AI SDK tool name restrictions
+        toolName = toolName.replaceAll(' ', '-');
+
         /*
          * Convert JSON Schema to Zod object
          * Type assert tool.inputSchema as any to resolve type errors
