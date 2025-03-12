@@ -12,6 +12,7 @@ import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
+import { searchResources } from '~/lib/.server/llm/search-resources';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -74,6 +75,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
         let vectorDbExamples: FileMap = {};
+        let relevantResources: Record<string, any> = {};
 
         if (messages.length > 3) {
           messageSliceId = messages.length - 3;
@@ -160,6 +162,46 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             status: 'complete',
             order: progressCounter++,
             message: `Found ${exampleCount} Code Examples`,
+          } satisfies ProgressAnnotation);
+
+          // Search for relevant resources
+          logger.debug('Searching for relevant resources');
+          dataStream.writeData({
+            type: 'progress',
+            label: 'resources',
+            status: 'in-progress',
+            order: progressCounter++,
+            message: 'Searching for Relevant Resources',
+          } satisfies ProgressAnnotation);
+
+          relevantResources = await searchResources({
+            messages: [...messages],
+            env: context.cloudflare?.env,
+            apiKeys,
+            files,
+            providerSettings,
+            promptId,
+            contextOptimization,
+            summary,
+            onFinish(resp) {
+              if (resp.usage) {
+                logger.debug('searchResources token usage', JSON.stringify(resp.usage));
+                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+              }
+            },
+          });
+
+          const resourceCount = Object.keys(relevantResources).length;
+          logger.debug(`Found ${resourceCount} relevant resources`);
+
+          dataStream.writeData({
+            type: 'progress',
+            label: 'resources',
+            status: 'complete',
+            order: progressCounter++,
+            message: `Found ${resourceCount} Relevant Resources`,
           } satisfies ProgressAnnotation);
 
           // Update context buffer
@@ -302,6 +344,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               summary,
               messageSliceId,
               vectorDbExamples,
+              relevantResources,
             });
 
             result.mergeIntoDataStream(dataStream);
@@ -342,6 +385,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           summary,
           messageSliceId,
           vectorDbExamples,
+          relevantResources,
         });
 
         (async () => {

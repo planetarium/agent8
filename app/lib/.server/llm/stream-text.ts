@@ -29,6 +29,7 @@ export async function streamText(props: {
   summary?: string;
   messageSliceId?: number;
   vectorDbExamples?: FileMap;
+  relevantResources?: Record<string, any>;
 }) {
   const {
     messages,
@@ -42,6 +43,7 @@ export async function streamText(props: {
     contextFiles,
     summary,
     vectorDbExamples,
+    relevantResources,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -147,6 +149,16 @@ ${props.summary}
           processedMessages = [lastMessage];
         }
       }
+    }
+
+    if (relevantResources && Object.keys(relevantResources).length > 0) {
+      systemPrompt = `${systemPrompt}
+      below are the relevant resources that might help with the current request:
+      RESOURCES:
+      ---
+      ${JSON.stringify(relevantResources)}
+      ---
+      `;
     }
   }
 
