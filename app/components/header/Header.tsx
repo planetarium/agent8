@@ -4,9 +4,12 @@ import { chatStore } from '~/lib/stores/chat';
 import { classNames } from '~/utils/classNames';
 import { HeaderActionButtons } from './HeaderActionButtons.client';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
+import { useSearchParams } from '@remix-run/react';
 
 export function Header() {
   const chat = useStore(chatStore);
+  const [searchParams] = useSearchParams();
+  const isEmbedMode = searchParams.get('mode') === 'embed';
 
   return (
     <header
@@ -15,15 +18,24 @@ export function Header() {
         'border-bolt-elements-borderColor': chat.started,
       })}
     >
-      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
-        <div className="i-ph:sidebar-simple-duotone text-xl" />
-        <a href="/" className="text-xl font-semibold text-accent flex items-center">
-          AGENT8
-        </a>
-      </div>
+      {/* Logo and menu button - hidden in embed mode */}
+      {!isEmbedMode && (
+        <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
+          <div className="i-ph:sidebar-simple-duotone text-xl" />
+          <a href="/" className="text-xl font-semibold text-accent flex items-center">
+            AGENT8
+          </a>
+        </div>
+      )}
+
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
         <>
-          <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary">
+          <span
+            className={classNames('truncate text-center text-bolt-elements-textPrimary', {
+              'flex-1 px-4': !isEmbedMode,
+              'flex-1': isEmbedMode,
+            })}
+          >
             <ClientOnly>{() => <ChatDescription />}</ClientOnly>
           </span>
           <ClientOnly>

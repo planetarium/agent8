@@ -22,7 +22,7 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
-import { selectStarterTemplate } from '~/utils/selectStarterTemplate';
+import { selectStarterTemplate, getTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
@@ -509,6 +509,80 @@ export const ChatImpl = memo(
       Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
     };
 
+    const handleGithubImport = async (repoUrl: string) => {
+      try {
+        setFakeLoading(true);
+
+        // Parse GitHub repository URL to extract owner/repo format
+        const repoRegex = /github\.com\/([^\/]+\/[^\/]+)/;
+        const match = repoUrl.match(repoRegex);
+
+        if (!match) {
+          toast.error('Invalid GitHub repository URL. Please provide a valid URL.');
+          return;
+        }
+
+        const githubRepo = match[1].replace(/\.git$/, '');
+        const path = ''; // Start from the root of the repository
+        const title = `GitHub: ${githubRepo}`; // You can customize this title
+
+        // Show loading toast
+        const toastId = toast.loading(`Importing repository: ${githubRepo}...`);
+
+        // Use the getTemplates function to fetch repository content
+        const templates = await getTemplates(githubRepo, path, title);
+        toast.done(toastId);
+
+        const { assistantMessage, userMessage } = templates;
+        setMessages([
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\nI want to import the following files from the repository: ${githubRepo}`,
+              },
+              ...imageDataList.map((imageData) => ({
+                type: 'image',
+                image: imageData,
+              })),
+            ] as any,
+          },
+          {
+            id: `2-${new Date().getTime()}`,
+            role: 'assistant',
+            content: assistantMessage,
+          },
+          {
+            id: `3-${new Date().getTime()}`,
+            role: 'user',
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+            annotations: ['hidden'],
+          },
+        ]);
+
+        // reload();
+        setInput('');
+        Cookies.remove(PROMPT_COOKIE_KEY);
+
+        setChatStarted(true);
+        setUploadedFiles([]);
+        setImageDataList([]);
+
+        resetEnhancer();
+
+        textareaRef.current?.blur();
+
+        toast.success(`Successfully imported repository: ${githubRepo}`);
+      } catch (error) {
+        console.error('Error importing GitHub repository:', error);
+        toast.error(`Failed to import repository`);
+      } finally {
+        setFakeLoading(false);
+      }
+    };
+
     return (
       <BaseChat
         ref={animationScope}
@@ -567,6 +641,7 @@ export const ChatImpl = memo(
         actionAlert={actionAlert}
         clearAlert={() => workbenchStore.clearAlert()}
         data={chatData}
+        onGithubImport={handleGithubImport}
       />
     );
   },

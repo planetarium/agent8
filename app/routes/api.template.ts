@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
+import { STARTER_TEMPLATES } from '~/utils/constants';
 import { getTemplates } from '~/utils/selectStarterTemplate';
 
 /*
@@ -45,11 +46,13 @@ export async function loader({ request }: ActionFunctionArgs) {
     // Cache miss or expired, fetch from GitHub
     console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-    const templateData = await getTemplates(templateName, title);
+    const template = STARTER_TEMPLATES.find((t) => t.name == templateName);
 
-    if (!templateData) {
+    if (!template) {
       return json({ error: 'Template not found' }, { status: 404 });
     }
+
+    const templateData = await getTemplates(template.githubRepo, template.path, title);
 
     // Store in cache
     templateCache[cacheKey] = {

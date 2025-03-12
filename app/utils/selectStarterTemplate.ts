@@ -105,9 +105,9 @@ const getGitHubRepoContent = async (
 
   try {
     const token = Cookies.get('githubToken') || import.meta.env.VITE_GITHUB_ACCESS_TOKEN;
-
     const headers: HeadersInit = {
       Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'agent8',
     };
 
     // Add your GitHub token if needed
@@ -176,22 +176,18 @@ const getGitHubRepoContent = async (
   }
 };
 
-export async function getTemplates(templateName: string, title?: string) {
-  const template = STARTER_TEMPLATES.find((t) => t.name == templateName);
-
-  if (!template) {
-    return null;
-  }
-
-  const files = await getGitHubRepoContent(template.githubRepo, template.path);
+export async function getTemplates(githubRepo: string, path: string, title?: string) {
+  const files = await getGitHubRepoContent(githubRepo, path);
 
   let filteredFiles = files;
 
   //remove default path from files
-  filteredFiles = filteredFiles.map((x) => ({
-    ...x,
-    path: x.path.replace(template.path + '/', ''),
-  }));
+  if (path) {
+    filteredFiles = filteredFiles.map((x) => ({
+      ...x,
+      path: x.path.replace(path + '/', ''),
+    }));
+  }
 
   /*
    * ignoring common unwanted files

@@ -113,40 +113,30 @@ export const Menu = () => {
     }
   }, [open]);
 
-  /*
-   * useEffect(() => {
-   *   const enterThreshold = 40;
-   *   const exitThreshold = 40;
-   */
+  useEffect(() => {
+    const enterThreshold = 40;
+    const exitThreshold = 40;
 
-  /*
-   *   function onMouseMove(event: MouseEvent) {
-   *     if (isSettingsOpen) {
-   *       return;
-   *     }
-   */
+    function onMouseMove(event: MouseEvent) {
+      if (isSettingsOpen) {
+        return;
+      }
 
-  /*
-   *     if (event.pageX < enterThreshold) {
-   *       setOpen(true);
-   *     }
-   */
+      if (event.pageX < enterThreshold) {
+        setOpen(true);
+      }
 
-  /*
-   *     if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
-   *       setOpen(false);
-   *     }
-   *   }
-   */
+      if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
+        setOpen(false);
+      }
+    }
 
-  //   window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouseMove);
 
-  /*
-   *   return () => {
-   *     window.removeEventListener('mousemove', onMouseMove);
-   *   };
-   * }, [isSettingsOpen]);
-   */
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+    };
+  }, [isSettingsOpen]);
 
   const handleDeleteClick = (event: React.UIEvent, item: ChatHistoryItem) => {
     event.preventDefault();

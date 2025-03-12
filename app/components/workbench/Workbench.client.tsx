@@ -382,6 +382,7 @@ export const Workbench = memo(
                   type: 'PUBLISH_GAME',
                   payload: {
                     title,
+                    gameId: chatId,
                     playUrl: publishedUrl,
                   },
                 },
