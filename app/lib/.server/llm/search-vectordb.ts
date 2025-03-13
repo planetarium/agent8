@@ -6,7 +6,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constant
 import { extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
 
 // Common patterns to ignore, similar to .gitignore
@@ -72,7 +72,15 @@ async function extractRequirements(props: { userMessage: string; summary: string
 /**
  * Searches the vector database for relevant code examples based on requirements
  */
-async function searchExamplesFromVectorDB({ requirements, supabase }: { requirements: string[]; supabase: any }) {
+async function searchExamplesFromVectorDB({
+  requirements,
+  supabase,
+  openai,
+}: {
+  requirements: string[];
+  supabase: any;
+  openai: any;
+}) {
   const results = [];
   const seenIds = new Set<string>();
 
@@ -214,6 +222,11 @@ export async function searchVectorDB(props: {
     serverEnv!.SUPABASE_URL || process.env.SUPABASE_URL!,
     serverEnv!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+  const openai = createOpenAI({
+    apiKey: serverEnv!.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  });
+
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
@@ -295,7 +308,7 @@ export async function searchVectorDB(props: {
   logger.info(`Extracted ${requirements.length} requirements:`, requirements);
 
   // Step 2: Search vector database for relevant code examples
-  const codeExamples = await searchExamplesFromVectorDB({ requirements, supabase });
+  const codeExamples = await searchExamplesFromVectorDB({ requirements, supabase, openai });
 
   logger.info(`Found ${codeExamples.length} code examples`);
 

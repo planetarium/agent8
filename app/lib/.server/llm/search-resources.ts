@@ -5,7 +5,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constant
 import { extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
 
 const logger = createScopedLogger('search-resources');
@@ -69,7 +69,15 @@ async function extractResourceRequirements(props: { userMessage: string; summary
 /**
  * Searches the vector database for relevant resources based on requirements
  */
-async function searchResourcesFromVectorDB({ requirements, supabase }: { requirements: string[]; supabase: any }) {
+async function searchResourcesFromVectorDB({
+  requirements,
+  supabase,
+  openai,
+}: {
+  requirements: string[];
+  supabase: any;
+  openai: any;
+}) {
   const results = [];
   const seenIds = new Set<string>();
 
@@ -201,6 +209,9 @@ export async function searchResources(props: {
     serverEnv!.SUPABASE_URL || process.env.SUPABASE_URL!,
     serverEnv!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+  const openai = createOpenAI({
+    apiKey: serverEnv!.OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  });
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
@@ -282,7 +293,7 @@ export async function searchResources(props: {
   logger.info(`Extracted ${requirements.length} resource requirements:`, requirements);
 
   // Step 2: Search vector database for relevant resources
-  const resources = await searchResourcesFromVectorDB({ requirements, supabase });
+  const resources = await searchResourcesFromVectorDB({ requirements, supabase, openai });
 
   logger.info(`Found ${resources.length} resources`);
 
