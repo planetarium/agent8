@@ -377,7 +377,7 @@ export const Preview = memo(() => {
                 title="preview"
                 className="border-none w-full h-full bg-bolt-elements-background-depth-1"
                 src={iframeUrl}
-                sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin"
+                sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin allow-pointer-lock allow-downloads"
                 allow="cross-origin-isolated"
               />
               <ScreenshotSelector
