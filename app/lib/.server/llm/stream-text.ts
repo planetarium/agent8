@@ -28,8 +28,8 @@ export async function streamText(props: {
   contextFiles?: FileMap;
   summary?: string;
   messageSliceId?: number;
-  vectorDbExamples?: FileMap;
   relevantResources?: Record<string, any>;
+  tools?: Record<string, any>;
 }) {
   const {
     messages,
@@ -42,8 +42,8 @@ export async function streamText(props: {
     contextOptimization,
     contextFiles,
     summary,
-    vectorDbExamples,
     relevantResources,
+    tools,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -120,17 +120,6 @@ ${codeContext}
 ---
 `;
 
-    if (vectorDbExamples && Object.keys(vectorDbExamples).length > 0) {
-      const examplesContext = createFilesContext(vectorDbExamples, true);
-      systemPrompt = `${systemPrompt}
-Below are relevant code examples that might help with the current request:
-EXAMPLES:
----
-${examplesContext}
----
-`;
-    }
-
     if (summary) {
       systemPrompt = `${systemPrompt}
       below is the chat history till now
@@ -173,7 +162,9 @@ ${props.summary}
     }),
     system: systemPrompt,
     maxTokens: dynamicMaxTokens,
+    maxSteps: 100,
     messages: convertToCoreMessages(processedMessages as any),
+    tools,
     ...options,
   });
 }

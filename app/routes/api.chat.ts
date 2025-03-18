@@ -11,8 +11,8 @@ import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
-import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
+import { MCPManager } from '~/lib/modules/mcp/manager';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -52,6 +52,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     parseCookies(cookieHeader || '').providers || '{}',
   );
 
+  const mcpManager = await MCPManager.getInstance(context);
+  const mcpTools = mcpManager.tools;
+
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
@@ -74,7 +77,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
-        let vectorDbExamples: FileMap = {};
         let relevantResources: Record<string, any> = {};
 
         if (messages.length > 3) {
@@ -123,46 +125,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             summary,
             chatId: messages.slice(-1)?.[0]?.id,
           } as ContextAnnotation);
-
-          // Search vector database for relevant code examples
-          logger.debug('Searching Vector Database for Examples');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'vectordb',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Searching for Code Examples',
-          } satisfies ProgressAnnotation);
-
-          vectorDbExamples = await searchVectorDB({
-            messages: [...messages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-
-          const exampleCount = Object.keys(vectorDbExamples).length;
-          logger.debug(`Found ${exampleCount} relevant code examples`);
-
-          dataStream.writeData({
-            type: 'progress',
-            label: 'vectordb',
-            status: 'complete',
-            order: progressCounter++,
-            message: `Found ${exampleCount} Code Examples`,
-          } satisfies ProgressAnnotation);
 
           // Search for relevant resources
           logger.debug('Searching for relevant resources');
@@ -282,7 +244,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         // Stream the text
         const options: StreamingOptions = {
-          toolChoice: 'none',
+          toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, usage }) => {
             logger.debug('usage', JSON.stringify(usage));
 
@@ -343,8 +305,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               contextFiles: filteredFiles,
               summary,
               messageSliceId,
-              vectorDbExamples,
               relevantResources,
+              tools: mcpTools,
             });
 
             result.mergeIntoDataStream(dataStream);
@@ -384,8 +346,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           contextFiles: filteredFiles,
           summary,
           messageSliceId,
-          vectorDbExamples,
           relevantResources,
+          tools: mcpTools,
         });
 
         (async () => {
