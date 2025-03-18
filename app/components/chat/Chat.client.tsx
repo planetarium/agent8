@@ -26,6 +26,7 @@ import { selectStarterTemplate, getTemplates } from '~/utils/selectStarterTempla
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
+import type { Template } from '~/types/template';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -34,16 +35,18 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-async function fetchTemplateFromAPI(templateName: string, title?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string) {
   try {
     const params = new URLSearchParams();
-    params.append('templateName', templateName);
+    params.append('templateName', template.name);
+    params.append('repo', template.githubRepo || '');
+    params.append('path', template.path || '');
 
     if (title) {
       params.append('title', title);
     }
 
-    const response = await fetch(`/api/template?${params.toString()}`);
+    const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch template: ${response.status}`);
@@ -330,8 +333,8 @@ export const ChatImpl = memo(
             provider,
           });
 
-          if (template !== 'blank') {
-            const temResp = await fetchTemplateFromAPI(template, title).catch((e) => {
+          if (!template) {
+            const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
               if (e.message.includes('rate limit')) {
                 toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
               } else {

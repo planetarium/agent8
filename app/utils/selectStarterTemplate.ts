@@ -2,7 +2,7 @@ import ignore from 'ignore';
 import type { ProviderInfo } from '~/types/model';
 import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
-import Cookies from 'js-cookie';
+import Cookies from 'node_modules/@types/js-cookie';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -48,7 +48,7 @@ Important: Provide only the selection tags in your response, no additional text.
 MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH 
 `;
 
-const templates: Template[] = STARTER_TEMPLATES.filter((t) => !t.name.includes('shadcn'));
+let templates: Template[] = STARTER_TEMPLATES;
 
 const parseSelectedTemplate = (llmOutput: string): { template: string; title: string } | null => {
   try {
@@ -68,6 +68,16 @@ const parseSelectedTemplate = (llmOutput: string): { template: string; title: st
 };
 
 export const selectStarterTemplate = async (options: { message: string; model: string; provider: ProviderInfo }) => {
+  try {
+    const response = await fetch('https://raw.githubusercontent.com/planetarium/agent8-templates/main/templates.json');
+    templates = await response.json();
+  } catch {
+    console.log('Failed to fetch templates, using local fallback');
+    templates = STARTER_TEMPLATES;
+  }
+
+  console.log('templates', templates);
+
   const { message, model, provider } = options;
   const requestBody = {
     message,
@@ -85,16 +95,21 @@ export const selectStarterTemplate = async (options: { message: string; model: s
   const { text } = respJson;
   const selectedTemplate = parseSelectedTemplate(text);
 
-  if (selectedTemplate) {
-    return selectedTemplate;
-  } else {
+  if (!selectedTemplate) {
     console.log('No template selected, using blank template');
+    return {};
+  }
 
+  const template: Template | undefined = templates.find((t) => t.name == selectedTemplate.template);
+
+  if (template) {
     return {
-      template: 'blank',
-      title: '',
+      template,
+      title: selectedTemplate.title,
     };
   }
+
+  return {};
 };
 
 const getGitHubRepoContent = async (

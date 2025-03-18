@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { STARTER_TEMPLATES } from '~/utils/constants';
 import { getTemplates } from '~/utils/selectStarterTemplate';
 
 /*
@@ -23,9 +22,11 @@ export async function loader({ request }: ActionFunctionArgs) {
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
   const title = url.searchParams.get('title') || undefined;
+  const repo = url.searchParams.get('repo');
+  const path = url.searchParams.get('path');
 
-  if (!templateName) {
-    return json({ error: 'templateName is required' }, { status: 400 });
+  if (!templateName || !repo || !path) {
+    return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
   }
 
   try {
@@ -46,13 +47,7 @@ export async function loader({ request }: ActionFunctionArgs) {
     // Cache miss or expired, fetch from GitHub
     console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-    const template = STARTER_TEMPLATES.find((t) => t.name == templateName);
-
-    if (!template) {
-      return json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    const templateData = await getTemplates(template.githubRepo, template.path, title);
+    const templateData = await getTemplates(repo, path, title);
 
     // Store in cache
     templateCache[cacheKey] = {

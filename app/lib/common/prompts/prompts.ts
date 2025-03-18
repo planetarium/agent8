@@ -276,12 +276,52 @@ const newState = await $global.getGlobalState(); // { "name": "kim", "age": 18 }
 
 Rooms are optimized for creating real-time multiplayer games. While global states handle numerous users, tracking them all isn't ideal. Rooms allow real-time awareness of connected users in the same space and synchronize all user states. There's a maximum connection limit.
 
+You can manage all rooms through $global. These functions require explicit roomId specification.
+
+- \`$global.countRooms(): Promise<number>\` - Gets the total number of rooms that currently have active users.
+- \`$global.getAllRoomIds(): Promise<string[]>\` - Returns IDs of all rooms that currently have active users.
+- \`$global.getAllRoomStates(): Promise<any[]>\` - Returns an array of roomStates for all rooms with active users.
+- \`$global.getRoomUserAccounts(roomId: string): Promise<string[]>\` - Gets an array of account strings for current users in a specific room.
+- \`$global.countRoomUsers(roomId: string): Promise<number>\` - Gets the number of current users in a specific room.
+
+- \`$global.getRoomState(roomId: string): Promise<any>\`
+- \`$global.updateRoomState(roomId: string, state: any): Promise<any>\`
+- \`$global.getRoomUserState(roomId: string, account: string): Promise<any>\`
+- \`$global.updateRoomUserState(roomId: string, account: string, state: any): Promise<any>\`
+
 To join/leave rooms, you must call these functions:
 
 - \`$global.joinRoom(roomId?: string): Promise<string>\`: Joins the specified room. If no roomId is provided, the server will create a new random room and return its ID.
 - \`$global.leaveRoom(): Promise<string>\`: Leaves the current room. You can call \`$room.leave()\` instead.
 
 IMPORTANT: \`joinRoom()\` request without roomId will always create a new random room. If you want users to join the same room by default, use a default roomId as a parameter.
+
+
+Eexample for joining the room
+\`\`\`js filename='server.js'
+class Server {
+  const MAX_ROOM_USER = 3;
+  async joinRoom(roomId) {
+    if (roomId) {
+      if ($global.countRoomUsers(roomId) >= MAX_ROOM_USER) throw Error('room is full');
+    }
+
+    const joinedRoomId = await $global.joinRoom(roomId)
+
+    if ($global.countRoomUsers(joinedRoomId) === MAX_ROOM_USER) { // or you can use \`$room.countUsers() === MAX_ROOM_USER\`
+      await $room.updateRoomState({ status: 'START' })
+    } else {
+      await $room.updateRoomState({ status: 'READY' })
+    }
+
+    return joinedRoomId
+  }
+}
+\`\`\`
+
+The $room prefix automatically acts on the room that the $sender belongs to, so you don't need to explicitly specify roomId. All actions are queried and processed for the currently joined room.
+
+
 
 Rooms provide a tick function that enables automatic server-side logic execution without explicit user calls.
 The room tick will only repeat execution while users are present in the room.
