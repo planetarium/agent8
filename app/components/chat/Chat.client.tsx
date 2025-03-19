@@ -61,6 +61,24 @@ async function fetchTemplateFromAPI(template: Template, title?: string) {
   }
 }
 
+function sendEventToParent(type: string, payload: any) {
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type,
+          payload,
+        },
+        '*',
+      );
+
+      console.log('Sent deployment info to parent window');
+    }
+  } catch (error) {
+    console.error('Error sending message to parent:', error);
+  }
+}
+
 export function Chat() {
   renderLogger.trace('Chat');
 
@@ -374,6 +392,8 @@ export const ChatImpl = memo(
               reload();
               setInput('');
               Cookies.remove(PROMPT_COOKIE_KEY);
+
+              sendEventToParent('EVENT', { name: 'START_EDITING' });
 
               setUploadedFiles([]);
               setImageDataList([]);
