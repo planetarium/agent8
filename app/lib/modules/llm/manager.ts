@@ -198,7 +198,7 @@ export class LLMManager {
   }
 
   getDefaultProvider(): BaseProvider {
-    const firstProvider = this._providers.values().next().value;
+    const firstProvider = Array.from(this._providers.values()).find((p) => p.name === 'OpenRouter');
 
     if (!firstProvider) {
       throw new Error('No providers registered');
