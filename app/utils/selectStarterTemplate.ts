@@ -163,7 +163,7 @@ const getGitHubRepoContent = async (
       data.map(async (item: any) => {
         if (item.type === 'dir') {
           // Recursively get contents of subdirectories
-          return await getGitHubRepoContent(repoName, item.path);
+          return await getGitHubRepoContent(repoName, item.path, env);
         } else if (item.type === 'file') {
           // Fetch file content
           const fileResponse = await fetch(item.url, {
