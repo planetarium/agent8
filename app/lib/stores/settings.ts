@@ -71,8 +71,8 @@ const getInitialProviderSettings = (): ProviderSetting => {
     initialSettings[provider.name] = {
       ...provider,
       settings: {
-        // Only enable Anthropic by default, disable all others
-        enabled: provider.name === 'Anthropic',
+        // Only enable by default, disable all others
+        enabled: ['Anthropic', 'OpenRouter', 'OpenAI'].includes(provider.name),
       },
     };
   });
