@@ -124,86 +124,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             chatId: messages.slice(-1)?.[0]?.id,
           } as ContextAnnotation);
 
-          // Search vector database for relevant code examples
-          logger.debug('Searching Vector Database for Examples');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'vectordb',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Searching for Code Examples',
-          } satisfies ProgressAnnotation);
-
-          vectorDbExamples = await searchVectorDB({
-            messages: [...messages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-
-          const exampleCount = Object.keys(vectorDbExamples).length;
-          logger.debug(`Found ${exampleCount} relevant code examples`);
-
-          dataStream.writeData({
-            type: 'progress',
-            label: 'vectordb',
-            status: 'complete',
-            order: progressCounter++,
-            message: `Found ${exampleCount} Code Examples`,
-          } satisfies ProgressAnnotation);
-
-          // Search for relevant resources
-          logger.debug('Searching for relevant resources');
-          dataStream.writeData({
-            type: 'progress',
-            label: 'resources',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Searching for Relevant Resources',
-          } satisfies ProgressAnnotation);
-
-          relevantResources = await searchResources({
-            messages: [...messages],
-            env: context.cloudflare?.env,
-            apiKeys,
-            files,
-            providerSettings,
-            promptId,
-            contextOptimization,
-            summary,
-            onFinish(resp) {
-              if (resp.usage) {
-                logger.debug('searchResources token usage', JSON.stringify(resp.usage));
-                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-              }
-            },
-          });
-
-          const resourceCount = Object.keys(relevantResources).length;
-          logger.debug(`Found ${resourceCount} relevant resources`);
-
-          dataStream.writeData({
-            type: 'progress',
-            label: 'resources',
-            status: 'complete',
-            order: progressCounter++,
-            message: `Found ${resourceCount} Relevant Resources`,
-          } satisfies ProgressAnnotation);
-
           // Update context buffer
           logger.debug('Updating Context Buffer');
           dataStream.writeData({
@@ -263,21 +183,84 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // logger.debug('Code Files Selected');
         }
 
+        // Search vector database for relevant code examples
+        logger.debug('Searching Vector Database for Examples');
         dataStream.writeData({
           type: 'progress',
-          label: 'KARL TEST',
+          label: 'vectordb',
           status: 'in-progress',
           order: progressCounter++,
-          message: 'KARL TEST',
+          message: 'Searching for Code Examples',
         } satisfies ProgressAnnotation);
 
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        vectorDbExamples = await searchVectorDB({
+          messages: [...messages],
+          env: context.cloudflare?.env,
+          apiKeys,
+          files,
+          providerSettings,
+          promptId,
+          contextOptimization,
+          summary: summary || 'This is first user request',
+          onFinish(resp) {
+            if (resp.usage) {
+              logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
+              cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+              cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+              cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+            }
+          },
+        });
+
+        const exampleCount = Object.keys(vectorDbExamples).length;
+        logger.debug(`Found ${exampleCount} relevant code examples`);
+
         dataStream.writeData({
           type: 'progress',
-          label: 'KARL TEST',
+          label: 'vectordb',
           status: 'complete',
           order: progressCounter++,
-          message: 'KARL TEST',
+          message: `Found ${exampleCount} Code Examples`,
+        } satisfies ProgressAnnotation);
+
+        // Search for relevant resources
+        logger.debug('Searching for relevant resources');
+        dataStream.writeData({
+          type: 'progress',
+          label: 'resources',
+          status: 'in-progress',
+          order: progressCounter++,
+          message: 'Searching for Relevant Resources',
+        } satisfies ProgressAnnotation);
+
+        relevantResources = await searchResources({
+          messages: [...messages],
+          env: context.cloudflare?.env,
+          apiKeys,
+          files,
+          providerSettings,
+          promptId,
+          contextOptimization,
+          summary: summary || 'This is first user request',
+          onFinish(resp) {
+            if (resp.usage) {
+              logger.debug('searchResources token usage', JSON.stringify(resp.usage));
+              cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+              cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+              cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+            }
+          },
+        });
+
+        const resourceCount = Object.keys(relevantResources).length;
+        logger.debug(`Found ${resourceCount} relevant resources`);
+
+        dataStream.writeData({
+          type: 'progress',
+          label: 'resources',
+          status: 'complete',
+          order: progressCounter++,
+          message: `Found ${resourceCount} Relevant Resources`,
         } satisfies ProgressAnnotation);
 
         // Stream the text

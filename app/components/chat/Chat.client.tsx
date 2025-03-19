@@ -333,7 +333,7 @@ export const ChatImpl = memo(
             provider,
           });
 
-          if (!template) {
+          if (template) {
             const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
               if (e.message.includes('rate limit')) {
                 toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');

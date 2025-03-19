@@ -18,7 +18,8 @@ const templateCache: Record<
 // Cache expiration time (24 hours in milliseconds)
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-export async function loader({ request }: ActionFunctionArgs) {
+export async function loader({ request, context }: ActionFunctionArgs) {
+  const env = { ...context.cloudflare.env, ...process.env } as Env;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
   const title = url.searchParams.get('title') || undefined;
@@ -47,7 +48,7 @@ export async function loader({ request }: ActionFunctionArgs) {
     // Cache miss or expired, fetch from GitHub
     console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-    const templateData = await getTemplates(repo, path, title);
+    const templateData = await getTemplates(repo, path, title, env);
 
     // Store in cache
     templateCache[cacheKey] = {

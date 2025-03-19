@@ -24,13 +24,9 @@ interface Record {
 
 // 로더 함수: 데이터 조회 및 페이징 처리
 export async function loader({ request, context }: LoaderFunctionArgs) {
-  const env = context.cloudflare?.env as Env;
-  console.log(context.cloudflare, env);
+  const env = { ...context.cloudflare.env, ...process.env } as Env;
 
-  const supabase = createClient(
-    env!.SUPABASE_URL || process.env.SUPABASE_URL!,
-    env!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1', 10);
   const searchQuery = url.searchParams.get('query') || '';

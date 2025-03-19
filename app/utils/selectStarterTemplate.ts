@@ -2,7 +2,7 @@ import ignore from 'ignore';
 import type { ProviderInfo } from '~/types/model';
 import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
-import Cookies from 'node_modules/@types/js-cookie';
+import Cookies from 'js-cookie';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -13,6 +13,7 @@ ${templates
     (template) => `
 <template>
   <name>${template.name}</name>
+  <label>${template.label}</label>
   <description>${template.description}</description>
   ${template.tags ? `<tags>${template.tags.join(', ')}</tags>` : ''}
 </template>
@@ -115,11 +116,12 @@ export const selectStarterTemplate = async (options: { message: string; model: s
 const getGitHubRepoContent = async (
   repoName: string,
   path: string = '',
+  env?: Env,
 ): Promise<{ name: string; path: string; content: string }[]> => {
   const baseUrl = 'https://api.github.com';
 
   try {
-    const token = Cookies.get('githubToken') || import.meta.env.VITE_GITHUB_ACCESS_TOKEN;
+    const token = Cookies.get('github_token') || import.meta.env.VITE_GITHUB_ACCESS_TOKEN || env?.GITHUB_TOKEN;
     const headers: HeadersInit = {
       Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'agent8',
@@ -191,8 +193,8 @@ const getGitHubRepoContent = async (
   }
 };
 
-export async function getTemplates(githubRepo: string, path: string, title?: string) {
-  const files = await getGitHubRepoContent(githubRepo, path);
+export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
+  const files = await getGitHubRepoContent(githubRepo, path, env);
 
   let filteredFiles = files;
 
