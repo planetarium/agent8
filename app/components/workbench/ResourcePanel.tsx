@@ -95,6 +95,19 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     '.mp4',
     '.webm',
     '.mov',
+
+    // 폰트
+    '.ttf',
+    '.otf',
+    '.woff',
+    '.woff2',
+
+    // 텍스트
+    '.txt',
+    '.md',
+    '.json',
+    '.csv',
+    '.xml',
   ];
 
   // categories 변경 시 ref에도 업데이트
@@ -396,6 +409,33 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
 
     if (videoExtensions.some((ext) => asset.url.toLowerCase().endsWith(ext))) {
       return 'video';
+    }
+
+    // 폰트 확인
+    const fontExtensions = ['.ttf', '.otf', '.woff', '.woff2'];
+
+    if (fontExtensions.some((ext) => asset.url.toLowerCase().endsWith(ext))) {
+      return 'font';
+    }
+
+    // 텍스트 확인
+    const textExtensions = [
+      '.txt',
+      '.md',
+      '.json',
+      '.csv',
+      '.xml',
+      '.yaml',
+      '.yml',
+      '.toml',
+      '.ini',
+      '.cfg',
+      '.conf',
+      '.properties',
+    ];
+
+    if (textExtensions.some((ext) => asset.url.toLowerCase().endsWith(ext))) {
+      return 'text';
     }
 
     return 'unknown';

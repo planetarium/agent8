@@ -19,14 +19,14 @@ export function Header() {
       })}
     >
       {/* Logo and menu button - hidden in embed mode */}
-      {!isEmbedMode && (
-        <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
-          <div className="i-ph:sidebar-simple-duotone text-xl" />
+      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
+        <div className="i-ph:sidebar-simple-duotone text-xl" />
+        {!isEmbedMode && (
           <a href="/" className="text-xl font-semibold text-accent flex items-center">
             AGENT8
           </a>
-        </div>
-      )}
+        )}
+      </div>
 
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
         <>
