@@ -587,6 +587,8 @@ export const ChatImpl = memo(
         resetEnhancer();
         textareaRef.current?.blur();
 
+        sendEventToParent('EVENT', { name: 'START_EDITING' });
+
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
         console.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
