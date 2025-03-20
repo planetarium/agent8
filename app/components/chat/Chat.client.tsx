@@ -549,8 +549,7 @@ export const ChatImpl = memo(
         const { assistantMessage, userMessage } = await templateData;
         toast.done(toastId);
 
-        // 메시지 설정
-        setMessages([
+        const messages = [
           {
             id: `1-${new Date().getTime()}`,
             role: 'user',
@@ -576,16 +575,9 @@ export const ChatImpl = memo(
             content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
             annotations: ['hidden'],
           },
-        ]);
+        ] as Message[];
 
-        // 상태 초기화
-        setInput('');
-        Cookies.remove(PROMPT_COOKIE_KEY);
-        setChatStarted(true);
-        setUploadedFiles([]);
-        setImageDataList([]);
-        resetEnhancer();
-        textareaRef.current?.blur();
+        importChat(source.title, messages);
 
         sendEventToParent('EVENT', { name: 'START_EDITING' });
 

@@ -14,6 +14,22 @@ export async function extractZipTemplate(
     const promises = Object.keys(contents.files).map(async (filename) => {
       const zipEntry = contents.files[filename];
 
+      if (filename.includes('__MACOSX')) {
+        return;
+      }
+
+      if (filename.includes('node_modules')) {
+        return;
+      }
+
+      if (filename.includes('package-lock.json')) {
+        return;
+      }
+
+      if (filename.includes('.DS_Store')) {
+        return;
+      }
+
       // 디렉토리 건너뛰기
       if (zipEntry.dir) {
         return;

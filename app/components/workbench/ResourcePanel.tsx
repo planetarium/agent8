@@ -122,7 +122,9 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   }, [files, isSaving]);
 
   useEffect(() => {
-    initializeVerse();
+    if (files && Object.keys(files).length > 0) {
+      initializeVerse();
+    }
   }, [files]);
 
   const loadAssets = async () => {
@@ -137,11 +139,19 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       const assetFile = files[assetsPath];
 
       if (!assetFile || assetFile.type !== 'file') {
-        setCategories({
+        // assets.json 파일이 없는 경우 기본 카테고리로 초기화
+        const defaultCategories = {
           images: {},
           models: {},
           audio: {},
-        });
+        };
+
+        setCategories(defaultCategories);
+        setSelectedCategory('images'); // 기본 카테고리 선택
+
+        // assets.json 파일 생성
+        await createAssetsJsonFile(defaultCategories);
+
         setIsLoading(false);
 
         return;
@@ -157,13 +167,41 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       } catch (error) {
         console.error('Failed to parse assets.json:', error);
         toast.error('Failed to parse assets.json file');
-        setCategories({});
+
+        // 파싱 실패 시 기본 카테고리로 초기화하고 파일 재생성
+        const defaultCategories = {
+          images: {},
+          models: {},
+          audio: {},
+        };
+
+        setCategories(defaultCategories);
+        setSelectedCategory('images');
+
+        // 손상된 assets.json 파일 재생성
+        await createAssetsJsonFile(defaultCategories);
       }
     } catch (error) {
       console.error('Error loading assets:', error);
       toast.error('Error loading assets');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // assets.json 파일 생성 함수
+  const createAssetsJsonFile = async (initialCategories: Categories) => {
+    try {
+      const content = JSON.stringify(initialCategories, null, 2);
+
+      workbenchStore.setSelectedFile(assetsPath);
+      workbenchStore.setCurrentDocumentContent(content);
+      await workbenchStore.saveCurrentDocument();
+
+      toast.success('Created assets.json file');
+    } catch (error) {
+      console.error('Error creating assets.json file:', error);
+      toast.error('Failed to create assets.json file');
     }
   };
 
