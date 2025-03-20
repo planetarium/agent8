@@ -34,6 +34,7 @@ import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import { ImportGithub } from './ImportGithub';
+import { ImportProjectZip } from './ImportProjectZip';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -70,6 +71,7 @@ interface BaseChatProps {
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
   onGithubImport?: (repoUrl: string) => void;
+  onProjectZipImport?: (title: string, zipFile: File) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -106,6 +108,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       data,
       actionRunner,
       onGithubImport,
+      onProjectZipImport,
     },
     ref,
   ) => {
@@ -545,6 +548,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           <div className="i-ph:paperclip text-xl"></div>
                         </IconButton>
                         <ImportGithub onImport={onGithubImport} />
+                        <ImportProjectZip onImport={onProjectZipImport} />
                         <IconButton
                           title="Enhance prompt"
                           disabled={input.length === 0 || enhancingPrompt}

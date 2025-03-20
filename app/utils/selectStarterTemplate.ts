@@ -3,6 +3,7 @@ import type { ProviderInfo } from '~/types/model';
 import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
+import { extractZipTemplate } from './zipUtils';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -195,7 +196,19 @@ const getGitHubRepoContent = async (
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
   const files = await getGitHubRepoContent(githubRepo, path, env);
+  return generateTemplateMessages(files, path, title);
+}
 
+export async function getZipTemplates(zipFile: File, title?: string) {
+  const files = await extractZipTemplate(await zipFile.arrayBuffer());
+  return generateTemplateMessages(files, '', title);
+}
+
+function generateTemplateMessages(
+  files: { name: string; path: string; content: string }[],
+  path: string,
+  title?: string,
+) {
   let filteredFiles = files;
 
   //remove default path from files

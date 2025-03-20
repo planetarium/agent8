@@ -22,7 +22,7 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
-import { selectStarterTemplate, getTemplates } from '~/utils/selectStarterTemplate';
+import { selectStarterTemplate, getTemplates, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
@@ -532,31 +532,24 @@ export const ChatImpl = memo(
       Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
     };
 
-    const handleGithubImport = async (repoUrl: string) => {
+    // 공통 로직을 처리하는 함수 추출
+    const handleTemplateImport = async (
+      source: { type: 'github' | 'zip'; title: string },
+      templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+    ) => {
       try {
         setFakeLoading(true);
 
-        // Parse GitHub repository URL to extract owner/repo format
-        const repoRegex = /github\.com\/([^\/]+\/[^\/]+)/;
-        const match = repoUrl.match(repoRegex);
-
-        if (!match) {
-          toast.error('Invalid GitHub repository URL. Please provide a valid URL.');
-          return;
-        }
-
-        const githubRepo = match[1].replace(/\.git$/, '');
-        const path = ''; // Start from the root of the repository
-        const title = `GitHub: ${githubRepo}`; // You can customize this title
-
         // Show loading toast
-        const toastId = toast.loading(`Importing repository: ${githubRepo}...`);
+        const toastId = toast.loading(
+          `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
+        );
 
-        // Use the getTemplates function to fetch repository content
-        const templates = await getTemplates(githubRepo, path, title);
+        // 템플릿 데이터 가져오기
+        const { assistantMessage, userMessage } = await templateData;
         toast.done(toastId);
 
-        const { assistantMessage, userMessage } = templates;
+        // 메시지 설정
         setMessages([
           {
             id: `1-${new Date().getTime()}`,
@@ -564,7 +557,7 @@ export const ChatImpl = memo(
             content: [
               {
                 type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\nI want to import the following files from the repository: ${githubRepo}`,
+                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
               },
               ...imageDataList.map((imageData) => ({
                 type: 'image',
@@ -585,25 +578,47 @@ export const ChatImpl = memo(
           },
         ]);
 
-        // reload();
+        // 상태 초기화
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
-
         setChatStarted(true);
         setUploadedFiles([]);
         setImageDataList([]);
-
         resetEnhancer();
-
         textareaRef.current?.blur();
 
-        toast.success(`Successfully imported repository: ${githubRepo}`);
+        toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
-        console.error('Error importing GitHub repository:', error);
-        toast.error(`Failed to import repository`);
+        console.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
+        toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
       } finally {
         setFakeLoading(false);
       }
+    };
+
+    // GitHub 임포트 함수 - 특화 로직만 남기고 공통 로직은 handleTemplateImport 호출
+    const handleGithubImport = async (repoUrl: string) => {
+      // GitHub 저장소 URL 파싱하여 owner/repo 형식 추출
+      const repoRegex = /github\.com\/([^\/]+\/[^\/]+)/;
+      const match = repoUrl.match(repoRegex);
+
+      if (!match) {
+        toast.error('Invalid GitHub repository URL. Please provide a valid URL.');
+        return;
+      }
+
+      const githubRepo = match[1].replace(/\.git$/, '');
+      const path = ''; // 저장소 루트에서 시작
+      const title = `GitHub: ${githubRepo}`;
+
+      // 공통 로직 함수 호출
+      await handleTemplateImport({ type: 'github', title }, getTemplates(githubRepo, path, title));
+    };
+
+    // ZIP 임포트 함수 - 특화 로직만 남기고 공통 로직은 handleTemplateImport 호출
+    const handleProjectZipImport = async (title: string, zipFile: File) => {
+      // 공통 로직 함수 호출
+      await handleTemplateImport({ type: 'zip', title }, getZipTemplates(zipFile, title));
     };
 
     return (
@@ -665,6 +680,7 @@ export const ChatImpl = memo(
         clearAlert={() => workbenchStore.clearAlert()}
         data={chatData}
         onGithubImport={handleGithubImport}
+        onProjectZipImport={handleProjectZipImport}
       />
     );
   },
