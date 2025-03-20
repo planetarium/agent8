@@ -25,6 +25,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
 import { chatId as chatIdStore, description as descriptionStore } from '~/lib/persistence';
+import { ResourcePanel } from './ResourcePanel';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -44,8 +45,8 @@ const sliderOptions: SliderOptions<WorkbenchViewType> = {
     text: 'Code',
   },
   middle: {
-    value: 'diff',
-    text: 'Diff',
+    value: 'resource',
+    text: 'Resources',
   },
   right: {
     value: 'preview',
@@ -504,7 +505,7 @@ export const Workbench = memo(
                     )}
                   </button>
                   <div className="ml-auto" />
-                  {selectedView === 'code' && (
+                  {(selectedView === 'code' || selectedView === 'resource') && (
                     <div className="flex overflow-y-auto">
                       <PanelHeaderButton
                         className="mr-1 text-sm"
@@ -552,6 +553,23 @@ export const Workbench = memo(
                     animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
                   >
                     <EditorPanel
+                      editorDocument={currentDocument}
+                      isStreaming={isStreaming}
+                      selectedFile={selectedFile}
+                      files={files}
+                      unsavedFiles={unsavedFiles}
+                      onFileSelect={onFileSelect}
+                      onEditorScroll={onEditorScroll}
+                      onEditorChange={onEditorChange}
+                      onFileSave={onFileSave}
+                      onFileReset={onFileReset}
+                    />
+                  </View>
+                  <View
+                    initial={{ x: '100%' }}
+                    animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                  >
+                    <ResourcePanel
                       editorDocument={currentDocument}
                       isStreaming={isStreaming}
                       selectedFile={selectedFile}

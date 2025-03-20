@@ -54,6 +54,7 @@
     "@codemirror/search": "^6.5.8",
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.35.0",
+    "@google/model-viewer": "^4.0.0",
     "@headlessui/react": "^2.2.0",
     "@iconify-json/svg-spinners": "^1.2.1",
     "@lezer/highlight": "^1.2.1",
@@ -127,7 +128,9 @@
     "rollup-plugin-node-polyfills": "^0.2.1",
     "shiki": "^1.24.0",
     "tailwind-merge": "^2.2.1",
+    "three": "^0.174.0",
     "unist-util-visit": "^5.0.0",
+    "uuid": "^11.1.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
