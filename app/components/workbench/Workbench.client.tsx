@@ -24,7 +24,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
-import { description as descriptionStore } from '~/lib/persistence';
+import { description as descriptionStore, chatId as chatIdStore } from '~/lib/persistence';
 import { ResourcePanel } from './ResourcePanel';
 import { WORK_DIR } from '~/utils/constants';
 
@@ -331,6 +331,7 @@ export const Workbench = memo(
         const envFilePath = `${WORK_DIR}/.env`;
         const envFile = files?.[envFilePath];
         let verseId = '';
+        const chatId = chatIdStore.get();
 
         if (envFile && envFile.type === 'file') {
           const envContent = envFile.content;
@@ -388,7 +389,7 @@ export const Workbench = memo(
           toast.success('Publish completed successfully');
 
           // 퍼블리시된 URL 설정
-          const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?buildAt=${Date.now()}`;
+          const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${chatId}&buildAt=${Date.now()}`;
           workbenchStore.setPublishedUrl(publishedUrl);
 
           // 상위 창에 배포 정보 전달
