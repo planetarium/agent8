@@ -158,7 +158,7 @@ export const AssistantMessage = memo(({ content, annotations, toolInvocations }:
                   <div className="font-semibold mb-1">Result:</div>
                   <pre className="whitespace-pre-wrap overflow-x-auto overflow-y-auto max-h-60 p-2 bg-bolt-elements-artifacts-inlineCode-background/50 rounded border border-bolt-elements-borderColor/30">
                     {tool.state === 'result' ? (
-                      tool.result
+                      JSON.stringify(tool.result, null, 2)
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="i-ph:spinner animate-spin"></span>

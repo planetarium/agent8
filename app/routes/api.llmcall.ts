@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import type { IProviderSetting, ProviderInfo } from '~/types/model';
-import { generateText } from 'ai';
+import { generateText, type Tool } from 'ai';
 import { PROVIDER_LIST } from '~/utils/constants';
 import { MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -133,7 +133,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         maxTokens: dynamicMaxTokens,
         maxSteps: 100,
         toolChoice: 'auto',
-        tools: mcpTools,
+        tools: mcpTools as Record<string, Tool>,
       });
       logger.info(`Generated response`);
 

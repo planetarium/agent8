@@ -74,6 +74,57 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
     const dataStream = createDataStream({
       async execute(dataStream) {
+        // Track unsubscribe functions to clean up later if needed
+        const progressUnsubscribers: Array<() => void> = [];
+
+        logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
+
+        for (const toolName in mcpTools) {
+          if (mcpTools[toolName]) {
+            const tool = mcpTools[toolName];
+
+            // Subscribe to progress events if emitter is available
+            if (tool.progressEmitter) {
+              // Subscribe to the tool's progress events
+              const unsubscribe = tool.progressEmitter.subscribe((event) => {
+                const { type, data, toolName } = event;
+
+                if (type === 'start') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'in-progress',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' execution started`,
+                  } as any);
+                } else if (type === 'progress') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'in-progress',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' executing: ${data.status || ''}`,
+                    percentage: data.percentage ? Number(data.percentage) : undefined,
+                  } as any);
+                } else if (type === 'complete') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'complete',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' execution completed`,
+                  } as any);
+
+                  // Automatically unsubscribe after complete
+                  unsubscribe();
+                }
+              });
+
+              // Store unsubscribe function for cleanup
+              progressUnsubscribers.push(unsubscribe);
+
+              logger.info(`Subscribed to progress events for tool: ${toolName}`);
+            }
+          }
+        }
+
         const filePaths = getFilePaths(files || {});
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
