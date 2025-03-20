@@ -24,8 +24,9 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
-import { chatId as chatIdStore, description as descriptionStore } from '~/lib/persistence';
+import { description as descriptionStore } from '~/lib/persistence';
 import { ResourcePanel } from './ResourcePanel';
+import { WORK_DIR } from '~/utils/constants';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -327,9 +328,26 @@ export const Workbench = memo(
         setIsPublishing(true);
         setSelectedView('code');
 
+        const envFilePath = `${WORK_DIR}/.env`;
+        const envFile = files?.[envFilePath];
+        let verseId = '';
+
+        if (envFile && envFile.type === 'file') {
+          const envContent = envFile.content;
+          const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
+
+          if (matches && matches[1]) {
+            verseId = matches[1];
+          }
+        }
+
+        if (!verseId) {
+          toast.error('Can not find verseId');
+          return;
+        }
+
         // WebContainer 터미널에 접근
         const shell = workbenchStore.boltTerminal;
-        const chatId = chatIdStore.get();
 
         // 터미널이 준비되었는지 확인
         await shell.ready();
@@ -370,7 +388,7 @@ export const Workbench = memo(
           toast.success('Publish completed successfully');
 
           // 퍼블리시된 URL 설정
-          const publishedUrl = `https://agent8-games.verse8.io/${chatId}/index.html?buildAt=${Date.now()}`;
+          const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?buildAt=${Date.now()}`;
           workbenchStore.setPublishedUrl(publishedUrl);
 
           // 상위 창에 배포 정보 전달
@@ -383,7 +401,7 @@ export const Workbench = memo(
                   type: 'PUBLISH_GAME',
                   payload: {
                     title,
-                    gameId: chatId,
+                    gameId: verseId,
                     playUrl: publishedUrl,
                   },
                 },
@@ -409,7 +427,7 @@ export const Workbench = memo(
       } finally {
         setIsPublishing(false);
       }
-    }, [workbenchStore.boltTerminal, setSelectedView]);
+    }, [workbenchStore.boltTerminal, setSelectedView, files]);
 
     const onEditorChange = useCallback<OnEditorChange>((update) => {
       workbenchStore.setCurrentDocumentContent(update.content);
