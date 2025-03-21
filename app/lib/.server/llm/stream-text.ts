@@ -31,6 +31,7 @@ export async function streamText(props: {
   vectorDbExamples?: FileMap;
   relevantResources?: Record<string, any>;
   tools?: Record<string, any>;
+  abortSignal?: AbortSignal;
 }) {
   const {
     messages,
@@ -46,6 +47,7 @@ export async function streamText(props: {
     vectorDbExamples,
     relevantResources,
     tools,
+    abortSignal,
   } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
@@ -275,6 +277,7 @@ ${examplesContext}
       apiKeys,
       providerSettings,
     }),
+    abortSignal,
     system: systemPrompt,
     maxTokens: dynamicMaxTokens,
     maxSteps: 100,

@@ -15,8 +15,9 @@ export async function createSummary(props: {
   promptId?: string;
   contextOptimization?: boolean;
   onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
+  abortSignal?: AbortSignal;
 }) {
-  const { messages, env: serverEnv, apiKeys, providerSettings, onFinish } = props;
+  const { messages, env: serverEnv, apiKeys, providerSettings, onFinish, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
   const processedMessages = messages.map((message) => {
@@ -185,6 +186,7 @@ Please provide a summary of the chat till now including the hitorical summary of
       apiKeys,
       providerSettings,
     }),
+    abortSignal,
   });
 
   const response = resp.text;

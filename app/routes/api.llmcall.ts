@@ -134,6 +134,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         maxSteps: 100,
         toolChoice: 'auto',
         tools: mcpTools as Record<string, Tool>,
+        abortSignal: request.signal,
       });
       logger.info(`Generated response`);
 
