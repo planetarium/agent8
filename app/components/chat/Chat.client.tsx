@@ -389,7 +389,11 @@ export const ChatImpl = memo(
                   annotations: ['hidden'],
                 },
               ]);
-              reload();
+
+              setTimeout(() => {
+                // wait for the files to be loaded
+                reload();
+              }, 1000);
               setInput('');
               Cookies.remove(PROMPT_COOKIE_KEY);
 

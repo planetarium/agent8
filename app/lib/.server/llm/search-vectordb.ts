@@ -3,7 +3,7 @@ import ignore from 'ignore';
 import type { IProviderSetting } from '~/types/model';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
-import { extractPropertiesFromMessage, simplifyBoltActions } from './utils';
+import { createFilesContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -16,45 +16,74 @@ const logger = createScopedLogger('search-vectordb');
 /**
  * Extracts concrete requirements from a user's request to search for code examples
  */
-async function extractRequirements(props: { userMessage: string; summary: string; model: any }) {
-  const { userMessage, summary, model } = props;
+async function extractRequirements(props: { userMessage: string; summary: string; model: any; contextFiles: FileMap }) {
+  const { userMessage, summary, model, contextFiles } = props;
+
+  const codeContext = createFilesContext(contextFiles, true);
 
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by extracting specific coding requirements from general requests.
       Your task is to analyze a user's request and identify concrete technical implementation requirements 
       that would benefit from code examples.
+      
+      CRITICAL: First determine if the request is:
+      1. Complex enough to require code examples (complex game mechanics, multiplayer functionality, etc.)
+      2. Something that can be easily implemented by an LLM without examples (simple UI, basic game logic, etc.)
+      
+      Only extract requirements if they are truly complex or would benefit significantly from existing code examples.
+
+      <CodeContext>
+      ${codeContext}
+      </CodeContext>
     `,
     prompt: `
       Here is the summary of the conversation so far:
       ${summary}
 
       User's request: "${userMessage}"
-
-      Extract 1-10 specific technical implementation requirements from this request.
-      Focus on aspects that might benefit from existing code examples, especially complex or difficult-to-implement features.
       
-      For example:
-      - If the user asks for "an RPG game", you might extract "2D character movement system", "turn-based combat logic", etc.
-      - If the user asks for "a chat application", you might extract "WebSocket connection handling", "message history storage", etc.
+      First, determine if this request requires code examples by answering YES or NO:
+      - Answer YES if the request involves complex implementation details that would benefit from existing code examples
+      - Answer NO if the request is straightforward enough for an LLM to implement without examples
+      
+      Then, only if you answered YES, extract 1-5 specific technical implementation requirements from this request.
+      Focus ONLY on aspects that are complex and would genuinely benefit from existing code examples.
+      
+      Format your response as a JSON object:
+      {
+        "requiresExamples": true/false,
+        "requirements": ["requirement 1", "requirement 2", ...]
+      }
+      
+      IMPORTANT: If the user's request is simple enough to implement without examples, return:
+      {
+        "requiresExamples": false,
+        "requirements": []
+      }
 
-      Format your response as a JSON array of strings, with each string being a specific requirement:
-      ["requirement 1", "requirement 2", "requirement 3", ...]
-
-      IMPORTANT: Return an empty array if no requirements are found.
       IMPORTANT: All requirements must be in English.
     `,
     model,
   });
 
   try {
-    // Extract just the JSON array from the response (remove any extra text)
-    const jsonMatch = resp.text.match(/\[.*\]/s);
+    // Extract JSON object from the response
+    const jsonMatch = resp.text.match(/\{.*\}/s);
 
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as string[];
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // If LLM determined no examples needed, return empty array
+      if (!parsed.requiresExamples) {
+        logger.info('LLM determined no examples needed for this request');
+        return [];
+      }
+
+      return parsed.requirements as string[];
     } else {
-      return JSON.parse(resp.text) as string[];
+      // Fallback parsing if JSON format wasn't followed
+      return JSON.parse(resp.text).requirements || [];
     }
   } catch (error) {
     logger.error('Failed to parse requirements JSON', error);
@@ -65,7 +94,7 @@ async function extractRequirements(props: { userMessage: string; summary: string
       .filter((line) => line.trim().startsWith('-') || line.trim().startsWith('*'))
       .map((line) => line.replace(/^[-*]\s+/, '').trim());
 
-    return lines.length > 0 ? lines : [userMessage];
+    return lines.length > 0 ? lines : [];
   }
 }
 
@@ -131,8 +160,9 @@ async function filterRelevantExamples(props: {
   userMessage: string;
   summary: string;
   model: any;
+  contextFiles: FileMap;
 }) {
-  const { requirements, examples, userMessage, summary, model } = props;
+  const { requirements, examples, userMessage, summary, model, contextFiles } = props;
 
   if (examples.length === 0) {
     return [];
@@ -155,11 +185,21 @@ async function filterRelevantExamples(props: {
     requirement: ex.requirement,
   }));
 
+  const codeContext = createFilesContext(contextFiles, true);
+
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by evaluating the relevance of code examples to their needs.
       Your task is to analyze code examples retrieved from a database and determine which ones are truly relevant 
       and helpful for the user's current request.
+      
+      CRITICAL: Be very selective. Only include examples that are DIRECTLY relevant to the specific requirements.
+      An example should only be included if it demonstrates implementation techniques that would be non-trivial 
+      for an LLM to generate from scratch.
+
+      <CodeContext>
+      ${codeContext}
+      </CodeContext>
     `,
     prompt: `
       Here is the summary of the conversation so far:
@@ -173,18 +213,23 @@ async function filterRelevantExamples(props: {
       Found code examples:
       ${JSON.stringify(examplesData, null, 2)}
 
-      Evaluate each example and decide if it's relevant and helpful for the user's request.
-      Focus on the description field of each example to understand what the code does.
+      Evaluate each example and decide if it's HIGHLY relevant and helpful for the user's request.
+      Focus on the description and code snippets to understand what the code does.
       
-      IMPORTANT: Your response must be a valid JSON array containing only the IDs of relevant examples.
+      For each example, ask:
+      1. Does this example directly address one of the complex requirements?
+      2. Would this code be difficult for an LLM to generate without an example?
+      3. Is this example of high quality and demonstrative of best practices?
+      
+      Only include examples that receive "yes" answers to ALL three questions.
+      
+      IMPORTANT: Your response must be a valid JSON array containing only the IDs of highly relevant examples.
       Example format: ["1", "3", "5"]
       
-      If none of the examples are relevant, return an empty array: []
+      If none of the examples are highly relevant, return an empty array: []
     `,
     model,
   });
-
-  console.log(resp.text);
 
   try {
     // Extract just the JSON array from the response (remove any extra text)
@@ -201,8 +246,8 @@ async function filterRelevantExamples(props: {
   } catch (error) {
     logger.error('Failed to parse filtered examples JSON', error);
 
-    // Return a subset of examples if parsing fails
-    return examples.slice(0, 2);
+    // Return no examples if parsing fails - better to return nothing than irrelevant examples
+    return [];
   }
 }
 
@@ -214,10 +259,11 @@ export async function searchVectorDB(props: {
   providerSettings?: Record<string, IProviderSetting>;
   promptId?: string;
   contextOptimization?: boolean;
+  contextFiles?: FileMap;
   summary: string;
   onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
 }) {
-  const { messages, env: serverEnv, apiKeys, providerSettings, summary, onFinish } = props;
+  const { messages, env: serverEnv, apiKeys, providerSettings, summary, onFinish, contextFiles } = props;
   const supabase = createClient(
     serverEnv!.SUPABASE_URL || process.env.SUPABASE_URL!,
     serverEnv!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -303,6 +349,7 @@ export async function searchVectorDB(props: {
     userMessage: userMessageText,
     summary,
     model,
+    contextFiles: contextFiles || {},
   });
 
   logger.info(`Extracted ${requirements.length} requirements:`, requirements);
@@ -319,6 +366,7 @@ export async function searchVectorDB(props: {
     userMessage: userMessageText,
     summary,
     model,
+    contextFiles: contextFiles || {},
   });
 
   logger.info(`Selected ${relevantExamples.length} relevant examples`);

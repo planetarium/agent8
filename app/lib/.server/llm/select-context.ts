@@ -90,6 +90,7 @@ export async function selectContext(props: {
 
   if (codeContext?.type === 'codeContext') {
     const codeContextFiles: string[] = codeContext.files;
+    codeContextFiles.push('PROJECT.md');
     Object.keys(files || {}).forEach((path) => {
       let relativePath = path;
 
@@ -150,6 +151,7 @@ export async function selectContext(props: {
         * You should not include any other text in the response.
         * You should not include any file that is not in the list of files above.
         * You should not include any file that is already in the context buffer.
+        * PROJECT.md is always in the context buffer. you don't need to include or exclude it in the response.
         * If no changes are needed, you can leave the response empty updateContextBuffer tag.
         `,
     prompt: `
@@ -164,9 +166,8 @@ export async function selectContext(props: {
         * context buffer should not include any file that is not in the list of files above.
         * context buffer is extremlly expensive, so only include files that are absolutely necessary.
         * If no changes are needed, you can leave the response empty updateContextBuffer tag.
-        * Only 5 files can be placed in the context buffer at a time.
+        * Only 5 files can be placed in the context buffer at a time. (Don't count PROJECT.md as one of the files, it is always in the context buffer.)
         * if the buffer is full, you need to exclude files that is not needed and include files that is relevent.
-
         `,
     model: provider.getModelInstance({
       model: currentModel,
@@ -216,6 +217,10 @@ export async function selectContext(props: {
 
     filteredFiles[path] = files[fullPath];
   });
+
+  if (files['/home/project/PROJECT.md']) {
+    filteredFiles['PROJECT.md'] = files['/home/project/PROJECT.md'];
+  }
 
   if (onFinish) {
     onFinish(resp);

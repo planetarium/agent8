@@ -201,6 +201,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           providerSettings,
           promptId,
           contextOptimization,
+          contextFiles: filteredFiles,
           summary: summary || 'This is first user request',
           onFinish(resp) {
             if (resp.usage) {
@@ -241,6 +242,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           providerSettings,
           promptId,
           contextOptimization,
+          contextFiles: filteredFiles,
           summary: summary || 'This is first user request',
           onFinish(resp) {
             if (resp.usage) {

@@ -2,7 +2,7 @@ import { embed, generateText, type CoreTool, type GenerateTextResult, type Messa
 import type { IProviderSetting } from '~/types/model';
 import { type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
-import { extractPropertiesFromMessage, simplifyBoltActions } from './utils';
+import { createFilesContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -13,45 +13,79 @@ const logger = createScopedLogger('search-resources');
 /**
  * Extracts resource requirements from a user's request
  */
-async function extractResourceRequirements(props: { userMessage: string; summary: string; model: any }) {
-  const { userMessage, summary, model } = props;
+async function extractResourceRequirements(props: {
+  userMessage: string;
+  summary: string;
+  model: any;
+  contextFiles: FileMap;
+}) {
+  const { userMessage, summary, model, contextFiles } = props;
+
+  const codeContext = createFilesContext(contextFiles, true);
 
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by extracting specific resource requirements from general requests.
       Your task is to analyze a user's request and identify concrete resource needs that would benefit their project.
+      
+      CRITICAL: First determine if the request is:
+      1. Complex enough to require external resources (3D models, textures, audio files, etc.)
+      2. Something that can be implemented without external resources
+      
+      Only extract requirements if they are truly needed for the user's project.
+
+      <CodeContext>
+      ${codeContext}
+      </CodeContext>
     `,
     prompt: `
       Here is the summary of the conversation so far:
       ${summary}
 
       User's request: "${userMessage}"
-
-      Extract 1-5 specific resource requirements from this request.
-      Focus on visual assets, 3D models, audio files, or other resources that the user might need for their project.
       
-      For example:
-      - If the user asks for "a 3D RPG game", you might extract "3D character models", "fantasy environment assets", "RPG sound effects", etc.
-      - If the user asks for "a space shooter", you might extract "spaceship 3D models", "space background textures", "explosion effects", etc.
+    
+      First, determine if this request requires external resources by answering YES or NO:
+      - Answer YES if the request involves visual assets, 3D models, audio files, or other resources
+      - Answer NO if the request can be implemented without external resources
+      
+      Then, only if you answered YES, extract 1-5 specific resource requirements from this request.
+      Focus ONLY on resources that are genuinely needed for the user's project.
+      
+      Format your response as a JSON object:
+      {
+        "requiresResources": true/false,
+        "requirements": ["requirement 1", "requirement 2", ...]
+      }
+      
+      IMPORTANT: If the user's request doesn't need external resources, return:
+      {
+        "requiresResources": false,
+        "requirements": []
+      }
 
-      Format your response as a JSON array of strings, with each string being a specific resource requirement:
-      ["requirement 1", "requirement 2", "requirement 3", ...]
-
-      IMPORTANT: Return an empty array if no resource requirements are found.
       IMPORTANT: All requirements must be in English.
-      IMPORTANT: Be specific about the type of resource needed.
     `,
     model,
   });
 
   try {
-    // Extract just the JSON array from the response (remove any extra text)
-    const jsonMatch = resp.text.match(/\[.*\]/s);
+    // Extract JSON object from the response
+    const jsonMatch = resp.text.match(/\{.*\}/s);
 
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as string[];
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // If LLM determined no resources needed, return empty array
+      if (!parsed.requiresResources) {
+        logger.info('LLM determined no resources needed for this request');
+        return [];
+      }
+
+      return parsed.requirements as string[];
     } else {
-      return JSON.parse(resp.text) as string[];
+      // Fallback parsing if JSON format wasn't followed
+      return JSON.parse(resp.text).requirements || [];
     }
   } catch (error) {
     logger.error('Failed to parse resource requirements JSON', error);
@@ -62,7 +96,7 @@ async function extractResourceRequirements(props: { userMessage: string; summary
       .filter((line) => line.trim().startsWith('-') || line.trim().startsWith('*'))
       .map((line) => line.replace(/^[-*]\s+/, '').trim());
 
-    return lines.length > 0 ? lines : [userMessage];
+    return lines.length > 0 ? lines : [];
   }
 }
 
@@ -128,8 +162,11 @@ async function filterRelevantResources(props: {
   userMessage: string;
   summary: string;
   model: any;
+  contextFiles: FileMap;
 }) {
-  const { requirements, resources, userMessage, summary, model } = props;
+  const { requirements, resources, userMessage, summary, model, contextFiles } = props;
+
+  const codeContext = createFilesContext(contextFiles, true);
 
   if (resources.length === 0) {
     return [];
@@ -149,6 +186,10 @@ async function filterRelevantResources(props: {
       You are an AI assistant that helps developers by evaluating the relevance of resources to their project needs.
       Your task is to analyze resources retrieved from a database and determine which ones are truly relevant 
       and helpful for the user's current request.
+
+      <CodeContext>
+      ${codeContext}
+      </CodeContext>
     `,
     prompt: `
       Here is the summary of the conversation so far:
@@ -201,10 +242,11 @@ export async function searchResources(props: {
   providerSettings?: Record<string, IProviderSetting>;
   promptId?: string;
   contextOptimization?: boolean;
+  contextFiles?: FileMap;
   summary: string;
   onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
 }) {
-  const { messages, env: serverEnv, apiKeys, providerSettings, summary, onFinish } = props;
+  const { messages, env: serverEnv, apiKeys, providerSettings, summary, onFinish, contextFiles } = props;
   const supabase = createClient(
     serverEnv!.SUPABASE_URL || process.env.SUPABASE_URL!,
     serverEnv!.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -288,6 +330,7 @@ export async function searchResources(props: {
     userMessage: userMessageText,
     summary,
     model,
+    contextFiles: contextFiles || {},
   });
 
   logger.info(`Extracted ${requirements.length} resource requirements:`, requirements);
@@ -304,6 +347,7 @@ export async function searchResources(props: {
     userMessage: userMessageText,
     summary,
     model,
+    contextFiles: contextFiles || {},
   });
 
   logger.info(`Selected ${relevantResources.length} relevant resources`);
