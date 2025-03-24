@@ -13,7 +13,8 @@ import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
-import { MCPManager } from '~/lib/modules/mcp/manager';
+import { getMCPConfigFromCookie } from '~/lib/api/cookies';
+import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -48,14 +49,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = JSON.parse(parseCookies(cookieHeader || '').apiKeys || '{}');
-  const providerSettings: Record<string, IProviderSetting> = JSON.parse(
-    parseCookies(cookieHeader || '').providers || '{}',
-  );
+  const parsedCookies = parseCookies(cookieHeader || '');
 
-  const mcpManager = await MCPManager.getInstance(context);
-  const mcpTools = mcpManager.tools;
-
+  const apiKeys = JSON.parse(parsedCookies.apiKeys || '{}');
+  const providerSettings: Record<string, IProviderSetting> = JSON.parse(parsedCookies.providers || '{}');
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
@@ -67,6 +64,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   let progressCounter: number = 1;
 
   try {
+    const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+    const mcpToolset = await createToolSet(mcpConfig);
+    const mcpTools = mcpToolset.tools;
+    logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
+
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
 
@@ -519,6 +521,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // Convert the string stream to a byte stream
           const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
           controller.enqueue(encoder.encode(str));
+        },
+        async flush() {
+          await cleanupToolSet(mcpToolset);
         },
       }),
     );

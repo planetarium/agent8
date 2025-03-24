@@ -6,12 +6,17 @@
  * MCP server configuration interface
  */
 export interface MCPServerConfig {
-  baseUrl: string;
+  name: string;
+  url: string;
+  enabled: boolean;
 }
+
+export type MCPConfigSource = 'cookie' | 'env';
 
 /**
  * MCP global configuration interface
  */
 export interface MCPConfig {
-  mcpServers: Record<string, MCPServerConfig>;
+  source: MCPConfigSource;
+  servers: Record<string, MCPServerConfig>;
 }

@@ -6,9 +6,9 @@ import { PROVIDER_LIST } from '~/utils/constants';
 import { MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
+import { getApiKeysFromCookie, getProviderSettingsFromCookie, getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
-import { MCPManager } from '~/lib/modules/mcp/manager';
+import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
 
 export async function action(args: ActionFunctionArgs) {
   return llmCallAction(args);
@@ -54,15 +54,18 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   const cookieHeader = request.headers.get('Cookie');
   const apiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
-
-  const mcpManager = await MCPManager.getInstance(context);
-  const mcpTools = mcpManager.tools;
+  const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+  const mcpToolset = await createToolSet(mcpConfig);
+  const mcpTools = mcpToolset.tools;
 
   if (streamOutput) {
     try {
       const result = await streamText({
         options: {
           system,
+          onFinish: async () => {
+            await cleanupToolSet(mcpToolset);
+          },
         },
         messages: [
           {
@@ -158,6 +161,8 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         status: 500,
         statusText: 'Internal Server Error',
       });
+    } finally {
+      await cleanupToolSet(mcpToolset);
     }
   }
 }

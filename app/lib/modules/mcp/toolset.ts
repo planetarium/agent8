@@ -8,6 +8,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { JSONSchemaToZod } from '@dmitryrechkin/json-schema-to-zod';
 import { createScopedLogger } from '~/utils/logger';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { MCPConfig } from './config';
 
 const logger = createScopedLogger('MCPToolset');
 
@@ -85,15 +86,6 @@ interface ProgressAwareTool extends Omit<Tool, 'execute'> {
   execute: (args: any) => Promise<object>;
 }
 
-export interface ToolSetConfig {
-  mcpServers: Record<
-    string,
-    {
-      baseUrl: string;
-    }
-  >;
-}
-
 export interface ToolSet {
   tools: Record<string, ProgressAwareTool>;
   clients: Record<string, Client>;
@@ -104,15 +96,20 @@ export interface ToolSet {
  * @param config Toolset configuration
  * @returns Toolset and MCP clients
  */
-export async function createToolSet(config: ToolSetConfig): Promise<ToolSet> {
+export async function createToolSet(config: MCPConfig): Promise<ToolSet> {
   const toolset: ToolSet = {
     tools: {},
     clients: {},
   };
 
-  for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
+  for (const [serverName, serverConfig] of Object.entries(config.servers)) {
+    if (!serverConfig.enabled) {
+      logger.info(`MCP server ${serverName} is disabled`);
+      continue;
+    }
+
     // Create SSE transport layer - direct initialization
-    const url = new URL(serverConfig.baseUrl);
+    const url = new URL(serverConfig.url);
     const transport = new SSEClientTransport(url);
 
     // Create MCP client
@@ -123,6 +120,10 @@ export async function createToolSet(config: ToolSetConfig): Promise<ToolSet> {
 
     client.onerror = (error) => {
       logger.error(`MCP client error: ${error}`);
+    };
+
+    client.onclose = () => {
+      logger.info(`MCP client ${serverName} closed`);
     };
 
     toolset.clients[serverName] = client;
@@ -191,4 +192,8 @@ export async function createToolSet(config: ToolSetConfig): Promise<ToolSet> {
   }
 
   return toolset;
+}
+
+export async function cleanupToolSet(toolset: ToolSet) {
+  await Promise.all(Object.values(toolset.clients).map((client) => client.close()));
 }
