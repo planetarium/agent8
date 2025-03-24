@@ -88,6 +88,9 @@ export class StreamingMessageParser {
       this.#messages.set(messageId, state);
     }
 
+    // Care about incomplete tags
+    input = this.#sanitizeIncompleteActionTags(input);
+
     let output = '';
     let i = state.position;
     let earlyBreak = false;
@@ -311,6 +314,39 @@ export class StreamingMessageParser {
   #extractAttribute(tag: string, attributeName: string): string | undefined {
     const match = tag.match(new RegExp(`${attributeName}="([^"]*)"`, 'i'));
     return match ? match[1] : undefined;
+  }
+
+  #sanitizeIncompleteActionTags(input: string): string {
+    // Check for open boltAction tags without closing tags
+    const openTagRegex = /<boltAction[^>]*>([\s\S]*)$/;
+    const openMatch = input.match(openTagRegex);
+
+    if (openMatch && !input.includes('</boltAction>')) {
+      // Log when incomplete tag is detected
+      logger.warn('Detected and handled incomplete boltAction tag due to token limit');
+      logger.debug('Original input with incomplete tag:', input);
+
+      // Safely remove the incomplete tag
+      const sanitized = input.replace(openTagRegex, '');
+      logger.debug('After removing incomplete tag:', sanitized);
+
+      return sanitized;
+    }
+
+    // Handle incomplete tag starts (e.g., ending with '<boltAc')
+    const incompleteStartRegex = /<bolt(?:Action|Artifact)?$/;
+
+    if (incompleteStartRegex.test(input)) {
+      logger.warn('Detected and handled incomplete bolt tag start due to token limit');
+      logger.debug('Original input with incomplete tag start:', input);
+
+      const sanitized = input.replace(incompleteStartRegex, '');
+      logger.debug('After removing incomplete tag start:', sanitized);
+
+      return sanitized;
+    }
+
+    return input;
   }
 }
 

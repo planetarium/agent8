@@ -3,6 +3,9 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX } from '~/
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('LLM:Utils');
 
 export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   model: string;
@@ -45,6 +48,34 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
 }
 
 export function simplifyBoltActions(input: string): string {
+  // Handle incomplete boltAction tags
+  const incompleteOpenTagRegex = /<boltAction[^>]*$/;
+
+  if (incompleteOpenTagRegex.test(input)) {
+    logger.debug('Found incomplete boltAction tag:', input.match(incompleteOpenTagRegex)?.[0]);
+    input = input.replace(incompleteOpenTagRegex, '');
+    logger.debug('Removed incomplete boltAction tag');
+  }
+
+  // Handle incomplete tag starts (e.g., ending with '<boltAc')
+  const incompleteStartRegex = /<bolt(?:Action|Artifact)?$/;
+
+  if (incompleteStartRegex.test(input)) {
+    logger.debug('Found incomplete bolt tag start:', input.match(incompleteStartRegex)?.[0]);
+    input = input.replace(incompleteStartRegex, '');
+    logger.debug('Removed incomplete bolt tag start');
+  }
+
+  // Handle open tags without closing tags
+  const openWithoutCloseRegex = /(<boltAction[^>]*>)([^<]*)$/;
+  const openMatch = input.match(openWithoutCloseRegex);
+
+  if (openMatch) {
+    logger.debug('Found open tag without closing tag:', openMatch[0]);
+    input = input.replace(openWithoutCloseRegex, '');
+    logger.debug('Removed open tag without closing tag');
+  }
+
   // Using regex to match boltAction tags that have type="file"
   const regex = /(<boltAction[^>]*type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/g;
 
