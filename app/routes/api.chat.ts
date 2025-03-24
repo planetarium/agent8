@@ -10,7 +10,7 @@ import { getFilePaths, selectContext } from '~/lib/.server/llm/select-context';
 import type { ContextAnnotation, ProgressAnnotation } from '~/types/context';
 import { WORK_DIR } from '~/utils/constants';
 import { createSummary } from '~/lib/.server/llm/create-summary';
-import { extractPropertiesFromMessage, simplifyBoltActions } from '~/lib/.server/llm/utils';
+import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
 
@@ -306,16 +306,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             const switchesLeft = MAX_RESPONSE_SEGMENTS - stream.switches;
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
-            logger.debug('Last chunk before sanitizing due to token limit:', content.slice(-100));
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
-
-            // Safely handle truncated response caused by token limit
-            const sanitizedContent = simplifyBoltActions(content);
-            logger.debug('Sanitized content after token limit:', sanitizedContent.slice(-100));
-
-            messages.push({ id: generateId(), role: 'assistant', content: sanitizedContent });
+            messages.push({ id: generateId(), role: 'assistant', content });
             messages.push({
               id: generateId(),
               role: 'user',
