@@ -89,12 +89,15 @@ export default class OpenRouterProvider extends BaseProvider {
 
       return data.data
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((m) => ({
-          name: m.id,
-          label: `${m.name} - in:$${(m.pricing.prompt * 1_000_000).toFixed(2)} out:$${(m.pricing.completion * 1_000_000).toFixed(2)} - context ${Math.floor(m.context_length / 1000)}k`,
-          provider: this.name,
-          maxTokenAllowed: 8000,
-        }));
+        .map((m) => {
+          const maxTokenAllowed = m.name.includes('Claude 3.7 Sonnet') ? 64000 : 8000;
+          return {
+            name: m.id,
+            label: `${m.name} - in:$${(m.pricing.prompt * 1_000_000).toFixed(2)} out:$${(m.pricing.completion * 1_000_000).toFixed(2)} - context ${Math.floor(m.context_length / 1000)}k`,
+            provider: this.name,
+            maxTokenAllowed,
+          };
+        });
     } catch (error) {
       console.error('Error getting OpenRouter models:', error);
       return [];

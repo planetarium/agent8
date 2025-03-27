@@ -17,7 +17,7 @@ export default class AnthropicProvider extends BaseProvider {
       name: 'claude-3-7-sonnet-20250219',
       label: 'Claude 3.7 Sonnet',
       provider: 'Anthropic',
-      maxTokenAllowed: 8000,
+      maxTokenAllowed: 64000,
     },
   ];
 
