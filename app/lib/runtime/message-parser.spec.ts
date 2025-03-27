@@ -156,6 +156,81 @@ describe('StreamingMessageParser', () => {
       runTest(input, expected);
     });
   });
+
+  describe('action continuation with same file path', () => {
+    it('should prevent content duplication when second action already contains first action content', () => {
+      const callbacks = {
+        onArtifactOpen: vi.fn<ArtifactCallback>(),
+        onArtifactClose: vi.fn<ArtifactCallback>(),
+        onActionOpen: vi.fn<ActionCallback>(),
+        onActionStream: vi.fn<ActionCallback>(),
+        onActionClose: vi.fn<ActionCallback>(),
+      };
+
+      const parser = new StreamingMessageParser({
+        artifactElement: () => '',
+        callbacks,
+      });
+
+      // First chunk with incomplete action
+      const firstChunk =
+        '<boltArtifact title="Continue Test" id="artifact_1"><boltAction type="file" filePath="1.txt">Hello';
+      parser.parse('message_1', firstChunk);
+
+      // Second chunk with new action that already contains the content from first action
+      const secondChunk = '<boltAction type="file" filePath="1.txt">Hello World</boltAction></boltArtifact>';
+      parser.parse('message_1', firstChunk + secondChunk);
+
+      // Check if actions were processed correctly
+      expect(callbacks.onArtifactOpen).toHaveBeenCalledTimes(1);
+      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(2);
+
+      // The first action should have been closed automatically
+      expect(callbacks.onActionClose).toHaveBeenCalledTimes(2);
+
+      // Check content wasn't duplicated (should be 'Hello World', not 'HelloHello World')
+      const lastActionCall = callbacks.onActionClose.mock.calls[1][0];
+      expect(lastActionCall.action.content).toBe('Hello World\n');
+    });
+
+    it('should prevent content duplication when second action already contains first action content as markdown code block', () => {
+      const callbacks = {
+        onArtifactOpen: vi.fn<ArtifactCallback>(),
+        onArtifactClose: vi.fn<ArtifactCallback>(),
+        onActionOpen: vi.fn<ActionCallback>(),
+        onActionStream: vi.fn<ActionCallback>(),
+        onActionClose: vi.fn<ActionCallback>(),
+      };
+
+      const parser = new StreamingMessageParser({
+        artifactElement: () => '',
+        callbacks,
+      });
+
+      // First chunk with incomplete action
+      const firstChunk =
+        '<boltArtifact title="Continue Test" id="artifact_1"><boltAction type="file" filePath="1.txt">// Fire 8 missiles in a radial pattern\n        for (let i =';
+      parser.parse('message_1', firstChunk);
+
+      // Second chunk with new action that already contains the content from first action
+      const secondChunk =
+        '<boltAction type="file" filePath="1.txt">```\n// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n\n```</boltAction></boltArtifact>';
+      parser.parse('message_1', firstChunk + secondChunk);
+
+      // Check if actions were processed correctly
+      expect(callbacks.onArtifactOpen).toHaveBeenCalledTimes(1);
+      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(2);
+
+      // The first action should have been closed automatically
+      expect(callbacks.onActionClose).toHaveBeenCalledTimes(2);
+
+      // Check content wasn't duplicated
+      const lastActionCall = callbacks.onActionClose.mock.calls[1][0];
+      expect(lastActionCall.action.content).toBe(
+        '// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n',
+      );
+    });
+  });
 });
 
 function runTest(input: string | string[], outputOrExpectedResult: string | ExpectedResult) {

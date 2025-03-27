@@ -52,6 +52,20 @@ interface MessageState {
   actionId: number;
 }
 
+function cleanoutFileContent(content: string, filePath: string): string {
+  let processedContent = content.trim();
+
+  // Remove markdown code block syntax if present and file is not markdown
+  if (!filePath.endsWith('.md')) {
+    processedContent = cleanoutMarkdownSyntax(processedContent);
+    processedContent = cleanEscapedTags(processedContent);
+  }
+
+  processedContent += '\n';
+
+  return processedContent;
+}
+
 function cleanoutMarkdownSyntax(content: string) {
   const codeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
   const match = content.match(codeBlockRegex);
@@ -68,6 +82,7 @@ function cleanoutMarkdownSyntax(content: string) {
 function cleanEscapedTags(content: string) {
   return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
+
 export class StreamingMessageParser {
   #messages = new Map<string, MessageState>();
 
@@ -88,9 +103,6 @@ export class StreamingMessageParser {
       this.#messages.set(messageId, state);
     }
 
-    // Care about incomplete tags
-    input = this.#sanitizeIncompleteActionTags(input);
-
     let output = '';
     let i = state.position;
     let earlyBreak = false;
@@ -105,22 +117,16 @@ export class StreamingMessageParser {
 
         if (state.insideAction) {
           const closeIndex = input.indexOf(ARTIFACT_ACTION_TAG_CLOSE, i);
-
+          const newActionOpenIndex = input.indexOf(ARTIFACT_ACTION_TAG_OPEN, i);
           const currentAction = state.currentAction;
 
-          if (closeIndex !== -1) {
+          if (closeIndex !== -1 && (newActionOpenIndex === -1 || closeIndex < newActionOpenIndex)) {
             currentAction.content += input.slice(i, closeIndex);
 
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              // Remove markdown code block syntax if present and file is not markdown
-              if (!currentAction.filePath.endsWith('.md')) {
-                content = cleanoutMarkdownSyntax(content);
-                content = cleanEscapedTags(content);
-              }
-
-              content += '\n';
+              content = cleanoutFileContent(content, currentAction.filePath);
             }
 
             currentAction.content = content;
@@ -143,14 +149,37 @@ export class StreamingMessageParser {
             state.currentAction = { content: '' };
 
             i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
+          } else if (newActionOpenIndex !== -1 && (closeIndex === -1 || newActionOpenIndex < closeIndex)) {
+            const newActionEndIndex = input.indexOf('>', newActionOpenIndex);
+
+            if (newActionEndIndex !== -1) {
+              const previousAction = state.currentAction;
+              state.currentAction = this.#parseActionTag(input, newActionOpenIndex, newActionEndIndex);
+
+              // it will be replaced.
+              previousAction.content = '';
+
+              this._options.callbacks?.onActionClose?.({
+                artifactId: currentArtifact.id,
+                messageId,
+                actionId: String(state.actionId - 1),
+                action: previousAction as BoltAction,
+              });
+
+              this._options.callbacks?.onActionOpen?.({
+                artifactId: currentArtifact.id,
+                messageId,
+                actionId: String(state.actionId++),
+                action: state.currentAction as BoltAction,
+              });
+
+              i = newActionEndIndex + 1;
+            } else {
+              break;
+            }
           } else {
             if ('type' in currentAction && currentAction.type === 'file') {
-              let content = input.slice(i);
-
-              if (!currentAction.filePath.endsWith('.md')) {
-                content = cleanoutMarkdownSyntax(content);
-                content = cleanEscapedTags(content);
-              }
+              const content = cleanoutFileContent(input.slice(i), currentAction.filePath);
 
               this._options.callbacks?.onActionStream?.({
                 artifactId: currentArtifact.id,
@@ -314,39 +343,6 @@ export class StreamingMessageParser {
   #extractAttribute(tag: string, attributeName: string): string | undefined {
     const match = tag.match(new RegExp(`${attributeName}="([^"]*)"`, 'i'));
     return match ? match[1] : undefined;
-  }
-
-  #sanitizeIncompleteActionTags(input: string): string {
-    // Check for open boltAction tags without closing tags
-    const openTagRegex = /<boltAction[^>]*>([\s\S]*)$/;
-    const openMatch = input.match(openTagRegex);
-
-    if (openMatch && !input.includes('</boltAction>')) {
-      // Log when incomplete tag is detected
-      logger.warn('Detected and handled incomplete boltAction tag due to token limit');
-      logger.debug('Original input with incomplete tag:', input);
-
-      // Safely remove the incomplete tag
-      const sanitized = input.replace(openTagRegex, '');
-      logger.debug('After removing incomplete tag:', sanitized);
-
-      return sanitized;
-    }
-
-    // Handle incomplete tag starts (e.g., ending with '<boltAc')
-    const incompleteStartRegex = /<bolt(?:Action|Artifact)?$/;
-
-    if (incompleteStartRegex.test(input)) {
-      logger.warn('Detected and handled incomplete bolt tag start due to token limit');
-      logger.debug('Original input with incomplete tag start:', input);
-
-      const sanitized = input.replace(incompleteStartRegex, '');
-      logger.debug('After removing incomplete tag start:', sanitized);
-
-      return sanitized;
-    }
-
-    return input;
   }
 }
 
