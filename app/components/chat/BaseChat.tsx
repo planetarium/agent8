@@ -9,7 +9,7 @@ import { Menu } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
-import { PROVIDER_LIST } from '~/utils/constants';
+import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import { APIKeyManager, getApiKeysFromCookies } from './APIKeyManager';
@@ -24,7 +24,6 @@ import FilePreview from './FilePreview';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
 import type { ProviderInfo } from '~/types/model';
-import { ScreenshotStateManager } from './ScreenshotStateManager';
 import { toast } from 'react-toastify';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
@@ -37,6 +36,13 @@ import { ImportGithub } from './ImportGithub';
 import { ImportProjectZip } from './ImportProjectZip';
 
 const TEXTAREA_MIN_HEIGHT = 76;
+
+export interface ChatAttachment {
+  filename: string;
+  url: string;
+  features: string;
+  details: string;
+}
 
 interface BaseChatProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement> | undefined;
@@ -62,10 +68,8 @@ interface BaseChatProps {
   enhancePrompt?: () => void;
   importChat?: (description: string, messages: Message[]) => Promise<void>;
   exportChat?: () => void;
-  uploadedFiles?: File[];
-  setUploadedFiles?: (files: File[]) => void;
-  imageDataList?: string[];
-  setImageDataList?: (dataList: string[]) => void;
+  attachmentList?: ChatAttachment[];
+  setAttachmentList?: (attachments: ChatAttachment[]) => void;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
   data?: JSONValue[] | undefined;
@@ -98,10 +102,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       sendMessage,
       handleStop,
       exportChat,
-      uploadedFiles = [],
-      setUploadedFiles,
-      imageDataList = [],
-      setImageDataList,
+      attachmentList = [],
+      setAttachmentList,
       messages,
       actionAlert,
       clearAlert,
@@ -256,23 +258,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
     };
 
-    const handleFileUpload = () => {
+    const handleFileUpload = async () => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
+      input.accept = 'image/*, video/*, audio/*, .glb, .gltf, .json, .ttf';
 
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
 
         if (file) {
-          const reader = new FileReader();
-
-          reader.onload = (e) => {
-            const base64Image = e.target?.result as string;
-            setUploadedFiles?.([...uploadedFiles, file]);
-            setImageDataList?.([...imageDataList, base64Image]);
-          };
-          reader.readAsDataURL(file);
+          await uploadFileAndAddToAttachmentList(file);
         }
       };
 
@@ -287,24 +282,125 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
 
       for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          e.preventDefault();
+        e.preventDefault();
 
-          const file = item.getAsFile();
+        const file = item.getAsFile();
 
-          if (file) {
-            const reader = new FileReader();
+        if (file) {
+          await uploadFileAndAddToAttachmentList(file);
+        }
 
-            reader.onload = (e) => {
-              const base64Image = e.target?.result as string;
-              setUploadedFiles?.([...uploadedFiles, file]);
-              setImageDataList?.([...imageDataList, base64Image]);
-            };
-            reader.readAsDataURL(file);
+        break;
+      }
+    };
+
+    const uploadFileAndAddToAttachmentList = async (file: File) => {
+      try {
+        const fileName = file.name;
+        const fileExt = `.${fileName.split('.').pop()?.toLowerCase()}`;
+
+        if (!ATTACHMENT_EXTS.includes(fileExt)) {
+          toast.error('Not allowed file type');
+        }
+
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+        const modelExtensions = ['.glb', '.gltf'];
+        const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
+        const videoExtensions = ['.mp4', '.webm', '.mov'];
+
+        let fileType = 'unknown';
+
+        if (imageExtensions.includes(fileExt)) {
+          fileType = 'image';
+        } else if (modelExtensions.includes(fileExt)) {
+          fileType = '3D model';
+        } else if (audioExtensions.includes(fileExt)) {
+          fileType = 'audio';
+        } else if (videoExtensions.includes(fileExt)) {
+          fileType = 'video';
+        } else {
+          toast.error('Only media files are allowed');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', 'chat-uploads');
+
+        const verse = 'current';
+        formData.append('verse', verse);
+
+        toast.info(`Uploading ${file.name}...`);
+
+        const response = await fetch('/api/upload-attachment', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Upload failed: ${response.status} ${errorText}`);
+        }
+
+        const result = (await response.json()) as { success: boolean; url: string; error?: string };
+
+        if (result.success && result.url) {
+          // 기본 첨부 파일 객체
+          let newAttachment: ChatAttachment = {
+            filename: fileName,
+            url: result.url,
+            features: `Type: ${fileType} Ext: ${fileExt}`,
+            details: `Type: ${fileType} Ext: ${fileExt}`,
+          };
+
+          // 이미지 파일인 경우 AI를 통한 설명 가져오기
+          if (fileType === 'image') {
+            try {
+              // 이미지 업로드 성공 알림
+
+              // 이미지 설명 API 호출
+              const descriptionResponse = await fetch('/api/image-description', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  imageUrls: [result.url],
+                }),
+              });
+
+              if (descriptionResponse.ok) {
+                const descriptions = await descriptionResponse.json();
+
+                // API 응답에서 첫 번째 이미지에 대한 설명 가져오기
+                if (descriptions && Array.isArray(descriptions) && descriptions.length > 0) {
+                  const imageDesc = descriptions[0];
+
+                  // 기존 attachment 정보에 AI가 생성한 설명 추가
+                  newAttachment = {
+                    ...newAttachment,
+                    features: imageDesc.features || newAttachment.features,
+                    details: imageDesc.details || newAttachment.details,
+                  };
+                }
+              }
+            } catch (descError) {
+              console.error('Error generating image description:', descError);
+              toast.warning('Could not generate image description, using default');
+            }
+          } else {
+            // 이미지가 아닌 경우 기본 업로드 성공 메시지
+            toast.success(`Uploaded ${file.name}`);
           }
 
-          break;
+          // 첨부 파일 리스트에 추가
+          setAttachmentList?.([...attachmentList, newAttachment]);
+        } else {
+          throw new Error(result.error || 'Unknown error during upload');
         }
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        toast.error(`Upload failed: ${error.message}`);
       }
     };
 
@@ -431,23 +527,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     </ClientOnly>
                   </div>
                   <FilePreview
-                    files={uploadedFiles}
-                    imageDataList={imageDataList}
+                    attachmentUrlList={attachmentList ? attachmentList.map((attachment) => attachment.url) : []}
                     onRemove={(index) => {
-                      setUploadedFiles?.(uploadedFiles.filter((_, i) => i !== index));
-                      setImageDataList?.(imageDataList.filter((_, i) => i !== index));
+                      setAttachmentList?.(attachmentList?.filter((_, i) => i !== index) || []);
                     }}
                   />
-                  <ClientOnly>
-                    {() => (
-                      <ScreenshotStateManager
-                        setUploadedFiles={setUploadedFiles}
-                        setImageDataList={setImageDataList}
-                        uploadedFiles={uploadedFiles}
-                        imageDataList={imageDataList}
-                      />
-                    )}
-                  </ClientOnly>
                   <div
                     className={classNames(
                       'relative shadow-xs border border-bolt-elements-borderColor backdrop-blur rounded-lg',
@@ -472,23 +556,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         e.preventDefault();
                         e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
                       }}
-                      onDrop={(e) => {
+                      onDrop={async (e) => {
                         e.preventDefault();
                         e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
 
                         const files = Array.from(e.dataTransfer.files);
-                        files.forEach((file) => {
-                          if (file.type.startsWith('image/')) {
-                            const reader = new FileReader();
 
-                            reader.onload = (e) => {
-                              const base64Image = e.target?.result as string;
-                              setUploadedFiles?.([...uploadedFiles, file]);
-                              setImageDataList?.([...imageDataList, base64Image]);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        });
+                        for (const file of files) {
+                          await uploadFileAndAddToAttachmentList(file);
+                        }
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
@@ -526,7 +602,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <ClientOnly>
                       {() => (
                         <SendButton
-                          show={input.length > 0 || isStreaming || uploadedFiles.length > 0}
+                          show={input.length > 0 || isStreaming || attachmentList.length > 0}
                           isStreaming={isStreaming}
                           disabled={!providerList || providerList.length === 0}
                           onClick={(event) => {
@@ -535,7 +611,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               return;
                             }
 
-                            if (input.length > 0 || uploadedFiles.length > 0) {
+                            if (input.length > 0 || attachmentList.length > 0) {
                               handleSendMessage?.(event);
                             }
                           }}

@@ -49,7 +49,8 @@ async function extractRequirements(props: { userMessage: string; summary: string
       
       Then, only if you answered YES, extract 1-5 specific technical implementation requirements from this request.
       Focus ONLY on aspects that are complex and would genuinely benefit from existing code examples.
-      
+      If you've created requirements, add the user's original request in English as one of the requirements at the end.
+
       Format your response as a JSON object:
       {
         "requiresExamples": true/false,
@@ -410,7 +411,7 @@ export async function searchVectorDB(props: {
     onFinish(mockResp);
   }
 
-  return result;
+  return { result, examples: relevantExamples, requirements };
 }
 
 export function getFilePaths(files: FileMap) {

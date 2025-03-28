@@ -12,7 +12,7 @@ import { Button } from '~/components/ui/Button';
 import { Input } from '~/components/ui/Input';
 import type { FileMap } from '~/lib/stores/files';
 import type { FileHistory } from '~/types/actions';
-import { WORK_DIR } from '~/utils/constants';
+import { ATTACHMENT_EXTS, WORK_DIR } from '~/utils/constants';
 import { renderLogger } from '~/utils/logger';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -72,43 +72,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
   // 허용되는 파일 확장자 목록
-  const allowedFileExtensions = [
-    // 이미지
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.svg',
-    '.webp',
-
-    // 3D 모델
-    '.glb',
-    '.gltf',
-
-    // 오디오
-    '.mp3',
-    '.wav',
-    '.ogg',
-    '.m4a',
-
-    // 비디오
-    '.mp4',
-    '.webm',
-    '.mov',
-
-    // 폰트
-    '.ttf',
-    '.otf',
-    '.woff',
-    '.woff2',
-
-    // 텍스트
-    '.txt',
-    '.md',
-    '.json',
-    '.csv',
-    '.xml',
-  ];
+  const allowedFileExtensions = ATTACHMENT_EXTS;
 
   // categories 변경 시 ref에도 업데이트
   useEffect(() => {
@@ -572,33 +536,21 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       return null;
     }
 
-    // 이미지 파일인 경우 가로/세로 크기 메타데이터 추가
-    let dimensions: { width?: number; height?: number } = {};
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
-
-    if (imageExtensions.includes(fileExt)) {
-      try {
-        dimensions = await getImageDimensions(file);
-      } catch (error) {
-        console.warn('Failed to get image dimensions:', error);
-      }
-    }
-
     try {
       setIsUploading(true);
 
       const uploadPath = `assets/${selectedCategory}`;
-      const endpoint = 'https://verse8-simple-game-backend-609824224664.asia-northeast3.run.app';
-      const signature = 'bolt-verse-signature';
 
-      const form = new FormData();
-      form.append('file', file);
-      form.append('path', uploadPath || '/');
+      // FormData 생성
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', uploadPath);
+      formData.append('verse', verse);
 
-      // fetch API로는 업로드 진행 상황을 추적하기 어려우므로, XMLHttpRequest 사용
+      // XMLHttpRequest 대신 fetch를 사용하되 업로드 진행 상황 추적
+      const xhr = new XMLHttpRequest();
+
       return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
         // 진행 상태 업데이트 이벤트
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
@@ -616,93 +568,43 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         xhr.addEventListener('load', async () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
-              // 중요: 고정된 URL 구조 사용
-              const assetUrl = `https://agent8-games.verse8.io/${verse}/assets/${selectedCategory}/${file.name}`;
-              console.log('Generated asset URL:', assetUrl); // 디버깅용
+              const response = JSON.parse(xhr.responseText);
 
-              // 이미지 파일인 경우 자동으로 설명 생성
-              let description = file.name; // 기본값을 파일명으로 설정
+              if (response.success) {
+                // 성공 상태 업데이트
+                setUploadingAssets((prev) => ({
+                  ...prev,
+                  [uploadId]: { ...prev[uploadId], status: 'success', progress: 100 },
+                }));
 
-              if (imageExtensions.includes(fileExt)) {
-                try {
-                  console.log('Requesting image description for:', assetUrl);
+                // 성공한 업로드 기록
+                setSuccessfulUploads((prev) => ({
+                  ...prev,
+                  [uploadId]: true,
+                }));
 
-                  const desc = await getImageDescription(assetUrl);
-
-                  if (desc && desc.trim()) {
-                    description = desc;
-                    console.log('Received image description:', description);
-                  } else {
-                    console.warn('Empty description received, using filename instead');
-                  }
-                } catch (error) {
-                  console.error('Failed to get image description:', error);
-                }
+                // URL 정보 포함하여 해결
+                resolve({
+                  url: response.url,
+                  description: response.description || file.name,
+                });
+              } else {
+                throw new Error(response.error || 'Upload failed');
               }
-
-              // 카테고리 업데이트 - 카테고리가 유효한지 먼저 확인
-              if (selectedCategory) {
-                const updatedCategories = { ...categoriesRef.current };
-
-                // 해당 uploadId를 가진 플레이스홀더 찾기
-                if (updatedCategories[selectedCategory]) {
-                  let assetUpdated = false;
-
-                  Object.entries(updatedCategories[selectedCategory]).forEach(([key, asset]) => {
-                    if (asset.metadata?.uploadId === uploadId) {
-                      console.log('Updating asset with URL:', assetUrl); // 디버깅용
-                      console.log('Setting description to:', description); // 디버깅용
-
-                      // 이미지 사이즈 메타데이터 추가
-                      const updatedMetadata = {
-                        ...asset.metadata,
-                        uploadComplete: true,
-                        ...(dimensions.width && dimensions.height ? { dimensions } : {}),
-                      };
-
-                      updatedCategories[selectedCategory][key] = {
-                        ...asset,
-                        url: assetUrl, // URL 설정 확인
-                        description: description || asset.description,
-                        metadata: updatedMetadata,
-                      };
-
-                      assetUpdated = true;
-                    }
-                  });
-
-                  if (assetUpdated) {
-                    // 상태와 ref 모두 업데이트
-                    console.log('Setting categories with updated URL and description');
-                    setCategories(updatedCategories);
-                    categoriesRef.current = updatedCategories;
-
-                    // 즉시 저장하여 변경사항이 유지되도록 함
-                    saveAssets().catch((e) => console.error('Failed to save assets:', e));
-                  }
-                }
-              }
-
-              // 성공 상태 업데이트
-              setUploadingAssets((prev) => ({
-                ...prev,
-                [uploadId]: { ...prev[uploadId], status: 'success', progress: 100 },
-              }));
-
-              // 성공한 업로드 기록
-              setSuccessfulUploads((prev) => ({
-                ...prev,
-                [uploadId]: true,
-              }));
-
-              // URL 정보 포함하여 해결
-              resolve({ url: assetUrl, description });
             } catch (error) {
               console.error('Error processing upload response:', error);
 
-              // 오류가 있어도 URL 반환
-              const assetUrl = `https://agent8-games.verse8.io/${verse}/assets/${selectedCategory}/${file.name}`;
-              resolve({ url: assetUrl });
+              // 에러 상태 업데이트
+              setUploadingAssets((prev) => ({
+                ...prev,
+                [uploadId]: {
+                  ...prev[uploadId],
+                  status: 'error',
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                  progress: 0,
+                },
+              }));
+              reject(error);
             }
           } else {
             // 에러 상태 업데이트
@@ -734,9 +636,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         });
 
         // 요청 설정 및 전송
-        xhr.open('POST', `${endpoint}/verses/${verse}/files`);
-        xhr.setRequestHeader('X-Signature', signature);
-        xhr.send(form);
+        xhr.open('POST', '/api/upload-attachment');
+        xhr.send(formData);
       });
     } catch (error: any) {
       console.error('Error uploading file:', error);
@@ -764,59 +665,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       if (allUploadsComplete) {
         setIsUploading(false);
       }
-    }
-  };
-
-  // 이미지 크기를 가져오는 함수
-  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-
-      img.onload = () => {
-        resolve({
-          width: img.width,
-          height: img.height,
-        });
-        URL.revokeObjectURL(img.src); // 메모리 누수 방지
-      };
-
-      img.onerror = () => {
-        reject(new Error('Failed to load image'));
-        URL.revokeObjectURL(img.src);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  // 이미지 설명을 가져오는 함수
-  const getImageDescription = async (imageUrl: string): Promise<string> => {
-    try {
-      // 모델과 프로바이더 정보 추가
-      const model = 'google/gemini-2.0-flash-lite-001';
-      const provider = {
-        name: 'openrouter',
-      };
-
-      const response = await fetch('/api/image-description', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageUrl,
-          model,
-          provider,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      return await response.text();
-    } catch (error) {
-      console.error('Error getting image description:', error);
-      return ''; // 오류 시 빈 문자열 반환
     }
   };
 

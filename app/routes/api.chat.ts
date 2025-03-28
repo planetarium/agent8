@@ -81,6 +81,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messageSliceId = messages.length - 3;
         }
 
+        console.log(JSON.stringify(messages));
+
         if (filePaths.length > 0 && contextOptimization) {
           logger.debug('Generating Chat Summary');
           dataStream.writeData({
@@ -193,7 +195,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           message: 'Searching for Code Examples',
         } satisfies ProgressAnnotation);
 
-        vectorDbExamples = await searchVectorDB({
+        const vectorDBResult = await searchVectorDB({
           messages: [...messages],
           env: context.cloudflare?.env,
           apiKeys,
@@ -213,6 +215,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           },
         });
 
+        vectorDbExamples = vectorDBResult.result;
+
         const exampleCount = Object.keys(vectorDbExamples).length;
         logger.debug(`Found ${exampleCount} relevant code examples`);
 
@@ -222,6 +226,22 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           status: 'complete',
           order: progressCounter++,
           message: `Found ${exampleCount} Code Examples`,
+        } satisfies ProgressAnnotation);
+
+        dataStream.writeData({
+          type: 'progress',
+          label: 'vectordb-requirements',
+          status: 'complete',
+          order: progressCounter++,
+          message: `Requirements:${vectorDBResult.requirements}`,
+        } satisfies ProgressAnnotation);
+
+        dataStream.writeData({
+          type: 'progress',
+          label: 'vectordb-found',
+          status: 'complete',
+          order: progressCounter++,
+          message: `Found :${vectorDBResult.examples.map((v) => v.path)}`,
         } satisfies ProgressAnnotation);
 
         // Search for relevant resources

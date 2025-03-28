@@ -133,7 +133,11 @@ ${props.summary}
     if (props.messageSliceId) {
       processedMessages = processedMessages.slice(props.messageSliceId);
     } else {
-      processedMessages = processedMessages.slice(-3);
+      const lastMessage = processedMessages.pop();
+
+      if (lastMessage) {
+        processedMessages = [lastMessage];
+      }
     }
   }
 
@@ -174,14 +178,38 @@ ${props.summary}
   }
 
   systemPrompt = `${systemPrompt}
-<ResourceContext>
-${resourceContext}
 
-When writing code, you must only use resources available here. You cannot use other resources in response code.
-You can use resources from \`src/assets.json\` or resources listed in \`availableResources\`.
-If you use a resource from \`availableResources\`, add that resource to \`src/assets.json\` in your response.
-CRITICAL: Never use URLs in response code that are not found here.
-</ResourceContext>
+
+  <resource_constraints>
+    <ResourceContext>
+    ${resourceContext}
+    </ResourceContext>
+
+    The resources needed to fulfill the user's request are provided in the ResourceContext.
+    You can only use resource urls from \`src/assets.json\` or listed in \`availableResources\` or listed url in \`<Attachments />\` user attached
+    If you want to use a resource from \`<availableResources>\`, \`<Attachments />\`, add that resource to \`src/assets.json\` in your response.
+    Resources that are not in \`src/assets.json\` can NEVER be used.
+
+
+  CRITICAL: Follow these strict resource management rules to prevent application errors:
+    
+  1. If appropriate resources are not available in assets.json:
+     - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
+     - For 3D games: Use Three.js to generate geometric shapes and programmatic textures
+     - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
+     - Consider simplifying the visual design to work with available resources
+     - NEVER create images directly using base64 or similar methods.
+     
+  
+  2. Resource reference pattern:
+     \`\`\`js
+     import Assets from './assets.json'
+     
+     // Correct way to use assets
+     const knightImageUrl = Assets.character.knight.url;
+     \`\`\`
+
+</resource_constraints>
 `;
 
   if (vectorDbExamples && Object.keys(vectorDbExamples).length > 0) {
@@ -196,6 +224,17 @@ ${examplesContext}
   }
 
   logger.info(`Sending llm call to ${provider.name} with model ${modelDetails.name}`);
+
+  /*
+   * fs.appendFileSync(
+   *   'last-prompt.logs',
+   *   `time: ${new Date().toISOString()}\n\nsystemPrompt: ${systemPrompt}\n\nprocessedMessages: ${JSON.stringify(
+   *     convertToCoreMessages(processedMessages as any),
+   *     null,
+   *     2,
+   *   )}\n\n`,
+   * );
+   */
 
   return await _streamText({
     model: provider.getModelInstance({

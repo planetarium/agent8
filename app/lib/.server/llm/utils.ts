@@ -1,5 +1,5 @@
 import { type Message } from 'ai';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX } from '~/utils/constants';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';
@@ -7,7 +7,7 @@ import type { ContextAnnotation } from '~/types/context';
 export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   model: string;
   provider: string;
-  content: string;
+  content: any;
 } {
   const textContent = Array.isArray(message.content)
     ? message.content.find((item) => item.type === 'text')?.text || ''
@@ -15,6 +15,7 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
 
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
+  const attachmentsMatch = textContent.match(ATTACHMENTS_REGEX);
 
   /*
    * Extract model
@@ -28,18 +29,33 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
    */
   const provider = providerMatch ? providerMatch[1] : DEFAULT_PROVIDER.name;
 
+  let attachments = [];
+  let attachmentsText = '';
+
+  try {
+    if (attachmentsMatch) {
+      attachments = JSON.parse(attachmentsMatch[1]);
+
+      if (attachments?.length > 0) {
+        attachmentsText = `\n\n<Attachments>${JSON.stringify(attachments)}</Attachments>`;
+      }
+    }
+  } catch {}
+
   const cleanedContent = Array.isArray(message.content)
     ? message.content.map((item) => {
         if (item.type === 'text') {
           return {
             type: 'text',
-            text: item.text?.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, ''),
+            text:
+              item.text?.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '').replace(ATTACHMENTS_REGEX, '') +
+              attachmentsText,
           };
         }
 
         return item; // Preserve image_url and other types as is
       })
-    : textContent.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '');
+    : textContent.replace(MODEL_REGEX, '').replace(PROVIDER_REGEX, '').replace(ATTACHMENTS_REGEX, '') + attachmentsText;
 
   return { model, provider, content: cleanedContent };
 }

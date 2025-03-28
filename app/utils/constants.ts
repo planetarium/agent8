@@ -6,6 +6,7 @@ export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
+export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
 export const DEFAULT_MODEL = 'anthropic/claude-3.7-sonnet';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 
@@ -51,4 +52,41 @@ export const STARTER_TEMPLATES: Template[] = [
     path: 'basic-3d',
     tags: ['vite', 'react', 'typescript', 'three.js'],
   },
+];
+
+export const ATTACHMENT_EXTS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+
+  // 3D 모델
+  '.glb',
+  '.gltf',
+
+  // 오디오
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.m4a',
+
+  // 비디오
+  '.mp4',
+  '.webm',
+  '.mov',
+
+  // 폰트
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2',
+
+  // 텍스트
+  '.txt',
+  '.md',
+  '.json',
+  '.csv',
+  '.xml',
 ];

@@ -1,81 +1,77 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { streamText } from '~/lib/.server/llm/stream-text';
-import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
-import { createScopedLogger } from '~/utils/logger';
+import { generateText } from 'ai';
 import { PROVIDER_LIST } from '~/utils/constants';
-import { stripIndents } from '~/utils/stripIndent';
 
 export async function action(args: ActionFunctionArgs) {
   return imageDescriptionAction(args);
 }
 
-const logger = createScopedLogger('api.image-description');
-
-async function imageDescriptionAction({ context, request }: ActionFunctionArgs) {
-  const { imageUrl } = await request.json<{
-    imageUrl: string;
-  }>();
-
+export async function generateImageDescription(
+  imageUrls: string[],
+): Promise<{ imageUrl: string; features: string; details: string }[]> {
   const provider = PROVIDER_LIST.find((p) => p.name === 'OpenRouter');
   const model = 'google/gemini-2.0-flash-lite-001';
 
   // Validate inputs
-  if (!imageUrl || typeof imageUrl !== 'string') {
-    throw new Response('Invalid or missing imageUrl', {
+  if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+    throw new Response('Invalid or missing imageUrls', {
       status: 400,
       statusText: 'Bad Request',
     });
   }
 
-  const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = getApiKeysFromCookie(cookieHeader);
-  const providerSettings = getProviderSettingsFromCookie(cookieHeader);
-
   try {
-    const result = await streamText({
+    const resp = await generateText({
+      model: provider!.getModelInstance({
+        model,
+      }),
+      system: `You are an image analysis expert in the gaming industry. 
+      You describe images in a way that other LLMs can accurately infer their characteristics and forms. 
+      You also recommend how the image could be utilized in various games with appropriate examples. 
+      Please analyze the images listed below. 
+      For each image, create both "details" and "features". 
+      The "details" should be between 100 and 500 characters, describing the image thoroughly enough that an LLM could recreate it as accurately as possible. 
+      The "features" should be between 30 and 80 characters, highlighting the characteristics and appropriate use cases that would help an LLM utilize this image when creating games. 
+      Please follow this response format: 
+      
+      [{"imageUrl": "", "details": "", "features": ""}]
+      
+      CRITICAL: Do not return any text other than JSON.
+      `,
+      maxTokens: 8000,
       messages: [
         {
           role: 'user',
-          content:
-            `[Model: ${model}]\n\n[Provider: ${provider?.name}]\n\n` +
-            stripIndents`
-            <image_url>
-              ${imageUrl}
-            </image_url>
-          `,
+          content: imageUrls.map((imageUrl) => ({
+            type: 'image',
+            image: imageUrl,
+          })),
         },
       ],
-      env: context.cloudflare?.env as any,
-      apiKeys,
-      providerSettings,
-      options: {
-        system:
-          'Provide a concise description of the image, focusing on key elements relevant for deciding its use in a game. Include basic visual details, potential uses (e.g., background, character, item), dominant colors, and the overall style. Keep the description under 120 characters.',
-      },
     });
 
-    // Handle streaming errors in a non-blocking way
-    (async () => {
-      try {
-        for await (const part of result.fullStream) {
-          if (part.type === 'error') {
-            const error: any = part.error;
-            logger.error('Streaming error:', error);
-            break;
-          }
-        }
-      } catch (error) {
-        logger.error('Error processing stream:', error);
-      }
-    })();
+    const jsonMatch = resp.text.match(/\[.*\]/s);
 
-    // Return the text stream directly
-    return new Response(result.textStream, {
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch {}
+
+  return [];
+}
+
+async function imageDescriptionAction({ request }: ActionFunctionArgs) {
+  const { imageUrls } = await request.json<{
+    imageUrls: string[];
+  }>();
+
+  try {
+    const result = await generateImageDescription(imageUrls);
+
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: {
-        'Content-Type': 'text/event-stream',
-        Connection: 'keep-alive',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
       },
     });
   } catch (error: unknown) {
