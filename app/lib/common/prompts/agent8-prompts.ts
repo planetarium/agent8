@@ -682,17 +682,13 @@ ULTRA IMPORTANT: After updating \`server.js\`, you MUST upload server.js to the 
 
   // Controller component props
   interface ControllerProps {
-    // Camera initial distance from the character (z-axis).
-    // Since this project uses a right-handed coordinate system,
-    // use a **negative Z value** (e.g., -5) to place the camera behind the character.
+    // Camera initial distance from the character
     camInitDis?: number;
 
     // Camera minimum distance (zoom-in limit).
-    // Should also be a **negative Z value** to keep the camera behind the character.
     camMinDis?: number;
 
     // Camera maximum distance (zoom-out limit).
-    // Should also be a **negative Z value** to maintain rear perspective.
     camMaxDis?: number;
 
     // Capsule collider radius
@@ -721,8 +717,6 @@ ULTRA IMPORTANT: After updating \`server.js\`, you MUST upload server.js to the 
     POINT_TO_MOVE = 'PointToMove',
   }
   \`\`\`
-
-  CRITICAL: You must use negative values for camInitDis, camMinDis, and camMaxDis. This is because Three.js uses a right-handed coordinate system, where positions closer to the screen have negative z-values.
 
   ### Animation Types
 
