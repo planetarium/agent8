@@ -40,12 +40,56 @@ function parseCookies(cookieHeader: string): Record<string, string> {
   return cookies;
 }
 
+async function consumeCredit(
+  endpoint: string,
+  userUid: string,
+  creditCredentials: { clientId: string; clientSecret: string },
+  cumulativeUsage: {
+    completionTokens: number;
+    promptTokens: number;
+    totalTokens: number;
+  },
+) {
+  if (!userUid) {
+    throw new Error('User UID is required');
+  }
+
+  const response = await fetch(endpoint + '/v1/credits/consume', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-client-id': creditCredentials.clientId,
+      'x-client-secret': creditCredentials.clientSecret,
+    },
+    body: JSON.stringify({
+      userUid,
+      llmProvider: 'Anthropic',
+      llmModelName: 'Claude 3.7 Sonnet',
+      inputTokens: cumulativeUsage.promptTokens,
+      outputTokens: cumulativeUsage.completionTokens,
+      description: 'Agent8 Chat',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to consume credit');
+  }
+}
+
 async function chatAction({ context, request }: ActionFunctionArgs) {
-  const { messages, files, promptId, contextOptimization } = await request.json<{
+  const env = { ...context.cloudflare.env, ...process.env } as Env;
+  const v8CreditEndpoint = env.V8_CREDIT_ENDPOINT;
+  const creditCredentials = {
+    clientId: env.V8_CREDIT_CLIENT_ID,
+    clientSecret: env.V8_CREDIT_CLIENT_SECRET,
+  };
+
+  const { messages, files, promptId, contextOptimization, userUid } = await request.json<{
     messages: Messages;
     files: any;
     promptId?: string;
     contextOptimization: boolean;
+    userUid: string;
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
@@ -373,6 +417,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 message: 'Response Generated',
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
+
+              await consumeCredit(v8CreditEndpoint, userUid, creditCredentials, cumulativeUsage);
 
               // stream.close();
               return;
