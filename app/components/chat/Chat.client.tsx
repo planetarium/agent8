@@ -150,8 +150,20 @@ const processSampledMessages = createSampler(
 
 async function runAndPreview() {
   const shell = workbenchStore.boltTerminal;
+
   await shell.ready();
-  await shell.executeCommand(Date.now().toString(), 'npm install && npx -y @agent8/deploy && npm run dev');
+
+  for (let retry = 0; retry < 60; retry++) {
+    const state = await shell.executionState.get();
+
+    if (state?.active) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    }
+
+    await shell.executeCommand(Date.now().toString(), 'npm install && npx -y @agent8/deploy && npm run dev');
+    break;
+  }
 }
 
 interface ChatProps {
