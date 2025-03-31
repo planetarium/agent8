@@ -8,6 +8,7 @@ export async function action(args: ActionFunctionArgs) {
 
 export async function generateImageDescription(
   imageUrls: string[],
+  message: string,
 ): Promise<{ imageUrl: string; features: string; details: string }[]> {
   const provider = PROVIDER_LIST.find((p) => p.name === 'OpenRouter');
   const model = 'google/gemini-2.0-flash-lite-001';
@@ -30,8 +31,13 @@ export async function generateImageDescription(
       You also recommend how the image could be utilized in various games with appropriate examples. 
       Please analyze the images listed below. 
       For each image, create both "details" and "features". 
-      The "details" should be between 100 and 500 characters, describing the image thoroughly enough that an LLM could recreate it as accurately as possible. 
+      The "details" should be between 100 and 500 characters, describing the image thoroughly enough that an LLM could recreate it as accurately as possible. And you should describe the necessary information according to the user's request. For example, if the user requests information about color schemes, describe the color information, and if they want to follow the arrangement of objects here, describe that in more detail here.
       The "features" should be between 30 and 80 characters, highlighting the characteristics and appropriate use cases that would help an LLM utilize this image when creating games. 
+
+      <UserRequest>
+      ${message}
+      </UserRequest>
+
       Please follow this response format: 
       
       [{"imageUrl": "", "details": "", "features": ""}]
@@ -61,12 +67,13 @@ export async function generateImageDescription(
 }
 
 async function imageDescriptionAction({ request }: ActionFunctionArgs) {
-  const { imageUrls } = await request.json<{
+  const { imageUrls, message } = await request.json<{
     imageUrls: string[];
+    message: string;
   }>();
 
   try {
-    const result = await generateImageDescription(imageUrls);
+    const result = await generateImageDescription(imageUrls, message);
 
     return new Response(JSON.stringify(result), {
       status: 200,

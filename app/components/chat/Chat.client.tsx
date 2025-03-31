@@ -340,6 +340,45 @@ export const ChatImpl = memo(
 
       runAnimation();
 
+      if (attachmentList.length > 0) {
+        const imageAttachments = attachmentList.filter((item) =>
+          ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
+        );
+
+        if (imageAttachments.length > 0) {
+          setFakeLoading(true);
+
+          const urls = imageAttachments.map((item) => item.url);
+
+          try {
+            const descriptionResponse = await fetch('/api/image-description', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: messageContent,
+                imageUrls: urls,
+              }),
+            });
+
+            if (descriptionResponse.ok) {
+              const descriptions = await descriptionResponse.json();
+
+              if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+                for (let i = 0; i < imageAttachments.length; i++) {
+                  imageAttachments[i].features = descriptions[i].features;
+                  imageAttachments[i].details = descriptions[i].details;
+                }
+              }
+            }
+          } catch (descError) {
+            console.error('Error generating image description:', descError);
+            toast.warning('Could not generate image description, using default');
+          }
+        }
+      }
+
       if (!chatStarted) {
         setFakeLoading(true);
 
