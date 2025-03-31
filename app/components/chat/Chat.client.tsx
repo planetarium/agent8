@@ -223,6 +223,7 @@ export const ChatImpl = memo(
         files,
         promptId,
         contextOptimization: contextOptimizationEnabled,
+        userUid: searchParams.get('userUid'),
       },
       sendExtraMessageFields: true,
       onError: (e) => {
