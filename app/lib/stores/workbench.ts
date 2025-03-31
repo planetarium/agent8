@@ -18,6 +18,7 @@ import { description } from '~/lib/persistence';
 import Cookies from 'js-cookie';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
+import { WORK_DIR } from '~/utils/constants';
 
 const { saveAs } = fileSaver;
 
@@ -370,16 +371,9 @@ export class WorkbenchStore {
     return artifacts[id];
   }
 
-  async downloadZip() {
+  async generateZip() {
     const zip = new JSZip();
     const files = this.files.get();
-
-    // Get the project name from the description input, or use a default name
-    const projectName = (description.value ?? 'project').toLocaleLowerCase().split(' ').join('_');
-
-    // Generate a simple 6-character hash based on the current timestamp
-    const timestampHash = Date.now().toString(36).slice(-6);
-    const uniqueProjectName = `${projectName}_${timestampHash}`;
 
     for (const [filePath, dirent] of Object.entries(files)) {
       if (dirent?.type === 'file' && !dirent.isBinary) {
@@ -405,6 +399,19 @@ export class WorkbenchStore {
 
     // Generate the zip file and save it
     const content = await zip.generateAsync({ type: 'blob' });
+
+    return content;
+  }
+
+  async downloadZip() {
+    // Get the project name from the description input, or use a default name
+    const projectName = (description.value ?? 'project').toLocaleLowerCase().split(' ').join('_');
+
+    // Generate a simple 6-character hash based on the current timestamp
+    const timestampHash = Date.now().toString(36).slice(-6);
+    const uniqueProjectName = `${projectName}_${timestampHash}`;
+
+    const content = await this.generateZip();
     saveAs(content, `${uniqueProjectName}.zip`);
   }
 
@@ -551,6 +558,90 @@ export class WorkbenchStore {
   // 퍼블리시된 URL 설정 메서드 추가
   setPublishedUrl(url: string) {
     this.#previewsStore.setPublishedUrl(url);
+  }
+
+  async publish(chatId: string, title: string) {
+    const envFilePath = `${WORK_DIR}/.env`;
+    const envFile = this.files.get()[envFilePath];
+    let verseId = '';
+
+    if (envFile && envFile.type === 'file') {
+      const envContent = envFile.content;
+      const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
+
+      if (matches && matches[1]) {
+        verseId = matches[1];
+      }
+    }
+
+    if (!verseId) {
+      throw new Error('Can not find verseId');
+    }
+
+    // WebContainer 터미널에 접근
+    const shell = workbenchStore.boltTerminal;
+
+    // 터미널이 준비되었는지 확인
+    await shell.ready();
+
+    await shell.executeCommand(Date.now().toString(), 'npm install');
+
+    await shell.waitTillOscCode('prompt');
+
+    const buildResult = await shell.executeCommand(Date.now().toString(), 'npm run build');
+
+    await shell.waitTillOscCode('prompt');
+
+    console.log('[Publish] Build Result:', buildResult);
+
+    if (buildResult?.exitCode === 2) {
+      console.log('[Publish] Build Failed:', buildResult.output);
+
+      this.actionAlert.set({
+        type: 'build',
+        title: 'Build Error',
+        description: 'Failed to build the project',
+        content: buildResult.output || 'Unknown build error',
+        source: 'terminal',
+      });
+
+      return;
+    }
+
+    const result = await shell.executeCommand(Date.now().toString(), 'npx -y @agent8/deploy');
+
+    await shell.waitTillOscCode('prompt');
+
+    console.log('[Publish] Result:', result);
+
+    if (result?.exitCode === 0) {
+      const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${chatId}&buildAt=${Date.now()}`;
+      this.setPublishedUrl(publishedUrl);
+
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: 'PUBLISH_GAME',
+              payload: {
+                title,
+                gameId: verseId,
+                playUrl: publishedUrl,
+              },
+            },
+            '*',
+          );
+
+          console.log('[Publish] Sent deployment info to parent window');
+        }
+      } catch (error) {
+        console.error('[Publish] Error sending message to parent:', error);
+
+        // 부모 창 통신 실패는 배포 성공에 영향을 주지 않으므로 오류만 기록
+      }
+    } else {
+      throw new Error('Failed to publish');
+    }
   }
 }
 

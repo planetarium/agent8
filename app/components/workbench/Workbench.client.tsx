@@ -24,9 +24,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
-import { description as descriptionStore, chatId as chatIdStore } from '~/lib/persistence';
 import { ResourcePanel } from './ResourcePanel';
-import { WORK_DIR } from '~/utils/constants';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -282,9 +280,7 @@ export const Workbench = memo(
   ({ chatStarted, isStreaming, actionRunner, metadata, updateChatMestaData }: WorkspaceProps) => {
     renderLogger.trace('Workbench');
 
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isPushDialogOpen, setIsPushDialogOpen] = useState(false);
-    const [isPublishing, setIsPublishing] = useState(false);
     const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
 
     // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
@@ -323,113 +319,6 @@ export const Workbench = memo(
       await shell.executeCommand(Date.now().toString(), 'npm install && npm run dev');
     }, []);
 
-    const onPublish = useCallback(async () => {
-      try {
-        setIsPublishing(true);
-        setSelectedView('code');
-
-        const envFilePath = `${WORK_DIR}/.env`;
-        const envFile = files?.[envFilePath];
-        let verseId = '';
-        const chatId = chatIdStore.get();
-
-        if (envFile && envFile.type === 'file') {
-          const envContent = envFile.content;
-          const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
-
-          if (matches && matches[1]) {
-            verseId = matches[1];
-          }
-        }
-
-        if (!verseId) {
-          toast.error('Can not find verseId');
-          return;
-        }
-
-        // WebContainer 터미널에 접근
-        const shell = workbenchStore.boltTerminal;
-
-        // 터미널이 준비되었는지 확인
-        await shell.ready();
-
-        await shell.executeCommand(Date.now().toString(), 'npm install');
-
-        await shell.waitTillOscCode('prompt');
-
-        const buildResult = await shell.executeCommand(Date.now().toString(), 'npm run build');
-
-        await shell.waitTillOscCode('prompt');
-
-        console.log('[Publish] Build Result:', buildResult);
-
-        if (buildResult?.exitCode === 2) {
-          console.log('[Publish] Build Failed:', buildResult.output);
-          toast.error('Failed to build');
-
-          // 빌드 에러 발생 시 actionAlert 설정
-          workbenchStore.actionAlert.set({
-            type: 'build',
-            title: 'Build Error',
-            description: 'Failed to build the project',
-            content: buildResult.output || 'Unknown build error',
-            source: 'terminal',
-          });
-
-          return;
-        }
-
-        const result = await shell.executeCommand(Date.now().toString(), 'npx -y @agent8/deploy');
-
-        await shell.waitTillOscCode('prompt');
-
-        console.log('[Publish] Result:', result);
-
-        if (result?.exitCode === 0) {
-          toast.success('Publish completed successfully');
-
-          // 퍼블리시된 URL 설정
-          const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${chatId}&buildAt=${Date.now()}`;
-          workbenchStore.setPublishedUrl(publishedUrl);
-
-          // 상위 창에 배포 정보 전달
-          try {
-            if (window.parent && window.parent !== window) {
-              const title = descriptionStore.get() || 'Game Project';
-
-              window.parent.postMessage(
-                {
-                  type: 'PUBLISH_GAME',
-                  payload: {
-                    title,
-                    gameId: verseId,
-                    playUrl: publishedUrl,
-                  },
-                },
-                '*',
-              );
-
-              console.log('[Publish] Sent deployment info to parent window');
-            }
-          } catch (error) {
-            console.error('[Publish] Error sending message to parent:', error);
-
-            // 부모 창 통신 실패는 배포 성공에 영향을 주지 않으므로 오류만 기록
-          }
-
-          // 퍼블리시 완료 후 Preview 탭으로 전환
-          setSelectedView('preview');
-        } else {
-          toast.error('Failed to publish');
-        }
-      } catch (error) {
-        console.error('Error executing publish command:', error);
-        toast.error('Failed to execute publish command');
-      } finally {
-        setIsPublishing(false);
-      }
-    }, [workbenchStore.boltTerminal, setSelectedView, files]);
-
     const onEditorChange = useCallback<OnEditorChange>((update) => {
       workbenchStore.setCurrentDocumentContent(update.content);
     }, []);
@@ -450,21 +339,6 @@ export const Workbench = memo(
 
     const onFileReset = useCallback(() => {
       workbenchStore.resetCurrentDocument();
-    }, []);
-
-    const handleSyncFiles = useCallback(async () => {
-      setIsSyncing(true);
-
-      try {
-        const directoryHandle = await window.showDirectoryPicker();
-        await workbenchStore.syncFiles(directoryHandle);
-        toast.success('Files synced successfully');
-      } catch (error) {
-        console.error('Error syncing files:', error);
-        toast.error('Failed to sync files');
-      } finally {
-        setIsSyncing(false);
-      }
     }, []);
 
     return (
@@ -502,27 +376,6 @@ export const Workbench = memo(
                     <div className="i-ph:play" />
                     <span>Run</span>
                   </button>
-                  <button
-                    onClick={() => {
-                      onPublish();
-                    }}
-                    className={classNames(
-                      'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-                      'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive',
-                      {
-                        'opacity-50 cursor-not-allowed flex items-center': isPublishing,
-                      },
-                    )}
-                  >
-                    {isPublishing ? (
-                      <>
-                        <div className="i-ph:spinner animate-spin mr-2" />
-                        Publishing...
-                      </>
-                    ) : (
-                      <span className="relative z-10">Publish</span>
-                    )}
-                  </button>
                   <div className="ml-auto" />
                   {(selectedView === 'code' || selectedView === 'resource') && (
                     <div className="flex overflow-y-auto">
@@ -532,14 +385,14 @@ export const Workbench = memo(
                           workbenchStore.downloadZip();
                         }}
                       >
-                        <div className="i-ph:code" />
+                        <div className="i-ph:download" />
                         Download Code
                       </PanelHeaderButton>
-                      <PanelHeaderButton className="mr-1 text-sm" onClick={handleSyncFiles} disabled={isSyncing}>
+                      {/* <PanelHeaderButton className="mr-1 text-sm" onClick={handleSyncFiles} disabled={isSyncing}>
                         {isSyncing ? <div className="i-ph:spinner" /> : <div className="i-ph:cloud-arrow-down" />}
                         {isSyncing ? 'Syncing...' : 'Sync Files'}
-                      </PanelHeaderButton>
-                      <PanelHeaderButton
+                      </PanelHeaderButton> */}
+                      {/* <PanelHeaderButton
                         className="mr-1 text-sm"
                         onClick={() => {
                           workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
@@ -547,7 +400,7 @@ export const Workbench = memo(
                       >
                         <div className="i-ph:terminal" />
                         Toggle Terminal
-                      </PanelHeaderButton>
+                      </PanelHeaderButton> */}
                       <PanelHeaderButton className="mr-1 text-sm" onClick={() => setIsPushDialogOpen(true)}>
                         <div className="i-ph:git-branch" />
                         Push to GitHub

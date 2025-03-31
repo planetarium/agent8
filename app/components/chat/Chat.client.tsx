@@ -236,7 +236,7 @@ export const ChatImpl = memo(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
         );
       },
-      onFinish: (message, response) => {
+      onFinish: async (message, response) => {
         const usage = response.usage;
         setData(undefined);
 
@@ -252,7 +252,7 @@ export const ChatImpl = memo(
           });
         }
 
-        runAndPreview();
+        await runAndPreview();
 
         logger.debug('Finished streaming');
       },
