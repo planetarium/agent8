@@ -188,12 +188,29 @@ ${props.summary}
     The resources needed to fulfill the user's request are provided in the ResourceContext.
     You can only use resource urls from \`src/assets.json\` or listed in \`availableResources\` or listed url in \`<Attachments />\` user attached
     If you want to use a resource from \`<availableResources>\`, \`<Attachments />\`, add that resource to \`src/assets.json\` in your response.
+    When adding to assets.json, it's good to include description and metadata along with the url. This will help the LLM utilize these resources better in future interactions.
+    src/assets.json format:
+    \`\`\`js filename="src/assets.json"
+    {
+      "images": {
+        "character": {
+          "url": "https://example.com/resource.png",
+          "description": "A beautiful image",
+          "metadata": {
+            "width": 100,
+            "height": 100
+          }
+        }
+      }
+    }
+    \`\`\`
     Resources that are not in \`src/assets.json\` can NEVER be used.
 
 
   CRITICAL: Follow these strict resource management rules to prevent application errors:
     
   1. If appropriate resources are not available in assets.json:
+     - First of all. Never create images directly using base64 or similar methods. even in assets.json's url part.
      - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
      - For 3D games: Use Three.js to generate geometric shapes and programmatic textures
      - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
