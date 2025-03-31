@@ -75,7 +75,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
         let vectorDbExamples: FileMap = {};
-        let relevantResources: Record<string, any> = {};
 
         if (messages.length > 3) {
           messageSliceId = messages.length - 3;
@@ -195,25 +194,46 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           message: 'Searching for Code Examples',
         } satisfies ProgressAnnotation);
 
-        const vectorDBResult = await searchVectorDB({
-          messages: [...messages],
-          env: context.cloudflare?.env,
-          apiKeys,
-          files,
-          providerSettings,
-          promptId,
-          contextOptimization,
-          contextFiles: filteredFiles,
-          summary: summary || 'This is first user request',
-          onFinish(resp) {
-            if (resp.usage) {
-              logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
-              cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-              cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-              cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-            }
-          },
-        });
+        const [vectorDBResult, relevantResources] = await Promise.all([
+          searchVectorDB({
+            messages: [...messages],
+            env: context.cloudflare?.env,
+            apiKeys,
+            files,
+            providerSettings,
+            promptId,
+            contextOptimization,
+            contextFiles: filteredFiles,
+            summary: summary || 'This is first user request',
+            onFinish(resp) {
+              if (resp.usage) {
+                logger.debug('searchVectorDB token usage', JSON.stringify(resp.usage));
+                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+              }
+            },
+          }),
+          searchResources({
+            messages: [...messages],
+            env: context.cloudflare?.env,
+            apiKeys,
+            files,
+            providerSettings,
+            promptId,
+            contextOptimization,
+            contextFiles: filteredFiles,
+            summary: summary || 'This is first user request',
+            onFinish(resp) {
+              if (resp.usage) {
+                logger.debug('searchResources token usage', JSON.stringify(resp.usage));
+                cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+                cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+                cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+              }
+            },
+          }),
+        ]);
 
         vectorDbExamples = vectorDBResult.result;
 
@@ -253,26 +273,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           order: progressCounter++,
           message: 'Searching for Relevant Resources',
         } satisfies ProgressAnnotation);
-
-        relevantResources = await searchResources({
-          messages: [...messages],
-          env: context.cloudflare?.env,
-          apiKeys,
-          files,
-          providerSettings,
-          promptId,
-          contextOptimization,
-          contextFiles: filteredFiles,
-          summary: summary || 'This is first user request',
-          onFinish(resp) {
-            if (resp.usage) {
-              logger.debug('searchResources token usage', JSON.stringify(resp.usage));
-              cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-              cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-              cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-            }
-          },
-        });
 
         const resourceCount = Object.keys(relevantResources).length;
         logger.debug(`Found ${resourceCount} relevant resources`);
