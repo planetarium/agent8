@@ -22,7 +22,6 @@ import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 
 import FilePreview from './FilePreview';
 import { ModelSelector } from '~/components/chat/ModelSelector';
-import { SpeechRecognitionButton } from '~/components/chat/SpeechRecognition';
 import type { ProviderInfo } from '~/types/model';
 import { toast } from 'react-toastify';
 import type { ActionAlert } from '~/types/actions';
@@ -32,8 +31,7 @@ import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
-import { ImportGithub } from './ImportGithub';
-import { ImportProjectZip } from './ImportProjectZip';
+import { ImportProject } from './ImportProject';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -42,6 +40,8 @@ export interface ChatAttachment {
   url: string;
   features: string;
   details: string;
+  ext: string;
+  metadata?: Record<string, any>;
 }
 
 interface BaseChatProps {
@@ -69,7 +69,7 @@ interface BaseChatProps {
   importChat?: (description: string, messages: Message[]) => Promise<void>;
   exportChat?: () => void;
   attachmentList?: ChatAttachment[];
-  setAttachmentList?: (attachments: ChatAttachment[]) => void;
+  setAttachmentList?: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
   data?: JSONValue[] | undefined;
@@ -117,8 +117,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
-    const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
-    const [isListening, setIsListening] = useState(false);
+    const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(true);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
@@ -164,7 +163,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
         recognition.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
-          setIsListening(false);
         };
 
         setRecognition(recognition);
@@ -224,20 +222,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setIsModelLoading(undefined);
     };
 
-    const startListening = () => {
-      if (recognition) {
-        recognition.start();
-        setIsListening(true);
-      }
-    };
-
-    const stopListening = () => {
-      if (recognition) {
-        recognition.stop();
-        setIsListening(false);
-      }
-    };
-
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
       if (sendMessage) {
         sendMessage(event, messageInput);
@@ -245,7 +229,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         if (recognition) {
           recognition.abort(); // Stop current recognition
           setTranscript(''); // Clear transcript
-          setIsListening(false);
 
           // Clear the input by triggering handleInputChange with empty value
           if (handleInputChange) {
@@ -261,7 +244,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const handleFileUpload = async () => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*, video/*, audio/*, .glb, .gltf, .json, .ttf';
+      input.accept = 'image/*, video/*, audio/*, .glb, .gltf, .json, .ttf, .zip';
 
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
@@ -282,15 +265,20 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
 
       for (const item of items) {
-        e.preventDefault();
+        if (item.type.startsWith('image/')) {
+          // 이미지 파일인 경우만 이벤트 기본 동작 방지
+          e.preventDefault();
 
-        const file = item.getAsFile();
+          const file = item.getAsFile();
 
-        if (file) {
-          await uploadFileAndAddToAttachmentList(file);
+          if (file) {
+            await uploadFileAndAddToAttachmentList(file);
+          }
+
+          break;
         }
 
-        break;
+        // 이미지가 아닌 경우에는 기본 붙여넣기 동작 허용 (preventDefault 호출 안 함)
       }
     };
 
@@ -299,8 +287,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const fileName = file.name;
         const fileExt = `.${fileName.split('.').pop()?.toLowerCase()}`;
 
+        if (fileExt === '.zip') {
+          onProjectZipImport?.(fileName, file);
+          return;
+        }
+
         if (!ATTACHMENT_EXTS.includes(fileExt)) {
           toast.error('Not allowed file type');
+          return;
         }
 
         const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
@@ -309,9 +303,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const videoExtensions = ['.mp4', '.webm', '.mov'];
 
         let fileType = 'unknown';
+        let metadata: Record<string, any> = {};
 
         if (imageExtensions.includes(fileExt)) {
           fileType = 'image';
+
+          // Get image dimensions for image files
+          if (fileExt !== '.svg') {
+            metadata = await getImageDimensions(file);
+          }
         } else if (modelExtensions.includes(fileExt)) {
           fileType = '3D model';
         } else if (audioExtensions.includes(fileExt)) {
@@ -323,6 +323,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           return;
         }
 
+        // 생성한 임시 ID
+        const tempId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        // 임시 첨부 파일 객체 생성 (업로드 중 상태)
+        const tempAttachment: ChatAttachment = {
+          filename: fileName,
+          url: `uploading://${tempId}`, // 특수 프로토콜 사용
+          features: `Uploading ${fileType} file...`,
+          details: `Uploading ${fileName}`,
+          ext: fileExt,
+          metadata,
+        };
+
+        // 임시 첨부 파일을 리스트에 추가
+        setAttachmentList?.((prev) => [...prev, tempAttachment]);
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('path', 'chat-uploads');
@@ -332,76 +348,93 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
         toast.info(`Uploading ${file.name}...`);
 
-        const response = await fetch('/api/upload-attachment', {
-          method: 'POST',
-          body: formData,
-        });
+        try {
+          const response = await fetch('/api/upload-attachment', {
+            method: 'POST',
+            body: formData,
+          });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Upload failed: ${response.status} ${errorText}`);
-        }
-
-        const result = (await response.json()) as { success: boolean; url: string; error?: string };
-
-        if (result.success && result.url) {
-          // 기본 첨부 파일 객체
-          let newAttachment: ChatAttachment = {
-            filename: fileName,
-            url: result.url,
-            features: `Type: ${fileType} Ext: ${fileExt}`,
-            details: `Type: ${fileType} Ext: ${fileExt}`,
-          };
-
-          // 이미지 파일인 경우 AI를 통한 설명 가져오기
-          if (fileType === 'image') {
-            try {
-              // 이미지 업로드 성공 알림
-
-              // 이미지 설명 API 호출
-              const descriptionResponse = await fetch('/api/image-description', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  imageUrls: [result.url],
-                }),
-              });
-
-              if (descriptionResponse.ok) {
-                const descriptions = await descriptionResponse.json();
-
-                // API 응답에서 첫 번째 이미지에 대한 설명 가져오기
-                if (descriptions && Array.isArray(descriptions) && descriptions.length > 0) {
-                  const imageDesc = descriptions[0];
-
-                  // 기존 attachment 정보에 AI가 생성한 설명 추가
-                  newAttachment = {
-                    ...newAttachment,
-                    features: imageDesc.features || newAttachment.features,
-                    details: imageDesc.details || newAttachment.details,
-                  };
-                }
-              }
-            } catch (descError) {
-              console.error('Error generating image description:', descError);
-              toast.warning('Could not generate image description, using default');
-            }
-          } else {
-            // 이미지가 아닌 경우 기본 업로드 성공 메시지
-            toast.success(`Uploaded ${file.name}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Upload failed: ${response.status} ${errorText}`);
           }
 
-          // 첨부 파일 리스트에 추가
-          setAttachmentList?.([...attachmentList, newAttachment]);
-        } else {
-          throw new Error(result.error || 'Unknown error during upload');
+          const result = (await response.json()) as { success: boolean; url: string; error?: string };
+
+          if (result.success && result.url) {
+            // 업로드 성공 시 실제 첨부 파일 객체 생성
+            const finalAttachment: ChatAttachment = {
+              filename: fileName,
+              url: result.url,
+              features: `Type: ${fileType} Ext: ${fileExt}`,
+              details: `Type: ${fileType} Ext: ${fileExt}`,
+              ext: fileExt,
+              metadata,
+            };
+
+            // Add dimensions to features for images
+            if (fileType === 'image' && metadata.width && metadata.height) {
+              finalAttachment.features = `Type: ${fileType} Ext: ${fileExt} Dimensions: ${metadata.width}x${metadata.height}`;
+              finalAttachment.details = `Type: ${fileType} Ext: ${fileExt} Dimensions: ${metadata.width}x${metadata.height}`;
+            }
+
+            // 임시 첨부 파일을 실제 첨부 파일로 교체
+            setAttachmentList?.((prev) =>
+              prev.map((attachment) => (attachment.url === `uploading://${tempId}` ? finalAttachment : attachment)),
+            );
+
+            toast.success(`Uploaded ${file.name}`);
+          } else {
+            throw new Error(result.error || 'Unknown error during upload');
+          }
+        } catch (error: any) {
+          // 업로드 실패 시 임시 첨부 파일을 에러 상태로 변경
+          setAttachmentList?.((prev) =>
+            prev.map((attachment) =>
+              attachment.url === `uploading://${tempId}`
+                ? {
+                    ...attachment,
+                    url: `error://${tempId}`,
+                    features: `Upload failed: ${error.message}`,
+                    details: `Failed to upload ${fileName}`,
+                  }
+                : attachment,
+            ),
+          );
+
+          console.error('Error uploading file:', error);
+          toast.error(`Upload failed: ${error.message}`);
+
+          // 3초 후 에러 상태의 첨부 파일 제거
+          setTimeout(() => {
+            setAttachmentList?.((prev) => prev.filter((attachment) => attachment.url !== `error://${tempId}`));
+          }, 3000);
         }
       } catch (error: any) {
-        console.error('Error uploading file:', error);
+        console.error('Error handling file:', error);
         toast.error(`Upload failed: ${error.message}`);
       }
+    };
+
+    // Helper function to get image dimensions
+    const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+
+        img.onload = () => {
+          URL.revokeObjectURL(img.src); // Clean up
+          resolve({
+            width: img.width,
+            height: img.height,
+          });
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(img.src); // Clean up
+          resolve({ width: 0, height: 0 }); // Default values in case of error
+        };
+        img.src = URL.createObjectURL(file);
+      });
     };
 
     const baseChat = (
@@ -528,8 +561,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </div>
                   <FilePreview
                     attachmentUrlList={attachmentList ? attachmentList.map((attachment) => attachment.url) : []}
+                    attachments={attachmentList}
                     onRemove={(index) => {
-                      setAttachmentList?.(attachmentList?.filter((_, i) => i !== index) || []);
+                      setAttachmentList?.((prev) => prev?.filter((_, i) => i !== index) || []);
                     }}
                   />
                   <div
@@ -562,9 +596,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                         const files = Array.from(e.dataTransfer.files);
 
-                        for (const file of files) {
-                          await uploadFileAndAddToAttachmentList(file);
-                        }
+                        await Promise.all(
+                          files.map(async (file) => {
+                            return uploadFileAndAddToAttachmentList(file);
+                          }),
+                        );
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
@@ -593,7 +629,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       }}
                       onPaste={handlePaste}
                       style={{
-                        minHeight: TEXTAREA_MIN_HEIGHT,
+                        minHeight: TEXTAREA_MIN_HEIGHT + (!chatStarted ? 30 : 0),
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
                       placeholder="How can Bolt help you today?"
@@ -623,8 +659,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         <IconButton title="Upload file" className="transition-all" onClick={() => handleFileUpload()}>
                           <div className="i-ph:paperclip text-xl"></div>
                         </IconButton>
-                        <ImportGithub onImport={onGithubImport} />
-                        <ImportProjectZip onImport={onProjectZipImport} />
                         <IconButton
                           title="Enhance prompt"
                           disabled={input.length === 0 || enhancingPrompt}
@@ -641,12 +675,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           )}
                         </IconButton>
 
-                        <SpeechRecognitionButton
-                          isListening={isListening}
-                          onStart={startListening}
-                          onStop={stopListening}
-                          disabled={isStreaming}
-                        />
                         {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
                         <IconButton
                           title="Model Settings"
@@ -669,7 +697,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           + <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Return</kbd>{' '}
                           a new line
                         </div>
-                      ) : null}
+                      ) : (
+                        !chatStarted && (
+                          <ImportProject onGithubImport={onGithubImport} onZipImport={onProjectZipImport} />
+                        )
+                      )}
                     </div>
                   </div>
                 </div>

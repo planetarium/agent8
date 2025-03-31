@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { IconButton } from '~/components/ui/IconButton';
 import { classNames } from '~/utils/classNames';
 
 interface ImportGithubProps {
@@ -41,9 +40,19 @@ export const ImportGithub = ({ onImport }: ImportGithubProps) => {
 
   return (
     <>
-      <IconButton title="Import from GitHub" className="transition-all" onClick={() => setShowModal(true)}>
-        <div className="i-ph:github-logo text-xl"></div>
-      </IconButton>
+      <button
+        className="flex flex-col items-center justify-center p-4 border rounded-lg
+                      dark:bg-gray-900 dark:text-gray-200
+                           border-gray-200 dark:border-gray-700
+                           hover:bg-gray-50 dark:hover:bg-gray-700 
+                           transition-colors"
+        onClick={() => {
+          setShowModal(true);
+        }}
+      >
+        <div className="i-ph:github-logo text-4xl mb-2"></div>
+        <span className="text-sm font-medium">GitHub Repository</span>
+      </button>
 
       {showModal && (
         <div
