@@ -4,9 +4,7 @@ import { chatStore } from '~/lib/stores/chat';
 import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { useSearchParams } from '@remix-run/react';
-import { Button } from '~/components/ui/Button';
-import { description as descriptionStore, chatId as chatIdStore } from '~/lib/persistence';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { HeaderDeployButton } from './HeaderDeployButton.client';
 
 export function Header() {
   const chat = useStore(chatStore);
@@ -40,32 +38,7 @@ export function Header() {
           >
             <ClientOnly>{() => <ChatDescription />}</ClientOnly>
           </span>
-          {/* <ClientOnly>
-            {() => (
-              <div className="mr-1">
-                <HeaderActionButtons />
-              </div>
-            )}
-          </ClientOnly> */}
-          <ClientOnly>
-            {() => (
-              <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden mr-2 text-sm">
-                <Button
-                  onClick={() => {
-                    const chatId = chatIdStore.get();
-                    const description = descriptionStore.get() || 'Game Project';
-
-                    if (chatId) {
-                      workbenchStore.publish(chatId, description);
-                    }
-                  }}
-                  className="px-4 dark:bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-item-backgroundActive flex items-center gap-2"
-                >
-                  Deploy
-                </Button>
-              </div>
-            )}
-          </ClientOnly>
+          <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
         </>
       )}
     </header>

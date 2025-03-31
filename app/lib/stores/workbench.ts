@@ -561,6 +561,8 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
+    this.currentView.set('code');
+
     const envFilePath = `${WORK_DIR}/.env`;
     const envFile = this.files.get()[envFilePath];
     let verseId = '';
