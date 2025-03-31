@@ -1,14 +1,16 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect } from 'react';
 import type { ActionAlert } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 
 interface Props {
+  autoFixChance: number;
   alert: ActionAlert;
   clearAlert: () => void;
-  postMessage: (message: string) => void;
+  postMessage: (message: string, isAutoFix?: boolean) => void;
 }
 
-export default function ChatAlert({ alert, clearAlert, postMessage }: Props) {
+export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessage }: Props) {
   const { description, content, source } = alert;
 
   const isPreview = source === 'preview';
@@ -16,6 +18,19 @@ export default function ChatAlert({ alert, clearAlert, postMessage }: Props) {
   const message = isPreview
     ? 'We encountered an error while running the preview. Would you like Bolt to analyze and help resolve this issue?'
     : 'We encountered an error while running terminal commands. Would you like Bolt to analyze and help resolve this issue?';
+
+  const handleAskBolt = (isAutoFix = false) => {
+    postMessage(
+      `*Fix this ${isPreview ? 'preview' : 'terminal'} error* \n\`\`\`${isPreview ? 'js' : 'sh'}\n${content}\n\`\`\`\n`,
+      isAutoFix,
+    );
+  };
+
+  useEffect(() => {
+    if (autoFixChance > 0) {
+      handleAskBolt(true);
+    }
+  }, [autoFixChance]);
 
   return (
     <AnimatePresence>
@@ -69,11 +84,7 @@ export default function ChatAlert({ alert, clearAlert, postMessage }: Props) {
             >
               <div className={classNames(' flex gap-2')}>
                 <button
-                  onClick={() =>
-                    postMessage(
-                      `*Fix this ${isPreview ? 'preview' : 'terminal'} error* \n\`\`\`${isPreview ? 'js' : 'sh'}\n${content}\n\`\`\`\n`,
-                    )
-                  }
+                  onClick={() => handleAskBolt(false)}
                   className={classNames(
                     `px-2 py-1.5 rounded-md text-sm font-medium`,
                     'bg-bolt-elements-button-primary-background',

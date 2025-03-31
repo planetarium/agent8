@@ -122,6 +122,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [transcript, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
+    const [autoFixChance, setAutoFixChance] = useState(1);
+
     useEffect(() => {
       if (data) {
         const progressList = data.filter(
@@ -225,6 +227,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
       if (sendMessage) {
         sendMessage(event, messageInput);
+
+        setAutoFixChance(1);
 
         if (recognition) {
           recognition.abort(); // Stop current recognition
@@ -486,11 +490,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <div className="bg-bolt-elements-background-depth-2">
                   {!isStreaming && actionAlert && (
                     <ChatAlert
+                      autoFixChance={autoFixChance}
                       alert={actionAlert}
                       clearAlert={() => clearAlert?.()}
-                      postMessage={(message) => {
+                      postMessage={(message, isAutoFix = false) => {
                         sendMessage?.({} as any, message);
                         clearAlert?.();
+
+                        if (isAutoFix) {
+                          setAutoFixChance(autoFixChance - 1);
+                        }
                       }}
                     />
                   )}
