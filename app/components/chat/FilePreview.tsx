@@ -89,9 +89,13 @@ const FilePreview: React.FC<FilePreviewProps> = ({ attachmentUrlList, attachment
     return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
   };
 
-  // Find attachment by URL
+  // Find attachment metadata by URL
   const getAttachmentByUrl = (url: string): ChatAttachment | undefined => {
-    return attachments?.find((attachment) => attachment.url === url);
+    if (!attachments) {
+      return undefined;
+    }
+
+    return attachments.find((attachment) => attachment.url === url);
   };
 
   const Model3dPreview = ({ url, fileName }: { url: string; fileName: string }) => {
@@ -145,7 +149,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({ attachmentUrlList, attachment
     const fileType = getFileType(url);
     const fileName = getFileName(url);
     const fileExt = getFileExtension(url);
-    const attachment = getAttachmentByUrl(url);
 
     // 모든 미리보기 컨테이너에 일관된 크기 적용
     const containerClass =
@@ -176,15 +179,23 @@ const FilePreview: React.FC<FilePreviewProps> = ({ attachmentUrlList, attachment
 
           {fileType === 'image' && (
             <div className="flex flex-col items-center justify-center h-full w-full">
-              <img src={url} alt={fileName} className="max-h-20 max-w-full object-contain" />
+              <img src={url} alt={fileName} className="max-h-20 max-w-full object-contain" loading="lazy" />
               <div className="text-xs text-bolt-elements-textSecondary mt-2 text-center truncate max-w-[140px]">
                 {fileName}
               </div>
-              {attachment?.metadata?.width && attachment?.metadata?.height && (
-                <div className="text-xs text-bolt-elements-textTertiary text-center">
-                  {attachment.metadata.width}×{attachment.metadata.height}
-                </div>
-              )}
+              {(() => {
+                const attachment = getAttachmentByUrl(url);
+
+                if (attachment?.metadata?.width && attachment?.metadata?.height) {
+                  return (
+                    <div className="text-xs text-bolt-elements-textTertiary text-center">
+                      {attachment.metadata.width}x{attachment.metadata.height}
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
             </div>
           )}
 

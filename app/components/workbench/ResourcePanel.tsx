@@ -50,6 +50,14 @@ interface UploadingAsset {
   error?: string;
 }
 
+// 타입 정의 업데이트
+type UploadResult = {
+  url: string;
+  description?: string;
+  dimensions?: { width?: number; height?: number };
+  fileExt: string;
+} | null;
+
 export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   renderLogger.trace('ResourcePanel');
 
@@ -111,6 +119,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         };
 
         setCategories(defaultCategories);
+        categoriesRef.current = defaultCategories; // 명시적으로 ref도 함께 업데이트
         setSelectedCategory('images'); // 기본 카테고리 선택
 
         // assets.json 파일 생성
@@ -124,6 +133,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       try {
         const parsed = JSON.parse(assetFile.content);
         setCategories(parsed);
+        categoriesRef.current = parsed; // 명시적으로 ref도 함께 업데이트
 
         if (Object.keys(parsed).length > 0 && !selectedCategory) {
           setSelectedCategory(Object.keys(parsed)[0]);
@@ -140,6 +150,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         };
 
         setCategories(defaultCategories);
+        categoriesRef.current = defaultCategories; // 명시적으로 ref도 함께 업데이트
         setSelectedCategory('images');
 
         // 손상된 assets.json 파일 재생성
@@ -177,12 +188,15 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     setIsSaving(true);
 
     try {
-      // categoriesRef.current를 사용하여 항상 최신 데이터 사용
+      // 현재 상태의 categories를 사용하여 저장
       const content = JSON.stringify(categoriesRef.current, null, 2);
 
       workbenchStore.setSelectedFile(assetsPath);
       workbenchStore.setCurrentDocumentContent(content);
       await workbenchStore.saveCurrentDocument();
+
+      // 저장 후 상태 갱신 - categoriesRef와 categories 동기화
+      setCategories({ ...categoriesRef.current });
     } catch (error) {
       console.error('Error saving assets:', error);
       toast.error('Failed to save assets');
@@ -449,10 +463,19 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
 
     try {
-      const fileName = url.split('/').pop() || '';
+      // URL의 마지막 부분을 파일명으로 가정
+      const parts = url.split('/');
+      let fileName = parts[parts.length - 1];
 
-      return fileName.split('?')[0];
-    } catch {
+      // URL 매개변수 제거
+      if (fileName.includes('?')) {
+        fileName = fileName.split('?')[0];
+      }
+
+      // URL 인코딩 디코드
+      return decodeURIComponent(fileName);
+    } catch (e) {
+      console.error('Error extracting filename from URL:', e);
       return '';
     }
   };
@@ -510,7 +533,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   };
 
   // 파일 업로드 함수 수정
-  const uploadFile = async (file: File, uploadId: string): Promise<{ url: string; description?: string } | null> => {
+  const uploadFile = async (file: File, uploadId: string): Promise<UploadResult> => {
     if (!verse || !selectedCategory) {
       // 업로드 실패 상태 업데이트
       setUploadingAssets((prev) => ({
@@ -569,6 +592,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
+              console.log('Upload response:', response); // 디버깅 로그 추가
 
               if (response.success) {
                 // 성공 상태 업데이트
@@ -583,10 +607,62 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                   [uploadId]: true,
                 }));
 
-                // URL 정보 포함하여 해결
+                const fileUrl = response.url;
+
+                if (!fileUrl) {
+                  console.error('No URL returned from upload API');
+                  throw new Error('No URL returned from upload API');
+                }
+
+                console.log(`File uploaded successfully. URL: ${fileUrl}`); // 디버깅 로그 추가
+
+                // 이미지인 경우 차원 정보만 가져옴
+                const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+                let dimensions = {};
+
+                if (imageExtensions.some((ext) => fileExt.toLowerCase() === ext)) {
+                  try {
+                    // 이미지 파일인 경우 크기 정보 얻기
+                    dimensions = await getImageDimensions(file);
+                  } catch (dimError) {
+                    console.error('Error getting image dimensions:', dimError);
+                  }
+                }
+
+                // 즉시 플레이스홀더 업데이트 (URL만 업데이트)
+                if (selectedCategory) {
+                  const updatedCategories = { ...categoriesRef.current };
+
+                  if (updatedCategories[selectedCategory]) {
+                    let found = false;
+
+                    Object.entries(updatedCategories[selectedCategory]).forEach(([key, asset]) => {
+                      if (asset.metadata?.uploadId === uploadId) {
+                        found = true;
+                        updatedCategories[selectedCategory][key] = {
+                          ...asset,
+                          url: fileUrl, // URL 즉시 업데이트
+                          metadata: {
+                            ...asset.metadata,
+                            ...(dimensions ? dimensions : {}),
+                            fileExt, // 파일 확장자 저장
+                          },
+                        };
+                        console.log(`Immediately updated asset ${key} with URL: ${fileUrl}`);
+                      }
+                    });
+
+                    if (found) {
+                      categoriesRef.current = updatedCategories;
+                      setCategories(updatedCategories); // 상태도 함께 업데이트
+                    }
+                  }
+                }
+
                 resolve({
-                  url: response.url,
-                  description: response.description || file.name,
+                  url: fileUrl,
+                  dimensions,
+                  fileExt,
                 });
               } else {
                 throw new Error(response.error || 'Upload failed');
@@ -687,147 +763,21 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     setIsDragging(true);
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
+  // 공통 파일 업로드 로직을 별도 함수로 추출
+  const processFiles = async (files: File[]) => {
     if (!selectedCategory) {
       toast.error('Please select a category before uploading');
-      return;
+      return false;
     }
 
-    // 에셋 드래그인지 확인
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-
-      if (data.type === 'assets') {
-        // 에셋 드래그이므로 함수 종료
-        return;
-      }
-    } catch {
-      // 파싱 에러는 무시 (일반 파일 드롭인 경우)
+    if (files.length === 0) {
+      return false;
     }
 
-    // 이하 기존의 파일 업로드 드롭 처리 코드
-    const { files: droppedFiles } = e.dataTransfer;
+    // Start uploading process
+    setIsUploading(true);
 
-    if (droppedFiles.length === 0) {
-      console.log('No files in drop event'); // 디버깅 로그
-      return;
-    }
-
-    console.log(`Dropped ${droppedFiles.length} files`); // 디버깅 로그
-
-    const newUploadingAssets: Record<string, UploadingAsset> = {};
-
-    Array.from(droppedFiles).forEach((file) => {
-      const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      newUploadingAssets[uploadId] = {
-        id: uploadId,
-        file,
-        progress: 0,
-        status: 'uploading',
-      };
-
-      // 미리 에셋 자리 잡기 (플레이스홀더)
-      const assetKey = `asset_${Date.now()}_${file.name.replace(/\.[^/.]+$/, '')}`;
-      const placeholderAsset: Asset = {
-        url: '',
-        description: file.name,
-        metadata: {
-          originalName: file.name,
-          size: file.size,
-          type: file.type,
-          uploadedAt: new Date().toISOString(),
-          uploadId, // 업로드 ID 저장하여 추적
-          isPlaceholder: true,
-        },
-      };
-
-      categoriesRef.current[selectedCategory] = {
-        ...categoriesRef.current[selectedCategory],
-        [assetKey]: placeholderAsset,
-      };
-    });
-
-    // 업로드 상태 추가
-    setUploadingAssets((prev) => ({ ...prev, ...newUploadingAssets }));
-
-    // 파일 업로드 시작
-    const uploadPromises = Object.entries(newUploadingAssets).map(async ([uploadId, uploadAsset]) => {
-      const result = await uploadFile(uploadAsset.file, uploadId);
-
-      if (result && result.url) {
-        Object.entries(categoriesRef.current[selectedCategory]).forEach(([key, asset]) => {
-          if (asset.metadata?.uploadId === uploadId) {
-            // URL 업데이트하되 플레이스홀더 상태는 유지
-            categoriesRef.current[selectedCategory][key] = {
-              ...asset,
-              url: result.url,
-              description: result?.description ? result.description : asset.description,
-            };
-          }
-        });
-
-        return { success: true, file: uploadAsset.file };
-      }
-
-      Object.entries(categoriesRef.current[selectedCategory]).forEach(([key, asset]) => {
-        if (asset.metadata?.uploadId === uploadId) {
-          // 에러 표시로 업데이트
-          categoriesRef.current[selectedCategory][key] = {
-            ...asset,
-            metadata: {
-              ...asset.metadata,
-              error: true,
-              errorMessage: 'Upload failed',
-            },
-          };
-        }
-      });
-
-      return { success: false, file: uploadAsset.file };
-    });
-
-    // 모든 업로드 완료 대기
-    const results = await Promise.all(uploadPromises);
-
-    const successCount = results.filter((r) => r.success).length;
-    const failCount = results.length - successCount;
-
-    if (successCount > 0) {
-      // 업로드 성공 후 assets.json 저장
-      await saveAssets();
-    }
-
-    if (failCount > 0) {
-      toast.warning(`Failed to upload ${failCount} file${failCount !== 1 ? 's' : ''}`);
-    }
-  };
-
-  // 파일 선택 입력을 위한 ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 파일 선택 클릭 핸들러
-  const handleFileSelect = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  // 파일 선택 변경 핸들러 수정
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCategory) {
-      toast.error('Please select a category before uploading');
-      return;
-    }
-
-    const { files: selectedFiles } = e.target;
-
-    if (!selectedFiles || selectedFiles.length === 0) {
-      return;
-    }
+    console.log(`Processing ${files.length} files`);
 
     // 현재 카테고리 상태 복사
     let updatedCategories = { ...categoriesRef.current };
@@ -835,8 +785,11 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     // 업로드 상태 플레이스홀더 생성
     const newUploadingAssets: Record<string, UploadingAsset> = {};
 
+    // 파일 이름을 uploadId에 매핑하는 객체 추가
+    const fileNameToUploadId: Record<string, string> = {};
+
     // 각 파일마다 플레이스홀더 생성
-    Array.from(selectedFiles).forEach((file) => {
+    Array.from(files).forEach((file) => {
       const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       newUploadingAssets[uploadId] = {
         id: uploadId,
@@ -845,18 +798,19 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         status: 'uploading',
       };
 
+      // 파일 이름과 uploadId 매핑 저장
+      fileNameToUploadId[file.name] = uploadId;
+
       // 플레이스홀더 에셋 추가
       const assetKey = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${file.name.replace(/\.[^/.]+$/, '')}`;
       const placeholderAsset: Asset = {
         url: '', // 초기 URL은 빈 값
         description: file.name,
         metadata: {
-          originalName: file.name,
-          size: file.size,
           type: file.type,
-          uploadedAt: new Date().toISOString(),
-          uploadId,
+          uploadId, // 확실하게 uploadId 설정
           isPlaceholder: true,
+          originalName: file.name, // 원본 파일명 저장
         },
       };
 
@@ -881,24 +835,165 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     const uploadResults = await Promise.all(
       Object.entries(newUploadingAssets).map(async ([uploadId, uploadAsset]) => {
         const result = await uploadFile(uploadAsset.file, uploadId);
-        return { uploadId, result };
+        return { uploadId, result, file: uploadAsset.file };
       }),
     );
+
+    // 성공한 업로드만 필터링
+    const successfulUploads = uploadResults.filter(({ result }) => result && result.url);
+
+    // 이미지 업로드만 필터링
+    const imageUploads = successfulUploads.filter(
+      ({ result }) =>
+        result?.fileExt && ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(result.fileExt.toLowerCase()),
+    );
+
+    // 이미지 설명 한번에 가져오기
+    const imageDescriptions: Record<string, string> = {};
+
+    if (imageUploads.length > 0) {
+      try {
+        console.log(`Fetching descriptions for ${imageUploads.length} images...`);
+
+        const imageUrls = imageUploads.map(({ result }) => result?.url).filter(Boolean);
+
+        const descriptionResponse = await fetch('/api/image-description', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrls,
+          }),
+        });
+
+        if (descriptionResponse.ok) {
+          const descriptions = await descriptionResponse.json();
+
+          if (Array.isArray(descriptions) && descriptions.length > 0) {
+            // URL을 키로 해서 설명을 매핑
+            descriptions.forEach((desc, index) => {
+              const url = imageUrls[index];
+
+              if (url && desc.features) {
+                imageDescriptions[url] = desc.features;
+              }
+            });
+          }
+        }
+      } catch (descError) {
+        console.error('Error fetching image descriptions:', descError);
+      }
+    }
 
     // URL 정보 업데이트
     const finalCategories = { ...categoriesRef.current };
     let hasChanges = false;
 
-    uploadResults.forEach(({ uploadId, result }) => {
+    // 디버깅을 위한 로그 추가
+    console.log(`Processing ${uploadResults.length} upload results`);
+    console.log(`Current assets in category:`, Object.keys(finalCategories[selectedCategory] || {}).length);
+
+    // 먼저 uploadId 기반으로 찾고, 없으면 파일 이름으로 찾는 방식으로 변경
+    uploadResults.forEach(({ uploadId, result, file }) => {
       if (result && result.url) {
-        // 각 카테고리의 각 에셋을 확인
+        console.log(`Processing upload result for ${uploadId}, file: ${file.name}, URL: ${result.url}`);
+
+        let found = false;
+
+        // 각 카테고리의 각 에셋을 확인해서 uploadId로 매칭
         Object.entries(finalCategories[selectedCategory]).forEach(([key, asset]) => {
           if (asset.metadata?.uploadId === uploadId) {
-            // URL 업데이트
+            found = true;
+
+            // 이 이미지에 대한 설명 찾기
+            const description = imageDescriptions[result.url] || file.name;
+
+            // URL 업데이트, description 추가
             finalCategories[selectedCategory][key] = {
               ...asset,
               url: result.url, // 확실하게 URL 설정
-              description: result?.description ? result.description : asset.description,
+              description, // 일괄 조회된 description 설정
+              metadata: {
+                ...asset.metadata,
+                ...(result.dimensions ? result.dimensions : {}),
+                uploadComplete: true, // 업로드 완료 표시
+              },
+            };
+
+            console.log(`Updated asset ${key} with URL: ${result.url} and description: "${description}"`);
+            hasChanges = true;
+          }
+        });
+
+        // uploadId로 찾지 못했다면 파일 이름으로 매칭 시도
+        if (!found) {
+          console.log(`No asset found with uploadId ${uploadId}, trying to match by filename: ${file.name}`);
+
+          Object.entries(finalCategories[selectedCategory]).forEach(([key, asset]) => {
+            // 파일 이름이나 설명으로 매칭 시도
+            if (
+              asset.description === file.name ||
+              asset.metadata?.originalName === file.name ||
+              getFileNameFromUrl(asset.url) === file.name
+            ) {
+              found = true;
+
+              // 이 이미지에 대한 설명 찾기
+              const description = imageDescriptions[result.url] || file.name;
+
+              // 에셋 업데이트
+              finalCategories[selectedCategory][key] = {
+                ...asset,
+                url: result.url,
+                description,
+                metadata: {
+                  ...asset.metadata,
+                  uploadId, // 나중에 찾기 쉽도록 uploadId 추가
+                  ...(result.dimensions ? result.dimensions : {}),
+                  uploadComplete: true,
+                },
+              };
+
+              console.log(`Matched asset by filename: ${key} with URL: ${result.url}`);
+              hasChanges = true;
+            }
+          });
+        }
+
+        // 그래도 찾지 못했다면 새 에셋으로 추가
+        if (!found) {
+          console.log(`No matching asset found for ${file.name}, creating new asset entry`);
+
+          const newKey = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${file.name.replace(/\.[^/.]+$/, '')}`;
+          const description = imageDescriptions[result.url] || file.name;
+
+          finalCategories[selectedCategory][newKey] = {
+            url: result.url,
+            description,
+            metadata: {
+              uploadId,
+              originalName: file.name,
+              uploadComplete: true,
+              dimensions: result.dimensions || {},
+            },
+          };
+
+          console.log(`Created new asset ${newKey} with URL: ${result.url}`);
+          hasChanges = true;
+        }
+      } else {
+        // 실패한 업로드 처리
+        Object.entries(finalCategories[selectedCategory]).forEach(([key, asset]) => {
+          if (asset.metadata?.uploadId === uploadId) {
+            // 에러 표시로 업데이트
+            finalCategories[selectedCategory][key] = {
+              ...asset,
+              metadata: {
+                ...asset.metadata,
+                error: true,
+                errorMessage: 'Upload failed',
+              },
             };
             hasChanges = true;
           }
@@ -907,18 +1002,80 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     });
 
     if (hasChanges) {
-      // 최종 상태 업데이트
-      setCategories(finalCategories);
+      // 최종 상태 업데이트 - 동기화
       categoriesRef.current = finalCategories;
+      setCategories(finalCategories);
+
+      // 업로드 성공 후 assets.json 저장
+      await saveAssets();
+    } else {
+      console.warn('No assets were updated after processing uploads');
     }
+
+    const successCount = uploadResults.filter(({ result }) => result && result.url).length;
+    const failCount = uploadResults.length - successCount;
+
+    if (failCount > 0) {
+      toast.warning(`Failed to upload ${failCount} file${failCount !== 1 ? 's' : ''}`);
+    }
+
+    // End uploading process
+    setIsUploading(false);
+
+    return successCount > 0;
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!selectedCategory) {
+      toast.error('Please select a category before uploading');
+      return;
+    }
+
+    // 에셋 드래그인지 확인
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+
+      if (data.type === 'assets') {
+        // 에셋 드래그이므로 함수 종료
+        return;
+      }
+    } catch {
+      // 파싱 에러는 무시 (일반 파일 드롭인 경우)
+    }
+
+    // 드롭된 파일 처리
+    const { files: droppedFiles } = e.dataTransfer;
+    await processFiles(Array.from(droppedFiles));
+  };
+
+  // 파일 선택 입력을 위한 ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 파일 선택 클릭 핸들러
+  const handleFileSelect = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // 파일 선택 변경 핸들러
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { files: selectedFiles } = e.target;
+
+    if (!selectedFiles || selectedFiles.length === 0) {
+      return;
+    }
+
+    await processFiles(Array.from(selectedFiles));
 
     // 파일 입력 필드 초기화
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-
-    // 변경사항 저장
-    await saveAssets();
   };
 
   // 업로드 버튼 컴포넌트
@@ -1196,10 +1353,11 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                 size: asset.metadata.size,
                 type: asset.metadata.type,
                 uploadedAt: asset.metadata.uploadedAt,
-                ...(dimensions ? { dimensions } : {}),
+                ...(dimensions ? dimensions : {}),
               },
             };
 
+            console.log(`Finalized asset ${key} with URL: ${asset.url}`); // 디버깅 로그 추가
             hasChanges = true;
           }
         });
@@ -1207,8 +1365,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         if (hasChanges) {
           // 상태와 ref 모두 업데이트
           console.log('Updating categories with finalized assets');
-          setCategories(updatedCategories);
           categoriesRef.current = updatedCategories;
+          setCategories(updatedCategories);
 
           // 변경사항 저장
           saveAssets();
@@ -1319,8 +1477,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         });
 
         // 상태 업데이트
-        setCategories(updatedCategories);
         categoriesRef.current = updatedCategories;
+        setCategories(updatedCategories);
 
         // 선택된 에셋 초기화
         setSelectedAsset(null);
@@ -1334,6 +1492,27 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       // 파싱 에러는 무시 (일반 파일 드롭인 경우)
       console.log('Not an asset drag operation');
     }
+  };
+
+  // 이미지 차원 가져오는 헬퍼 함수 추가
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        resolve({
+          width: img.width,
+          height: img.height,
+        });
+        URL.revokeObjectURL(img.src); // 메모리 누수 방지를 위한 정리
+      };
+
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(file);
+    });
   };
 
   return (

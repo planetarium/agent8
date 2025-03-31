@@ -303,15 +303,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const videoExtensions = ['.mp4', '.webm', '.mov'];
 
         let fileType = 'unknown';
-        let metadata: Record<string, any> = {};
 
         if (imageExtensions.includes(fileExt)) {
           fileType = 'image';
-
-          // Get image dimensions for image files
-          if (fileExt !== '.svg') {
-            metadata = await getImageDimensions(file);
-          }
         } else if (modelExtensions.includes(fileExt)) {
           fileType = '3D model';
         } else if (audioExtensions.includes(fileExt)) {
@@ -333,7 +327,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           features: `Uploading ${fileType} file...`,
           details: `Uploading ${fileName}`,
           ext: fileExt,
-          metadata,
         };
 
         // 임시 첨부 파일을 리스트에 추가
@@ -347,6 +340,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         formData.append('verse', verse);
 
         toast.info(`Uploading ${file.name}...`);
+
+        // For image files, get dimensions before uploading
+        let imageMetadata = undefined;
+
+        if (fileType === 'image' && !fileExt.includes('svg')) {
+          try {
+            imageMetadata = await getImageDimensions(file);
+          } catch (error) {
+            console.error('Error getting image dimensions:', error);
+          }
+        }
 
         try {
           const response = await fetch('/api/upload-attachment', {
@@ -369,13 +373,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               features: `Type: ${fileType} Ext: ${fileExt}`,
               details: `Type: ${fileType} Ext: ${fileExt}`,
               ext: fileExt,
-              metadata,
+              metadata: imageMetadata,
             };
 
-            // Add dimensions to features for images
-            if (fileType === 'image' && metadata.width && metadata.height) {
-              finalAttachment.features = `Type: ${fileType} Ext: ${fileExt} Dimensions: ${metadata.width}x${metadata.height}`;
-              finalAttachment.details = `Type: ${fileType} Ext: ${fileExt} Dimensions: ${metadata.width}x${metadata.height}`;
+            // Add dimensions to features if available
+            if (imageMetadata?.width && imageMetadata?.height) {
+              finalAttachment.features = `Type: ${fileType} Ext: ${fileExt} Size: ${imageMetadata.width}x${imageMetadata.height}`;
+              finalAttachment.details = `Type: ${fileType} Ext: ${fileExt} Size: ${imageMetadata.width}x${imageMetadata.height}`;
             }
 
             // 임시 첨부 파일을 실제 첨부 파일로 교체
@@ -418,20 +422,20 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     // Helper function to get image dimensions
     const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         const img = new Image();
 
         img.onload = () => {
-          URL.revokeObjectURL(img.src); // Clean up
           resolve({
             width: img.width,
             height: img.height,
           });
+          URL.revokeObjectURL(img.src); // Clean up to avoid memory leaks
         };
 
         img.onerror = () => {
-          URL.revokeObjectURL(img.src); // Clean up
-          resolve({ width: 0, height: 0 }); // Default values in case of error
+          reject(new Error('Failed to load image'));
+          URL.revokeObjectURL(img.src);
         };
         img.src = URL.createObjectURL(file);
       });
