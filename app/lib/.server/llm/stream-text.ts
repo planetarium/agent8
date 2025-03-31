@@ -204,13 +204,26 @@ ${props.summary}
       }
     }
     \`\`\`
-    Resources that are not in \`src/assets.json\` can NEVER be used.
+
+    The structure of assets.json is fixed at 2 levels deep. The first key is the category and the second key is the resource ID. Please always maintain this structure.
+    \`\`\`js
+    {
+      "CATEGORY": {
+        "RESOURCE_ID": {
+          "url": "...",
+          "description": "...",
+          "metadata": {}
+        }
+      }
+    }
+    \`\`\`
 
 
   CRITICAL: Follow these strict resource management rules to prevent application errors:
     
   1. If appropriate resources are not available in assets.json:
-     - First of all. Never create images directly using base64 or similar methods. even in assets.json's url part.
+     - Never create images directly using base64 or similar methods. even in assets.json's url part.
+     - Never create URLs that are not provided.
      - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
      - For 3D games: Use Three.js to generate geometric shapes and programmatic textures
      - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
