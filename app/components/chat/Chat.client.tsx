@@ -722,6 +722,7 @@ export const ChatImpl = memo(
         actionAlert={actionAlert}
         clearAlert={() => workbenchStore.clearAlert()}
         data={chatData}
+        onHandleTemplateImport={handleTemplateImport}
         onGithubImport={handleGithubImport}
         onProjectZipImport={handleProjectZipImport}
       />

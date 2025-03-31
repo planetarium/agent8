@@ -74,6 +74,10 @@ interface BaseChatProps {
   clearAlert?: () => void;
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
+  onHandleTemplateImport?: (
+    source: { type: 'github' | 'zip'; title: string },
+    templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+  ) => void;
   onGithubImport?: (repoUrl: string) => void;
   onProjectZipImport?: (title: string, zipFile: File) => void;
 }
@@ -111,6 +115,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       actionRunner,
       onGithubImport,
       onProjectZipImport,
+      onHandleTemplateImport,
     },
     ref,
   ) => {
@@ -747,6 +752,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 actionRunner={actionRunner ?? ({} as ActionRunner)}
                 chatStarted={chatStarted}
                 isStreaming={isStreaming}
+                onHandleTemplateImport={onHandleTemplateImport}
               />
             )}
           </ClientOnly>

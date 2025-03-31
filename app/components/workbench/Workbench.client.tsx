@@ -25,6 +25,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
 import { ResourcePanel } from './ResourcePanel';
+import { getZipTemplates } from '~/utils/selectStarterTemplate';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -34,6 +35,10 @@ interface WorkspaceProps {
     gitUrl?: string;
   };
   updateChatMestaData?: (metadata: any) => void;
+  onHandleTemplateImport?: (
+    source: { type: 'github' | 'zip'; title: string },
+    templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+  ) => void;
 }
 
 const viewTransition = { ease: cubicEasingFn };
@@ -277,7 +282,14 @@ const FileModifiedDropdown = memo(
 );
 
 export const Workbench = memo(
-  ({ chatStarted, isStreaming, actionRunner, metadata, updateChatMestaData }: WorkspaceProps) => {
+  ({
+    chatStarted,
+    isStreaming,
+    actionRunner,
+    metadata,
+    updateChatMestaData,
+    onHandleTemplateImport,
+  }: WorkspaceProps) => {
     renderLogger.trace('Workbench');
 
     const [isPushDialogOpen, setIsPushDialogOpen] = useState(false);
@@ -379,6 +391,22 @@ export const Workbench = memo(
                   <div className="ml-auto" />
                   {(selectedView === 'code' || selectedView === 'resource') && (
                     <div className="flex overflow-y-auto">
+                      <PanelHeaderButton
+                        className="mr-1 text-sm"
+                        onClick={async () => {
+                          const zip = await workbenchStore.generateZip();
+
+                          if (onHandleTemplateImport) {
+                            await onHandleTemplateImport(
+                              { type: 'zip', title: 'Forked Project' },
+                              getZipTemplates(new File([zip], 'Forked Project.zip'), 'Forked Project'),
+                            );
+                          }
+                        }}
+                      >
+                        <div className="i-ph:arrows-split" />
+                        Fork
+                      </PanelHeaderButton>
                       <PanelHeaderButton
                         className="mr-1 text-sm"
                         onClick={() => {

@@ -4,9 +4,6 @@ import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import { useLocation } from '@remix-run/react';
-import { db, chatId } from '~/lib/persistence/useChatHistory';
-import { forkChat } from '~/lib/persistence/db';
-import { toast } from 'react-toastify';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
@@ -32,19 +29,23 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       window.location.search = searchParams.toString();
     };
 
-    const handleFork = async (messageId: string) => {
-      try {
-        if (!db || !chatId.get()) {
-          toast.error('Chat persistence is not available');
-          return;
-        }
-
-        const urlId = await forkChat(db, chatId.get()!, messageId);
-        window.location.href = `/chat/${urlId}`;
-      } catch (error) {
-        toast.error('Failed to fork chat: ' + (error as Error).message);
-      }
-    };
+    /*
+     * const handleFork = async (messageId: string) => {
+     *   try {
+     *     if (!db || !chatId.get()) {
+     *       toast.error('Chat persistence is not available');
+     *       return;
+     *     }
+     *
+     *
+     *
+     *     const urlId = await forkChat(db, chatId.get()!, messageId);
+     *     window.location.href = `/chat/${urlId}`;
+     *   } catch (error) {
+     *     toast.error('Failed to fork chat: ' + (error as Error).message);
+     *   }
+     * };
+     */
 
     return (
       <div id={id} className={props.className} ref={ref}>
@@ -107,7 +108,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         </WithTooltip>
                       )}
 
-                      <WithTooltip tooltip="Fork chat from this message">
+                      {/* <WithTooltip tooltip="Fork chat from this message">
                         <button
                           onClick={() => handleFork(messageId)}
                           key="i-ph:git-fork"
@@ -116,7 +117,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             'text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors',
                           )}
                         />
-                      </WithTooltip>
+                      </WithTooltip> */}
                     </div>
                   )}
                 </div>
