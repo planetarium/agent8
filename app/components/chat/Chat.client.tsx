@@ -149,8 +149,9 @@ const processSampledMessages = createSampler(
 );
 
 async function runAndPreview() {
-  const shell = workbenchStore.boltTerminal;
+  workbenchStore.clearAlert();
 
+  const shell = workbenchStore.boltTerminal;
   await shell.ready();
 
   for (let retry = 0; retry < 60; retry++) {
@@ -307,6 +308,7 @@ export const ChatImpl = memo(
 
     const abort = () => {
       stop();
+      setFakeLoading(false);
       chatStore.setKey('aborted', true);
       workbenchStore.abortAllActions();
 

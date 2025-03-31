@@ -484,7 +484,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 })}
               >
                 <div className="bg-bolt-elements-background-depth-2">
-                  {actionAlert && (
+                  {!isStreaming && actionAlert && (
                     <ChatAlert
                       alert={actionAlert}
                       clearAlert={() => clearAlert?.()}
