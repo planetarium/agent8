@@ -148,6 +148,12 @@ const processSampledMessages = createSampler(
   50,
 );
 
+async function runAndPreview() {
+  const shell = workbenchStore.boltTerminal;
+  await shell.ready();
+  await shell.executeCommand(Date.now().toString(), 'npm install && npx -y @agent8/deploy && npm run dev');
+}
+
 interface ChatProps {
   initialMessages: Message[];
   storeMessageHistory: (messages: Message[]) => Promise<void>;
@@ -232,6 +238,8 @@ export const ChatImpl = memo(
             messageLength: message.content.length,
           });
         }
+
+        runAndPreview();
 
         logger.debug('Finished streaming');
       },
