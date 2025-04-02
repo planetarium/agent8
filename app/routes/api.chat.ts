@@ -13,6 +13,8 @@ import { createSummary } from '~/lib/.server/llm/create-summary';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
+import { getMCPConfigFromCookie } from '~/lib/api/cookies';
+import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
 
 export async function action(args: ActionFunctionArgs) {
   return chatAction(args);
@@ -47,11 +49,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
-  const apiKeys = JSON.parse(parseCookies(cookieHeader || '').apiKeys || '{}');
-  const providerSettings: Record<string, IProviderSetting> = JSON.parse(
-    parseCookies(cookieHeader || '').providers || '{}',
-  );
+  const parsedCookies = parseCookies(cookieHeader || '');
 
+  const apiKeys = JSON.parse(parsedCookies.apiKeys || '{}');
+  const providerSettings: Record<string, IProviderSetting> = JSON.parse(parsedCookies.providers || '{}');
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
@@ -63,6 +64,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   let progressCounter: number = 1;
 
   try {
+    const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+    const mcpToolset = await createToolSet(mcpConfig);
+    const mcpTools = mcpToolset.tools;
+    logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
+
     const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
 
@@ -70,6 +76,57 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
     const dataStream = createDataStream({
       async execute(dataStream) {
+        // Track unsubscribe functions to clean up later if needed
+        const progressUnsubscribers: Array<() => void> = [];
+
+        logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
+
+        for (const toolName in mcpTools) {
+          if (mcpTools[toolName]) {
+            const tool = mcpTools[toolName];
+
+            // Subscribe to progress events if emitter is available
+            if (tool.progressEmitter) {
+              // Subscribe to the tool's progress events
+              const unsubscribe = tool.progressEmitter.subscribe((event) => {
+                const { type, data, toolName } = event;
+
+                if (type === 'start') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'in-progress',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' execution started`,
+                  } as any);
+                } else if (type === 'progress') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'in-progress',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' executing: ${data.status || ''}`,
+                    percentage: data.percentage ? Number(data.percentage) : undefined,
+                  } as any);
+                } else if (type === 'complete') {
+                  dataStream.writeData({
+                    type: 'progress',
+                    status: 'complete',
+                    order: progressCounter++,
+                    message: `Tool '${toolName}' execution completed`,
+                  } as any);
+
+                  // Automatically unsubscribe after complete
+                  unsubscribe();
+                }
+              });
+
+              // Store unsubscribe function for cleanup
+              progressUnsubscribers.push(unsubscribe);
+
+              logger.info(`Subscribed to progress events for tool: ${toolName}`);
+            }
+          }
+        }
+
         const filePaths = getFilePaths(files || {});
         let filteredFiles: FileMap | undefined = undefined;
         let summary: string | undefined = undefined;
@@ -102,6 +159,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             providerSettings,
             promptId,
             contextOptimization,
+            abortSignal: request.signal,
             onFinish(resp) {
               if (resp.usage) {
                 logger.debug('createSummary token usage', JSON.stringify(resp.usage));
@@ -146,6 +204,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             promptId,
             contextOptimization,
             summary,
+            abortSignal: request.signal,
             onFinish(resp) {
               if (resp.usage) {
                 logger.debug('selectContext token usage', JSON.stringify(resp.usage));
@@ -287,7 +346,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         // Stream the text
         const options: StreamingOptions = {
-          toolChoice: 'none',
+          toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, usage }) => {
             logger.debug('usage', JSON.stringify(usage));
 
@@ -350,18 +409,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               messageSliceId,
               vectorDbExamples,
               relevantResources,
+              tools: mcpTools,
+              abortSignal: request.signal,
             });
 
             result.mergeIntoDataStream(dataStream);
 
             (async () => {
-              for await (const part of result.fullStream) {
-                if (part.type === 'error') {
-                  const error: any = part.error;
-                  logger.error(`${error}`);
+              try {
+                for await (const part of result.fullStream) {
+                  if (part.type === 'error') {
+                    const error: any = part.error;
+                    logger.error(`${error}`);
 
+                    return;
+                  }
+                }
+              } catch (e: any) {
+                if (e.name === 'AbortError') {
+                  logger.info('Request aborted.');
                   return;
                 }
+
+                throw e;
               }
             })();
 
@@ -391,16 +461,27 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messageSliceId,
           vectorDbExamples,
           relevantResources,
+          tools: mcpTools,
+          abortSignal: request.signal,
         });
 
         (async () => {
-          for await (const part of result.fullStream) {
-            if (part.type === 'error') {
-              const error: any = part.error;
-              logger.error(`${error}`);
+          try {
+            for await (const part of result.fullStream) {
+              if (part.type === 'error') {
+                const error: any = part.error;
+                logger.error(`${error}`);
 
+                return;
+              }
+            }
+          } catch (e: any) {
+            if (e.name === 'AbortError') {
+              logger.info('Request aborted.');
               return;
             }
+
+            throw e;
           }
         })();
         result.mergeIntoDataStream(dataStream);
@@ -440,6 +521,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // Convert the string stream to a byte stream
           const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
           controller.enqueue(encoder.encode(str));
+        },
+        async flush() {
+          await cleanupToolSet(mcpToolset);
         },
       }),
     );

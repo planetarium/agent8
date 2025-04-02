@@ -1,3 +1,5 @@
+import type { MCPConfig, MCPServerConfig } from '~/lib/modules/mcp/config';
+
 export function parseCookies(cookieHeader: string | null) {
   const cookies: Record<string, string> = {};
 
@@ -30,4 +32,14 @@ export function getApiKeysFromCookie(cookieHeader: string | null): Record<string
 export function getProviderSettingsFromCookie(cookieHeader: string | null): Record<string, any> {
   const cookies = parseCookies(cookieHeader);
   return cookies.providers ? JSON.parse(cookies.providers) : {};
+}
+
+export function getMCPConfigFromCookie(cookieHeader: string | null): MCPConfig {
+  const cookies = parseCookies(cookieHeader);
+  const servers: MCPServerConfig[] = cookies.mcpSseServers ? JSON.parse(cookies.mcpSseServers) : [];
+
+  return {
+    source: 'cookie',
+    servers: Object.fromEntries(servers.map((server) => [server.name, server])),
+  };
 }

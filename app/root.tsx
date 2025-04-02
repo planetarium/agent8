@@ -47,10 +47,10 @@ const inlineThemeCode = stripIndents`
   function setTutorialKitTheme() {
     // 항상 다크 테마 사용
     let theme = 'dark';
-    
+
     // 로컬 스토리지에 다크 테마 저장
     localStorage.setItem('bolt_theme', theme);
-    
+
     // HTML 요소에 다크 테마 속성 설정
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }

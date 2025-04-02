@@ -29,6 +29,13 @@ export interface Shortcuts {
   toggleTerminal: Shortcut;
 }
 
+// MCP SSE server settings interface
+export interface MCPSSEServer {
+  name: string;
+  url: string;
+  enabled: boolean;
+}
+
 export const URL_CONFIGURABLE_PROVIDERS = ['Ollama', 'LMStudio', 'OpenAILike'];
 export const LOCAL_PROVIDERS = ['OpenAILike', 'LMStudio', 'Ollama'];
 
@@ -124,14 +131,35 @@ export const updateProviderSettings = (provider: string, settings: ProviderSetti
 export const isDebugMode = atom(false);
 
 // Define keys for localStorage
-const SETTINGS_KEYS = {
+export const SETTINGS_KEYS = {
   LATEST_BRANCH: 'isLatestBranch',
   AUTO_SELECT_TEMPLATE: 'autoSelectTemplate',
   CONTEXT_OPTIMIZATION: 'contextOptimizationEnabled',
   EVENT_LOGS: 'isEventLogsEnabled',
   PROMPT_ID: 'promptId',
   DEVELOPER_MODE: 'isDeveloperMode',
+  MCP_SSE_SERVERS: 'mcpSseServers',
 } as const;
+
+// Get initial MCP SSE server settings from localStorage
+const getInitialMCPSSEServers = (): MCPSSEServer[] => {
+  if (!isBrowser) {
+    return [];
+  }
+
+  try {
+    const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
+
+    if (!stored) {
+      return [];
+    }
+
+    return JSON.parse(stored);
+  } catch (error) {
+    console.error('Failed to parse MCP SSE server settings:', error);
+    return [];
+  }
+};
 
 // Initialize settings from localStorage or defaults
 const getInitialSettings = () => {
@@ -171,6 +199,7 @@ export const autoSelectStarterTemplate = atom<boolean>(initialSettings.autoSelec
 export const enableContextOptimizationStore = atom<boolean>(initialSettings.contextOptimization);
 export const isEventLogsEnabled = atom<boolean>(initialSettings.eventLogs);
 export const promptStore = atom<string>(initialSettings.promptId);
+export const mcpSseServersStore = atom<MCPSSEServer[]>(getInitialMCPSSEServers());
 
 // Helper functions to update settings with persistence
 export const updateLatestBranch = (enabled: boolean) => {
@@ -324,3 +353,48 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set({ selectedTab: tab });
   },
 }));
+
+// MCP SSE Servers management functions
+export const updateMCPSSEServers = (servers: MCPSSEServer[]) => {
+  mcpSseServersStore.set(servers);
+  localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(servers));
+
+  // Also save to cookie for API routes
+  try {
+    // Use the same key name as localStorage for consistency
+    Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(servers), {
+      expires: 365, // 1년간 유효
+      path: '/',
+      sameSite: 'lax',
+    });
+    console.log('MCP SSE servers saved to cookies:', servers);
+  } catch (e) {
+    console.error('Failed to set mcpSseServers cookie:', e);
+  }
+};
+
+export const addMCPSSEServer = (server: MCPSSEServer) => {
+  const servers = mcpSseServersStore.get();
+  const updatedServers = [...servers, server];
+  updateMCPSSEServers(updatedServers);
+};
+
+export const updateMCPSSEServer = (index: number, server: MCPSSEServer) => {
+  const servers = mcpSseServersStore.get();
+  const updatedServers = [...servers];
+  updatedServers[index] = server;
+  updateMCPSSEServers(updatedServers);
+};
+
+export const removeMCPSSEServer = (index: number) => {
+  const servers = mcpSseServersStore.get();
+  const updatedServers = servers.filter((_, i) => i !== index);
+  updateMCPSSEServers(updatedServers);
+};
+
+export const toggleMCPSSEServer = (index: number, enabled: boolean) => {
+  const servers = mcpSseServersStore.get();
+  const updatedServers = [...servers];
+  updatedServers[index] = { ...updatedServers[index], enabled };
+  updateMCPSSEServers(updatedServers);
+};
