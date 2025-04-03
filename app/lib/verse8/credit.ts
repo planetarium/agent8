@@ -1,3 +1,7 @@
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('credit');
+
 export async function getUserCredit(
   endpoint: string,
   userUid: string,
@@ -26,7 +30,7 @@ export async function getUserCredit(
 
     return BigInt(credits);
   } catch (error) {
-    console.error('Failed to get user credit', error);
+    logger.error('Failed to get user credit', error);
     throw new Error('Failed to get user credit');
   }
 }
@@ -35,15 +39,14 @@ export async function consumeUserCredit(
   endpoint: string,
   userUid: string,
   creditCredentials: { clientId: string; clientSecret: string },
-  inputTokens: string,
-  outputTokens: string,
-  description?: string,
-  model: {
-    provider: string;
-    name: string;
-  } = {
-    provider: 'Anthropic',
-    name: 'Claude 3.7 Sonnet',
+  consumeArgs: {
+    model: {
+      provider: string;
+      name: string;
+    };
+    inputTokens: number;
+    outputTokens: number;
+    description?: string;
   },
 ) {
   if (!userUid) {
@@ -59,11 +62,11 @@ export async function consumeUserCredit(
     },
     body: JSON.stringify({
       userUid,
-      llmProvider: model.provider,
-      llmModelName: model.name,
-      inputTokens,
-      outputTokens,
-      description: description || 'Agent8 Chat',
+      llmProvider: consumeArgs.model.provider,
+      llmModelName: consumeArgs.model.name,
+      inputTokens: consumeArgs.inputTokens,
+      outputTokens: consumeArgs.outputTokens,
+      description: consumeArgs.description || 'Agent8 Chat',
     }),
   });
 

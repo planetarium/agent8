@@ -1,4 +1,8 @@
 import Cookies from 'js-cookie';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('userAuth');
+
 export const V8_ACCESS_TOKEN_KEY = 'v8AccessToken';
 
 export const updateV8AccessToken = (v8AccessToken: string) => {
@@ -30,7 +34,7 @@ export const verifyV8AccessToken = async (
       isActivated: data?.isActivated || false,
     };
   } catch (error) {
-    console.error('Failed to verify V8 access token', error);
+    logger.error('Failed to verify V8 access token', error);
     return { userUid: '', isActivated: false };
   }
 };

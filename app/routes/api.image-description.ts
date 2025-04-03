@@ -8,7 +8,7 @@ export const action = withV8AuthUser(imageDescriptionAction, { checkCredit: true
 export async function generateImageDescription(
   imageUrls: string[],
   message: string,
-  onFinish?: (args: { usage: LanguageModelUsage }) => void,
+  onFinish: (args: { usage: LanguageModelUsage; model: string; provider: string }) => void,
 ): Promise<{ imageUrl: string; features: string; details: string }[]> {
   const provider = PROVIDER_LIST.find((p) => p.name === 'OpenRouter');
   const model = 'google/gemini-2.0-flash-lite-001';
@@ -54,7 +54,13 @@ export async function generateImageDescription(
           })),
         },
       ],
-      onStepFinish: onFinish,
+      onStepFinish: (args) => {
+        onFinish({
+          usage: args.usage,
+          model,
+          provider: provider!.name,
+        });
+      },
     });
 
     const jsonMatch = resp.text.match(/\[.*\]/s);
@@ -74,10 +80,15 @@ async function imageDescriptionAction({ request, context }: ActionFunctionArgs) 
   }>();
 
   try {
-    const result = await generateImageDescription(imageUrls, message, ({ usage }) => {
+    const result = await generateImageDescription(imageUrls, message, ({ usage, model, provider }) => {
       if (usage) {
         const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-        consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Image Description');
+        consumeUserCredit({
+          model: { provider, name: model },
+          inputTokens: usage.promptTokens,
+          outputTokens: usage.completionTokens,
+          description: 'Image Description',
+        });
       }
     });
 

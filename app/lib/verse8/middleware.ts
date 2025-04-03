@@ -2,18 +2,21 @@ import type { ActionFunctionArgs } from '@remix-run/node';
 import { consumeUserCredit, getUserCredit } from './credit';
 import { verifyV8AccessToken } from './userAuth';
 import { getUserAuthFromCookie } from '~/lib/api/cookies';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('middleware.withV8AuthUser');
 
 interface V8AuthUserOptions {
   checkActivated?: boolean;
   checkCredit?: boolean;
 }
 
-export type ContextConsumeUserCredit = (
-  inputTokens: string,
-  outputTokens: string,
-  description?: string,
-  model?: { provider: string; name: string },
-) => Promise<void>;
+export type ContextConsumeUserCredit = (args: {
+  model: { provider: string; name: string };
+  inputTokens: number;
+  outputTokens: number;
+  description?: string;
+}) => Promise<void>;
 
 export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
   return async (args: ActionFunctionArgs) => {
@@ -27,7 +30,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
           ...context,
           user: { uid: 'unknown', isActivated: false, credit: 0 },
           consumeUserCredit: () => {
-            console.warn('consumeUserCredit is disabled');
+            logger.warn('consumeUserCredit is disabled');
           },
         };
         return await handler({ ...args, context: enhancedContext });
@@ -67,12 +70,12 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       const enhancedContext = {
         ...context,
         user: { uid: userUid, isActivated, credit: credit?.toString() },
-        consumeUserCredit: (
-          inputTokens: string,
-          outputTokens: string,
-          description?: string,
-          model?: { provider: string; name: string },
-        ) =>
+        consumeUserCredit: (consumeArgs: {
+          inputTokens: number;
+          outputTokens: number;
+          description?: string;
+          model: { provider: string; name: string };
+        }) =>
           consumeUserCredit(
             env.VITE_V8_CREDIT_ENDPOINT,
             userUid,
@@ -80,10 +83,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
               clientId: env.V8_CREDIT_CLIENT_ID,
               clientSecret: env.V8_CREDIT_CLIENT_SECRET,
             },
-            inputTokens,
-            outputTokens,
-            description,
-            model,
+            consumeArgs,
           ),
       };
 
@@ -91,7 +91,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
 
       return response;
     } catch (error: any) {
-      console.error('V8 Auth Middleware Error', error);
+      logger.error('V8 Auth Middleware Error', error);
       return new Response(error.message, { status: 400 });
     }
   };

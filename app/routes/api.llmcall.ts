@@ -65,7 +65,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
           onFinish: async ({ usage }) => {
             if (usage) {
               const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-              await consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Start Call');
+              await consumeUserCredit({
+                model: { provider: providerName, name: model },
+                inputTokens: usage.promptTokens,
+                outputTokens: usage.completionTokens,
+                description: 'Start Call',
+              });
             }
 
             await cleanupToolSet(mcpToolset);
@@ -140,7 +145,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         onStepFinish: async ({ usage }) => {
           if (usage) {
             const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-            await consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Start Call');
+            await consumeUserCredit({
+              model: { provider: providerName, name: model },
+              inputTokens: usage.promptTokens,
+              outputTokens: usage.completionTokens,
+              description: 'Start Call',
+            });
           }
         },
         maxTokens: dynamicMaxTokens,

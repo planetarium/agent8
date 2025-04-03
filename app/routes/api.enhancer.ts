@@ -86,7 +86,12 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
         onFinish: ({ usage }) => {
           if (usage) {
             const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-            consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Prompt Enhancer');
+            consumeUserCredit({
+              model: { provider: providerName, name: model },
+              inputTokens: usage.promptTokens,
+              outputTokens: usage.completionTokens,
+              description: 'Prompt Enhancer',
+            });
           }
         },
 
