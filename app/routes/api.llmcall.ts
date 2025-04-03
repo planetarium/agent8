@@ -9,10 +9,9 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie, getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
 import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
-export async function action(args: ActionFunctionArgs) {
-  return llmCallAction(args);
-}
+export const action = withV8AuthUser(llmCallAction, { checkCredit: true });
 
 async function getModelList(options: {
   apiKeys?: Record<string, string>;
@@ -63,7 +62,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
       const result = await streamText({
         options: {
           system,
-          onFinish: async () => {
+          onFinish: async ({ usage }) => {
+            if (usage) {
+              const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+              await consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Start Call');
+            }
+
             await cleanupToolSet(mcpToolset);
           },
         },
@@ -133,6 +137,12 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
           apiKeys,
           providerSettings,
         }),
+        onStepFinish: async ({ usage }) => {
+          if (usage) {
+            const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+            await consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Start Call');
+          }
+        },
         maxTokens: dynamicMaxTokens,
         maxSteps: 100,
         toolChoice: 'auto',

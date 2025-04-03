@@ -1,4 +1,5 @@
 import type { MCPConfig, MCPServerConfig } from '~/lib/modules/mcp/config';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 export function parseCookies(cookieHeader: string | null) {
   const cookies: Record<string, string> = {};
@@ -41,5 +42,12 @@ export function getMCPConfigFromCookie(cookieHeader: string | null): MCPConfig {
   return {
     source: 'cookie',
     servers: Object.fromEntries(servers.map((server) => [server.name, server])),
+  };
+}
+
+export function getUserAuthFromCookie(cookieHeader: string | null): { accessToken: string } {
+  const cookies = parseCookies(cookieHeader);
+  return {
+    accessToken: cookies[V8_ACCESS_TOKEN_KEY],
   };
 }

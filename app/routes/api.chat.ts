@@ -15,10 +15,9 @@ import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
-export async function action(args: ActionFunctionArgs) {
-  return chatAction(args);
-}
+export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.chat');
 
@@ -40,56 +39,12 @@ function parseCookies(cookieHeader: string): Record<string, string> {
   return cookies;
 }
 
-async function consumeCredit(
-  endpoint: string,
-  userUid: string,
-  creditCredentials: { clientId: string; clientSecret: string },
-  cumulativeUsage: {
-    completionTokens: number;
-    promptTokens: number;
-    totalTokens: number;
-  },
-) {
-  if (!userUid) {
-    throw new Error('User UID is required');
-  }
-
-  const response = await fetch(endpoint + '/v1/credits/consume', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-client-id': creditCredentials.clientId,
-      'x-client-secret': creditCredentials.clientSecret,
-    },
-    body: JSON.stringify({
-      userUid,
-      llmProvider: 'Anthropic',
-      llmModelName: 'Claude 3.7 Sonnet',
-      inputTokens: cumulativeUsage.promptTokens,
-      outputTokens: cumulativeUsage.completionTokens,
-      description: 'Agent8 Chat',
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to consume credit');
-  }
-}
-
 async function chatAction({ context, request }: ActionFunctionArgs) {
-  const env = { ...context.cloudflare.env, ...process.env } as Env;
-  const v8CreditEndpoint = env.V8_CREDIT_ENDPOINT;
-  const creditCredentials = {
-    clientId: env.V8_CREDIT_CLIENT_ID,
-    clientSecret: env.V8_CREDIT_CLIENT_SECRET,
-  };
-
-  const { messages, files, promptId, contextOptimization, userUid } = await request.json<{
+  const { messages, files, promptId, contextOptimization } = await request.json<{
     messages: Messages;
     files: any;
     promptId?: string;
     contextOptimization: boolean;
-    userUid: string;
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
@@ -180,8 +135,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         if (messages.length > 3) {
           messageSliceId = messages.length - 3;
         }
-
-        console.log(JSON.stringify(messages));
 
         if (filePaths.length > 0 && contextOptimization) {
           logger.debug('Generating Chat Summary');
@@ -409,6 +362,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   totalTokens: cumulativeUsage.totalTokens,
                 },
               });
+
               dataStream.writeData({
                 type: 'progress',
                 label: 'response',
@@ -418,7 +372,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
 
-              await consumeCredit(v8CreditEndpoint, userUid, creditCredentials, cumulativeUsage);
+              const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+              await consumeUserCredit(
+                cumulativeUsage.promptTokens.toString(),
+                cumulativeUsage.completionTokens.toString(),
+                'Generate Response',
+              );
 
               // stream.close();
               return;

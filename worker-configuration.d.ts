@@ -21,7 +21,9 @@ interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   GITHUB_TOKEN: string;
-  V8_CREDIT_ENDPOINT: string;
+  VITE_V8_CREDIT_ENDPOINT: string;
+  VITE_V8_API_ENDPOINT: string;
   V8_CREDIT_CLIENT_ID: string;
   V8_CREDIT_CLIENT_SECRET: string;
+  VITE_ACCESS_CONTROL_ENABLED: string;
 }

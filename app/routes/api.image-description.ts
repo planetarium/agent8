@@ -1,14 +1,14 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { generateText } from 'ai';
+import { generateText, type LanguageModelUsage } from 'ai';
 import { PROVIDER_LIST } from '~/utils/constants';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
-export async function action(args: ActionFunctionArgs) {
-  return imageDescriptionAction(args);
-}
+export const action = withV8AuthUser(imageDescriptionAction, { checkCredit: true });
 
 export async function generateImageDescription(
   imageUrls: string[],
   message: string,
+  onFinish?: (args: { usage: LanguageModelUsage }) => void,
 ): Promise<{ imageUrl: string; features: string; details: string }[]> {
   const provider = PROVIDER_LIST.find((p) => p.name === 'OpenRouter');
   const model = 'google/gemini-2.0-flash-lite-001';
@@ -54,6 +54,7 @@ export async function generateImageDescription(
           })),
         },
       ],
+      onStepFinish: onFinish,
     });
 
     const jsonMatch = resp.text.match(/\[.*\]/s);
@@ -66,14 +67,19 @@ export async function generateImageDescription(
   return [];
 }
 
-async function imageDescriptionAction({ request }: ActionFunctionArgs) {
+async function imageDescriptionAction({ request, context }: ActionFunctionArgs) {
   const { imageUrls, message } = await request.json<{
     imageUrls: string[];
     message: string;
   }>();
 
   try {
-    const result = await generateImageDescription(imageUrls, message);
+    const result = await generateImageDescription(imageUrls, message, ({ usage }) => {
+      if (usage) {
+        const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+        consumeUserCredit(usage.promptTokens.toString(), usage.completionTokens.toString(), 'Image Description');
+      }
+    });
 
     return new Response(JSON.stringify(result), {
       status: 200,

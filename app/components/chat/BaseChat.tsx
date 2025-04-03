@@ -499,6 +499,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       alert={actionAlert}
                       clearAlert={() => clearAlert?.()}
                       postMessage={(message, isAutoFix = false) => {
+                        if (isStreaming) {
+                          return;
+                        }
+
                         sendMessage?.({} as any, message);
                         clearAlert?.();
 
