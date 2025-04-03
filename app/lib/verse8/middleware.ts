@@ -4,9 +4,8 @@ import { verifyV8AccessToken } from './userAuth';
 import { getUserAuthFromCookie } from '~/lib/api/cookies';
 
 interface V8AuthUserOptions {
-  checkActivated?: boolean; // 활성화 여부
-  checkCredit?: boolean; // 크레딧/포인트 체크 여부
-  customValidation?: (user: any, context: any) => Promise<boolean>; // 커스텀 검증 함수
+  checkActivated?: boolean;
+  checkCredit?: boolean;
 }
 
 export type ContextConsumeUserCredit = (

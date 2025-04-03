@@ -19,8 +19,6 @@ export const verifyV8AccessToken = async (
       },
     });
 
-    console.log(response);
-
     if (!response.ok) {
       throw new Error('Failed to verify V8 access token');
     }

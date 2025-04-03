@@ -12,8 +12,6 @@ export async function getUserCredit(
       },
     });
 
-    console.log(response);
-
     if (response.status === 404) {
       return 0n;
     }

@@ -39,9 +39,8 @@ function AccessControlledChat() {
       const verifyToken = async () => {
         try {
           const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
-          const { isActivated, userUid } = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
+          const { isActivated } = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
 
-          console.log('User verification:', { isActivated, userUid });
           setIsActivated(isActivated);
         } catch (error) {
           console.error('Failed to verify token:', error);
@@ -56,15 +55,12 @@ function AccessControlledChat() {
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      console.log('Received message event:', event.data);
-
       if (event.data && event.data.type === 'INIT') {
         const token = event.data.payload?.accessToken;
 
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
-          console.log('ACCESS TOKEN', token.substring(0, 10));
         }
       }
     };
