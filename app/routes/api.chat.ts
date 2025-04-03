@@ -137,8 +137,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           messageSliceId = messages.length - 3;
         }
 
-        console.log(JSON.stringify(messages));
-
         if (filePaths.length > 0 && contextOptimization) {
           logger.debug('Generating Chat Summary');
           dataStream.writeData({
