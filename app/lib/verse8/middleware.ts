@@ -27,7 +27,9 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
         const enhancedContext = {
           ...context,
           user: { uid: 'unknown', isActivated: false, credit: 0 },
-          consumeUserCredit: () => {},
+          consumeUserCredit: () => {
+            console.warn('consumeUserCredit is disabled');
+          },
         };
         return await handler({ ...args, context: enhancedContext });
       }
