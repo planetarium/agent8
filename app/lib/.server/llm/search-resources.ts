@@ -18,8 +18,9 @@ async function extractResourceRequirements(props: {
   summary: string;
   model: any;
   contextFiles: FileMap;
+  onStepFinish?: (resp: any) => void;
 }) {
-  const { userMessage, summary, model, contextFiles } = props;
+  const { userMessage, summary, model, contextFiles, onStepFinish } = props;
 
   const codeContext = createFilesContext(contextFiles, true);
 
@@ -67,6 +68,7 @@ async function extractResourceRequirements(props: {
       IMPORTANT: All requirements must be in English.
     `,
     model,
+    onStepFinish,
   });
 
   try {
@@ -163,8 +165,9 @@ async function filterRelevantResources(props: {
   summary: string;
   model: any;
   contextFiles: FileMap;
+  onStepFinish?: (resp: any) => void;
 }) {
-  const { requirements, resources, userMessage, summary, model, contextFiles } = props;
+  const { requirements, resources, userMessage, summary, model, contextFiles, onStepFinish } = props;
 
   const codeContext = createFilesContext(contextFiles, true);
 
@@ -212,6 +215,7 @@ async function filterRelevantResources(props: {
       If none of the resources are relevant, return an empty array: []
     `,
     model,
+    onStepFinish,
   });
 
   try {
@@ -325,12 +329,26 @@ export async function searchResources(props: {
     providerSettings,
   });
 
+  // Track cumulative usage across all generateText calls
+  const cumulativeUsage = {
+    completionTokens: 0,
+    promptTokens: 0,
+    totalTokens: 0,
+  };
+
   // Step 1: Extract specific resource requirements from the user's request
   const requirements = await extractResourceRequirements({
     userMessage: userMessageText,
     summary,
     model,
     contextFiles: contextFiles || {},
+    onStepFinish: (resp) => {
+      if (resp.usage) {
+        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+      }
+    },
   });
 
   logger.info(`Extracted ${requirements.length} resource requirements:`, requirements);
@@ -348,6 +366,13 @@ export async function searchResources(props: {
     summary,
     model,
     contextFiles: contextFiles || {},
+    onStepFinish: (resp) => {
+      if (resp.usage) {
+        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+      }
+    },
   });
 
   logger.info(`Selected ${relevantResources.length} relevant resources`);
@@ -366,10 +391,11 @@ export async function searchResources(props: {
   });
 
   if (onFinish) {
-    // This is needed to maintain compatibility with the original function
+    // Pass the cumulative usage from both generateText calls
     const mockResp = {
       text: JSON.stringify(relevantResources.map((res) => res.id)),
       choices: [{ text: '' }],
+      usage: cumulativeUsage,
     } as any;
     onFinish(mockResp);
   }

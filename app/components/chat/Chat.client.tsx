@@ -402,77 +402,133 @@ export const ChatImpl = memo(
       }
 
       if (!chatStarted) {
-        setFakeLoading(true);
+        try {
+          setFakeLoading(true);
 
-        if (autoSelectTemplate) {
-          const { template, title } = await selectStarterTemplate({
-            message: messageContent,
-            model,
-            provider,
-          });
-
-          if (template) {
-            const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
-              if (e.message.includes('rate limit')) {
-                toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
-              } else {
-                toast.warning('Failed to import starter template\n Continuing with blank template');
-              }
+          if (autoSelectTemplate) {
+            const { template, title } = await selectStarterTemplate({
+              message: messageContent,
+              model,
+              provider,
             });
 
-            if (temResp) {
-              const { assistantMessage, userMessage } = temResp;
-              setMessages([
-                {
-                  id: `1-${new Date().getTime()}`,
-                  role: 'user',
-                  content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-                  annotations: ['hidden'],
-                },
-                {
-                  id: `2-${new Date().getTime()}`,
-                  role: 'assistant',
-                  content: assistantMessage,
-                },
-                {
-                  id: `3-${new Date().getTime()}`,
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                        attachmentList,
-                      )}]\n\n${messageContent}`,
-                    },
-                  ] as any,
-                },
-              ]);
+            if (template) {
+              const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
+                if (e.message.includes('rate limit')) {
+                  toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
+                } else {
+                  toast.warning('Failed to import starter template\n Continuing with blank template');
+                }
+              });
 
-              setTimeout(() => {
-                // wait for the files to be loaded
-                reload();
-              }, 1000);
-              setInput('');
-              Cookies.remove(PROMPT_COOKIE_KEY);
+              if (temResp) {
+                const { assistantMessage, userMessage } = temResp;
+                setMessages([
+                  {
+                    id: `1-${new Date().getTime()}`,
+                    role: 'user',
+                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+                    annotations: ['hidden'],
+                  },
+                  {
+                    id: `2-${new Date().getTime()}`,
+                    role: 'assistant',
+                    content: assistantMessage,
+                  },
+                  {
+                    id: `3-${new Date().getTime()}`,
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                          attachmentList,
+                        )}]\n\n${messageContent}`,
+                      },
+                    ] as any,
+                  },
+                ]);
 
-              sendEventToParent('EVENT', { name: 'START_EDITING' });
+                setTimeout(() => {
+                  // wait for the files to be loaded
+                  reload();
+                }, 1000);
+                setInput('');
+                Cookies.remove(PROMPT_COOKIE_KEY);
 
-              setAttachmentList([]);
+                sendEventToParent('EVENT', { name: 'START_EDITING' });
 
-              resetEnhancer();
+                setAttachmentList([]);
 
-              textareaRef.current?.blur();
-              setFakeLoading(false);
+                resetEnhancer();
 
-              return;
+                textareaRef.current?.blur();
+                setFakeLoading(false);
+
+                return;
+              }
             }
           }
+
+          // If autoSelectTemplate is disabled or template selection failed, proceed with normal message
+          setMessages([
+            {
+              id: `${new Date().getTime()}`,
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                    attachmentList,
+                  )}]\n\n${messageContent}`,
+                },
+              ] as any,
+            },
+          ]);
+          reload();
+          setFakeLoading(false);
+          setInput('');
+          Cookies.remove(PROMPT_COOKIE_KEY);
+
+          setAttachmentList([]);
+
+          resetEnhancer();
+
+          textareaRef.current?.blur();
+
+          return;
+        } catch {
+          setChatStarted(false);
+          setFakeLoading(false);
+        }
+      }
+
+      try {
+        if (error != null) {
+          setMessages(messages.slice(0, -1));
         }
 
-        // If autoSelectTemplate is disabled or template selection failed, proceed with normal message
-        setMessages([
-          {
-            id: `${new Date().getTime()}`,
+        const modifiedFiles = workbenchStore.getModifiedFiles();
+
+        chatStore.setKey('aborted', false);
+
+        if (modifiedFiles !== undefined) {
+          const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
+          append({
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                  attachmentList,
+                )}]\n\n${userUpdateArtifact}${messageContent}`,
+              },
+            ] as any,
+          });
+
+          workbenchStore.resetAllFileModifications();
+        } else {
+          append({
             role: 'user',
             content: [
               {
@@ -482,10 +538,9 @@ export const ChatImpl = memo(
                 )}]\n\n${messageContent}`,
               },
             ] as any,
-          },
-        ]);
-        reload();
-        setFakeLoading(false);
+          });
+        }
+
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 
@@ -494,55 +549,13 @@ export const ChatImpl = memo(
         resetEnhancer();
 
         textareaRef.current?.blur();
+      } catch (error) {
+        console.error('Error sending message:', error);
 
-        return;
+        if (error instanceof Error) {
+          toast.error('Error:' + error?.message);
+        }
       }
-
-      if (error != null) {
-        setMessages(messages.slice(0, -1));
-      }
-
-      const modifiedFiles = workbenchStore.getModifiedFiles();
-
-      chatStore.setKey('aborted', false);
-
-      if (modifiedFiles !== undefined) {
-        const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
-        append({
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                attachmentList,
-              )}]\n\n${userUpdateArtifact}${messageContent}`,
-            },
-          ] as any,
-        });
-
-        workbenchStore.resetAllFileModifications();
-      } else {
-        append({
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                attachmentList,
-              )}]\n\n${messageContent}`,
-            },
-          ] as any,
-        });
-      }
-
-      setInput('');
-      Cookies.remove(PROMPT_COOKIE_KEY);
-
-      setAttachmentList([]);
-
-      resetEnhancer();
-
-      textareaRef.current?.blur();
     };
 
     /**

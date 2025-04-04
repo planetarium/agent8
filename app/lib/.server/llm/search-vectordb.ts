@@ -16,8 +16,14 @@ const logger = createScopedLogger('search-vectordb');
 /**
  * Extracts concrete requirements from a user's request to search for code examples
  */
-async function extractRequirements(props: { userMessage: string; summary: string; model: any; contextFiles: FileMap }) {
-  const { userMessage, summary, model, contextFiles } = props;
+async function extractRequirements(props: {
+  userMessage: string;
+  summary: string;
+  model: any;
+  contextFiles: FileMap;
+  onStepFinish?: (resp: any) => void;
+}) {
+  const { userMessage, summary, model, contextFiles, onStepFinish } = props;
 
   const codeContext = createFilesContext(contextFiles, true);
 
@@ -66,6 +72,7 @@ async function extractRequirements(props: { userMessage: string; summary: string
       IMPORTANT: All requirements must be in English.
     `,
     model,
+    onStepFinish,
   });
 
   try {
@@ -162,8 +169,9 @@ async function filterRelevantExamples(props: {
   summary: string;
   model: any;
   contextFiles: FileMap;
+  onStepFinish?: (resp: any) => void;
 }) {
-  const { requirements, examples, userMessage, summary, model, contextFiles } = props;
+  const { requirements, examples, userMessage, summary, model, contextFiles, onStepFinish } = props;
 
   if (examples.length === 0) {
     return [];
@@ -230,6 +238,7 @@ async function filterRelevantExamples(props: {
       If none of the examples are highly relevant, return an empty array: []
     `,
     model,
+    onStepFinish,
   });
 
   try {
@@ -345,12 +354,26 @@ export async function searchVectorDB(props: {
     providerSettings,
   });
 
+  // Track cumulative usage across all generateText calls
+  const cumulativeUsage = {
+    completionTokens: 0,
+    promptTokens: 0,
+    totalTokens: 0,
+  };
+
   // Step 1: Extract specific requirements from the user's request
   const requirements = await extractRequirements({
     userMessage: userMessageText,
     summary,
     model,
     contextFiles: contextFiles || {},
+    onStepFinish: (resp) => {
+      if (resp.usage) {
+        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+      }
+    },
   });
 
   logger.info(`Extracted ${requirements.length} requirements:`, requirements);
@@ -368,6 +391,13 @@ export async function searchVectorDB(props: {
     summary,
     model,
     contextFiles: contextFiles || {},
+    onStepFinish: (resp) => {
+      if (resp.usage) {
+        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+      }
+    },
   });
 
   logger.info(`Selected ${relevantExamples.length} relevant examples`);
@@ -403,10 +433,11 @@ export async function searchVectorDB(props: {
   });
 
   if (onFinish) {
-    // This is needed to maintain compatibility with the original function
+    // Pass the cumulative usage from both generateText calls
     const mockResp = {
       text: JSON.stringify(relevantExamples.map((ex) => ex.id)),
       choices: [{ text: '' }],
+      usage: cumulativeUsage,
     } as any;
     onFinish(mockResp);
   }

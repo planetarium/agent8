@@ -4,10 +4,9 @@ import { stripIndents } from '~/utils/stripIndent';
 import type { ProviderInfo } from '~/types/model';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
-export async function action(args: ActionFunctionArgs) {
-  return enhancerAction(args);
-}
+export const action = withV8AuthUser(enhancerAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.enhancher');
 
@@ -83,6 +82,18 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       options: {
         system:
           'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
+
+        onFinish: ({ usage }) => {
+          if (usage) {
+            const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+            consumeUserCredit({
+              model: { provider: providerName, name: model },
+              inputTokens: usage.promptTokens,
+              outputTokens: usage.completionTokens,
+              description: 'Prompt Enhancer',
+            });
+          }
+        },
 
         /*
          * onError: (event) => {

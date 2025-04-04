@@ -15,10 +15,9 @@ import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
-export async function action(args: ActionFunctionArgs) {
-  return chatAction(args);
-}
+export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.chat');
 
@@ -132,6 +131,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let summary: string | undefined = undefined;
         let messageSliceId = 0;
         let vectorDbExamples: FileMap = {};
+        const chatId = messages.slice(-1)?.[0]?.id;
 
         if (messages.length > 3) {
           messageSliceId = messages.length - 3;
@@ -148,7 +148,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } satisfies ProgressAnnotation);
 
           // Create a summary of the chat
-          console.log(`Messages count: ${messages.length}`);
+          logger.debug(`Messages count: ${messages.length}`);
 
           summary = await createSummary({
             messages: [...messages],
@@ -178,7 +178,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           dataStream.writeMessageAnnotation({
             type: 'chatSummary',
             summary,
-            chatId: messages.slice(-1)?.[0]?.id,
+            chatId,
           } as ContextAnnotation);
 
           // Update context buffer
@@ -192,7 +192,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } satisfies ProgressAnnotation);
 
           // Select context files
-          console.log(`Messages count: ${messages.length}`);
+          logger.debug(`Messages count: ${messages.length}`);
           filteredFiles = await selectContext({
             messages: [...messages],
             env: context.cloudflare?.env,
@@ -348,6 +348,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           onFinish: async ({ text: content, finishReason, usage }) => {
             logger.debug('usage', JSON.stringify(usage));
 
+            const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
+            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
+
             if (usage) {
               cumulativeUsage.completionTokens += usage.completionTokens || 0;
               cumulativeUsage.promptTokens += usage.promptTokens || 0;
@@ -363,6 +366,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   totalTokens: cumulativeUsage.totalTokens,
                 },
               });
+
               dataStream.writeData({
                 type: 'progress',
                 label: 'response',
@@ -371,6 +375,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 message: 'Response Generated',
               } satisfies ProgressAnnotation);
               await new Promise((resolve) => setTimeout(resolve, 0));
+
+              const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+              await consumeUserCredit({
+                model: { provider, name: model },
+                inputTokens: cumulativeUsage.promptTokens,
+                outputTokens: cumulativeUsage.completionTokens,
+                description: `Generate Response (${chatId})`,
+              });
 
               // stream.close();
               return;
@@ -384,8 +396,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-            const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
-            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
             messages.push({ id: generateId(), role: 'assistant', content });
             messages.push({
               id: generateId(),
