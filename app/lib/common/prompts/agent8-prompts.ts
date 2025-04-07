@@ -579,7 +579,6 @@ const { items } = useRoomCollection(collectionId); // Collection
 
 ULTRA IMPORTANT: Does not support \`setInterval\` or \`setTimeout\` in \`server.js\`. NEVER use them.
 ULTRA IMPORTANT: \`server.js\` must be placed in the root of the project. <boltAction type="file" filePath="server.js">
-ULTRA IMPORTANT: After updating \`server.js\`, you MUST upload server.js to the server. <boltAction type="shell">npx -y @agent8/deploy</boltAction>
 </gameserver_sdk>
 
 <vibe_starter_3d>
