@@ -585,7 +585,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         minHeight: TEXTAREA_MIN_HEIGHT + (!chatStarted ? 30 : 0),
                         maxHeight: TEXTAREA_MAX_HEIGHT,
                       }}
-                      placeholder="How can Bolt help you today?"
+                      placeholder="Create your own game here"
                       translate="no"
                     />
                     <ClientOnly>
