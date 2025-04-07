@@ -3,6 +3,7 @@ import { BaseProvider } from './base-provider';
 import type { ModelInfo, ProviderInfo } from './types';
 import * as providers from './registry';
 import { createScopedLogger } from '~/utils/logger';
+import { isProviderWhitelisted, filterWhitelistedModels } from './whitelist';
 
 const logger = createScopedLogger('LLMManager');
 export class LLMManager {
@@ -39,10 +40,15 @@ export class LLMManager {
         if (typeof exportedItem === 'function' && exportedItem.prototype instanceof BaseProvider) {
           const provider = new exportedItem();
 
-          try {
-            this.registerProvider(provider);
-          } catch (error: any) {
-            logger.warn('Failed To Register Provider: ', provider.name, 'error:', error.message);
+          // 화이트리스트에 있는 프로바이더만 등록
+          if (isProviderWhitelisted(provider.name)) {
+            try {
+              this.registerProvider(provider);
+            } catch (error: any) {
+              logger.warn('Failed To Register Provider: ', provider.name, 'error:', error.message);
+            }
+          } else {
+            logger.info(`Provider ${provider.name} is not in whitelist. Skipping.`);
           }
         }
       }
@@ -59,7 +65,9 @@ export class LLMManager {
 
     logger.info('Registering Provider: ', provider.name);
     this._providers.set(provider.name, provider);
-    this._modelList = [...this._modelList, ...provider.staticModels];
+
+    // 화이트리스트된 모델만 추가
+    this._modelList = [...this._modelList, ...filterWhitelistedModels(provider.staticModels)];
   }
 
   getProvider(name: string): BaseProvider | undefined {
@@ -99,7 +107,8 @@ export class LLMManager {
           const cachedModels = provider.getModelsFromCache(options);
 
           if (cachedModels) {
-            return cachedModels;
+            // 화이트리스트 적용
+            return filterWhitelistedModels(cachedModels);
           }
 
           const dynamicModels = await provider
@@ -108,7 +117,8 @@ export class LLMManager {
               logger.info(`Caching ${models.length} dynamic models for ${provider.name}`);
               provider.storeDynamicModels(options, models);
 
-              return models;
+              // 화이트리스트 적용
+              return filterWhitelistedModels(models);
             })
             .catch((err) => {
               logger.error(`Error getting dynamic models ${provider.name} :`, err);
@@ -119,9 +129,15 @@ export class LLMManager {
         }),
     );
     const staticModels = Array.from(this._providers.values()).flatMap((p) => p.staticModels || []);
+
+    // 화이트리스트 적용
+    const filteredStaticModels = filterWhitelistedModels(staticModels);
+
     const dynamicModelsFlat = dynamicModels.flat();
     const dynamicModelKeys = dynamicModelsFlat.map((d) => `${d.name}-${d.provider}`);
-    const filteredStaticModesl = staticModels.filter((m) => !dynamicModelKeys.includes(`${m.name}-${m.provider}`));
+    const filteredStaticModesl = filteredStaticModels.filter(
+      (m) => !dynamicModelKeys.includes(`${m.name}-${m.provider}`),
+    );
 
     // Combine static and dynamic models
     const modelList = [...dynamicModelsFlat, ...filteredStaticModesl];
@@ -131,8 +147,11 @@ export class LLMManager {
     return modelList;
   }
   getStaticModelList() {
-    return [...this._providers.values()].flatMap((p) => p.staticModels || []);
+    // 화이트리스트 적용
+    return filterWhitelistedModels([...this._providers.values()].flatMap((p) => p.staticModels || []));
   }
+
+  // 나머지 메소드도 화이트리스트 적용
   async getModelListFromProvider(
     providerArg: BaseProvider,
     options: {
@@ -147,7 +166,7 @@ export class LLMManager {
       throw new Error(`Provider ${providerArg.name} not found`);
     }
 
-    const staticModels = provider.staticModels || [];
+    const staticModels = filterWhitelistedModels(provider.staticModels || []);
 
     if (!provider.getDynamicModels) {
       return staticModels;
@@ -163,7 +182,11 @@ export class LLMManager {
 
     if (cachedModels) {
       logger.info(`Found ${cachedModels.length} cached models for ${provider.name}`);
-      return [...cachedModels, ...staticModels];
+
+      // 화이트리스트 적용
+      const filteredCachedModels = filterWhitelistedModels(cachedModels);
+
+      return [...filteredCachedModels, ...staticModels];
     }
 
     logger.info(`Getting dynamic models for ${provider.name}`);
@@ -174,7 +197,8 @@ export class LLMManager {
         logger.info(`Got ${models.length} dynamic models for ${provider.name}`);
         provider.storeDynamicModels(options, models);
 
-        return models;
+        // 화이트리스트 적용
+        return filterWhitelistedModels(models);
       })
       .catch((err) => {
         logger.error(`Error getting dynamic models ${provider.name} :`, err);
@@ -187,6 +211,7 @@ export class LLMManager {
 
     return modelList;
   }
+
   getStaticModelListFromProvider(providerArg: BaseProvider) {
     const provider = this._providers.get(providerArg.name);
 
@@ -194,11 +219,13 @@ export class LLMManager {
       throw new Error(`Provider ${providerArg.name} not found`);
     }
 
-    return [...(provider.staticModels || [])];
+    // 화이트리스트 적용
+    return filterWhitelistedModels(provider.staticModels || []);
   }
 
   getDefaultProvider(): BaseProvider {
-    const firstProvider = Array.from(this._providers.values()).find((p) => p.name === 'OpenRouter');
+    // 화이트리스트에 있는 첫 번째 프로바이더를 기본값으로 사용
+    const firstProvider = Array.from(this._providers.values())[0];
 
     if (!firstProvider) {
       throw new Error('No providers registered');
