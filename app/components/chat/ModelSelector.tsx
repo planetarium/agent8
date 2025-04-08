@@ -4,6 +4,8 @@ import type { KeyboardEvent } from 'react';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { classNames } from '~/utils/classNames';
 import * as React from 'react';
+import { MODEL_WHITELIST } from '~/lib/modules/llm/whitelist';
+import type { WhitelistItem } from '~/lib/modules/llm/whitelist';
 
 interface ModelSelectorProps {
   model?: string;
@@ -12,7 +14,6 @@ interface ModelSelectorProps {
   setProvider?: (provider: ProviderInfo) => void;
   modelList: ModelInfo[];
   providerList: ProviderInfo[];
-  apiKeys: Record<string, string>;
   modelLoading?: string;
 }
 
@@ -25,8 +26,8 @@ export const ModelSelector = ({
   providerList,
   modelLoading,
 }: ModelSelectorProps) => {
-  const [modelSearchQuery, setModelSearchQuery] = useState('');
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -35,8 +36,8 @@ export const ModelSelector = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false);
-        setModelSearchQuery('');
+        setIsDropdownOpen(false);
+        setSearchQuery('');
       }
     };
 
@@ -45,30 +46,43 @@ export const ModelSelector = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter models based on search query
-  const filteredModels = [...modelList]
-    .filter((e) => e.provider === provider?.name && e.name)
-    .filter(
-      (model) =>
-        model.label.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
-        model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()),
-    );
+  // 사용 가능한 화이트리스트 항목 만들기
+  const whitelistOptions = MODEL_WHITELIST.filter((item) => {
+    // 해당 프로바이더가 활성화되어 있는지 확인
+    const providerEnabled = providerList.some((p) => p.name === item.providerName);
+
+    // 해당 모델이 모델 목록에 있는지 확인
+    const modelExists = modelList.some((m) => m.provider === item.providerName && m.name === item.modelName);
+
+    return providerEnabled && modelExists;
+  });
+
+  // 현재 선택된 화이트리스트 항목 찾기
+  const selectedOption =
+    model && provider
+      ? MODEL_WHITELIST.find((item) => item.providerName === provider.name && item.modelName === model)
+      : undefined;
+
+  // 검색어로 화이트리스트 항목 필터링
+  const filteredOptions = whitelistOptions.filter((item) =>
+    item.label.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   // Reset focused index when search query changes or dropdown opens/closes
   useEffect(() => {
     setFocusedIndex(-1);
-  }, [modelSearchQuery, isModelDropdownOpen]);
+  }, [searchQuery, isDropdownOpen]);
 
   // Focus search input when dropdown opens
   useEffect(() => {
-    if (isModelDropdownOpen && searchInputRef.current) {
+    if (isDropdownOpen && searchInputRef.current) {
       searchInputRef.current.focus();
     }
-  }, [isModelDropdownOpen]);
+  }, [isDropdownOpen]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!isModelDropdownOpen) {
+    if (!isDropdownOpen) {
       return;
     }
 
@@ -78,7 +92,7 @@ export const ModelSelector = ({
         setFocusedIndex((prev) => {
           const next = prev + 1;
 
-          if (next >= filteredModels.length) {
+          if (next >= filteredOptions.length) {
             return 0;
           }
 
@@ -92,7 +106,7 @@ export const ModelSelector = ({
           const next = prev - 1;
 
           if (next < 0) {
-            return filteredModels.length - 1;
+            return filteredOptions.length - 1;
           }
 
           return next;
@@ -102,28 +116,44 @@ export const ModelSelector = ({
       case 'Enter':
         e.preventDefault();
 
-        if (focusedIndex >= 0 && focusedIndex < filteredModels.length) {
-          const selectedModel = filteredModels[focusedIndex];
-          setModel?.(selectedModel.name);
-          setIsModelDropdownOpen(false);
-          setModelSearchQuery('');
+        if (focusedIndex >= 0 && focusedIndex < filteredOptions.length) {
+          const selectedItem = filteredOptions[focusedIndex];
+          selectWhitelistItem(selectedItem);
         }
 
         break;
 
       case 'Escape':
         e.preventDefault();
-        setIsModelDropdownOpen(false);
-        setModelSearchQuery('');
+        setIsDropdownOpen(false);
+        setSearchQuery('');
         break;
 
       case 'Tab':
-        if (!e.shiftKey && focusedIndex === filteredModels.length - 1) {
-          setIsModelDropdownOpen(false);
+        if (!e.shiftKey && focusedIndex === filteredOptions.length - 1) {
+          setIsDropdownOpen(false);
         }
 
         break;
     }
+  };
+
+  // 선택한 화이트리스트 항목 적용
+  const selectWhitelistItem = (item: WhitelistItem) => {
+    // 해당 프로바이더 찾기
+    const newProvider = providerList.find((p) => p.name === item.providerName);
+
+    if (newProvider && setProvider) {
+      setProvider(newProvider);
+    }
+
+    // 모델 설정
+    if (setModel) {
+      setModel(item.modelName);
+    }
+
+    setIsDropdownOpen(false);
+    setSearchQuery('');
   };
 
   // Focus the selected option
@@ -133,99 +163,49 @@ export const ModelSelector = ({
     }
   }, [focusedIndex]);
 
-  // Update enabled providers when cookies change
-  useEffect(() => {
-    // If current provider is disabled, switch to first enabled provider
-    if (providerList.length === 0) {
-      return;
-    }
-
-    if (provider && !providerList.map((p) => p.name).includes(provider.name)) {
-      const firstEnabledProvider = providerList[0];
-      setProvider?.(firstEnabledProvider);
-
-      // Also update the model to the first available one for the new provider
-      const firstModel = modelList.find((m) => m.provider === firstEnabledProvider.name);
-
-      if (firstModel) {
-        setModel?.(firstModel.name);
-      }
-    }
-  }, [providerList, provider, setProvider, modelList, setModel]);
-
   if (providerList.length === 0) {
-    return (
-      <div className="mb-2 p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary">
-        <p className="text-center">
-          No providers are currently enabled. Please enable at least one provider in the settings to start using the
-          chat.
-        </p>
-      </div>
-    );
+    return <div className="text-bolt-elements-textSecondary text-xs">No providers enabled</div>;
+  }
+
+  if (whitelistOptions.length === 0) {
+    return <div className="text-bolt-elements-textSecondary text-xs">No models available</div>;
   }
 
   return (
-    <div className="mb-2 flex gap-2 flex-col sm:flex-row">
-      <select
-        value={provider?.name ?? ''}
-        onChange={(e) => {
-          const newProvider = providerList.find((p: ProviderInfo) => p.name === e.target.value);
-
-          if (newProvider && setProvider) {
-            setProvider(newProvider);
-          }
-
-          const firstModel = [...modelList].find((m) => m.provider === e.target.value);
-
-          if (firstModel && setModel) {
-            setModel(firstModel.name);
-          }
-        }}
-        className="flex-1 p-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus transition-all"
-      >
-        {providerList.map((provider: ProviderInfo) => (
-          <option key={provider.name} value={provider.name}>
-            {provider.name}
-          </option>
-        ))}
-      </select>
-
-      <div className="relative flex-1 lg:max-w-[70%]" onKeyDown={handleKeyDown} ref={dropdownRef}>
+    <div className="flex items-center">
+      <div className="relative" onKeyDown={handleKeyDown} ref={dropdownRef}>
         <div
           className={classNames(
-            'w-full p-2 rounded-lg border border-bolt-elements-borderColor',
-            'bg-bolt-elements-prompt-background text-bolt-elements-textPrimary',
-            'focus-within:outline-none focus-within:ring-2 focus-within:ring-bolt-elements-focus',
-            'transition-all cursor-pointer',
-            isModelDropdownOpen ? 'ring-2 ring-bolt-elements-focus' : undefined,
+            'flex items-center text-bolt-elements-textSecondary text-xs cursor-pointer hover:text-bolt-elements-textPrimary transition-colors',
+            isDropdownOpen ? 'text-bolt-elements-textPrimary' : '',
           )}
-          onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setIsModelDropdownOpen(!isModelDropdownOpen);
+              setIsDropdownOpen(!isDropdownOpen);
             }
           }}
           role="combobox"
-          aria-expanded={isModelDropdownOpen}
+          aria-expanded={isDropdownOpen}
           aria-controls="model-listbox"
           aria-haspopup="listbox"
           tabIndex={0}
         >
-          <div className="flex items-center justify-between">
-            <div className="truncate">{modelList.find((m) => m.name === model)?.label || 'Select model'}</div>
-            <div
+          <div className="flex items-center gap-1">
+            <span className="max-w-[300px] truncate">{selectedOption?.label || 'Select model'}</span>
+            <span
               className={classNames(
-                'i-ph:caret-down w-4 h-4 text-bolt-elements-textSecondary opacity-75',
-                isModelDropdownOpen ? 'rotate-180' : undefined,
+                'i-ph:caret-down opacity-75 transform transition-transform',
+                isDropdownOpen ? 'rotate-180' : '',
               )}
-            />
+            ></span>
           </div>
         </div>
 
-        {isModelDropdownOpen && (
+        {isDropdownOpen && (
           <div
-            className="absolute z-10 w-full mt-1 py-1 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2  shadow-lg"
+            className="absolute z-10 mt-1 py-1 min-w-[300px] rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg"
             role="listbox"
             id="model-listbox"
           >
@@ -234,8 +214,8 @@ export const ModelSelector = ({
                 <input
                   ref={searchInputRef}
                   type="text"
-                  value={modelSearchQuery}
-                  onChange={(e) => setModelSearchQuery(e.target.value)}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search models..."
                   className={classNames(
                     'w-full pl-8 pr-3 py-1.5 rounded-md text-sm',
@@ -270,36 +250,34 @@ export const ModelSelector = ({
                 'sm:[&::-webkit-scrollbar-track]:bg-transparent',
               )}
             >
-              {modelLoading === 'all' || modelLoading === provider?.name ? (
+              {modelLoading === 'all' ? (
                 <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">Loading...</div>
-              ) : filteredModels.length === 0 ? (
+              ) : filteredOptions.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">No models found</div>
               ) : (
-                filteredModels.map((modelOption, index) => (
+                filteredOptions.map((option, index) => (
                   <div
                     ref={(el) => (optionsRef.current[index] = el)}
                     key={index}
                     role="option"
-                    aria-selected={model === modelOption.name}
+                    aria-selected={selectedOption?.label === option.label}
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
                       'hover:bg-bolt-elements-background-depth-3',
-                      'text-bolt-elements-textPrimary',
+                      'text-bolt-elements-textPrimary opacity-90',
                       'outline-none',
-                      model === modelOption.name || focusedIndex === index
+                      selectedOption?.label === option.label || focusedIndex === index
                         ? 'bg-bolt-elements-background-depth-2'
                         : undefined,
                       focusedIndex === index ? 'ring-1 ring-inset ring-bolt-elements-focus' : undefined,
                     )}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setModel?.(modelOption.name);
-                      setIsModelDropdownOpen(false);
-                      setModelSearchQuery('');
+                      selectWhitelistItem(option);
                     }}
                     tabIndex={focusedIndex === index ? 0 : -1}
                   >
-                    {modelOption.label}
+                    {option.label}
                   </div>
                 ))
               )}
