@@ -5,6 +5,8 @@ import { createScopedLogger } from '~/utils/logger';
 import { rehypePlugins, remarkPlugins, allowedHTMLElements } from '~/utils/markdown';
 import { Artifact } from './Artifact';
 import { CodeBlock } from './CodeBlock';
+import { ToolCall } from './ToolCall';
+import { ToolResult } from './ToolResult';
 
 import styles from './Markdown.module.scss';
 import ThoughtBox from './ThoughtBox';
@@ -35,6 +37,14 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
 
         if (className?.includes('__boltThought__')) {
           return <ThoughtBox title="Thought process">{children}</ThoughtBox>;
+        }
+
+        if (className?.includes('__toolCall__')) {
+          return <ToolCall>{children as React.ReactElement<any, 'code'>}</ToolCall>;
+        }
+
+        if (className?.includes('__toolResult__')) {
+          return <ToolResult>{children as React.ReactElement<any, 'code'>}</ToolResult>;
         }
 
         return (

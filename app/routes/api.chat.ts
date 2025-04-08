@@ -21,6 +21,12 @@ export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.chat');
 
+// See also https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+const TEXT_PART_PREFIX = '0';
+const REASONING_PART_PREFIX = 'g';
+const TOOL_CALL_PART_PREFIX = '9';
+const TOOL_RESULT_PART_PREFIX = 'a';
+
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
 
@@ -503,12 +509,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           }
 
           if (typeof chunk === 'string') {
-            if (chunk.startsWith('g') && !lastChunk.startsWith('g')) {
-              controller.enqueue(encoder.encode(`0: "<div class=\\"__boltThought__\\">"\n`));
+            if (chunk.startsWith(REASONING_PART_PREFIX) && !lastChunk.startsWith(REASONING_PART_PREFIX)) {
+              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"<div class=\\"__boltThought__\\">"\n`));
             }
 
-            if (lastChunk.startsWith('g') && !chunk.startsWith('g')) {
-              controller.enqueue(encoder.encode(`0: "</div>\\n"\n`));
+            if (lastChunk.startsWith(REASONING_PART_PREFIX) && !chunk.startsWith(REASONING_PART_PREFIX)) {
+              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"</div>\\n"\n`));
             }
           }
 
@@ -516,14 +522,42 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           let transformedChunk = chunk;
 
-          if (typeof chunk === 'string' && chunk.startsWith('g')) {
-            let content = chunk.split(':').slice(1).join(':');
+          if (typeof chunk === 'string') {
+            if (chunk.startsWith(REASONING_PART_PREFIX)) {
+              let content = chunk.split(':').slice(1).join(':');
 
-            if (content.endsWith('\n')) {
-              content = content.slice(0, content.length - 1);
+              if (content.endsWith('\n')) {
+                content = content.slice(0, content.length - 1);
+              }
+
+              transformedChunk = `${TEXT_PART_PREFIX}:${content}\n`;
             }
 
-            transformedChunk = `0:${content}\n`;
+            if (chunk.startsWith(TOOL_CALL_PART_PREFIX)) {
+              let content = chunk.split(':').slice(1).join(':');
+
+              if (content.endsWith('\n')) {
+                content = content.slice(0, content.length - 1);
+              }
+
+              const { toolCallId } = JSON.parse(content);
+              const divString = `<div class="__toolCall__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div>`;
+
+              transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
+            }
+
+            if (chunk.startsWith(TOOL_RESULT_PART_PREFIX)) {
+              let content = chunk.split(':').slice(1).join(':');
+
+              if (content.endsWith('\n')) {
+                content = content.slice(0, content.length - 1);
+              }
+
+              const { toolCallId } = JSON.parse(content);
+              const divString = `<div class="__toolResult__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div>`;
+
+              transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
+            }
           }
 
           // Convert the string stream to a byte stream
