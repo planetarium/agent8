@@ -151,8 +151,11 @@ const getGitHubRepoContent = async (
     // If it's a single file, return its content
     if (!Array.isArray(data)) {
       if (data.type === 'file') {
-        // If it's a file, get its content
-        const content = atob(data.content); // Decode base64 content
+        /*
+         * If it's a file, get its content
+         * Use TextDecoder to properly handle Korean and other non-ASCII characters
+         */
+        const content = new TextDecoder('utf-8').decode(Uint8Array.from(atob(data.content), (c) => c.charCodeAt(0)));
         return [
           {
             name: data.name,
@@ -175,7 +178,11 @@ const getGitHubRepoContent = async (
             headers,
           });
           const fileData: any = await fileResponse.json();
-          const content = atob(fileData.content); // Decode base64 content
+
+          // 수정된 코드: TextDecoder를 사용하여 UTF-8로 올바르게 디코딩
+          const content = new TextDecoder('utf-8').decode(
+            Uint8Array.from(atob(fileData.content), (c) => c.charCodeAt(0)),
+          );
 
           return [
             {
