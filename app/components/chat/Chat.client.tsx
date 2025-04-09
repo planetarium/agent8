@@ -4,7 +4,7 @@
  */
 import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
@@ -262,19 +262,12 @@ export const ChatImpl = memo(
     useEffect(() => {
       const prompt = searchParams.get('prompt');
 
-      // console.log(prompt, searchParams, model, provider);
-
       if (prompt) {
         setSearchParams({});
         runAnimation();
         append({
           role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
-            },
-          ] as any, // Type assertion to bypass compiler check
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
         });
       }
     }, [model, provider, searchParams]);
@@ -438,14 +431,9 @@ export const ChatImpl = memo(
                   {
                     id: `3-${new Date().getTime()}`,
                     role: 'user',
-                    content: [
-                      {
-                        type: 'text',
-                        text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                          attachmentList,
-                        )}]\n\n${messageContent}`,
-                      },
-                    ] as any,
+                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                      attachmentList,
+                    )}]\n\n${messageContent}`,
                   },
                 ]);
 
@@ -475,14 +463,9 @@ export const ChatImpl = memo(
             {
               id: `${new Date().getTime()}`,
               role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                    attachmentList,
-                  )}]\n\n${messageContent}`,
-                },
-              ] as any,
+              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                attachmentList,
+              )}]\n\n${messageContent}`,
             },
           ]);
           reload();
@@ -516,28 +499,18 @@ export const ChatImpl = memo(
           const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
           append({
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                  attachmentList,
-                )}]\n\n${userUpdateArtifact}${messageContent}`,
-              },
-            ] as any,
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+              attachmentList,
+            )}]\n\n${userUpdateArtifact}${messageContent}`,
           });
 
           workbenchStore.resetAllFileModifications();
         } else {
           append({
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                  attachmentList,
-                )}]\n\n${messageContent}`,
-              },
-            ] as any,
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+              attachmentList,
+            )}]\n\n${messageContent}`,
           });
         }
 
@@ -619,14 +592,9 @@ export const ChatImpl = memo(
           {
             id: `1-${new Date().getTime()}`,
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                  attachmentList,
-                )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
-              },
-            ] as any,
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+              attachmentList,
+            )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
           },
           {
             id: `2-${new Date().getTime()}`,
