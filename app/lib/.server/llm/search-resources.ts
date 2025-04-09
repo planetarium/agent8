@@ -28,11 +28,11 @@ async function extractResourceRequirements(props: {
     system: `
       You are an AI assistant that helps developers by extracting specific resource requirements from general requests.
       Your task is to analyze a user's request and identify concrete resource needs that would benefit their project.
-      
+
       CRITICAL: First determine if the request is:
       1. Complex enough to require external resources (3D models, textures, audio files, etc.)
       2. Something that can be implemented without external resources
-      
+
       Only extract requirements if they are truly needed for the user's project.
 
       <CodeContext>
@@ -44,21 +44,21 @@ async function extractResourceRequirements(props: {
       ${summary}
 
       User's request: "${userMessage}"
-      
-    
+
+
       First, determine if this request requires external resources by answering YES or NO:
       - Answer YES if the request involves visual assets, 3D models, audio files, or other resources
       - Answer NO if the request can be implemented without external resources
-      
+
       Then, only if you answered YES, extract 1-5 specific resource requirements from this request.
       Focus ONLY on resources that are genuinely needed for the user's project.
-      
+
       Format your response as a JSON object:
       {
         "requiresResources": true/false,
         "requirements": ["requirement 1", "requirement 2", ...]
       }
-      
+
       IMPORTANT: If the user's request doesn't need external resources, return:
       {
         "requiresResources": false,
@@ -187,7 +187,7 @@ async function filterRelevantResources(props: {
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by evaluating the relevance of resources to their project needs.
-      Your task is to analyze resources retrieved from a database and determine which ones are truly relevant 
+      Your task is to analyze resources retrieved from a database and determine which ones are truly relevant
       and helpful for the user's current request.
 
       <CodeContext>
@@ -208,10 +208,10 @@ async function filterRelevantResources(props: {
 
       Evaluate each resource and decide if it's relevant and helpful for the user's request.
       Focus on the description field of each resource to understand what it provides.
-      
+
       IMPORTANT: Your response must be a valid JSON array containing only the IDs of relevant resources.
       Example format: ["1", "3", "5"]
-      
+
       If none of the resources are relevant, return an empty array: []
     `,
     model,
@@ -323,7 +323,7 @@ export async function searchResources(props: {
 
   const userMessageText = extractTextContent(lastUserMessage);
   const model = provider.getModelInstance({
-    model: currentModel,
+    model: modelDetails.name,
     serverEnv,
     apiKeys,
     providerSettings,
