@@ -43,7 +43,7 @@ export function usePromptEnhancer() {
     const originalInput = input;
 
     if (reader) {
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder('utf-8');
 
       let _input = '';
       let _error;
