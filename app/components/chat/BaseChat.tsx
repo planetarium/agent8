@@ -73,7 +73,7 @@ interface BaseChatProps {
   actionRunner?: ActionRunner;
   onHandleTemplateImport?: (
     source: { type: 'github' | 'zip'; title: string },
-    templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+    templateData: { assistantMessage: string; userMessage: string },
   ) => void;
   onGithubImport?: (repoUrl: string) => void;
   onProjectZipImport?: (title: string, zipFile: File) => void;

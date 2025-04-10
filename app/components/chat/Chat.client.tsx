@@ -35,12 +35,14 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-async function fetchTemplateFromAPI(template: Template, title?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string, projectSummary?: string) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
     params.append('repo', template.githubRepo || '');
     params.append('path', template.path || '');
+    params.append('projectRepo', projectRepo || '');
+    params.append('projectSummary', projectSummary || '');
 
     if (title) {
       params.append('title', title);
@@ -399,14 +401,14 @@ export const ChatImpl = memo(
           setFakeLoading(true);
 
           if (autoSelectTemplate) {
-            const { template, title } = await selectStarterTemplate({
+            const { template, title, projectRepo, projectSummary } = await selectStarterTemplate({
               message: messageContent,
               model,
               provider,
             });
 
             if (template) {
-              const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
+              const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, projectSummary).catch((e) => {
                 if (e.message.includes('rate limit')) {
                   toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
                 } else {
@@ -574,7 +576,7 @@ export const ChatImpl = memo(
     // 공통 로직을 처리하는 함수 추출
     const handleTemplateImport = async (
       source: { type: 'github' | 'zip'; title: string },
-      templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+      templateData: { assistantMessage: string; userMessage: string },
     ) => {
       try {
         setFakeLoading(true);
@@ -585,7 +587,7 @@ export const ChatImpl = memo(
         );
 
         // 템플릿 데이터 가져오기
-        const { assistantMessage, userMessage } = await templateData;
+        const { assistantMessage, userMessage } = templateData;
         toast.done(toastId);
 
         const messages = [
@@ -638,13 +640,15 @@ export const ChatImpl = memo(
       const title = `GitHub: ${githubRepo}`;
 
       // 공통 로직 함수 호출
-      await handleTemplateImport({ type: 'github', title }, getTemplates(githubRepo, path, title));
+      const { messages } = await getTemplates(githubRepo, path, title);
+      await handleTemplateImport({ type: 'github', title }, messages);
     };
 
     // ZIP 임포트 함수 - 특화 로직만 남기고 공통 로직은 handleTemplateImport 호출
     const handleProjectZipImport = async (title: string, zipFile: File) => {
       // 공통 로직 함수 호출
-      await handleTemplateImport({ type: 'zip', title }, getZipTemplates(zipFile, title));
+      const { messages } = await getZipTemplates(zipFile, title);
+      await handleTemplateImport({ type: 'zip', title }, messages);
     };
 
     return (

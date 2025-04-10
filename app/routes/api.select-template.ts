@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
+import { createRepository, commitFilesToRepo } from '~/lib/repoManager/api';
+import { withV8AuthUser } from '~/lib/verse8/middleware';
 
 /*
  * In-memory cache for templates
@@ -10,6 +12,7 @@ const templateCache: Record<
   string,
   {
     data: any;
+    files: any;
     timestamp: number;
     expiresAt: number;
   }
@@ -18,13 +21,19 @@ const templateCache: Record<
 // Cache expiration time (24 hours in milliseconds)
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-export async function loader({ request, context }: ActionFunctionArgs) {
+export const loader = withV8AuthUser(selectTemplateAction, { checkCredit: true });
+
+export async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
   const title = url.searchParams.get('title') || undefined;
   const repo = url.searchParams.get('repo');
   const path = url.searchParams.get('path');
+  const projectRepo = url.searchParams.get('projectRepo');
+  const projectSummary = url.searchParams.get('projectSummary');
+  const user = context?.user as { email: string };
+  const email = user?.email || '';
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
@@ -38,6 +47,34 @@ export async function loader({ request, context }: ActionFunctionArgs) {
     // Check if we have a valid cached response
     if (templateCache[cacheKey] && templateCache[cacheKey].expiresAt > now) {
       console.log(`Cache hit for template: ${cacheKey}`);
+
+      // If registerToRepo is true, commit the cached template to the repository
+      if (templateCache[cacheKey].files) {
+        const repository = await createRepository(
+          env,
+          email,
+          projectRepo || `template-${templateName}-${Date.now()}`,
+          projectSummary || '',
+        );
+        const commitResult = await commitFilesToRepo(
+          env,
+          email,
+          repository.name,
+          templateCache[cacheKey].files,
+          templateName,
+        );
+
+        return json({
+          data: templateCache[cacheKey].data,
+          cached: true,
+          cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+          repository: {
+            name: repository.name,
+            commitResult,
+          },
+        });
+      }
+
       return json({
         data: templateCache[cacheKey].data,
         cached: true,
@@ -48,17 +85,38 @@ export async function loader({ request, context }: ActionFunctionArgs) {
     // Cache miss or expired, fetch from GitHub
     console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-    const templateData = await getTemplates(repo, path, title, env);
+    const { files, messages } = await getTemplates(repo, path, title, env);
 
     // Store in cache
     templateCache[cacheKey] = {
-      data: templateData,
+      data: messages,
+      files,
       timestamp: now,
       expiresAt: now + CACHE_TTL,
     };
 
+    // If registerToRepo is true, commit the template to the repository
+    if (files) {
+      const repository = await createRepository(
+        env,
+        email,
+        projectRepo || `template-${templateName}-${Date.now()}`,
+        projectSummary || '',
+      );
+      const commitResult = await commitFilesToRepo(env, email, repository.name, files, templateName);
+
+      return json({
+        data: messages,
+        cached: false,
+        repository: {
+          name: repository.name,
+          commitResult,
+        },
+      });
+    }
+
     return json({
-      data: templateData,
+      data: messages,
       cached: false,
     });
   } catch (error) {
@@ -76,7 +134,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json();
-    const { action, templateName, title } = body as { action: string; templateName: string; title: string };
+    const { action, templateName, title } = body as {
+      action: string;
+      templateName: string;
+      title: string;
+    };
 
     if (action === 'clearCache') {
       if (templateName) {
