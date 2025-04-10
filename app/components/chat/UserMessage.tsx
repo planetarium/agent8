@@ -7,43 +7,21 @@ import { Markdown } from './Markdown';
 import FilePreview from './FilePreview';
 
 interface UserMessageProps {
-  content: string | Array<{ type: string; text?: string; image?: string }>;
+  content: string;
 }
 
 export function UserMessage({ content }: UserMessageProps) {
-  if (Array.isArray(content)) {
-    const textItem = content.find((item) => item.type === 'text');
-    const textContent = stripMetadata(textItem?.text || '');
-    const images = content.filter((item) => item.type === 'image' && item.image);
-    const attachments = textItem?.text ? extractAttachments(textItem.text) : [];
-
-    return (
-      <div className="overflow-hidden pt-[4px]">
-        <div className="flex flex-col gap-4">
-          {textContent && <Markdown html>{textContent}</Markdown>}
-          {images.map((item, index) => (
-            <img
-              key={index}
-              src={item.image}
-              alt={`Image ${index + 1}`}
-              className="max-w-full h-auto rounded-lg"
-              style={{ maxHeight: '512px', objectFit: 'contain' }}
-            />
-          ))}
-
-          {attachments.length > 0 && (
-            <FilePreview attachmentUrlList={attachments ? attachments.map((attachment: any) => attachment.url) : []} />
-          )}
-        </div>
-      </div>
-    );
-  }
-
   const textContent = stripMetadata(content);
+  const attachments = content ? extractAttachments(content) : [];
 
   return (
     <div className="overflow-hidden pt-[4px]">
-      <Markdown html>{textContent}</Markdown>
+      <div className="flex flex-col gap-4">
+        {textContent && <Markdown html>{textContent}</Markdown>}
+        {attachments.length > 0 && (
+          <FilePreview attachmentUrlList={attachments ? attachments.map((attachment: any) => attachment.url) : []} />
+        )}
+      </div>
     </div>
   );
 }

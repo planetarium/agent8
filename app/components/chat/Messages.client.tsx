@@ -51,7 +51,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       <div id={id} className={props.className} ref={ref}>
         {messages.length > 0
           ? messages.map((message, index) => {
-              const { role, content, id: messageId, annotations } = message;
+              const { role, id: messageId, annotations } = message;
               const isUserMessage = role === 'user';
               const isFirst = index === 0;
               const isLast = index === messages.length - 1;
@@ -60,6 +60,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               if (isHidden) {
                 return <Fragment key={index} />;
               }
+
+              // `message.content` has an internal problem of duplicating strings for multipart message.
+              const content =
+                message.parts && message.parts.length > 1
+                  ? message.parts
+                      .filter((part) => part.type === 'text')
+                      .map((part) => part.text)
+                      .join('')
+                  : message.content;
 
               return (
                 <div

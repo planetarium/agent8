@@ -30,13 +30,13 @@ async function extractRequirements(props: {
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by extracting specific coding requirements from general requests.
-      Your task is to analyze a user's request and identify concrete technical implementation requirements 
+      Your task is to analyze a user's request and identify concrete technical implementation requirements
       that would benefit from code examples.
-      
+
       CRITICAL: First determine if the request is:
       1. Complex enough to require code examples (complex game mechanics, multiplayer functionality, etc.)
       2. Something that can be easily implemented by an LLM without examples (simple UI, basic game logic, etc.)
-      
+
       Only extract requirements if they are truly complex or would benefit significantly from existing code examples.
 
       <CodeContext>
@@ -48,11 +48,11 @@ async function extractRequirements(props: {
       ${summary}
 
       User's request: "${userMessage}"
-      
+
       First, determine if this request requires code examples by answering YES or NO:
       - Answer YES if the request involves complex implementation details that would benefit from existing code examples
       - Answer NO if the request is straightforward enough for an LLM to implement without examples
-      
+
       Then, only if you answered YES, extract 1-5 specific technical implementation requirements from this request.
       Focus ONLY on aspects that are complex and would genuinely benefit from existing code examples.
       If you've created requirements, add the user's original request in English as one of the requirements at the end.
@@ -62,7 +62,7 @@ async function extractRequirements(props: {
         "requiresExamples": true/false,
         "requirements": ["requirement 1", "requirement 2", ...]
       }
-      
+
       IMPORTANT: If the user's request is simple enough to implement without examples, return:
       {
         "requiresExamples": false,
@@ -199,11 +199,11 @@ async function filterRelevantExamples(props: {
   const resp = await generateText({
     system: `
       You are an AI assistant that helps developers by evaluating the relevance of code examples to their needs.
-      Your task is to analyze code examples retrieved from a database and determine which ones are truly relevant 
+      Your task is to analyze code examples retrieved from a database and determine which ones are truly relevant
       and helpful for the user's current request.
-      
+
       CRITICAL: Be very selective. Only include examples that are DIRECTLY relevant to the specific requirements.
-      An example should only be included if it demonstrates implementation techniques that would be non-trivial 
+      An example should only be included if it demonstrates implementation techniques that would be non-trivial
       for an LLM to generate from scratch.
 
       <CodeContext>
@@ -224,17 +224,17 @@ async function filterRelevantExamples(props: {
 
       Evaluate each example and decide if it's HIGHLY relevant and helpful for the user's request.
       Focus on the description and code snippets to understand what the code does.
-      
+
       For each example, ask:
       1. Does this example directly address one of the complex requirements?
       2. Would this code be difficult for an LLM to generate without an example?
       3. Is this example of high quality and demonstrative of best practices?
-      
+
       Only include examples that receive "yes" answers to ALL three questions.
-      
+
       IMPORTANT: Your response must be a valid JSON array containing only the IDs of highly relevant examples.
       Example format: ["1", "3", "5"]
-      
+
       If none of the examples are highly relevant, return an empty array: []
     `,
     model,
@@ -348,7 +348,7 @@ export async function searchVectorDB(props: {
 
   const userMessageText = extractTextContent(lastUserMessage);
   const model = provider.getModelInstance({
-    model: currentModel,
+    model: modelDetails.name,
     serverEnv,
     apiKeys,
     providerSettings,
