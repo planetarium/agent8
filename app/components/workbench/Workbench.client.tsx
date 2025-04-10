@@ -37,7 +37,7 @@ interface WorkspaceProps {
   updateChatMestaData?: (metadata: any) => void;
   onHandleTemplateImport?: (
     source: { type: 'github' | 'zip'; title: string },
-    templateData: Promise<{ assistantMessage: string; userMessage: string }>,
+    templateData: { assistantMessage: string; userMessage: string },
   ) => void;
 }
 
@@ -397,10 +397,11 @@ export const Workbench = memo(
                           const zip = await workbenchStore.generateZip();
 
                           if (onHandleTemplateImport) {
-                            await onHandleTemplateImport(
-                              { type: 'zip', title: 'Forked Project' },
-                              getZipTemplates(new File([zip], 'Forked Project.zip'), 'Forked Project'),
+                            const { messages } = await getZipTemplates(
+                              new File([zip], 'Forked Project.zip'),
+                              'Forked Project',
                             );
+                            await onHandleTemplateImport({ type: 'zip', title: 'Forked Project' }, messages);
                           }
                         }}
                       >
