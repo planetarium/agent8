@@ -4,6 +4,7 @@ import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
+import type { FileMap } from '~/lib/stores/files';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -133,11 +134,7 @@ export const selectStarterTemplate = async (options: { message: string; model: s
   return {};
 };
 
-const getGitHubRepoContent = async (
-  repoName: string,
-  path: string = '',
-  env?: Env,
-): Promise<{ name: string; path: string; content: string }[]> => {
+const getGitHubRepoContent = async (repoName: string, path: string = '', env?: Env): Promise<FileMap> => {
   const baseUrl = 'https://api.github.com';
 
   try {
@@ -163,6 +160,8 @@ const getGitHubRepoContent = async (
 
     const data: any = await response.json();
 
+    const fileMap: FileMap = {};
+
     // If it's a single file, return its content
     if (!Array.isArray(data)) {
       if (data.type === 'file') {
@@ -171,22 +170,26 @@ const getGitHubRepoContent = async (
          * Use TextDecoder to properly handle Korean and other non-ASCII characters
          */
         const content = new TextDecoder('utf-8').decode(Uint8Array.from(atob(data.content), (c) => c.charCodeAt(0)));
-        return [
-          {
-            name: data.name,
-            path: data.path,
-            content,
-          },
-        ];
+        const filePath = `${data.path}`;
+        fileMap[filePath] = {
+          type: 'file',
+          content,
+          isBinary: false,
+        };
+
+        return fileMap;
       }
     }
 
     // Process directory contents recursively
-    const contents = await Promise.all(
+    await Promise.all(
       data.map(async (item: any) => {
         if (item.type === 'dir') {
           // Recursively get contents of subdirectories
-          return await getGitHubRepoContent(repoName, item.path, env);
+          const subDirContents = await getGitHubRepoContent(repoName, item.path, env);
+
+          // Merge subdirectory contents into the main fileMap
+          Object.assign(fileMap, subDirContents);
         } else if (item.type === 'file') {
           // Fetch file content
           const fileResponse = await fetch(item.url, {
@@ -194,26 +197,22 @@ const getGitHubRepoContent = async (
           });
           const fileData: any = await fileResponse.json();
 
-          // 수정된 코드: TextDecoder를 사용하여 UTF-8로 올바르게 디코딩
+          // TextDecoder를 사용하여 UTF-8로 올바르게 디코딩
           const content = new TextDecoder('utf-8').decode(
             Uint8Array.from(atob(fileData.content), (c) => c.charCodeAt(0)),
           );
 
-          return [
-            {
-              name: item.name,
-              path: item.path,
-              content,
-            },
-          ];
+          const filePath = `${item.path}`;
+          fileMap[filePath] = {
+            type: 'file',
+            content,
+            isBinary: false,
+          };
         }
-
-        return [];
       }),
     );
 
-    // Flatten the array of contents
-    return contents.flat();
+    return fileMap;
   } catch (error) {
     console.error('Error fetching repo contents:', error);
     throw error;
@@ -221,29 +220,42 @@ const getGitHubRepoContent = async (
 };
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
-  let files = await getGitHubRepoContent(githubRepo, path, env);
+  const files = await getGitHubRepoContent(githubRepo, path, env);
+
+  const fileMap: FileMap = {};
 
   if (path) {
-    files = files.map((x) => ({
-      ...x,
-      path: x.path.replace(path + '/', ''),
-    }));
+    for (const key in files) {
+      fileMap[key.replace(path + '/', '')] = files[key];
+    }
   }
 
-  return { files, messages: generateTemplateMessages(files, title) };
+  return { fileMap, messages: generateTemplateMessages(fileMap, title) };
 }
 
 export async function getZipTemplates(zipFile: File, title?: string) {
-  const files = await extractZipTemplate(await zipFile.arrayBuffer());
+  const fileMap = await extractZipTemplate(await zipFile.arrayBuffer());
 
-  if (!files.find((x) => x.name === 'PROJECT.md')) {
+  if (!fileMap['PROJECT.md']) {
     throw new Error('PROJECT.md file not found in the zip file');
   }
 
-  return { files, messages: generateTemplateMessages(files, title) };
+  return { fileMap, messages: generateTemplateMessages(fileMap, title) };
 }
 
-function generateTemplateMessages(files: { name: string; path: string; content: string }[], title?: string) {
+function generateTemplateMessages(fileMap: FileMap, title?: string) {
+  const files = [];
+
+  for (const key in fileMap) {
+    if (fileMap[key]!.type === 'file') {
+      files.push({
+        name: key,
+        path: key,
+        content: fileMap[key]!.content,
+      });
+    }
+  }
+
   let filteredFiles = files;
 
   /*

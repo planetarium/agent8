@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { classNames } from '~/utils/classNames';
+import { IconButton } from '~/components/ui/IconButton';
 
 interface ImportProjectZipProps {
   onImport?: (title: string, zipFile: File) => void;
@@ -105,19 +106,9 @@ export const ImportProjectZip = ({ onImport }: ImportProjectZipProps) => {
 
   return (
     <>
-      <button
-        className="flex flex-col items-center justify-center p-4 border rounded-lg 
-        dark:bg-gray-900 dark:text-gray-200
-                           border-gray-200 dark:border-gray-700
-                           hover:bg-gray-50 dark:hover:bg-gray-700 
-                           transition-colors"
-        onClick={() => {
-          setShowModal(true);
-        }}
-      >
-        <div className="i-ph:file-zip text-4xl mb-2"></div>
-        <span className="text-sm font-medium">ZIP File</span>
-      </button>
+      <IconButton title="Import Project" className="transition-all" onClick={() => setShowModal(true)}>
+        <div className="i-ph:import text-xs">Import Project</div>
+      </IconButton>
 
       {showModal && (
         <div
