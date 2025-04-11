@@ -78,7 +78,18 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
     // Cache miss or expired, fetch from GitHub
     console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-    const { files, messages } = await getTemplates(repo, path, title, env);
+    const { fileMap, messages } = await getTemplates(repo, path, title, env);
+
+    const files = [];
+
+    for (const key in fileMap) {
+      if (fileMap[key]!.type === 'file') {
+        files.push({
+          path: key,
+          content: fileMap[key]!.content,
+        });
+      }
+    }
 
     // Store in cache
     templateCache[cacheKey] = {
