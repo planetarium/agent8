@@ -333,6 +333,12 @@ export class WorkbenchStore {
       return;
     }
 
+    // Don't run the action if it's a reload
+    if (this.#reloadedMessages.has(messageId)) {
+      artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+      return;
+    }
+
     if (data.action.type === 'file') {
       const wc = await webcontainer;
       const fullPath = path.join(wc.workdir, data.action.filePath);

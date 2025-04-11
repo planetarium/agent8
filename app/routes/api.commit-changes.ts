@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { commitFilesToRepo } from '~/lib/repoManager/api';
+import { commitFilesToRepo, createRepository } from '~/lib/repoManager/api';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -10,8 +10,9 @@ export const action = withV8AuthUser(commitChangesAction, { checkCredit: true })
 
 export async function commitChangesAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
-  const user = context?.user as { email: string };
+  const user = context?.user as { email: string; accessToken: string };
   const email = user?.email || '';
+  const userAccessToken = user?.accessToken || '';
 
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
@@ -28,10 +29,6 @@ export async function commitChangesAction({ request, context }: ActionFunctionAr
       return json({ error: 'Files array is required and cannot be empty' }, { status: 400 });
     }
 
-    if (!repositoryName) {
-      return json({ error: 'Repository name is required' }, { status: 400 });
-    }
-
     // Validate files structure
     for (const file of files) {
       if (!file.path || typeof file.path !== 'string') {
@@ -43,14 +40,22 @@ export async function commitChangesAction({ request, context }: ActionFunctionAr
       }
     }
 
+    let finalRepositoryName = repositoryName;
+
+    if (!finalRepositoryName) {
+      const repository = await createRepository(env, userAccessToken, email, `verse8-project-${Date.now()}`, '');
+      finalRepositoryName = repository.name;
+    }
+
     // Commit the files to the repository
     const result = await commitFilesToRepo(
       env,
+      userAccessToken,
       email,
-      repositoryName,
+      finalRepositoryName,
       files,
       commitMessage || 'Update files',
-      'develop', // default branch
+      'main',
     );
 
     if (!result.success) {
@@ -66,7 +71,7 @@ export async function commitChangesAction({ request, context }: ActionFunctionAr
     return json({
       success: true,
       data: result.data,
-      repositoryName,
+      repositoryName: finalRepositoryName,
     });
   } catch (error) {
     logger.error('Error in commitChangesAction:', error);

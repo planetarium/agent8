@@ -32,8 +32,9 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
   const path = url.searchParams.get('path');
   const projectRepo = url.searchParams.get('projectRepo');
   const projectSummary = url.searchParams.get('projectSummary');
-  const user = context?.user as { email: string };
+  const user = context?.user as { email: string; accessToken: string };
   const email = user?.email || '';
+  const userAccessToken = user?.accessToken || '';
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
@@ -50,6 +51,7 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
 
       const repository = await createRepository(
         env,
+        userAccessToken,
         email,
         projectRepo || `template-${templateName}-${Date.now()}`,
         projectSummary || '',
@@ -57,7 +59,14 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
 
       // If registerToRepo is true, commit the cached template to the repository
       if (templateCache[cacheKey].files) {
-        await commitFilesToRepo(env, email, repository.name, templateCache[cacheKey].files, templateName);
+        await commitFilesToRepo(
+          env,
+          userAccessToken,
+          email,
+          repository.name,
+          templateCache[cacheKey].files,
+          'Initial Commit',
+        );
 
         return json({
           data: templateCache[cacheKey].data,
@@ -101,6 +110,7 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
 
     const repository = await createRepository(
       env,
+      userAccessToken,
       email,
       projectRepo || `template-${templateName}-${Date.now()}`,
       projectSummary || '',
@@ -108,7 +118,7 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
 
     // If registerToRepo is true, commit the template to the repository
     if (files) {
-      await commitFilesToRepo(env, email, repository.name, files, templateName);
+      await commitFilesToRepo(env, userAccessToken, email, repository.name, files, 'Initial Commit');
       return json({
         data: messages,
         cached: false,

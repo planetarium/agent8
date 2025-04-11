@@ -28,7 +28,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       if (env.VITE_ACCESS_CONTROL_ENABLED !== 'true') {
         const enhancedContext = {
           ...context,
-          user: { uid: 'unknown', email: null, walletAddress: null, isActivated: false, credit: 0 },
+          user: { accessToken: null, uid: 'unknown', email: null, walletAddress: null, isActivated: false, credit: 0 },
           consumeUserCredit: () => {
             logger.warn('consumeUserCredit is disabled');
           },
@@ -72,7 +72,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       // 검증된 사용자 정보를 context에 추가
       const enhancedContext = {
         ...context,
-        user: { uid: userUid, email, walletAddress, isActivated, credit: credit?.toString() },
+        user: { accessToken, uid: userUid, email, walletAddress, isActivated, credit: credit?.toString() },
         consumeUserCredit: (consumeArgs: {
           inputTokens: number;
           outputTokens: number;
