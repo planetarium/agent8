@@ -37,15 +37,17 @@ interface CreateRepositoryResponse {
  */
 export async function createRepository(
   env: Env,
+  userAccessToken: string,
   email: string,
   repositoryName: string,
   description: string,
 ): Promise<CreateRepositoryResponse> {
   try {
-    const response = await fetch(`${env.REPO_MANAGER_URL}/git/repositories`, {
+    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/repositories`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${userAccessToken}`,
       },
       body: JSON.stringify({
         email,
@@ -79,17 +81,19 @@ export async function createRepository(
  */
 export async function commitFilesToRepo(
   env: Env,
+  userAccessToken: string,
   email: string,
   repositoryName: string,
   files: CommitFile[],
   commitMessage: string,
-  branch: string = 'develop',
+  branch: string = 'main',
 ): Promise<CommitFilesResponse> {
   try {
-    const response = await fetch(`${env.REPO_MANAGER_URL}/git/commit-files-by-repo`, {
+    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/commit-files-by-repo`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${userAccessToken}`,
       },
       body: JSON.stringify({
         email,

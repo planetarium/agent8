@@ -1,14 +1,17 @@
 import type { Message } from 'ai';
 import { stripMetadata } from '~/components/chat/UserMessage';
-import { repoStore } from '~/lib/stores/repo';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { repoStore } from '~/lib/stores/repo';
 import { createScopedLogger } from '~/utils/logger';
+import { WORK_DIR } from '~/utils/constants';
 
 const logger = createScopedLogger('client.commitChanges');
 
 export const commitChanges = async (message: Message) => {
   try {
-    const { name: repositoryName } = repoStore.get();
+    const repositoryName = repoStore.get().name;
+
+    let files = [];
     const content =
       message.parts && message.parts.length > 1
         ? message.parts
@@ -17,14 +20,25 @@ export const commitChanges = async (message: Message) => {
             .join('')
         : message.content;
 
-    const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>/g;
-    const matches = [...content.matchAll(regex)];
-    const filePaths = matches.map((match) => match[1]);
+    if (!repositoryName) {
+      // If repositoryName is not set, commit all files
+      files = Object.entries(workbenchStore.files.get())
+        .filter(([_, file]) => file && (file as any).content)
+        .map(([path, file]) => ({
+          path: path.replace(WORK_DIR + '/', ''),
+          content: (file as any).content,
+        }));
+    } else {
+      // If not, commit the files in the message
+      const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>/g;
+      const matches = [...content.matchAll(regex)];
+      const filePaths = matches.map((match) => match[1]);
 
-    const files = filePaths.map((filePath) => ({
-      path: filePath,
-      content: (workbenchStore.files.get()[`/home/project/${filePath}`] as any).content,
-    }));
+      files = filePaths.map((filePath) => ({
+        path: filePath,
+        content: (workbenchStore.files.get()[`${WORK_DIR}/${filePath}`] as any).content,
+      }));
+    }
 
     const promptAnnotation = message.annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
     const userMessage = promptAnnotation?.prompt || 'Commit changes';
@@ -34,7 +48,7 @@ export const commitChanges = async (message: Message) => {
 ${userMessage}
 </V8UserMessage>
 <V8AssistantMessage>
-${stripMetadata(content)}
+${content.replace(/(<boltAction[^>]*>)(.*?)(<\/boltAction>)/gs, '$1$3')}
 </V8AssistantMessage>`;
 
     // API 호출하여 변경사항 커밋

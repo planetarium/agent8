@@ -26,5 +26,5 @@ interface Env {
   V8_CREDIT_CLIENT_ID: string;
   V8_CREDIT_CLIENT_SECRET: string;
   VITE_ACCESS_CONTROL_ENABLED: string;
-  REPO_MANAGER_URL: string;
+  VITE_REPO_MANAGER_URL: string;
 }
