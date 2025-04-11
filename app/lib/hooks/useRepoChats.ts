@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
 import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from '~/lib/stores/repo';
-import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
+import { downloadProjectZip, getProjectCommits } from '~/lib/repoManager/client';
 
 interface RepoChatsOptions {
   branch?: string;
@@ -137,22 +137,7 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
     setLoadingFiles(true);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_REPO_MANAGER_URL}/git/code?projectPath=${encodeURIComponent(projectPath)}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch project files: ${response.status} ${response.statusText}`);
-      }
-
-      // Get zip file as blob
-      const zipBlob = await response.blob();
+      const zipBlob = await downloadProjectZip(projectPath);
 
       // Load zip file using JSZip
       const zip = await JSZip.loadAsync(zipBlob);
@@ -261,10 +246,6 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
           queryParams.append('untilCommit', currentOptions.untilCommit);
         }
 
-        if (currentOptions.perPage) {
-          queryParams.append('perPage', currentOptions.perPage.toString());
-        }
-
         const requestParamsString = queryParams.toString();
 
         // 동일한 요청 파라미터로 이미 요청한 경우 (페이지가 다른 경우 제외)
@@ -276,18 +257,11 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
         // 현재 요청 파라미터 저장
         prevRequestParams.current = requestParamsString;
 
-        const response = await fetch(`${import.meta.env.VITE_REPO_MANAGER_URL}/git/project-commits?${queryParams}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch commits: ${response.status} ${response.statusText}`);
-        }
-
-        const data: CommitResponse = await response.json();
+        const data = (await getProjectCommits(repoId, {
+          branch: currentOptions.branch,
+          untilCommit: currentOptions.untilCommit,
+          page,
+        })) as CommitResponse;
 
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch commit history');

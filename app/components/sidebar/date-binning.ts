@@ -1,9 +1,9 @@
 import { format, isAfter, isThisWeek, isThisYear, isToday, isYesterday, subDays } from 'date-fns';
-import type { ChatHistoryItem } from '~/lib/persistence';
+import type { RepositoryItem } from '~/lib/repoManager/types';
 
-type Bin = { category: string; items: ChatHistoryItem[] };
+type Bin = { category: string; items: RepositoryItem[] };
 
-export function binDates(_list: ChatHistoryItem[]) {
+export function binDates(_list: RepositoryItem[]) {
   const list = _list.toSorted((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 
   const binLookup: Record<string, Bin> = {};

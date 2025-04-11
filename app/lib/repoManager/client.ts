@@ -4,6 +4,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { createScopedLogger } from '~/utils/logger';
 import { WORK_DIR } from '~/utils/constants';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 const logger = createScopedLogger('client.commitChanges');
 
@@ -77,4 +78,87 @@ ${content.replace(/(<boltAction[^>]*>)(.*?)(<\/boltAction>)/gs, '$1$3')}
     logger.error('Error committing changes:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
+};
+
+export const downloadProjectZip = async (projectPath: string) => {
+  const response = await fetch(
+    `${import.meta.env.VITE_REPO_MANAGER_URL}/git/download?projectPath=${encodeURIComponent(projectPath)}`,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to download project zip: ${response.status} ${response.statusText}`);
+  }
+
+  return response.blob();
+};
+
+export const getProjectCommits = async (
+  projectPath: string,
+  options: { branch?: string; untilCommit?: string; page?: number } = {},
+) => {
+  const queryParams = new URLSearchParams({
+    projectPath,
+  });
+
+  if (options.branch) {
+    queryParams.append('branch', options.branch);
+  }
+
+  if (options.untilCommit) {
+    queryParams.append('untilCommit', options.untilCommit);
+  }
+
+  if (options.page) {
+    queryParams.append('page', options.page.toString());
+  }
+
+  const response = await fetch(`${import.meta.env.VITE_REPO_MANAGER_URL}/git/commits?${queryParams}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch commits: ${response.status} ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+export const getProjects = async () => {
+  const response = await fetch(`${import.meta.env.VITE_REPO_MANAGER_URL}/git/projects`, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+export const deleteProject = async (projectId: string) => {
+  const response = await fetch(`${import.meta.env.VITE_REPO_MANAGER_URL}/git/projects/${projectId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
+  }
+
+  return await response.json();
 };

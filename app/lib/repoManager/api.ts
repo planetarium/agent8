@@ -43,7 +43,7 @@ export async function createRepository(
   description: string,
 ): Promise<CreateRepositoryResponse> {
   try {
-    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/repositories`, {
+    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/projects`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export async function commitFilesToRepo(
   branch: string = 'main',
 ): Promise<CommitFilesResponse> {
   try {
-    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/commit-files-by-repo`, {
+    const response = await fetch(`${env.VITE_REPO_MANAGER_URL}/git/commits`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
