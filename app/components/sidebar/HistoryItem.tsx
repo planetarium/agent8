@@ -1,28 +1,27 @@
 import { useParams } from '@remix-run/react';
 import { classNames } from '~/utils/classNames';
 import * as Dialog from '@radix-ui/react-dialog';
-import { type ChatHistoryItem } from '~/lib/persistence';
+import { type RepositoryItem } from '~/lib/repoManager/types';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
 import { forwardRef, type ForwardedRef } from 'react';
 
 interface HistoryItemProps {
-  item: ChatHistoryItem;
+  item: RepositoryItem;
   onDelete?: (event: React.UIEvent) => void;
-  onDuplicate?: (id: string) => void;
-  exportChat: (id?: string) => void;
 }
 
-export function HistoryItem({ item, onDelete, onDuplicate, exportChat }: HistoryItemProps) {
+export function HistoryItem({ item, onDelete }: HistoryItemProps) {
   const { id: urlId } = useParams();
   const isActiveChat = urlId === item.urlId;
 
-  const { editing, handleChange, handleBlur, handleSubmit, handleKeyDown, currentDescription, toggleEditMode } =
-    useEditChatDescription({
+  const { editing, handleChange, handleBlur, handleSubmit, handleKeyDown, currentDescription } = useEditChatDescription(
+    {
       initialDescription: item.description,
       customChatId: item.id,
       syncWithGlobalStore: isActiveChat,
-    });
+    },
+  );
 
   return (
     <div
@@ -60,29 +59,6 @@ export function HistoryItem({ item, onDelete, onDuplicate, exportChat }: History
             )}
           >
             <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <ChatActionButton
-                toolTipContent="Export"
-                icon="i-ph:download-simple h-4 w-4"
-                onClick={(event) => {
-                  event.preventDefault();
-                  exportChat(item.id);
-                }}
-              />
-              {onDuplicate && (
-                <ChatActionButton
-                  toolTipContent="Duplicate"
-                  icon="i-ph:copy h-4 w-4"
-                  onClick={() => onDuplicate?.(item.id)}
-                />
-              )}
-              <ChatActionButton
-                toolTipContent="Rename"
-                icon="i-ph:pencil-fill h-4 w-4"
-                onClick={(event) => {
-                  event.preventDefault();
-                  toggleEditMode();
-                }}
-              />
               <Dialog.Trigger asChild>
                 <ChatActionButton
                   toolTipContent="Delete"

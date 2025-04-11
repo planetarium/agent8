@@ -1,19 +1,18 @@
 import { motion, type Variants } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
 import { Dialog, DialogButton, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
 import { ControlPanel } from '~/components/@settings/core/ControlPanel';
 import { SettingsButton } from '~/components/ui/SettingsButton';
-import { db, deleteById, getAll, chatId, type ChatHistoryItem, useChatHistory } from '~/lib/persistence';
 import { cubicEasingFn } from '~/utils/easings';
-import { logger } from '~/utils/logger';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
 import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
+import { deleteProject, getProjects } from '~/lib/repoManager/client';
+import type { RepositoryItem } from '~/lib/repoManager/types';
 
 const menuVariants = {
   closed: {
@@ -36,7 +35,7 @@ const menuVariants = {
   },
 } satisfies Variants;
 
-type DialogContent = { type: 'delete'; item: ChatHistoryItem } | null;
+type DialogContent = { type: 'delete'; item: RepositoryItem } | null;
 
 function CurrentDateTime() {
   const [dateTime, setDateTime] = useState(new Date());
@@ -61,10 +60,10 @@ function CurrentDateTime() {
 }
 
 export const Menu = () => {
-  const { duplicateCurrentChat, exportChat } = useChatHistory();
   const menuRef = useRef<HTMLDivElement>(null);
-  const [list, setList] = useState<ChatHistoryItem[]>([]);
+  const [list, setList] = useState<RepositoryItem[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const profile = useStore(profileStore);
@@ -75,32 +74,37 @@ export const Menu = () => {
   });
 
   const loadEntries = useCallback(() => {
-    if (db) {
-      getAll(db)
-        .then((list) => list.filter((item) => item.urlId && item.description))
-        .then(setList)
-        .catch((error) => toast.error(error.message));
-    }
+    setLoading(true);
+
+    getProjects().then((res: any) => {
+      if (res.success) {
+        setList(
+          res.data.projects.map((project: any) => ({
+            projectId: project.id,
+            urlId: project.path_with_namespace,
+            id: project.name,
+            description: project.name,
+            timestamp: project.updated_at,
+          })),
+        );
+      } else {
+        console.error(res.error);
+      }
+
+      setLoading(false);
+    });
   }, []);
 
-  const deleteItem = useCallback((event: React.UIEvent, item: ChatHistoryItem) => {
+  const deleteItem = useCallback((event: React.UIEvent, item: RepositoryItem) => {
     event.preventDefault();
 
-    if (db) {
-      deleteById(db, item.id)
-        .then(() => {
-          loadEntries();
-
-          if (chatId.get() === item.id) {
-            // hard page navigation to clear the stores
-            window.location.pathname = '/';
-          }
-        })
-        .catch((error) => {
-          toast.error('Failed to delete conversation');
-          logger.error(error);
-        });
-    }
+    deleteProject(item.projectId).then((res: any) => {
+      if (res.success) {
+        loadEntries();
+      } else {
+        console.error(res.error);
+      }
+    });
   }, []);
 
   const closeDialog = () => {
@@ -138,14 +142,9 @@ export const Menu = () => {
     };
   }, [isSettingsOpen]);
 
-  const handleDeleteClick = (event: React.UIEvent, item: ChatHistoryItem) => {
+  const handleDeleteClick = (event: React.UIEvent, item: RepositoryItem) => {
     event.preventDefault();
     setDialogContent({ type: 'delete', item });
-  };
-
-  const handleDuplicate = async (id: string) => {
-    await duplicateCurrentChat(id);
-    loadEntries(); // Reload the list after duplication
   };
 
   const handleSettingsClick = () => {
@@ -218,10 +217,14 @@ export const Menu = () => {
           </div>
           <div className="text-gray-600 dark:text-gray-400 text-sm font-medium px-4 py-2">Your Chats</div>
           <div className="flex-1 overflow-auto px-3 pb-3">
-            {filteredList.length === 0 && (
-              <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
-                {list.length === 0 ? 'No previous conversations' : 'No matches found'}
-              </div>
+            {loading ? (
+              <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">Loading...</div>
+            ) : (
+              filteredList.length === 0 && (
+                <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">
+                  {list.length === 0 ? 'No previous conversations' : 'No matches found'}
+                </div>
+              )
             )}
             <DialogRoot open={dialogContent !== null}>
               {binDates(filteredList).map(({ category, items }) => (
@@ -231,13 +234,7 @@ export const Menu = () => {
                   </div>
                   <div className="space-y-0.5 pr-1">
                     {items.map((item) => (
-                      <HistoryItem
-                        key={item.id}
-                        item={item}
-                        exportChat={exportChat}
-                        onDelete={(event) => handleDeleteClick(event, item)}
-                        onDuplicate={() => handleDuplicate(item.id)}
-                      />
+                      <HistoryItem key={item.id} item={item} onDelete={(event) => handleDeleteClick(event, item)} />
                     ))}
                   </div>
                 </div>
