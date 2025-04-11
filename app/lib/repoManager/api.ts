@@ -7,11 +7,14 @@ interface CommitFile {
 interface CommitFilesResponse {
   success: boolean;
   data?: {
-    id: string;
+    commitHash: string;
     message: string;
-    created_at: string;
+    timestamp: string;
+    repository: {
+      name: string;
+      path: string;
+    };
   };
-  message?: string;
 }
 
 interface CreateRepositoryResponse {
@@ -102,12 +105,16 @@ export async function commitFilesToRepo(
       throw new Error(`Failed to commit files: ${response.status} - ${errorText}`);
     }
 
-    return await response.json();
+    const result = (await response.json()) as any;
+
+    return {
+      success: true,
+      data: result,
+    };
   } catch (error) {
     console.error('Error committing files to repository:', error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }

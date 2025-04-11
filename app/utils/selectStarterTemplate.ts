@@ -212,14 +212,6 @@ const getGitHubRepoContent = async (
       }),
     );
 
-    //remove default path from files
-    if (path) {
-      return contents.flat().map((x) => ({
-        ...x,
-        path: x.path.replace(path + '/', ''),
-      }));
-    }
-
     // Flatten the array of contents
     return contents.flat();
   } catch (error) {
@@ -229,7 +221,15 @@ const getGitHubRepoContent = async (
 };
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
-  const files = await getGitHubRepoContent(githubRepo, path, env);
+  let files = await getGitHubRepoContent(githubRepo, path, env);
+
+  if (path) {
+    files = files.map((x) => ({
+      ...x,
+      path: x.path.replace(path + '/', ''),
+    }));
+  }
+
   return { files, messages: generateTemplateMessages(files, title) };
 }
 
