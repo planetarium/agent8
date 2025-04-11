@@ -27,6 +27,8 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
+import { commitChanges } from '~/lib/repoManager/client';
+import { repoStore } from '~/lib/stores/repo';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -54,9 +56,12 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
       throw new Error(`Failed to fetch template: ${response.status}`);
     }
 
-    const result = (await response.json()) as { data: { assistantMessage: string; userMessage: string } };
+    const result = (await response.json()) as {
+      data: { assistantMessage: string; userMessage: string };
+      repository: { name: string; path: string };
+    };
 
-    return result.data;
+    return result;
   } catch (error) {
     console.error('Error fetching template from API:', error);
     throw error;
@@ -188,7 +193,7 @@ export const ChatImpl = memo(
     const [fakeLoading, setFakeLoading] = useState(false);
     const files = useStore(workbenchStore.files);
     const actionAlert = useStore(workbenchStore.alert);
-    const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
+    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('selectedModel');
@@ -243,7 +248,6 @@ export const ChatImpl = memo(
         setData(undefined);
 
         if (usage) {
-          console.log('Token usage:', usage);
           logStore.logProvider('Chat response completed', {
             component: 'Chat',
             action: 'response',
@@ -254,7 +258,7 @@ export const ChatImpl = memo(
           });
         }
 
-        await runAndPreview();
+        await Promise.all([runAndPreview(), commitChanges(message)]);
 
         logger.debug('Finished streaming');
       },
@@ -400,91 +404,81 @@ export const ChatImpl = memo(
         try {
           setFakeLoading(true);
 
-          if (autoSelectTemplate) {
-            const { template, title, projectRepo, projectSummary } = await selectStarterTemplate({
-              message: messageContent,
-              model,
-              provider,
-            });
+          const { template, title, projectRepo, projectSummary } = await selectStarterTemplate({
+            message: messageContent,
+            model,
+            provider,
+          });
 
-            if (template) {
-              const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, projectSummary).catch((e) => {
-                if (e.message.includes('rate limit')) {
-                  toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
-                } else {
-                  toast.warning('Failed to import starter template\n Continuing with blank template');
-                }
-              });
-
-              if (temResp) {
-                const { assistantMessage, userMessage } = temResp;
-                setMessages([
-                  {
-                    id: `1-${new Date().getTime()}`,
-                    role: 'user',
-                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-                    annotations: ['hidden'],
-                  },
-                  {
-                    id: `2-${new Date().getTime()}`,
-                    role: 'assistant',
-                    content: assistantMessage,
-                  },
-                  {
-                    id: `3-${new Date().getTime()}`,
-                    role: 'user',
-                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                      attachmentList,
-                    )}]\n\n${messageContent}`,
-                  },
-                ]);
-
-                setTimeout(() => {
-                  // wait for the files to be loaded
-                  reload();
-                }, 1000);
-                setInput('');
-                Cookies.remove(PROMPT_COOKIE_KEY);
-
-                sendEventToParent('EVENT', { name: 'START_EDITING' });
-
-                setAttachmentList([]);
-
-                resetEnhancer();
-
-                textareaRef.current?.blur();
-                setFakeLoading(false);
-
-                return;
-              }
-            }
+          if (!template) {
+            throw new Error('Not Found Template');
           }
 
-          // If autoSelectTemplate is disabled or template selection failed, proceed with normal message
+          const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, projectSummary).catch((e) => {
+            if (e.message.includes('rate limit')) {
+              toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+            } else {
+              toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            }
+          });
+
+          if (!temResp?.repository) {
+            throw new Error('cannot create a repository.');
+          }
+
+          if (!temResp?.data) {
+            throw new Error('Not Found Template Data');
+          }
+
+          const { assistantMessage, userMessage } = temResp.data;
+          repoStore.setKey('name', temResp.repository.name);
+
           setMessages([
             {
-              id: `${new Date().getTime()}`,
+              id: `1-${new Date().getTime()}`,
+              role: 'user',
+              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+              annotations: ['hidden'],
+            },
+            {
+              id: `2-${new Date().getTime()}`,
+              role: 'assistant',
+              content: assistantMessage,
+            },
+            {
+              id: `3-${new Date().getTime()}`,
               role: 'user',
               content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
               )}]\n\n${messageContent}`,
             },
           ]);
-          reload();
-          setFakeLoading(false);
+
+          setTimeout(() => {
+            // wait for the files to be loaded
+            reload();
+          }, 1000);
           setInput('');
           Cookies.remove(PROMPT_COOKIE_KEY);
+
+          sendEventToParent('EVENT', { name: 'START_EDITING' });
 
           setAttachmentList([]);
 
           resetEnhancer();
 
           textareaRef.current?.blur();
+          setFakeLoading(false);
 
           return;
-        } catch {
+        } catch (error) {
+          toast.warning(
+            `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
+          );
           setChatStarted(false);
           setFakeLoading(false);
+
+          return;
         }
       }
 

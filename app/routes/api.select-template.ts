@@ -48,30 +48,22 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
     if (templateCache[cacheKey] && templateCache[cacheKey].expiresAt > now) {
       console.log(`Cache hit for template: ${cacheKey}`);
 
+      const repository = await createRepository(
+        env,
+        email,
+        projectRepo || `template-${templateName}-${Date.now()}`,
+        projectSummary || '',
+      );
+
       // If registerToRepo is true, commit the cached template to the repository
       if (templateCache[cacheKey].files) {
-        const repository = await createRepository(
-          env,
-          email,
-          projectRepo || `template-${templateName}-${Date.now()}`,
-          projectSummary || '',
-        );
-        const commitResult = await commitFilesToRepo(
-          env,
-          email,
-          repository.name,
-          templateCache[cacheKey].files,
-          templateName,
-        );
+        await commitFilesToRepo(env, email, repository.name, templateCache[cacheKey].files, templateName);
 
         return json({
           data: templateCache[cacheKey].data,
           cached: true,
           cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
-          repository: {
-            name: repository.name,
-            commitResult,
-          },
+          repository,
         });
       }
 
@@ -79,6 +71,7 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
         data: templateCache[cacheKey].data,
         cached: true,
         cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+        repository,
       });
     }
 
@@ -95,29 +88,27 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
       expiresAt: now + CACHE_TTL,
     };
 
+    const repository = await createRepository(
+      env,
+      email,
+      projectRepo || `template-${templateName}-${Date.now()}`,
+      projectSummary || '',
+    );
+
     // If registerToRepo is true, commit the template to the repository
     if (files) {
-      const repository = await createRepository(
-        env,
-        email,
-        projectRepo || `template-${templateName}-${Date.now()}`,
-        projectSummary || '',
-      );
-      const commitResult = await commitFilesToRepo(env, email, repository.name, files, templateName);
-
+      await commitFilesToRepo(env, email, repository.name, files, templateName);
       return json({
         data: messages,
         cached: false,
-        repository: {
-          name: repository.name,
-          commitResult,
-        },
+        repository,
       });
     }
 
     return json({
       data: messages,
       cached: false,
+      repository,
     });
   } catch (error) {
     console.error('Error fetching template:', error);
