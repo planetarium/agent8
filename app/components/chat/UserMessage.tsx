@@ -26,7 +26,7 @@ export function UserMessage({ content }: UserMessageProps) {
   );
 }
 
-function stripMetadata(content: string) {
+export function stripMetadata(content: string) {
   const artifactRegex = /<boltArtifact\s+[^>]*>[\s\S]*?<\/boltArtifact>/gm;
   return content
     .replace(MODEL_REGEX, '')

@@ -15,7 +15,7 @@ export const updateV8AccessToken = (v8AccessToken: string) => {
 export const verifyV8AccessToken = async (
   v8ApiEndpoint: string,
   accessToken: string,
-): Promise<{ userUid: string; isActivated: boolean }> => {
+): Promise<{ userUid: string; isActivated: boolean; email: string; walletAddress: string }> => {
   try {
     const response = await fetch(v8ApiEndpoint + '/v1/auth/verify', {
       headers: {
@@ -32,9 +32,11 @@ export const verifyV8AccessToken = async (
     return {
       userUid: data?.userUid || data?.userAddress || '',
       isActivated: data?.isActivated || false,
+      email: data?.email || '',
+      walletAddress: data?.walletAddress || '',
     };
   } catch (error) {
     logger.error('Failed to verify V8 access token', error);
-    return { userUid: '', isActivated: false };
+    return { userUid: '', isActivated: false, email: '', walletAddress: '' };
   }
 };

@@ -11,7 +11,7 @@ import { unreachable } from '~/utils/unreachable';
 
 const logger = createScopedLogger('FilesStore');
 
-const utf8TextDecoder = new TextDecoder('utf8', { fatal: true });
+const utf8TextDecoder = new TextDecoder('utf-8', { fatal: true });
 
 export interface File {
   type: 'file';

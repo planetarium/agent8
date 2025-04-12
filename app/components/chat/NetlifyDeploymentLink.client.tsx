@@ -1,12 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { netlifyConnection, fetchNetlifyStats } from '~/lib/stores/netlify';
-import { chatId } from '~/lib/persistence/useChatHistory';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useEffect } from 'react';
+import { repoStore } from '~/lib/stores/repo';
 
 export function NetlifyDeploymentLink() {
   const connection = useStore(netlifyConnection);
-  const currentChatId = useStore(chatId);
+  const currentChatId = repoStore.get().path;
 
   useEffect(() => {
     if (connection.token && currentChatId) {

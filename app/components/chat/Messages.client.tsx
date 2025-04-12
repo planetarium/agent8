@@ -29,24 +29,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       window.location.search = searchParams.toString();
     };
 
-    /*
-     * const handleFork = async (messageId: string) => {
-     *   try {
-     *     if (!db || !chatId.get()) {
-     *       toast.error('Chat persistence is not available');
-     *       return;
-     *     }
-     *
-     *
-     *
-     *     const urlId = await forkChat(db, chatId.get()!, messageId);
-     *     window.location.href = `/chat/${urlId}`;
-     *   } catch (error) {
-     *     toast.error('Failed to fork chat: ' + (error as Error).message);
-     *   }
-     * };
-     */
-
     return (
       <div id={id} className={props.className} ref={ref}>
         {messages.length > 0

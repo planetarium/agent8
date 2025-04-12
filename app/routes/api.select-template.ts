@@ -1,6 +1,11 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
+import { createRepository, commitFilesToRepo } from '~/lib/persistenceGitbase/api';
+import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('api.select-template');
 
 /*
  * In-memory cache for templates
@@ -10,6 +15,7 @@ const templateCache: Record<
   string,
   {
     data: any;
+    files: any;
     timestamp: number;
     expiresAt: number;
   }
@@ -18,48 +24,78 @@ const templateCache: Record<
 // Cache expiration time (24 hours in milliseconds)
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-export async function loader({ request, context }: ActionFunctionArgs) {
+export const loader = withV8AuthUser(selectTemplateAction, { checkCredit: true });
+
+export async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
-  const title = url.searchParams.get('title') || undefined;
+  const title = url.searchParams.get('title') || '';
   const repo = url.searchParams.get('repo');
   const path = url.searchParams.get('path');
+  const projectRepo = url.searchParams.get('projectRepo');
+  const projectSummary = url.searchParams.get('projectSummary');
+  const user = context?.user as { email: string; accessToken: string };
+  const userAccessToken = user?.accessToken || '';
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
   }
 
   try {
-    // Create a cache key based on templateName and title
-    const cacheKey = `${templateName}:${title || ''}`;
+    const cacheKey = `${templateName}`;
     const now = Date.now();
 
     // Check if we have a valid cached response
-    if (templateCache[cacheKey] && templateCache[cacheKey].expiresAt > now) {
-      console.log(`Cache hit for template: ${cacheKey}`);
-      return json({
-        data: templateCache[cacheKey].data,
-        cached: true,
-        cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
-      });
+    if (!templateCache[cacheKey] || templateCache[cacheKey].expiresAt < now) {
+      // Cache miss or expired, fetch from GitHub
+      logger.info(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
+
+      const { fileMap, messages } = await getTemplates(repo, path, title, env);
+
+      const files = [];
+
+      for (const key in fileMap) {
+        if (fileMap[key]!.type === 'file') {
+          files.push({
+            path: key,
+            content: fileMap[key]!.content,
+          });
+        }
+      }
+
+      // Store in cache
+      templateCache[cacheKey] = {
+        data: messages,
+        files,
+        timestamp: now,
+        expiresAt: now + CACHE_TTL,
+      };
     }
 
-    // Cache miss or expired, fetch from GitHub
-    console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
+    const repository = await createRepository(
+      env,
+      userAccessToken,
+      projectRepo || `template-${templateName}-${Date.now()}`,
+      (title || templateName) + '\n' + projectSummary || '',
+    );
 
-    const templateData = await getTemplates(repo, path, title, env);
+    if (!repository.success || !repository.data) {
+      throw new Error('Failed to create repository');
+    }
 
-    // Store in cache
-    templateCache[cacheKey] = {
-      data: templateData,
-      timestamp: now,
-      expiresAt: now + CACHE_TTL,
-    };
+    await commitFilesToRepo(
+      env,
+      userAccessToken,
+      repository.data.name,
+      templateCache[cacheKey].files,
+      'Initial Commit',
+    );
 
     return json({
-      data: templateData,
-      cached: false,
+      data: templateCache[cacheKey].data,
+      cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+      repository: repository.data,
     });
   } catch (error) {
     console.error('Error fetching template:', error);
@@ -76,7 +112,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const body = await request.json();
-    const { action, templateName, title } = body as { action: string; templateName: string; title: string };
+    const { action, templateName, title } = body as {
+      action: string;
+      templateName: string;
+      title: string;
+    };
 
     if (action === 'clearCache') {
       if (templateName) {

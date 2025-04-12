@@ -1,10 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
 import { debounce } from '~/utils/debounce';
-import type { ChatHistoryItem } from '~/lib/persistence';
+import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 
 interface UseSearchFilterOptions {
-  items: ChatHistoryItem[];
-  searchFields?: (keyof ChatHistoryItem)[];
+  items: RepositoryItem[];
+  searchFields?: (keyof RepositoryItem)[];
   debounceMs?: number;
 }
 
