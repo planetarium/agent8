@@ -1,11 +1,11 @@
 import { workbenchStore } from '~/lib/stores/workbench';
-import { chatId as chatIdStore, description as descriptionStore } from '~/lib/persistence';
 import { Button } from '~/components/ui/Button';
+import { repoStore } from '~/lib/stores/repo';
 
 export function HeaderDeployButton() {
   const handleDeploy = async () => {
-    const chatId = chatIdStore.get();
-    const title = descriptionStore.get() || 'Game Project';
+    const chatId = repoStore.get().name;
+    const title = repoStore.get().title || 'Game Project';
 
     if (chatId) {
       await workbenchStore.publish(chatId, title);

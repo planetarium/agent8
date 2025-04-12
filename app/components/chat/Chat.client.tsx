@@ -9,7 +9,6 @@ import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
-import { description } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
@@ -27,11 +26,11 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
-import { commitChanges } from '~/lib/repoManager/client';
+import { commitChanges } from '~/lib/persistenceGitbase/client';
 import { webcontainer } from '~/lib/webcontainer';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
-import { useRepoChats } from '~/lib/hooks/useRepoChats';
+import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -61,7 +60,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
 
     const result = (await response.json()) as {
       data: { assistantMessage: string; userMessage: string };
-      repository: { name: string; path: string };
+      repository: { name: string; path: string; description: string };
     };
 
     return result;
@@ -92,10 +91,10 @@ function sendEventToParent(type: string, payload: any) {
 export function Chat() {
   renderLogger.trace('Chat');
 
-  const { loaded, chats, files } = useRepoChats();
+  const { loaded, chats, files, project } = useGitbaseChatHistory();
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState(false);
-  const title = useStore(description);
+  const title = repoStore.get().title;
 
   useEffect(() => {
     if (initialMessages.length > 0) {
@@ -108,14 +107,23 @@ export function Chat() {
   }, [initialMessages, loaded]);
 
   useEffect(() => {
-    if (loaded && chats.length > 0) {
-      setInitialMessages(chats);
-      webcontainer.then(async (wc) => {
-        wc.mount(convertFileMapToFileSystemTree(files));
-      });
-      workbenchStore.showWorkbench.set(true);
+    if (loaded) {
+      if (chats.length > 0) {
+        setInitialMessages(chats);
+        webcontainer.then(async (wc) => {
+          wc.mount(convertFileMapToFileSystemTree(files));
+        });
+        workbenchStore.showWorkbench.set(true);
+      }
+
+      if (project.description) {
+        repoStore.set({
+          ...repoStore.get(),
+          title: project.description.split('\n')[0],
+        });
+      }
     }
-  }, [loaded, files, chats]);
+  }, [loaded, files, chats, project]);
 
   return (
     <>
@@ -268,17 +276,22 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       await Promise.all([
         runAndPreview(),
-        commitChanges(message).then((res) => {
-          if (res.success && res.repositoryName) {
-            if (repoStore.get().name !== res.repositoryName) {
-              repoStore.set({
-                name: res.repositoryName,
-                path: res.data.repository.path,
-              });
-              window.history.replaceState(null, '', '/chat/' + res.data.repository.path);
+        commitChanges(message)
+          .then((res: any) => {
+            if (res.success && res.repositoryName) {
+              if (repoStore.get().name !== res.repositoryName) {
+                repoStore.set({
+                  name: res.repositoryName,
+                  path: res.data.repository.path,
+                  title: res.data.repository.description('\n')[0],
+                });
+                window.history.replaceState(null, '', '/chat/' + res.data.repository.path);
+              }
             }
-          }
-        }),
+          })
+          .catch(() => {
+            toast.error('The code commit has failed. You can download the code and restore it.');
+          }),
       ]);
 
       logger.debug('Finished streaming');
@@ -455,6 +468,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         repoStore.set({
           name: temResp.repository.name,
           path: temResp.repository.path,
+          title,
         });
 
         setMessages([
@@ -639,7 +653,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
     } catch (error) {
-      console.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
+      logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
       toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
     } finally {
       setFakeLoading(false);

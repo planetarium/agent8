@@ -9,10 +9,9 @@ import { classNames } from '~/utils/classNames';
 import { path } from '~/utils/path';
 import { useEffect, useRef, useState } from 'react';
 import type { ActionCallbackData } from '~/lib/runtime/message-parser';
-import { chatId } from '~/lib/persistence/useChatHistory'; // Add this import
 import { streamingState } from '~/lib/stores/streaming';
 import { NetlifyDeploymentLink } from '~/components/chat/NetlifyDeploymentLink.client';
-
+import { repoStore } from '~/lib/stores/repo';
 interface HeaderActionButtonsProps {}
 
 export function HeaderActionButtons({}: HeaderActionButtonsProps) {
@@ -40,7 +39,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const currentChatId = useStore(chatId);
+  const currentChatId = repoStore.get().path;
 
   const handleDeploy = async () => {
     if (!connection.user || !connection.token) {

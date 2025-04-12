@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
 import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from '~/lib/stores/repo';
-import { downloadProjectZip, getProjectCommits } from '~/lib/repoManager/client';
+import { downloadProjectZip, getProjectCommits } from '~/lib/persistenceGitbase/client';
 
 interface RepoChatsOptions {
   branch?: string;
@@ -35,14 +35,28 @@ interface PaginationInfo {
 interface CommitResponse {
   success: boolean;
   data: {
+    project: {
+      id: string;
+      name: string;
+      description: string;
+    };
     commits: Commit[];
     pagination: PaginationInfo;
   };
   error?: string;
 }
 
-export function useRepoChats(options: RepoChatsOptions = {}) {
+export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   const repoId = repoStore.get().path;
+  const [project, setProject] = useState<{
+    id: string;
+    name: string;
+    description: string;
+  }>({
+    id: '',
+    name: '',
+    description: '',
+  });
   const [chats, setChats] = useState<Message[]>([]);
   const [files, setFiles] = useState<FileMap>({});
   const [loaded, setLoaded] = useState(false);
@@ -180,7 +194,9 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
       // 파일 처리
       zip.forEach((relativePath, zipEntry) => {
         if (!zipEntry.dir) {
-          const promise = zipEntry.async('string').then((content) => {
+          const promise = async () => {
+            const content = await zipEntry.async('string');
+
             // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
             const pathParts = relativePath.split('/');
 
@@ -197,9 +213,9 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
               content,
               isBinary: false,
             };
-          });
+          };
 
-          promises.push(promise);
+          promises.push(promise());
         }
       });
 
@@ -266,6 +282,8 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch commit history');
         }
+
+        setProject(data.data.project);
 
         const newMessages = parseCommitMessages(data.data.commits);
 
@@ -340,6 +358,7 @@ export function useRepoChats(options: RepoChatsOptions = {}) {
   return {
     loaded: loaded && !loadingFiles,
     chats,
+    project,
     files,
     loading: loading || loadingFiles,
     error,

@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { commitFilesToRepo, createRepository } from '~/lib/repoManager/api';
+import { commitFilesToRepo, createRepository } from '~/lib/persistenceGitbase/api';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -11,7 +11,6 @@ export const action = withV8AuthUser(commitChangesAction, { checkCredit: true })
 export async function commitChangesAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; accessToken: string };
-  const email = user?.email || '';
   const userAccessToken = user?.accessToken || '';
 
   if (request.method !== 'POST') {
@@ -43,15 +42,19 @@ export async function commitChangesAction({ request, context }: ActionFunctionAr
     let finalRepositoryName = repositoryName;
 
     if (!finalRepositoryName) {
-      const repository = await createRepository(env, userAccessToken, email, `verse8-project-${Date.now()}`, '');
-      finalRepositoryName = repository.name;
+      const repository = await createRepository(env, userAccessToken, `verse8-project-${Date.now()}`, '');
+
+      if (!repository.success || !repository.data) {
+        throw new Error('Failed to create repository');
+      }
+
+      finalRepositoryName = repository.data.name;
     }
 
     // Commit the files to the repository
     const result = await commitFilesToRepo(
       env,
       userAccessToken,
-      email,
       finalRepositoryName,
       files,
       commitMessage || 'Update files',
