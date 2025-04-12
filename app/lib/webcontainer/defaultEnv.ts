@@ -1,5 +1,5 @@
 import type { WebContainer } from '@webcontainer/api';
-import { chatId as chatIdStore } from '~/lib/persistence';
+import { repoStore } from '~/lib/stores/repo';
 
 /**
  * WebContainer에 .env 파일을 생성합니다.
@@ -11,7 +11,7 @@ import { chatId as chatIdStore } from '~/lib/persistence';
 export async function createDefaultEnv(webcontainerInstance: WebContainer): Promise<void> {
   try {
     // chatId가 있는지 확인
-    const chatId = chatIdStore.get();
+    const chatId = repoStore.get().name;
 
     if (!chatId) {
       console.warn('Cannot create .env file: chatId is not available yet');

@@ -14,11 +14,11 @@ import fileSaver from 'file-saver';
 import { Octokit, type RestEndpointMethodTypes } from '@octokit/rest';
 import { path } from '~/utils/path';
 import { extractRelativePath } from '~/utils/diff';
-import { description } from '~/lib/persistence';
 import Cookies from 'js-cookie';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
 import { WORK_DIR } from '~/utils/constants';
+import { repoStore } from './repo';
 
 const { saveAs } = fileSaver;
 
@@ -411,7 +411,7 @@ export class WorkbenchStore {
 
   async downloadZip() {
     // Get the project name from the description input, or use a default name
-    const projectName = (description.value ?? 'project').toLocaleLowerCase().split(' ').join('_');
+    const projectName = (repoStore.get().name ?? 'project').toLocaleLowerCase().split(' ').join('_');
 
     // Generate a simple 6-character hash based on the current timestamp
     const timestampHash = Date.now().toString(36).slice(-6);

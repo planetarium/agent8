@@ -123,6 +123,7 @@ export default function Index() {
       repoStore.set({
         name: repoName,
         path: repoPath,
+        title: repoName,
       });
     }
   }, [repoPath, repoName]);

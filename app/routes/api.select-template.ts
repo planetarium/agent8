@@ -1,8 +1,11 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
-import { createRepository, commitFilesToRepo } from '~/lib/repoManager/api';
+import { createRepository, commitFilesToRepo } from '~/lib/persistenceGitbase/api';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('api.select-template');
 
 /*
  * In-memory cache for templates
@@ -27,13 +30,12 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
-  const title = url.searchParams.get('title') || undefined;
+  const title = url.searchParams.get('title') || '';
   const repo = url.searchParams.get('repo');
   const path = url.searchParams.get('path');
   const projectRepo = url.searchParams.get('projectRepo');
   const projectSummary = url.searchParams.get('projectSummary');
   const user = context?.user as { email: string; accessToken: string };
-  const email = user?.email || '';
   const userAccessToken = user?.accessToken || '';
 
   if (!templateName || !repo || !path) {
@@ -41,95 +43,59 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
   }
 
   try {
-    // Create a cache key based on templateName and title
-    const cacheKey = `${templateName}:${title || ''}`;
+    const cacheKey = `${templateName}`;
     const now = Date.now();
 
     // Check if we have a valid cached response
-    if (templateCache[cacheKey] && templateCache[cacheKey].expiresAt > now) {
-      console.log(`Cache hit for template: ${cacheKey}`);
+    if (!templateCache[cacheKey] || templateCache[cacheKey].expiresAt < now) {
+      // Cache miss or expired, fetch from GitHub
+      logger.info(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-      const repository = await createRepository(
-        env,
-        userAccessToken,
-        email,
-        projectRepo || `template-${templateName}-${Date.now()}`,
-        projectSummary || '',
-      );
+      const { fileMap, messages } = await getTemplates(repo, path, title, env);
 
-      // If registerToRepo is true, commit the cached template to the repository
-      if (templateCache[cacheKey].files) {
-        await commitFilesToRepo(
-          env,
-          userAccessToken,
-          email,
-          repository.name,
-          templateCache[cacheKey].files,
-          'Initial Commit',
-        );
+      const files = [];
 
-        return json({
-          data: templateCache[cacheKey].data,
-          cached: true,
-          cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
-          repository,
-        });
+      for (const key in fileMap) {
+        if (fileMap[key]!.type === 'file') {
+          files.push({
+            path: key,
+            content: fileMap[key]!.content,
+          });
+        }
       }
 
-      return json({
-        data: templateCache[cacheKey].data,
-        cached: true,
-        cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
-        repository,
-      });
+      // Store in cache
+      templateCache[cacheKey] = {
+        data: messages,
+        files,
+        timestamp: now,
+        expiresAt: now + CACHE_TTL,
+      };
     }
-
-    // Cache miss or expired, fetch from GitHub
-    console.log(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
-
-    const { fileMap, messages } = await getTemplates(repo, path, title, env);
-
-    const files = [];
-
-    for (const key in fileMap) {
-      if (fileMap[key]!.type === 'file') {
-        files.push({
-          path: key,
-          content: fileMap[key]!.content,
-        });
-      }
-    }
-
-    // Store in cache
-    templateCache[cacheKey] = {
-      data: messages,
-      files,
-      timestamp: now,
-      expiresAt: now + CACHE_TTL,
-    };
 
     const repository = await createRepository(
       env,
       userAccessToken,
-      email,
       projectRepo || `template-${templateName}-${Date.now()}`,
-      projectSummary || '',
+      (title || templateName) + '\n' + projectSummary || '',
     );
 
-    // If registerToRepo is true, commit the template to the repository
-    if (files) {
-      await commitFilesToRepo(env, userAccessToken, email, repository.name, files, 'Initial Commit');
-      return json({
-        data: messages,
-        cached: false,
-        repository,
-      });
+    if (!repository.success || !repository.data) {
+      throw new Error('Failed to create repository');
     }
 
+    await commitFilesToRepo(
+      env,
+      userAccessToken,
+      repository.data.name,
+      templateCache[cacheKey].files,
+      'Initial Commit',
+    );
+
     return json({
-      data: messages,
-      cached: false,
-      repository,
+      data: templateCache[cacheKey].data,
+      cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+      repository: repository.data,
     });
   } catch (error) {
     console.error('Error fetching template:', error);

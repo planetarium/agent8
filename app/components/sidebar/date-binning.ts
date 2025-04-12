@@ -1,5 +1,5 @@
 import { format, isAfter, isThisWeek, isThisYear, isToday, isYesterday, subDays } from 'date-fns';
-import type { RepositoryItem } from '~/lib/repoManager/types';
+import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 
 type Bin = { category: string; items: RepositoryItem[] };
 

@@ -11,8 +11,8 @@ import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
-import { deleteProject, getProjects } from '~/lib/repoManager/client';
-import type { RepositoryItem } from '~/lib/repoManager/types';
+import { deleteProject, getProjects } from '~/lib/persistenceGitbase/client';
+import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 
 const menuVariants = {
   closed: {

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { debounce } from '~/utils/debounce';
-import type { RepositoryItem } from '~/lib/repoManager/types';
+import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 
 interface UseSearchFilterOptions {
   items: RepositoryItem[];
