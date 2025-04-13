@@ -3,10 +3,12 @@ import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { WORK_DIR } from '~/utils/constants';
-import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 export const commitChanges = async (message: Message) => {
-  const repositoryName = repoStore.get().name;
+  const projectName = repoStore.get().name;
+  const projectPath = repoStore.get().path;
+  const title = repoStore.get().title;
+  const isFirstCommit = !projectPath;
 
   let files = [];
   const content =
@@ -17,7 +19,7 @@ export const commitChanges = async (message: Message) => {
           .join('')
       : message.content;
 
-  if (!repositoryName) {
+  if (isFirstCommit) {
     // If repositoryName is not set, commit all files
     files = Object.entries(workbenchStore.files.get())
       .filter(([_, file]) => file && (file as any).content)
@@ -45,18 +47,20 @@ export const commitChanges = async (message: Message) => {
 ${userMessage}
 </V8UserMessage>
 <V8AssistantMessage>
-${content.replace(/(<boltAction[^>]*>)(.*?)(<\/boltAction>)/gs, '$1$3')}
+${content.replace(/(<boltAction[^>]*filePath[^>]*>)(.*?)(<\/boltAction>)/gs, '$1$3')}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋
-  const response = await fetch('/api/commit-changes', {
+  const response = await fetch('/api/gitlab/commits', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      projectName,
+      isFirstCommit,
+      description: title,
       files,
-      repositoryName,
       commitMessage,
     }),
   });
@@ -69,15 +73,11 @@ ${content.replace(/(<boltAction[^>]*>)(.*?)(<\/boltAction>)/gs, '$1$3')}
 };
 
 export const downloadProjectZip = async (projectPath: string) => {
-  const response = await fetch(
-    `${import.meta.env.VITE_GITBASE_PERSISTENCE_URL}/git/download?projectPath=${encodeURIComponent(projectPath)}`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
-      },
+  const response = await fetch(`/api/gitlab/download?projectPath=${encodeURIComponent(projectPath)}`, {
+    headers: {
+      'Content-Type': 'application/json',
     },
-  );
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to download project zip: ${response.status} ${response.statusText}`);
@@ -106,10 +106,9 @@ export const getProjectCommits = async (
     queryParams.append('page', options.page.toString());
   }
 
-  const response = await fetch(`${import.meta.env.VITE_GITBASE_PERSISTENCE_URL}/git/commits?${queryParams}`, {
+  const response = await fetch(`/api/gitlab/commits?${queryParams}`, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
     },
   });
 
@@ -121,10 +120,9 @@ export const getProjectCommits = async (
 };
 
 export const getProjects = async () => {
-  const response = await fetch(`${import.meta.env.VITE_GITBASE_PERSISTENCE_URL}/git/projects`, {
+  const response = await fetch(`/api/gitlab/projects`, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
     },
   });
 
@@ -136,12 +134,8 @@ export const getProjects = async () => {
 };
 
 export const deleteProject = async (projectId: string) => {
-  const response = await fetch(`${import.meta.env.VITE_GITBASE_PERSISTENCE_URL}/git/projects/${projectId}`, {
+  const response = await fetch(`/api/gitlab/projects?projectId=${projectId}`, {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
-    },
   });
 
   if (!response.ok) {
@@ -152,11 +146,10 @@ export const deleteProject = async (projectId: string) => {
 };
 
 export const updateProjectDescription = async (projectPath: string, description: string) => {
-  const response = await fetch(`${import.meta.env.VITE_GITBASE_PERSISTENCE_URL}/git/description`, {
+  const response = await fetch(`/api/gitlab/description`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem(V8_ACCESS_TOKEN_KEY)}`,
     },
     body: JSON.stringify({
       projectPath,

@@ -89,6 +89,9 @@ importers:
       '@dmitryrechkin/json-schema-to-zod':
         specifier: ^1.0.1
         version: 1.0.1
+      '@gitbeaker/rest':
+        specifier: ^42.2.0
+        version: 42.2.0
       '@google/model-viewer':
         specifier: ^4.0.0
         version: 4.1.0(three@0.174.0)
@@ -197,6 +200,9 @@ importers:
       ai:
         specifier: ^4.3.4
         version: 4.3.4(react@18.3.1)(zod@3.24.2)
+      axios:
+        specifier: ^1.8.4
+        version: 1.8.4
       chalk:
         specifier: ^5.4.1
         version: 5.4.1
@@ -1850,6 +1856,18 @@ packages:
 
   '@gar/promisify@1.1.3':
     resolution: {integrity: sha512-k2Ty1JcVojjJFwrg/ThKi2ujJ7XNLYaFGNB/bWT9wGR+oSMJHMa5w+CUq6p/pVrKeNNgA7pCqEcjSnHVoqJQFw==}
+
+  '@gitbeaker/core@42.2.0':
+    resolution: {integrity: sha512-pUFESP5I0/f2bqSNXuI+pM+ZdpipFexIscywTw2M6+N1L4z5hH+ww9KHVl7EdE0r046ZFsVLu4MukQipWCKfLg==}
+    engines: {node: '>=18.20.0'}
+
+  '@gitbeaker/requester-utils@42.2.0':
+    resolution: {integrity: sha512-8p9N2apidpUNwodRWT5/WjfIS9pKJBcoRAud4+qvvRNX99SO3sn9YVDEfA3eIjBHsc7E9soVhGQvvRV2HSP+JA==}
+    engines: {node: '>=18.20.0'}
+
+  '@gitbeaker/rest@42.2.0':
+    resolution: {integrity: sha512-d7LDVuu85/HNVSQajajfTpgDJNaX+/KICyV+Q8mKW8tVTK4K61OTfS05Q0XI4JFHxHNAB1sF+OnvR3C6/jQAJA==}
+    engines: {node: '>=18.20.0'}
 
   '@google/model-viewer@4.1.0':
     resolution: {integrity: sha512-7WB/jS6wfBfRl/tWhsUUvDMKFE1KlKME97coDLlZQfvJD0nCwjhES1lJ+k7wnmf7T3zMvCfn9mIjM/mgZapuig==}
@@ -4000,6 +4018,9 @@ packages:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
     engines: {node: '>= 0.4'}
 
+  axios@1.8.4:
+    resolution: {integrity: sha512-eBSYY4Y68NNlHbHBMdeDmKNtDgXWhQsJcGqzO3iLUM0GraQFSS9cVgPX5I9b3lbdFKyYoAEGAZF1DwhTaljNAw==}
+
   bach@0.5.0:
     resolution: {integrity: sha512-wr1KICs4sa/Ye4D38CEWkxmRi0E/1NnlcTXE4WT46993f+m+W8rVeRlQVh7O9jUHd3/cyNttv4qIDEUullFPcw==}
     engines: {node: '>= 0.10'}
@@ -5498,6 +5519,15 @@ packages:
 
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
+
+  follow-redirects@1.15.9:
+    resolution: {integrity: sha512-gew4GsXizNgdoRyqmyfMHyAmXsZDk6mHkSxZFCzW9gwlbtOW44CDtYavM+y+72qD/Vq2l550kMF52DT8fOLJqQ==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
 
   for-each@0.3.5:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
@@ -7733,6 +7763,10 @@ packages:
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
+  picomatch-browser@2.2.6:
+    resolution: {integrity: sha512-0ypsOQt9D4e3hziV8O4elD9uN0z/jtUEfxVRtNaAAtXIyUx9m/SzlO020i8YNL2aL/E6blOvvHQcin6HZlFy/w==}
+    engines: {node: '>=8.6'}
+
   picomatch@2.3.1:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
@@ -7924,6 +7958,9 @@ packages:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
 
+  proxy-from-env@1.1.0:
+    resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+
   public-encrypt@4.0.3:
     resolution: {integrity: sha512-zVpa8oKZSz5bTMTFClc1fQOnyyEzpl5ozpi1B5YcvBrdohMjH2rfsBtyXcuNuwjsDIXmBYlF2N5FlJYhR29t8Q==}
 
@@ -7996,6 +8033,9 @@ packages:
   range-parser@1.2.1:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
     engines: {node: '>= 0.6'}
+
+  rate-limiter-flexible@4.0.1:
+    resolution: {integrity: sha512-2/dGHpDFpeA0+755oUkW+EKyklqLS9lu0go9pDsbhqQjZcxfRyJ6LA4JI0+HAdZ2bemD/oOjUeZQB2lCZqXQfQ==}
 
   raw-body@2.5.2:
     resolution: {integrity: sha512-8zGqypfENjCIqGhgXToC8aB2r7YrBX+AQAfIPs/Mlk+BtPTztOvTS01NRW/3Eh60J+a48lt8qsCzirQ6loCVfA==}
@@ -9813,6 +9853,9 @@ packages:
       utf-8-validate:
         optional: true
 
+  xcase@2.0.1:
+    resolution: {integrity: sha512-UmFXIPU+9Eg3E9m/728Bii0lAIuoc+6nbrNUKaRPJOFp91ih44qqGlWtxMB6kXFrRD6po+86ksHM5XHCfk6iPw==}
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -11371,6 +11414,24 @@ snapshots:
   '@floating-ui/utils@0.2.9': {}
 
   '@gar/promisify@1.1.3': {}
+
+  '@gitbeaker/core@42.2.0':
+    dependencies:
+      '@gitbeaker/requester-utils': 42.2.0
+      qs: 6.14.0
+      xcase: 2.0.1
+
+  '@gitbeaker/requester-utils@42.2.0':
+    dependencies:
+      picomatch-browser: 2.2.6
+      qs: 6.14.0
+      rate-limiter-flexible: 4.0.1
+      xcase: 2.0.1
+
+  '@gitbeaker/rest@42.2.0':
+    dependencies:
+      '@gitbeaker/core': 42.2.0
+      '@gitbeaker/requester-utils': 42.2.0
 
   '@google/model-viewer@4.1.0(three@0.174.0)':
     dependencies:
@@ -13411,7 +13472,7 @@ snapshots:
       '@babel/plugin-syntax-typescript': 7.25.9(@babel/core@7.26.10)
       '@vanilla-extract/babel-plugin-debug-ids': 1.2.0
       '@vanilla-extract/css': 1.17.1
-      esbuild: 0.17.6
+      esbuild: 0.17.19
       eval: 0.1.8
       find-up: 5.0.0
       javascript-stringify: 2.1.0
@@ -14061,6 +14122,14 @@ snapshots:
   available-typed-arrays@1.0.7:
     dependencies:
       possible-typed-array-names: 1.1.0
+
+  axios@1.8.4:
+    dependencies:
+      follow-redirects: 1.15.9
+      form-data: 4.0.2
+      proxy-from-env: 1.1.0
+    transitivePeerDependencies:
+      - debug
 
   bach@0.5.0:
     dependencies:
@@ -16244,6 +16313,8 @@ snapshots:
       keyv: 4.5.4
 
   flatted@3.3.3: {}
+
+  follow-redirects@1.15.9: {}
 
   for-each@0.3.5:
     dependencies:
@@ -19193,6 +19264,8 @@ snapshots:
 
   picocolors@1.1.1: {}
 
+  picomatch-browser@2.2.6: {}
+
   picomatch@2.3.1: {}
 
   picomatch@4.0.2: {}
@@ -19364,6 +19437,8 @@ snapshots:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
 
+  proxy-from-env@1.1.0: {}
+
   public-encrypt@4.0.3:
     dependencies:
       bn.js: 4.12.1
@@ -19492,6 +19567,8 @@ snapshots:
       safe-buffer: 5.2.1
 
   range-parser@1.2.1: {}
+
+  rate-limiter-flexible@4.0.1: {}
 
   raw-body@2.5.2:
     dependencies:
@@ -21632,6 +21709,8 @@ snapshots:
   ws@8.18.0: {}
 
   ws@8.18.1: {}
+
+  xcase@2.0.1: {}
 
   xml-name-validator@5.0.0: {}
 

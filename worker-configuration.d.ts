@@ -28,4 +28,6 @@ interface Env {
   VITE_ACCESS_CONTROL_ENABLED: string;
   VITE_GITBASE_PERSISTENCE_ENABLED: string;
   VITE_GITBASE_PERSISTENCE_URL: string;
+  GITLAB_URL: string;
+  GITLAB_TOKEN: string;
 }

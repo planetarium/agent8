@@ -28,7 +28,6 @@ Response Format:
   <templateName>{selected template name}</templateName>
   <title>{a proper title for the project}</title>
   <projectRepo>{the name of the new project repository to use}</projectRepo>
-  <projectSummary>{a summary of the project}</projectSummary>
 </selection>
 
 Examples:
@@ -40,7 +39,6 @@ Response:
   <templateName>basic-2d</templateName>
   <title>Simple 2d platformer game</title>
   <projectRepo>basic-2d-game</projectRepo>
-  <projectSummary>A simple 2d platformer game</projectSummary>
 </selection>
 </example>
 
@@ -57,15 +55,12 @@ MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
 
 let templates: Template[] = STARTER_TEMPLATES;
 
-const parseSelectedTemplate = (
-  llmOutput: string,
-): { template: string; title: string; projectRepo: string; projectSummary: string } | null => {
+const parseSelectedTemplate = (llmOutput: string): { template: string; title: string; projectRepo: string } | null => {
   try {
     // Extract content between <templateName> tags
     const templateNameMatch = llmOutput.match(/<templateName>(.*?)<\/templateName>/);
     const titleMatch = llmOutput.match(/<title>(.*?)<\/title>/);
     const projectRepoMatch = llmOutput.match(/<projectRepo>(.*?)<\/projectRepo>/);
-    const projectSummaryMatch = llmOutput.match(/<projectSummary>(.*?)<\/projectSummary>/);
 
     if (!templateNameMatch) {
       return null;
@@ -75,7 +70,6 @@ const parseSelectedTemplate = (
       template: templateNameMatch[1].trim(),
       title: titleMatch?.[1].trim() || 'Untitled Project',
       projectRepo: projectRepoMatch?.[1].trim() || '',
-      projectSummary: projectSummaryMatch?.[1].trim() || '',
     };
   } catch (error) {
     console.error('Error parsing template selection:', error);
@@ -127,7 +121,6 @@ export const selectStarterTemplate = async (options: { message: string; model: s
       template,
       title: selectedTemplate.title,
       projectRepo: selectedTemplate.projectRepo,
-      projectSummary: selectedTemplate.projectSummary,
     };
   }
 

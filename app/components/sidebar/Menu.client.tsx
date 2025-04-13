@@ -11,7 +11,7 @@ import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
-import { deleteProject, getProjects } from '~/lib/persistenceGitbase/client';
+import { deleteProject, getProjects } from '~/lib/persistenceGitbase/api.client';
 import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 
 const menuVariants = {
@@ -83,7 +83,7 @@ export const Menu = () => {
             projectId: project.id,
             urlId: project.path_with_namespace,
             id: project.name,
-            description: project.name,
+            description: (project.description || project.name).split('\n')[0],
             timestamp: project.updated_at,
           })),
         );

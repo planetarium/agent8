@@ -26,7 +26,7 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
-import { commitChanges } from '~/lib/persistenceGitbase/client';
+import { commitChanges } from '~/lib/persistenceGitbase/api.client';
 import { webcontainer } from '~/lib/webcontainer';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
@@ -39,14 +39,12 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string, projectSummary?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
     params.append('repo', template.githubRepo || '');
     params.append('path', template.path || '');
-    params.append('projectRepo', projectRepo || '');
-    params.append('projectSummary', projectSummary || '');
 
     if (title) {
       params.append('title', title);
@@ -60,7 +58,6 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
 
     const result = (await response.json()) as {
       data: { assistantMessage: string; userMessage: string };
-      repository: { name: string; path: string; description: string };
     };
 
     return result;
@@ -278,15 +275,17 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         runAndPreview(),
         commitChanges(message)
           .then((res: any) => {
-            if (res.success && res.repositoryName) {
-              if (repoStore.get().name !== res.repositoryName) {
+            if (res.success) {
+              if (!repoStore.get().path) {
                 repoStore.set({
-                  name: res.repositoryName,
-                  path: res.data.repository.path,
-                  title: res.data.repository.description('\n')[0],
+                  name: res.data.project.name,
+                  path: res.data.project.path,
+                  title: res.data.project.description.split('\n')[0] || res.data.project.name,
                 });
-                window.history.replaceState(null, '', '/chat/' + res.data.repository.path);
+                window.history.replaceState(null, '', '/chat/' + res.data.project.path);
               }
+            } else {
+              throw new Error('The code commit has failed. You can download the code and restore it.');
             }
           })
           .catch(() => {
@@ -436,7 +435,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       try {
         setFakeLoading(true);
 
-        const { template, title, projectRepo, projectSummary } = await selectStarterTemplate({
+        const { template, title, projectRepo } = await selectStarterTemplate({
           message: messageContent,
           model,
           provider,
@@ -446,7 +445,13 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
           throw new Error('Not Found Template');
         }
 
-        const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, projectSummary).catch((e) => {
+        repoStore.set({
+          name: projectRepo,
+          path: '',
+          title,
+        });
+
+        const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
           if (e.message.includes('rate limit')) {
             toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
           } else {
@@ -454,22 +459,11 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
           }
         });
 
-        if (!temResp?.repository) {
-          throw new Error('cannot create a repository.');
-        }
-
         if (!temResp?.data) {
           throw new Error('Not Found Template Data');
         }
 
         const { assistantMessage, userMessage } = temResp.data;
-
-        window.history.replaceState(null, '', '/chat/' + temResp.repository.path);
-        repoStore.set({
-          name: temResp.repository.name,
-          path: temResp.repository.path,
-          title,
-        });
 
         setMessages([
           {
