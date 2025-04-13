@@ -7,7 +7,7 @@ export const action = withV8AuthUser(descriptionAction, { checkCredit: true });
 /**
  * Action function for updating project description
  */
-export async function descriptionAction({ context, request }: ActionFunctionArgs) {
+async function descriptionAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
