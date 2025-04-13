@@ -1,8 +1,4 @@
 import { Gitlab } from '@gitbeaker/rest';
-import JSZip from 'jszip';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 
 import type {
   GitlabUser,
@@ -268,98 +264,6 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to create project: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * ZIP 파일을 사용하여 코드를 리포지토리에 커밋합니다.
-   * ZIP 파일의 모든 내용을 추출하여 리포지토리에 커밋합니다.
-   * 이 방식은 프로젝트 전체를 업데이트하며, ZIP에 없는 기존 파일은 삭제됩니다.
-   *
-   * @param projectId 프로젝트 ID
-   * @param zipBuffer ZIP 파일 버퍼
-   * @param commitMessage 커밋 메시지
-   */
-  async commitCodeWithZip(projectId: number, zipBuffer: Buffer, commitMessage: string): Promise<GitlabCommit> {
-    try {
-      const tempDir = path.join(os.tmpdir(), `gitlab-commit-${Date.now()}`);
-      fs.mkdirSync(tempDir, { recursive: true });
-
-      const zip = new JSZip();
-      const zipContent = await zip.loadAsync(zipBuffer);
-
-      // 파일 추출 및 저장
-      const files: string[] = [];
-      const extractPromises: Promise<void>[] = [];
-
-      zipContent.forEach((relativePath, file) => {
-        if (!file.dir) {
-          const fullPath = path.join(tempDir, relativePath);
-          const dirPath = path.dirname(fullPath);
-
-          // 디렉토리 생성
-          if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
-          }
-
-          // 파일 저장
-          const extractPromise = file.async('nodebuffer').then((content) => {
-            fs.writeFileSync(fullPath, content);
-            files.push(fullPath);
-          });
-
-          extractPromises.push(extractPromise);
-        }
-      });
-
-      // 모든 파일 추출 완료 대기
-      await Promise.all(extractPromises);
-
-      // 각 파일을 GitLab API를 통해 커밋
-      const actions: CommitAction[] = files.map((file) => {
-        const relativePath = path.relative(tempDir, file);
-        const content = fs.readFileSync(file, 'utf-8');
-
-        return {
-          action: 'create',
-          filePath: relativePath,
-          content,
-        };
-      });
-
-      // 프로젝트의 기존 파일 목록 가져오기
-      console.log('기존 파일 목록 가져오기...');
-
-      const existingFiles = await this._getProjectFiles(projectId);
-      console.log(`기존 파일 수: ${existingFiles.length}`);
-
-      // 새 ZIP에 없는 기존 파일은 삭제 액션을 추가
-      const zipFilePaths = files.map((file) => path.relative(tempDir, file));
-
-      for (const existingFile of existingFiles) {
-        if (!zipFilePaths.includes(existingFile)) {
-          actions.push({
-            action: 'delete',
-            filePath: existingFile,
-          });
-        }
-      }
-
-      // 커밋 - main 브랜치에 커밋
-      const result = await this.gitlab.Commits.create(
-        projectId,
-        'main', // 기본 main 브랜치 사용
-        commitMessage,
-        actions,
-      );
-
-      // 임시 디렉토리 정리
-      fs.rmSync(tempDir, { recursive: true, force: true });
-
-      return result as unknown as GitlabCommit;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to commit code: ${errorMessage}`);
     }
   }
 
