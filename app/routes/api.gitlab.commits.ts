@@ -9,7 +9,7 @@ export const loader = withV8AuthUser(commitsLoader, { checkCredit: true });
 /**
  * Loader function for getting project commits
  */
-export async function commitsLoader({ context, request }: ActionFunctionArgs) {
+async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
 
   const url = new URL(request.url);
@@ -56,7 +56,7 @@ export async function commitsLoader({ context, request }: ActionFunctionArgs) {
 /**
  * Action function for committing files to project
  */
-export async function commitsAction({ context, request }: ActionFunctionArgs) {
+async function commitsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 

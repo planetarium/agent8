@@ -7,7 +7,7 @@ export const loader = withV8AuthUser(downloadLoader, { checkCredit: true });
 /**
  * Loader function for downloading code from a project
  */
-export async function downloadLoader({ context, request }: LoaderFunctionArgs) {
+async function downloadLoader({ context, request }: LoaderFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
 
   const url = new URL(request.url);

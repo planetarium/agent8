@@ -10,7 +10,7 @@ export const loader = withV8AuthUser(projectsLoader, { checkCredit: true });
 /**
  * Loader function for getting user projects
  */
-export async function projectsLoader({ context, request }: ActionFunctionArgs) {
+async function projectsLoader({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
@@ -58,7 +58,7 @@ export async function projectsLoader({ context, request }: ActionFunctionArgs) {
 /**
  * Action function for creating project or deleting project
  */
-export async function projectsAction({ context, request }: ActionFunctionArgs) {
+async function projectsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
