@@ -25,7 +25,7 @@ const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 export const loader = withV8AuthUser(selectTemplateAction, { checkCredit: true });
 
-export async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
+async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
