@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { repoStore } from '~/lib/stores/repo';
-import { updateProjectDescription } from '~/lib/persistenceGitbase/client';
+import { updateProjectDescription } from '~/lib/persistenceGitbase/api.client';
 interface EditChatDescriptionOptions {
   initialDescription?: string;
   customChatId?: string;

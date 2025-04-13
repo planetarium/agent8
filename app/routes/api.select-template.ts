@@ -1,7 +1,6 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
-import { createRepository, commitFilesToRepo } from '~/lib/persistenceGitbase/api';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -33,10 +32,6 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
   const title = url.searchParams.get('title') || '';
   const repo = url.searchParams.get('repo');
   const path = url.searchParams.get('path');
-  const projectRepo = url.searchParams.get('projectRepo');
-  const projectSummary = url.searchParams.get('projectSummary');
-  const user = context?.user as { email: string; accessToken: string };
-  const userAccessToken = user?.accessToken || '';
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
@@ -73,29 +68,9 @@ export async function selectTemplateAction({ request, context }: ActionFunctionA
       };
     }
 
-    const repository = await createRepository(
-      env,
-      userAccessToken,
-      projectRepo || `template-${templateName}-${Date.now()}`,
-      (title || templateName) + '\n' + projectSummary || '',
-    );
-
-    if (!repository.success || !repository.data) {
-      throw new Error('Failed to create repository');
-    }
-
-    await commitFilesToRepo(
-      env,
-      userAccessToken,
-      repository.data.name,
-      templateCache[cacheKey].files,
-      'Initial Commit',
-    );
-
     return json({
       data: templateCache[cacheKey].data,
       cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
-      repository: repository.data,
     });
   } catch (error) {
     console.error('Error fetching template:', error);

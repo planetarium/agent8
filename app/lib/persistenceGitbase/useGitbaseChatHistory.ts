@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
 import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from '~/lib/stores/repo';
-import { downloadProjectZip, getProjectCommits } from '~/lib/persistenceGitbase/client';
+import { downloadProjectZip, getProjectCommits } from '~/lib/persistenceGitbase/api.client';
 
 interface RepoChatsOptions {
   branch?: string;
