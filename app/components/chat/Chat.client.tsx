@@ -40,7 +40,7 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-async function fetchTemplateFromAPI(template: Template, title?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
@@ -51,6 +51,10 @@ async function fetchTemplateFromAPI(template: Template, title?: string) {
       params.append('title', title);
     }
 
+    if (projectRepo) {
+      params.append('projectRepo', projectRepo);
+    }
+
     const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
@@ -59,6 +63,8 @@ async function fetchTemplateFromAPI(template: Template, title?: string) {
 
     const result = (await response.json()) as {
       data: { assistantMessage: string; userMessage: string };
+      project: { id: number; name: string; path: string; description: string };
+      commit: { id: number };
     };
 
     return result;
@@ -272,40 +278,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         });
       }
 
-      await Promise.all([
-        runAndPreview(),
-        commitChanges(message)
-          .then((res: any) => {
-            if (res.success) {
-              if (!repoStore.get().path) {
-                repoStore.set({
-                  name: res.data.project.name,
-                  path: res.data.project.path,
-                  title: res.data.project.description.split('\n')[0] || res.data.project.name,
-                });
-                window.history.replaceState(null, '', '/chat/' + res.data.project.path);
-              }
-
-              setMessages((prev: Message[]) =>
-                prev.map((m: Message) => {
-                  if (m.id === message.id) {
-                    return {
-                      ...m,
-                      id: res.data.commitHash,
-                    };
-                  }
-
-                  return m;
-                }),
-              );
-            } else {
-              throw new Error('The code commit has failed. You can download the code and restore it.');
-            }
-          })
-          .catch(() => {
-            toast.error('The code commit has failed. You can download the code and restore it.');
-          }),
-      ]);
+      await Promise.all([runAndPreview(), handleCommit(message)]);
 
       logger.debug('Finished streaming');
     },
@@ -341,6 +314,28 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       parseMessages,
     });
   }, [messages, isLoading, parseMessages]);
+
+  const handleCommit = async (message: Message) => {
+    try {
+      await commitChanges(message, (commitHash) => {
+        setMessages((prev: Message[]) =>
+          prev.map((m: Message) => {
+            if (m.id === message.id) {
+              return {
+                ...m,
+                id: commitHash,
+              };
+            }
+
+            return m;
+          }),
+        );
+      });
+    } catch (e) {
+      toast.error('The code commit has failed. You can download the code and restore it.');
+      console.log(e);
+    }
+  };
 
   const scrollTextArea = () => {
     const textarea = textareaRef.current;
@@ -459,19 +454,29 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
           throw new Error('Not Found Template');
         }
 
-        repoStore.set({
-          name: projectRepo,
-          path: '',
-          title,
-        });
-
-        const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
+        const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
           if (e.message.includes('rate limit')) {
             toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
           } else {
             toast.warning('Failed to import starter template\nRetry again after a few minutes.');
           }
         });
+
+        const projectPath = temResp?.project?.path;
+        const projectName = temResp?.project?.name;
+        const templateCommitId = temResp?.commit?.id;
+
+        if (!projectPath || !projectName || !templateCommitId) {
+          throw new Error('Cannot create project');
+        }
+
+        repoStore.set({
+          name: projectName,
+          path: projectPath,
+          title,
+        });
+
+        window.history.replaceState(null, '', '/chat/' + projectPath);
 
         if (!temResp?.data) {
           throw new Error('Not Found Template Data');
@@ -487,7 +492,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
             annotations: ['hidden'],
           },
           {
-            id: `2-${new Date().getTime()}`,
+            id: `assistant-${templateCommitId}`,
             role: 'assistant',
             content: assistantMessage,
           },
@@ -674,6 +679,9 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   };
 
   const handleFork = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
     const commitHash = message.id.split('-').pop();
 
     if (!commitHash || !isCommitHash(commitHash)) {
@@ -715,6 +723,9 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   };
 
   const handleRetry = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
     const messageIndex = messages.findIndex((m) => m.id === message.id);
     const projectPath = repoStore.get().path;
 

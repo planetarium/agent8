@@ -7,7 +7,7 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 
-export const commitChanges = async (message: Message) => {
+export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
   const title = repoStore.get().title;
@@ -45,6 +45,11 @@ export const commitChanges = async (message: Message) => {
       path: filePath,
       content: (workbenchStore.files.get()[`${WORK_DIR}/${filePath}`] as any).content,
     }));
+
+    if (files.length === 0) {
+      // If no files are found, create a temporary file
+      files = [{ path: 'commitedAt', content: Date.now().toString() }];
+    }
   }
 
   const promptAnnotation = message.annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
@@ -68,11 +73,28 @@ ${content.replace(/(<boltAction[^>]*filePath[^>]*>)(.*?)(<\/boltAction>)/gs, '$1
     baseCommit: revertTo,
   });
 
+  const result = response.data;
+
+  if (!result.data.commitHash) {
+    throw new Error('The code commit has failed.');
+  }
+
+  if (isFirstCommit) {
+    repoStore.set({
+      name: result.data.project.name,
+      path: result.data.project.path,
+      title: result.data.project.description.split('\n')[0] || result.data.project.name,
+    });
+    window.history.replaceState(null, '', '/chat/' + result.data.project.path);
+  }
+
   if (revertTo) {
     window.history.replaceState({}, '', location.pathname);
   }
 
-  return response.data;
+  callback?.(result.data.commitHash);
+
+  return result;
 };
 
 export const downloadProjectZip = async (projectPath: string, commitSha?: string) => {

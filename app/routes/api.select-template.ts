@@ -3,6 +3,7 @@ import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
+import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 
 const logger = createScopedLogger('api.select-template');
 
@@ -32,9 +33,15 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const title = url.searchParams.get('title') || '';
   const repo = url.searchParams.get('repo');
   const path = url.searchParams.get('path');
+  const projectRepo = url.searchParams.get('projectRepo');
+  const email = (context.user as { email: string }).email;
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
+  }
+
+  if (!projectRepo) {
+    return json({ error: 'projectRepo is required' }, { status: 400 });
   }
 
   try {
@@ -68,8 +75,20 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
       };
     }
 
+    const gitlabService = new GitlabService(env);
+    const gitlabUser = await gitlabService.getOrCreateUser(email as string);
+    const project = await gitlabService.createProject(gitlabUser, projectRepo, title);
+    const commit = await gitlabService.commitFiles(project.id, templateCache[cacheKey].files, 'Initial commit');
+
     return json({
       data: templateCache[cacheKey].data,
+      project: {
+        id: project.id,
+        name: project.name,
+        path: project.path_with_namespace,
+        description: project.description,
+      },
+      commit: { id: commit.id },
       cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
     });
   } catch (error) {
