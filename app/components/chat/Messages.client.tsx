@@ -4,28 +4,30 @@ import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import { useLocation } from '@remix-run/react';
-import WithTooltip from '~/components/ui/Tooltip';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 
 interface MessagesProps {
   id?: string;
   className?: string;
   isStreaming?: boolean;
   messages?: Message[];
+  onRetry?: (message: Message) => void;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [] } = props;
+    const { id, isStreaming = false, messages = [], onRetry } = props;
     const location = useLocation();
     const profile = useStore(profileStore);
 
-    const handleRewind = (messageId: string) => {
+    const handleRevert = (messageId: string) => {
       const searchParams = new URLSearchParams(location.search);
-      searchParams.set('rewindTo', messageId);
+      searchParams.set('revertTo', messageId);
       window.location.search = searchParams.toString();
     };
 
@@ -84,31 +86,37 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       <AssistantMessage content={content} annotations={message.annotations} />
                     )}
                   </div>
-                  {!isUserMessage && (
-                    <div className="flex gap-2 flex-col lg:flex-row">
-                      {messageId && (
-                        <WithTooltip tooltip="Revert to this message">
-                          <button
-                            onClick={() => handleRewind(messageId)}
-                            key="i-ph:arrow-u-up-left"
-                            className={classNames(
-                              'i-ph:arrow-u-up-left',
-                              'text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors',
-                            )}
-                          />
-                        </WithTooltip>
-                      )}
-
-                      {/* <WithTooltip tooltip="Fork chat from this message">
-                        <button
-                          onClick={() => handleFork(messageId)}
-                          key="i-ph:git-fork"
-                          className={classNames(
-                            'i-ph:git-fork',
-                            'text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors',
-                          )}
-                        />
-                      </WithTooltip> */}
+                  {!isUserMessage ? (
+                    <div className="flex items-start mt-2.5">
+                      <Dropdown
+                        trigger={
+                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                        }
+                      >
+                        {messageId && isCommitHash(messageId) && (
+                          <DropdownItem onSelect={() => handleRevert(messageId)} disabled={isLast}>
+                            <span className="i-ph:arrow-u-up-left text-xl" />
+                            Revert to this message
+                          </DropdownItem>
+                        )}
+                        <DropdownItem onSelect={() => {}}>
+                          <span className="i-ph:git-fork text-xl" />
+                          Fork chat from this message
+                        </DropdownItem>
+                      </Dropdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-start mt-2.5">
+                      <Dropdown
+                        trigger={
+                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                        }
+                      >
+                        <DropdownItem onSelect={() => onRetry?.(message)}>
+                          <span className="i-ph:arrow-clockwise text-xl" />
+                          Retry chat
+                        </DropdownItem>
+                      </Dropdown>
                     </div>
                   )}
                 </div>

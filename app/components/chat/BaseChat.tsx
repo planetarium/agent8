@@ -70,6 +70,7 @@ interface BaseChatProps {
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
   onProjectZipImport?: (title: string, zipFile: File) => void;
+  handleRetry?: (message: Message) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -103,6 +104,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       data,
       actionRunner,
       onProjectZipImport,
+      handleRetry,
     },
     ref,
   ) => {
@@ -450,6 +452,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
                       messages={messages}
                       isStreaming={isStreaming}
+                      onRetry={handleRetry}
                     />
                   ) : null;
                 }}
