@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
-import { generateId } from '~/utils/fileUtils';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
 import { getProjectCommits, fetchProjectFiles } from '~/lib/persistenceGitbase/api.client';
 import { useSearchParams } from '@remix-run/react';
 import { isCommitHash } from './utils';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('useGitbaseChatHistory');
 
 interface RepoChatsOptions {
   branch?: string;
@@ -61,7 +63,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   const [files, setFiles] = useState<FileMap>({});
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadedFiles, setLoadedFiles] = useState(false);
+  const [filesLoaded, setFilesLoaded] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -137,13 +139,9 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         }
       }
 
-      const isInitialCommit = (message: string) => {
-        return message.toLowerCase().trim() === 'initial commit' || message.toLowerCase().trim() === 'add readme.md';
-      };
-
-      if (!assistantMatched && !userMatched && !isInitialCommit(commit.message)) {
+      if (!assistantMatched && !userMatched) {
         messages.push({
-          id: `commit-${commit.id}-${generateId()}`,
+          id: `commit-${commit.id}`,
           role: 'assistant',
           content: commit.message,
           parts: [
@@ -153,6 +151,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
             },
           ],
           createdAt: new Date(commit.created_at),
+          annotations: ['hidden'],
         });
       }
     });
@@ -166,16 +165,16 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     }
 
     try {
-      setLoadedFiles(false);
+      setFilesLoaded(false);
 
       setLoadingFiles(true);
 
       const fileMap = await fetchProjectFiles(repoId, revertTo || undefined);
 
       setFiles(fileMap);
-      setLoadedFiles(true);
+      setFilesLoaded(true);
     } catch (fileError) {
-      console.error('Error fetching project files:', fileError);
+      logger.error('Error fetching project files:', fileError);
     } finally {
       setLoadingFiles(false);
     }
@@ -249,7 +248,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         setHasMore(data.data.pagination.hasMore);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error fetching commit history');
-        console.error('Error fetching commit history:', err);
+        logger.error('Error fetching commit history:', err);
       } finally {
         setLoading(false);
       }
@@ -271,7 +270,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     // repo가 없으면 초기화만 하고 API 호출 안함
     if (!repoId) {
       setLoaded(true);
-      setLoadedFiles(true);
+      setFilesLoaded(true);
       setChats([]);
       setFiles({});
 
@@ -290,7 +289,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   }, [repoId, fetchCommits, loadFiles]);
 
   return {
-    loaded: loaded && loadedFiles,
+    loaded: loaded && filesLoaded,
     chats,
     project,
     files,

@@ -735,19 +735,18 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     const toastId = toast.loading('Loading previous version...');
 
     try {
-      await webcontainer.then(async (wc) => {
-        await wc.fs.rm('/', { recursive: true, force: true });
-        await wc.fs.mkdir('/', { recursive: true });
+      const wc = await webcontainer;
+      await wc.fs.rm('/', { recursive: true, force: true });
+      await wc.fs.mkdir('/', { recursive: true });
 
-        const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
-        await wc.mount(convertFileMapToFileSystemTree(files));
-        setMessages(messages.slice(0, messageIndex + 1));
-        reload();
+      const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
+      await wc.mount(convertFileMapToFileSystemTree(files));
+      setMessages(messages.slice(0, messageIndex + 1));
+      reload();
 
-        // Dismiss the loading toast on success
-        toast.dismiss(toastId);
-        toast.success('Previous version loaded successfully');
-      });
+      // Dismiss the loading toast on success
+      toast.dismiss(toastId);
+      toast.success('Previous version loaded successfully');
     } catch (error) {
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
