@@ -2,6 +2,7 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import type { GitlabProject } from '~/lib/persistenceGitbase/types';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { logger } from '~/utils/logger';
 
 export const action = withV8AuthUser(commitsAction, { checkCredit: true });
 export const loader = withV8AuthUser(commitsLoader, { checkCredit: true });
@@ -15,8 +16,9 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const url = new URL(request.url);
   const projectPath = url.searchParams.get('projectPath');
   const page = url.searchParams.get('page') || '1';
-  const perPage = url.searchParams.get('perPage') || '20';
+  const perPage = url.searchParams.get('perPage') || '10';
   const branch = url.searchParams.get('branch') || '';
+  const untilCommit = url.searchParams.get('untilCommit') || '';
 
   if (!projectPath) {
     return json({ success: false, message: 'Project path is required' }, { status: 400 });
@@ -31,7 +33,13 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
-    const result = await gitlabService.getProjectCommits(projectPath, parsedPage, parsedPerPage, branchToUse);
+    const result = await gitlabService.getProjectCommits(
+      projectPath,
+      parsedPage,
+      parsedPerPage,
+      branchToUse,
+      untilCommit,
+    );
 
     return json({
       success: true,
@@ -48,7 +56,10 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
+    logger.error('Failed to fetch project commits:', error);
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
     return json({ success: false, message: `Failed to fetch project commits: ${errorMessage}` }, { status: 500 });
   }
 }
@@ -78,6 +89,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
     isFirstCommit: boolean;
     description?: string;
     commitMessage: string;
+    baseCommit?: string;
     branch?: string;
     files: {
       path: string;
@@ -88,7 +100,8 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
   const isFirstCommit = requestData.isFirstCommit;
   const description = requestData.description;
   const commitMessage = requestData.commitMessage;
-  const branch = requestData.branch || 'main';
+  const branch = requestData.branch || 'develop';
+  const baseCommit = requestData.baseCommit;
   const files = requestData.files;
 
   if (!projectName && !isFirstCommit) {
@@ -111,8 +124,10 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
       project = await gitlabService.getProject(gitlabUser, projectName);
     }
 
+    logger.info('project', project);
+
     // Commit files
-    const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch);
+    const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch, baseCommit);
 
     return json({
       success: true,

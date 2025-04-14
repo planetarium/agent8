@@ -3,6 +3,7 @@ import { default as IndexRoute } from './_index';
 
 export async function loader(args: LoaderFunctionArgs) {
   const repoPath = args.params.user + '/' + args.params.repo;
+
   return json({
     id: repoPath,
     repoPath,

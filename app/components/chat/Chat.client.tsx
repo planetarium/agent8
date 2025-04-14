@@ -26,11 +26,12 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
-import { commitChanges } from '~/lib/persistenceGitbase/api.client';
+import { commitChanges, fetchProjectFiles } from '~/lib/persistenceGitbase/api.client';
 import { webcontainer } from '~/lib/webcontainer';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -284,6 +285,19 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
                 });
                 window.history.replaceState(null, '', '/chat/' + res.data.project.path);
               }
+
+              setMessages((prev: Message[]) =>
+                prev.map((m: Message) => {
+                  if (m.id === message.id) {
+                    return {
+                      ...m,
+                      id: res.data.commitHash,
+                    };
+                  }
+
+                  return m;
+                }),
+              );
             } else {
               throw new Error('The code commit has failed. You can download the code and restore it.');
             }
@@ -659,6 +673,34 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
   };
 
+  const handleRetry = async (message: Message) => {
+    const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+    if (messageIndex <= 0) {
+      toast.error('Retry failed');
+      return;
+    }
+
+    const prevMessage = messages[messageIndex - 1];
+
+    const prevCommitHash = prevMessage.id.split('-').pop();
+
+    if (!prevCommitHash || !isCommitHash(prevCommitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
+
+    webcontainer.then(async (wc) => {
+      await wc.fs.rm('/', { recursive: true, force: true });
+      await wc.fs.mkdir('/', { recursive: true });
+
+      const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
+      await wc.mount(convertFileMapToFileSystemTree(files));
+      setMessages(messages.slice(0, messageIndex + 1));
+      reload();
+    });
+  };
+
   return (
     <BaseChat
       ref={animationScope}
@@ -685,6 +727,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         debouncedCachePrompt(e);
       }}
       handleStop={abort}
+      handleRetry={handleRetry}
       description={description}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {
