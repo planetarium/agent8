@@ -13,19 +13,23 @@ interface DropdownItemProps {
   children: ReactNode;
   onSelect?: () => void;
   className?: string;
+  disabled?: boolean;
 }
 
-export const DropdownItem = ({ children, onSelect, className }: DropdownItemProps) => (
+export const DropdownItem = ({ children, onSelect, className, disabled }: DropdownItemProps) => (
   <DropdownMenu.Item
     className={classNames(
       'relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
-      'text-bolt-elements-textPrimary hover:text-bolt-elements-textPrimary',
-      'hover:bg-bolt-elements-background-depth-3',
-      'transition-colors cursor-pointer',
+      'text-bolt-elements-textPrimary',
+      (!disabled && 'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary cursor-pointer') ||
+        '',
+      (disabled && 'text-bolt-elements-textSecondary') || '',
+      'transition-colors ',
       'outline-none',
       className,
     )}
-    onSelect={onSelect}
+    onSelect={!disabled ? onSelect : undefined}
+    disabled={disabled}
   >
     {children}
   </DropdownMenu.Item>
