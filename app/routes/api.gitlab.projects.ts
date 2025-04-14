@@ -16,15 +16,7 @@ async function projectsLoader({ context, request }: ActionFunctionArgs) {
 
   const gitlabService = new GitlabService(env);
 
-  if (!user) {
-    return json({ success: false, message: 'Authentication required' }, { status: 401 });
-  }
-
   const email = user.email;
-
-  if (!email) {
-    return json({ success: false, message: 'Email is required' }, { status: 400 });
-  }
 
   const url = new URL(request.url);
   const page = url.searchParams.get('page') || '1';
@@ -63,14 +55,6 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
   const user = context?.user as { email: string; isActivated: boolean };
 
   const gitlabService = new GitlabService(env);
-
-  if (!user) {
-    return json({ success: false, message: 'Authentication required' }, { status: 401 });
-  }
-
-  if (!user.isActivated) {
-    return json({ success: false, message: 'User is not activated' }, { status: 403 });
-  }
 
   const email = user.email;
 
