@@ -6,6 +6,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constant
 import { createFilesContext, extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
+import { extractTextContent } from '~/utils/message';
 
 // Common patterns to ignore, similar to .gitignore
 
@@ -109,11 +110,6 @@ export async function selectContext(props: {
   }
 
   const summaryText = `Here is the summary of the chat till now: ${summary}`;
-
-  const extractTextContent = (message: Message) =>
-    Array.isArray(message.content)
-      ? (message.content.find((item) => item.type === 'text')?.text as string) || ''
-      : message.content;
 
   const lastUserMessage = processedMessages.filter((x) => x.role == 'user').pop();
 

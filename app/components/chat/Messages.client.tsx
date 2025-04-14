@@ -61,15 +61,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 return <Fragment key={index} />;
               }
 
-              // `message.content` has an internal problem of duplicating strings for multipart message.
-              const content =
-                message.parts && message.parts.length > 1
-                  ? message.parts
-                      .filter((part) => part.type === 'text')
-                      .map((part) => part.text)
-                      .join('')
-                  : message.content;
-
               return (
                 <div
                   key={index}
@@ -97,9 +88,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   )}
                   <div className="grid grid-col-1 w-full">
                     {isUserMessage ? (
-                      <UserMessage content={content} />
+                      <UserMessage content={message.content} />
                     ) : (
-                      <AssistantMessage content={content} annotations={message.annotations} />
+                      <AssistantMessage content={message.content} annotations={message.annotations} />
                     )}
                   </div>
                   {!isUserMessage && (
