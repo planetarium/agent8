@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { StreamingMessageParser } from '~/lib/runtime/message-parser';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { createScopedLogger } from '~/utils/logger';
+import { extractTextContent } from '~/utils/message';
 
 const logger = createScopedLogger('useMessageParser');
 
@@ -42,13 +43,6 @@ const messageParser = new StreamingMessageParser({
     },
   },
 });
-const extractTextContent = (message: Message) =>
-  message.parts && message.parts.length > 0
-    ? message.parts
-        .filter((part) => part.type === 'text')
-        .map((part) => part.text)
-        .join('')
-    : message.content;
 
 export function useMessageParser() {
   const [parsedMessages, setParsedMessages] = useState<{ [key: number]: string }>({});
