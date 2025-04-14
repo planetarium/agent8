@@ -63,7 +63,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string) {
 
     return result;
   } catch (error) {
-    console.error('Error fetching template from API:', error);
+    logger.error('Error fetching template from API:', error);
     throw error;
   }
 }
@@ -79,10 +79,10 @@ function sendEventToParent(type: string, payload: any) {
         '*',
       );
 
-      console.log('Sent deployment info to parent window');
+      logger.info('Sent deployment info to parent window');
     }
   } catch (error) {
-    console.error('Error sending message to parent:', error);
+    logger.error('Error sending message to parent:', error);
   }
 }
 
@@ -439,7 +439,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
             }
           }
         } catch (descError) {
-          console.error('Error generating image description:', descError);
+          logger.error('Error generating image description:', descError);
           toast.warning('Could not generate image description, using default');
         }
       }
@@ -565,7 +565,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       textareaRef.current?.blur();
     } catch (error) {
-      console.error('Error sending message:', error);
+      logger.error('Error sending message:', error);
 
       if (error instanceof Error) {
         toast.error('Error:' + error?.message);
