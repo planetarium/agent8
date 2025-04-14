@@ -71,6 +71,7 @@ interface BaseChatProps {
   actionRunner?: ActionRunner;
   onProjectZipImport?: (title: string, zipFile: File) => void;
   handleRetry?: (message: Message) => void;
+  handleFork?: (message: Message) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -105,6 +106,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       actionRunner,
       onProjectZipImport,
       handleRetry,
+      handleFork,
     },
     ref,
   ) => {
@@ -453,6 +455,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       messages={messages}
                       isStreaming={isStreaming}
                       onRetry={handleRetry}
+                      onFork={handleFork}
                     />
                   ) : null;
                 }}

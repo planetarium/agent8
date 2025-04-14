@@ -26,7 +26,7 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
-import { commitChanges, fetchProjectFiles } from '~/lib/persistenceGitbase/api.client';
+import { commitChanges, fetchProjectFiles, forkProject } from '~/lib/persistenceGitbase/api.client';
 import { webcontainer } from '~/lib/webcontainer';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
@@ -673,6 +673,47 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
   };
 
+  const handleFork = async (message: Message) => {
+    const commitHash = message.id.split('-').pop();
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
+
+    const nameWords = repoStore.get().name.split('-');
+
+    let newRepoName = '';
+
+    if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
+      newRepoName = nameWords.slice(0, -1).join('-');
+    } else {
+      newRepoName = nameWords.join('-');
+    }
+
+    // Show loading toast while forking
+    const toastId = toast.loading('Forking project...');
+
+    try {
+      const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+
+      // Dismiss the loading toast
+      toast.dismiss(toastId);
+
+      if (forkedProject && forkedProject.success) {
+        toast.success('Forked project successfully');
+        window.location.href = '/chat/' + forkedProject.project.path;
+      } else {
+        toast.error('Failed to fork project');
+      }
+    } catch (error) {
+      // Dismiss the loading toast and show error
+      toast.dismiss(toastId);
+      toast.error('Failed to fork project');
+      logger.error('Error forking project:', error);
+    }
+  };
+
   const handleRetry = async (message: Message) => {
     const messageIndex = messages.findIndex((m) => m.id === message.id);
 
@@ -690,15 +731,29 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       return;
     }
 
-    webcontainer.then(async (wc) => {
-      await wc.fs.rm('/', { recursive: true, force: true });
-      await wc.fs.mkdir('/', { recursive: true });
+    // Show loading toast while retrying
+    const toastId = toast.loading('Loading previous version...');
 
-      const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
-      await wc.mount(convertFileMapToFileSystemTree(files));
-      setMessages(messages.slice(0, messageIndex + 1));
-      reload();
-    });
+    try {
+      await webcontainer.then(async (wc) => {
+        await wc.fs.rm('/', { recursive: true, force: true });
+        await wc.fs.mkdir('/', { recursive: true });
+
+        const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
+        await wc.mount(convertFileMapToFileSystemTree(files));
+        setMessages(messages.slice(0, messageIndex + 1));
+        reload();
+
+        // Dismiss the loading toast on success
+        toast.dismiss(toastId);
+        toast.success('Previous version loaded successfully');
+      });
+    } catch (error) {
+      // Dismiss the loading toast and show error
+      toast.dismiss(toastId);
+      toast.error('Failed to load previous version');
+      logger.error('Error loading previous version:', error);
+    }
   };
 
   return (
@@ -728,6 +783,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       }}
       handleStop={abort}
       handleRetry={handleRetry}
+      handleFork={handleFork}
       description={description}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {

@@ -17,11 +17,12 @@ interface MessagesProps {
   isStreaming?: boolean;
   messages?: Message[];
   onRetry?: (message: Message) => void;
+  onFork?: (message: Message) => void;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [], onRetry } = props;
+    const { id, isStreaming = false, messages = [], onRetry, onFork } = props;
     const location = useLocation();
     const profile = useStore(profileStore);
 
@@ -99,7 +100,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             Revert to this message
                           </DropdownItem>
                         )}
-                        <DropdownItem onSelect={() => {}}>
+                        <DropdownItem onSelect={() => onFork?.(message)}>
                           <span className="i-ph:git-fork text-xl" />
                           Fork chat from this message
                         </DropdownItem>
