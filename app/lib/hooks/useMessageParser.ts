@@ -43,8 +43,11 @@ const messageParser = new StreamingMessageParser({
   },
 });
 const extractTextContent = (message: Message) =>
-  Array.isArray(message.content)
-    ? (message.content.find((item) => item.type === 'text')?.text as string) || ''
+  message.parts && message.parts.length > 0
+    ? message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('')
     : message.content;
 
 export function useMessageParser() {
