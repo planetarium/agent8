@@ -73,14 +73,6 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
 
   const gitlabService = new GitlabService(env);
 
-  if (!user) {
-    return json({ success: false, message: 'Authentication required' }, { status: 401 });
-  }
-
-  if (!user.isActivated) {
-    return json({ success: false, message: 'User is not activated' }, { status: 403 });
-  }
-
   const email = user.email;
 
   // JSON 데이터로 받기

@@ -11,14 +11,6 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
-  if (!user) {
-    return json({ success: false, message: 'Authentication required' }, { status: 401 });
-  }
-
-  if (!user.isActivated) {
-    return json({ success: false, message: 'User is not activated' }, { status: 403 });
-  }
-
   const email = user.email;
 
   // JSON 데이터로 받기
