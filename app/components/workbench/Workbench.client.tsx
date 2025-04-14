@@ -23,7 +23,6 @@ import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
-import { PushToGitHubDialog } from '~/components/@settings/tabs/connections/components/PushToGitHubDialog';
 import { ResourcePanel } from './ResourcePanel';
 
 interface WorkspaceProps {
@@ -276,239 +275,194 @@ const FileModifiedDropdown = memo(
   },
 );
 
-export const Workbench = memo(
-  ({ chatStarted, isStreaming, actionRunner, metadata, updateChatMestaData }: WorkspaceProps) => {
-    renderLogger.trace('Workbench');
+export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: WorkspaceProps) => {
+  renderLogger.trace('Workbench');
 
-    const [isPushDialogOpen, setIsPushDialogOpen] = useState(false);
-    const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
+  const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
 
-    // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
+  // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
 
-    const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
-    const showWorkbench = useStore(workbenchStore.showWorkbench);
-    const selectedFile = useStore(workbenchStore.selectedFile);
-    const currentDocument = useStore(workbenchStore.currentDocument);
-    const unsavedFiles = useStore(workbenchStore.unsavedFiles);
-    const files = useStore(workbenchStore.files);
-    const selectedView = useStore(workbenchStore.currentView);
+  const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
+  const showWorkbench = useStore(workbenchStore.showWorkbench);
+  const selectedFile = useStore(workbenchStore.selectedFile);
+  const currentDocument = useStore(workbenchStore.currentDocument);
+  const unsavedFiles = useStore(workbenchStore.unsavedFiles);
+  const files = useStore(workbenchStore.files);
+  const selectedView = useStore(workbenchStore.currentView);
 
-    const isSmallViewport = useViewport(1024);
+  const isSmallViewport = useViewport(1024);
 
-    const setSelectedView = (view: WorkbenchViewType) => {
-      workbenchStore.currentView.set(view);
-    };
+  const setSelectedView = (view: WorkbenchViewType) => {
+    workbenchStore.currentView.set(view);
+  };
 
-    useEffect(() => {
-      if (hasPreview) {
-        setSelectedView('preview');
-      }
-    }, [hasPreview]);
+  useEffect(() => {
+    if (hasPreview) {
+      setSelectedView('preview');
+    }
+  }, [hasPreview]);
 
-    useEffect(() => {
-      workbenchStore.setDocuments(files);
-    }, [files]);
+  useEffect(() => {
+    workbenchStore.setDocuments(files);
+  }, [files]);
 
-    const onRun = useCallback(async () => {
-      setSelectedView('code');
+  const onRun = useCallback(async () => {
+    setSelectedView('code');
 
-      const shell = workbenchStore.boltTerminal;
+    const shell = workbenchStore.boltTerminal;
 
-      await shell.ready();
+    await shell.ready();
 
-      await shell.executeCommand(Date.now().toString(), 'npm install && npm run dev');
-    }, []);
+    await shell.executeCommand(Date.now().toString(), 'npm install && npm run dev');
+  }, []);
 
-    const onEditorChange = useCallback<OnEditorChange>((update) => {
-      workbenchStore.setCurrentDocumentContent(update.content);
-    }, []);
+  const onEditorChange = useCallback<OnEditorChange>((update) => {
+    workbenchStore.setCurrentDocumentContent(update.content);
+  }, []);
 
-    const onEditorScroll = useCallback<OnEditorScroll>((position) => {
-      workbenchStore.setCurrentDocumentScrollPosition(position);
-    }, []);
+  const onEditorScroll = useCallback<OnEditorScroll>((position) => {
+    workbenchStore.setCurrentDocumentScrollPosition(position);
+  }, []);
 
-    const onFileSelect = useCallback((filePath: string | undefined) => {
-      workbenchStore.setSelectedFile(filePath);
-    }, []);
+  const onFileSelect = useCallback((filePath: string | undefined) => {
+    workbenchStore.setSelectedFile(filePath);
+  }, []);
 
-    const onFileSave = useCallback(() => {
-      workbenchStore.saveCurrentDocument().catch(() => {
-        toast.error('Failed to update file content');
-      });
-    }, []);
+  const onFileSave = useCallback(() => {
+    workbenchStore.saveCurrentDocument().catch(() => {
+      toast.error('Failed to update file content');
+    });
+  }, []);
 
-    const onFileReset = useCallback(() => {
-      workbenchStore.resetCurrentDocument();
-    }, []);
+  const onFileReset = useCallback(() => {
+    workbenchStore.resetCurrentDocument();
+  }, []);
 
-    return (
-      chatStarted && (
-        <motion.div
-          initial="closed"
-          animate={showWorkbench ? 'open' : 'closed'}
-          variants={workbenchVariants}
-          className="z-workbench"
+  return (
+    chatStarted && (
+      <motion.div
+        initial="closed"
+        animate={showWorkbench ? 'open' : 'closed'}
+        variants={workbenchVariants}
+        className="z-workbench"
+      >
+        <div
+          className={classNames(
+            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+            {
+              'w-full': isSmallViewport,
+              'left-0': showWorkbench && isSmallViewport,
+              'left-[var(--workbench-left)]': showWorkbench,
+              'left-[100%]': !showWorkbench,
+            },
+          )}
         >
-          <div
-            className={classNames(
-              'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
-              {
-                'w-full': isSmallViewport,
-                'left-0': showWorkbench && isSmallViewport,
-                'left-[var(--workbench-left)]': showWorkbench,
-                'left-[100%]': !showWorkbench,
-              },
-            )}
-          >
-            <div className="absolute inset-0 px-2 lg:px-6">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-                <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
-                  <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
-                  <button
-                    onClick={() => {
-                      onRun();
-                    }}
-                    className={classNames(
-                      'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-                      'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
-                    )}
-                  >
-                    <div className="i-ph:play" />
-                    <span>Run</span>
-                  </button>
-                  <div className="ml-auto" />
-                  {(selectedView === 'code' || selectedView === 'resource') && (
-                    <div className="flex overflow-y-auto">
-                      <PanelHeaderButton
-                        className="mr-1 text-sm"
-                        onClick={async () => {
-                          alert('Fork');
-                        }}
-                      >
-                        <div className="i-ph:arrows-split" />
-                        Fork
-                      </PanelHeaderButton>
-                      <PanelHeaderButton
-                        className="mr-1 text-sm"
-                        onClick={() => {
-                          workbenchStore.downloadZip();
-                        }}
-                      >
-                        <div className="i-ph:download" />
-                        Download Code
-                      </PanelHeaderButton>
-                      {/* <PanelHeaderButton className="mr-1 text-sm" onClick={handleSyncFiles} disabled={isSyncing}>
-                        {isSyncing ? <div className="i-ph:spinner" /> : <div className="i-ph:cloud-arrow-down" />}
-                        {isSyncing ? 'Syncing...' : 'Sync Files'}
-                      </PanelHeaderButton> */}
-                      {/* <PanelHeaderButton
-                        className="mr-1 text-sm"
-                        onClick={() => {
-                          workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
-                        }}
-                      >
-                        <div className="i-ph:terminal" />
-                        Toggle Terminal
-                      </PanelHeaderButton> */}
-                      <PanelHeaderButton className="mr-1 text-sm" onClick={() => setIsPushDialogOpen(true)}>
-                        <div className="i-ph:git-branch" />
-                        Push to GitHub
-                      </PanelHeaderButton>
-                    </div>
+          <div className="absolute inset-0 px-2 lg:px-6">
+            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+              <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
+                <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                <button
+                  onClick={() => {
+                    onRun();
+                  }}
+                  className={classNames(
+                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
+                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
                   )}
-                  {selectedView === 'diff' && (
-                    <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
-                  )}
-                  <IconButton
-                    icon="i-ph:x-circle"
-                    className="-mr-1"
-                    size="xl"
-                    onClick={() => {
-                      workbenchStore.showWorkbench.set(false);
-                    }}
+                >
+                  <div className="i-ph:play" />
+                  <span>Run</span>
+                </button>
+                <div className="ml-auto" />
+                {(selectedView === 'code' || selectedView === 'resource') && (
+                  <div className="flex overflow-y-auto">
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={async () => {
+                        alert('Fork');
+                      }}
+                    >
+                      <div className="i-ph:arrows-split" />
+                      Fork
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => {
+                        workbenchStore.downloadZip();
+                      }}
+                    >
+                      <div className="i-ph:download" />
+                      Download
+                    </PanelHeaderButton>
+                  </div>
+                )}
+                {selectedView === 'diff' && (
+                  <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+                )}
+                <IconButton
+                  icon="i-ph:x-circle"
+                  className="-mr-1"
+                  size="xl"
+                  onClick={() => {
+                    workbenchStore.showWorkbench.set(false);
+                  }}
+                />
+              </div>
+              <div className="relative flex-1 overflow-hidden">
+                <View
+                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                  animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                >
+                  <EditorPanel
+                    editorDocument={currentDocument}
+                    isStreaming={isStreaming}
+                    selectedFile={selectedFile}
+                    files={files}
+                    unsavedFiles={unsavedFiles}
+                    onFileSelect={onFileSelect}
+                    onEditorScroll={onEditorScroll}
+                    onEditorChange={onEditorChange}
+                    onFileSave={onFileSave}
+                    onFileReset={onFileReset}
                   />
-                </div>
-                <div className="relative flex-1 overflow-hidden">
-                  <View
-                    initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                    animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                  >
-                    <EditorPanel
-                      editorDocument={currentDocument}
-                      isStreaming={isStreaming}
-                      selectedFile={selectedFile}
-                      files={files}
-                      unsavedFiles={unsavedFiles}
-                      onFileSelect={onFileSelect}
-                      onEditorScroll={onEditorScroll}
-                      onEditorChange={onEditorChange}
-                      onFileSave={onFileSave}
-                      onFileReset={onFileReset}
-                    />
-                  </View>
-                  <View
-                    initial={{ x: '100%' }}
-                    animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                  >
-                    <ResourcePanel
-                      editorDocument={currentDocument}
-                      isStreaming={isStreaming}
-                      selectedFile={selectedFile}
-                      files={files}
-                      unsavedFiles={unsavedFiles}
-                      onFileSelect={onFileSelect}
-                      onEditorScroll={onEditorScroll}
-                      onEditorChange={onEditorChange}
-                      onFileSave={onFileSave}
-                      onFileReset={onFileReset}
-                    />
-                  </View>
-                  <View
-                    initial={{ x: '100%' }}
-                    animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                  >
-                    <DiffView fileHistory={fileHistory} setFileHistory={setFileHistory} actionRunner={actionRunner} />
-                  </View>
-                  <View
-                    initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                    animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                  >
-                    <Preview />
-                  </View>
-                </div>
+                </View>
+                <View
+                  initial={{ x: '100%' }}
+                  animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                >
+                  <ResourcePanel
+                    editorDocument={currentDocument}
+                    isStreaming={isStreaming}
+                    selectedFile={selectedFile}
+                    files={files}
+                    unsavedFiles={unsavedFiles}
+                    onFileSelect={onFileSelect}
+                    onEditorScroll={onEditorScroll}
+                    onEditorChange={onEditorChange}
+                    onFileSave={onFileSave}
+                    onFileReset={onFileReset}
+                  />
+                </View>
+                <View
+                  initial={{ x: '100%' }}
+                  animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                >
+                  <DiffView fileHistory={fileHistory} setFileHistory={setFileHistory} actionRunner={actionRunner} />
+                </View>
+                <View
+                  initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
+                  animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
+                >
+                  <Preview />
+                </View>
               </div>
             </div>
           </div>
-          <PushToGitHubDialog
-            isOpen={isPushDialogOpen}
-            onClose={() => setIsPushDialogOpen(false)}
-            onPush={async (repoName, username, token) => {
-              try {
-                const commitMessage = prompt('Please enter a commit message:', 'Initial commit') || 'Initial commit';
-                await workbenchStore.pushToGitHub(repoName, commitMessage, username, token);
-
-                const repoUrl = `https://github.com/${username}/${repoName}`;
-
-                if (updateChatMestaData && !metadata?.gitUrl) {
-                  updateChatMestaData({
-                    ...(metadata || {}),
-                    gitUrl: repoUrl,
-                  });
-                }
-
-                return repoUrl;
-              } catch (error) {
-                console.error('Error pushing to GitHub:', error);
-                toast.error('Failed to push to GitHub');
-                throw error;
-              }
-            }}
-          />
-        </motion.div>
-      )
-    );
-  },
-);
+        </div>
+      </motion.div>
+    )
+  );
+});
 
 // View component for rendering content with motion transitions
 interface ViewProps extends HTMLMotionProps<'div'> {
