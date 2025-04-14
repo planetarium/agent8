@@ -1,14 +1,23 @@
 import type { Message } from 'ai';
+import axios from 'axios';
 import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { WORK_DIR } from '~/utils/constants';
+import { isCommitHash } from './utils';
+import type { FileMap } from '~/lib/stores/files';
+import JSZip from 'jszip';
 
 export const commitChanges = async (message: Message) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
   const title = repoStore.get().title;
   const isFirstCommit = !projectPath;
+
+  // Get revertTo from URL query parameters
+  const url = new URL(window.location.href);
+  const revertToParam = url.searchParams.get('revertTo');
+  const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
   let files = [];
   const content =
@@ -51,39 +60,106 @@ ${content.replace(/(<boltAction[^>]*filePath[^>]*>)(.*?)(<\/boltAction>)/gs, '$1
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋
-  const response = await fetch('/api/gitlab/commits', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      projectName,
-      isFirstCommit,
-      description: title,
-      files,
-      commitMessage,
-    }),
+  const response = await axios.post('/api/gitlab/commits', {
+    projectName,
+    isFirstCommit,
+    description: title,
+    files,
+    commitMessage,
+    baseCommit: revertTo,
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to commit changes: ${response.status} ${response.statusText}`);
+  if (revertTo) {
+    window.history.replaceState({}, '', location.pathname);
   }
 
-  return await response.json();
+  return response.data;
 };
 
-export const downloadProjectZip = async (projectPath: string) => {
-  const response = await fetch(`/api/gitlab/download?projectPath=${encodeURIComponent(projectPath)}`, {
-    headers: {
-      'Content-Type': 'application/json',
+export const downloadProjectZip = async (projectPath: string, commitSha?: string) => {
+  const response = await axios.get(`/api/gitlab/download`, {
+    params: {
+      projectPath,
+      commitSha,
     },
+    responseType: 'blob',
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to download project zip: ${response.status} ${response.statusText}`);
-  }
+  return response.data;
+};
 
-  return response.blob();
+export const fetchProjectFiles = async (projectPath: string, commitSha?: string): Promise<FileMap> => {
+  const zipBlob = await downloadProjectZip(projectPath, commitSha);
+
+  // Load zip file using JSZip
+  const zip = await JSZip.loadAsync(zipBlob);
+
+  // Process zip contents into FileMap structure
+  const fileMap: FileMap = {};
+  const dirSet = new Set<string>(); // 디렉토리 경로 추적용 Set
+
+  // 먼저 모든 디렉토리 경로를 수집
+  zip.forEach((relativePath) => {
+    // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
+    const pathParts = relativePath.split('/');
+
+    if (pathParts.length > 1) {
+      pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
+    }
+
+    // 파일 경로의 모든 상위 디렉토리를 찾아 dirSet에 추가
+    if (pathParts.length > 1) {
+      for (let i = 1; i < pathParts.length; i++) {
+        const dirPath = pathParts.slice(0, i).join('/');
+
+        if (dirPath) {
+          dirSet.add(dirPath);
+        }
+      }
+    }
+  });
+
+  // 디렉토리 먼저 FileMap에 추가
+  dirSet.forEach((dirPath) => {
+    const fullPath = `${WORK_DIR}/${dirPath}`;
+    fileMap[fullPath] = {
+      type: 'folder',
+    };
+  });
+
+  const promises: Promise<void>[] = [];
+
+  // 파일 처리
+  zip.forEach((relativePath, zipEntry) => {
+    if (!zipEntry.dir) {
+      const promise = async () => {
+        const content = await zipEntry.async('string');
+
+        // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
+        const pathParts = relativePath.split('/');
+
+        if (pathParts.length > 1) {
+          pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
+        }
+
+        const filePath = pathParts.join('/');
+        const fullPath = `${WORK_DIR}/${filePath}`;
+
+        // FileMap에 추가
+        fileMap[fullPath] = {
+          type: 'file',
+          content,
+          isBinary: false,
+        };
+      };
+
+      promises.push(promise());
+    }
+  });
+
+  await Promise.all(promises);
+
+  return fileMap;
 };
 
 export const getProjectCommits = async (
@@ -106,60 +182,34 @@ export const getProjectCommits = async (
     queryParams.append('page', options.page.toString());
   }
 
-  const response = await fetch(`/api/gitlab/commits?${queryParams}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+  const response = await axios.get(`/api/gitlab/commits`, {
+    params: Object.fromEntries(queryParams),
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch commits: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
+  return response.data;
 };
 
 export const getProjects = async () => {
-  const response = await fetch(`/api/gitlab/projects`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await axios.get('/api/gitlab/projects');
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
+  return response.data;
 };
 
 export const deleteProject = async (projectId: string) => {
-  const response = await fetch(`/api/gitlab/projects?projectId=${projectId}`, {
-    method: 'DELETE',
+  const response = await axios.delete(`/api/gitlab/projects`, {
+    params: {
+      projectId,
+    },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
+  return response.data;
 };
 
 export const updateProjectDescription = async (projectPath: string, description: string) => {
-  const response = await fetch(`/api/gitlab/description`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      projectPath,
-      description,
-    }),
+  const response = await axios.post('/api/gitlab/description', {
+    projectPath,
+    description,
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
+  return response.data;
 };

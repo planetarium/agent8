@@ -10,6 +10,7 @@ import type {
 } from './types';
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
+import { isCommitHash } from './utils';
 
 const logger = createScopedLogger('gitlabService');
 
@@ -97,22 +98,18 @@ export class GitlabService {
 
   async getProject(user: GitlabUser, projectName: string): Promise<GitlabProject> {
     try {
-      const response = await fetch(
-        `${this.gitlabUrl}/api/v4/users/${user.id}/projects?owned=true&search=${encodeURIComponent(
-          projectName,
-        )}&per_page=100`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/users/${user.id}/projects`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
         },
-      );
+        params: {
+          owned: true,
+          search: projectName,
+          per_page: 100,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error(`API Failed: ${response.status} ${response.statusText}`);
-      }
-
-      const projects = (await response.json()) as GitlabProject[];
+      const projects = response.data as GitlabProject[];
 
       const project = projects.find((p: any) => p.name.toLowerCase() === projectName.toLowerCase());
 
@@ -138,22 +135,18 @@ export class GitlabService {
 
   async createProject(user: GitlabUser, projectName: string, description?: string): Promise<GitlabProject> {
     try {
-      const response = await fetch(
-        `${this.gitlabUrl}/api/v4/users/${user.id}/projects?owned=true&search=${encodeURIComponent(
-          projectName,
-        )}&per_page=100`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/users/${user.id}/projects`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
         },
-      );
+        params: {
+          owned: true,
+          search: projectName,
+          per_page: 100,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error(`API Failed: ${response.status} ${response.statusText}`);
-      }
-
-      const existingProjects = (await response.json()) as GitlabProject[];
+      const existingProjects = response.data as GitlabProject[];
 
       let finalProjectName = projectName;
 
@@ -168,35 +161,9 @@ export class GitlabService {
         name: finalProjectName,
         namespaceId: user.namespace_id,
         visibility: 'private',
-        initializeWithReadme: true,
+        initializeWithReadme: false,
         description: description || `${finalProjectName}`,
       });
-
-      try {
-        const projectDetail = await this.gitlab.Projects.show(project.id);
-
-        if (!projectDetail.default_branch) {
-          const initialCommitActions = [
-            {
-              action: 'create' as const,
-              filePath: 'README.md',
-              content: `# ${finalProjectName}\n\n${description || ''}`,
-            },
-          ];
-
-          await this.gitlab.Commits.create(project.id, 'main', 'Initial Commit', initialCommitActions);
-        }
-      } catch {
-        const initialCommitActions = [
-          {
-            action: 'create' as const,
-            filePath: 'README.md',
-            content: `# ${finalProjectName}\n\n${description || ''}`,
-          },
-        ];
-
-        await this.gitlab.Commits.create(project.id, 'main', 'Initial Commit', initialCommitActions);
-      }
 
       return project as unknown as GitlabProject;
     } catch (error) {
@@ -209,7 +176,8 @@ export class GitlabService {
     projectId: number,
     files: FileContent[],
     commitMessage: string,
-    branch: string = 'main',
+    branch: string = 'develop',
+    baseCommit?: string,
   ): Promise<GitlabCommit> {
     try {
       let defaultBranchName = '';
@@ -262,6 +230,46 @@ export class GitlabService {
             logger.error('Initial commit failed:', initialCommitError);
             throw new Error(`Cannot create initial commit to branch: ${branch}`);
           }
+        }
+      }
+
+      // If baseCommit is provided, reset the branch to that commit
+      if (baseCommit) {
+        try {
+          // Create a backup branch in case something goes wrong
+          const backupBranch = `backup-${branch}-${Date.now()}`;
+          await this.gitlab.Branches.create(projectId, backupBranch, branch);
+
+          // Delete and recreate the branch at the specific commit
+          try {
+            // Delete the branch
+            await this.gitlab.Branches.remove(projectId, branch);
+
+            // Create a new branch pointing to the baseCommit
+            await this.gitlab.Branches.create(projectId, branch, baseCommit);
+
+            logger.info(`Reset branch ${branch} to commit ${baseCommit}`);
+          } catch (resetError) {
+            // If something went wrong, restore from backup
+            logger.error('Error resetting branch to commit:', resetError);
+
+            try {
+              // Try to restore from backup
+              await this.gitlab.Branches.remove(projectId, branch);
+              await this.gitlab.Branches.create(projectId, branch, backupBranch);
+            } catch (restoreError) {
+              logger.error('Failed to restore branch from backup:', restoreError);
+            }
+
+            throw new Error(
+              `Failed to reset branch to commit: ${resetError instanceof Error ? resetError.message : 'Unknown error'}`,
+            );
+          }
+        } catch (baseCommitError) {
+          logger.error('Failed to reset branch to base commit:', baseCommitError);
+          throw new Error(
+            `Failed to reset branch to base commit: ${baseCommitError instanceof Error ? baseCommitError.message : 'Unknown error'}`,
+          );
         }
       }
 
@@ -349,7 +357,7 @@ export class GitlabService {
     }
   }
 
-  private async _getLastCommit(projectId: number, branch: string = 'main'): Promise<GitlabCommit> {
+  private async _getLastCommit(projectId: number, branch: string = 'develop'): Promise<GitlabCommit> {
     try {
       const commits = await this.gitlab.Commits.all(projectId, {
         refName: branch,
@@ -367,31 +375,25 @@ export class GitlabService {
     }
   }
 
-  private async _getProjectFiles(projectId: number, branch: string = 'main'): Promise<string[]> {
+  private async _getProjectFiles(projectId: number, branch: string = 'develop'): Promise<string[]> {
     try {
-      const response = await fetch(
-        `${this.gitlabUrl}/api/v4/projects/${projectId}/repository/tree?recursive=true&ref=${encodeURIComponent(
-          branch,
-        )}&per_page=100`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/tree`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
         },
-      );
-
-      if (!response.ok) {
-        throw new Error(`API Failed: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
+        params: {
+          recursive: true,
+          ref: branch,
+          per_page: 100,
+        },
+      });
 
       interface TreeItem {
         path: string;
         type: string;
       }
 
-      const files = (data as TreeItem[]).filter((item) => item.type === 'blob').map((item) => item.path);
+      const files = (response.data as TreeItem[]).filter((item) => item.type === 'blob').map((item) => item.path);
 
       return files;
     } catch (error) {
@@ -402,7 +404,7 @@ export class GitlabService {
 
   async downloadCode(projectPath: string, commitSha?: string): Promise<Buffer> {
     try {
-      const ref = commitSha || 'main';
+      const ref = commitSha || 'develop';
 
       const project = await this.gitlab.Projects.show(projectPath);
 
@@ -463,41 +465,41 @@ export class GitlabService {
     try {
       const user = await this.getOrCreateUser(email);
 
-      const projectsResponse = await fetch(
-        `${this.gitlabUrl}/api/v4/users/${user.id}/projects?membership=true&order_by=updated_at&sort=desc&page=${page}&per_page=${perPage}&statistics=true`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
+      const projectsResponse = await axios.get(`${this.gitlabUrl}/api/v4/users/${user.id}/projects`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
         },
-      );
+        params: {
+          membership: true,
+          order_by: 'updated_at',
+          sort: 'desc',
+          page,
+          per_page: perPage,
+          statistics: true,
+        },
+      });
 
-      if (!projectsResponse.ok) {
-        throw new Error(`API 요청 실패: ${projectsResponse.status} ${projectsResponse.statusText}`);
-      }
-
-      const projects = (await projectsResponse.json()) as GitlabProject[];
-
-      const totalProjects = parseInt(projectsResponse.headers.get('x-total') || '0', 10);
+      const projects = projectsResponse.data as GitlabProject[];
+      const totalProjects = parseInt(projectsResponse.headers['x-total'] || '0', 10);
       const hasMore = page * perPage < totalProjects;
 
       const enhancedProjects = await Promise.all(
         projects.map(async (project: GitlabProject) => {
           try {
-            const commitsResponse = await fetch(
-              `${this.gitlabUrl}/api/v4/projects/${project.id}/repository/commits?ref_name=${project.default_branch || 'main'}&per_page=1`,
+            const commitsResponse = await axios.get(
+              `${this.gitlabUrl}/api/v4/projects/${project.id}/repository/commits`,
               {
                 headers: {
                   'PRIVATE-TOKEN': this.gitlabToken,
                 },
+                params: {
+                  ref_name: project.default_branch || 'develop',
+                  per_page: 1,
+                },
               },
             );
 
-            if (!commitsResponse.ok) {
-              throw new Error(`API 요청 실패: ${commitsResponse.status} ${commitsResponse.statusText}`);
-            }
-
-            const lastCommits = (await commitsResponse.json()) as GitlabCommit[];
+            const lastCommits = commitsResponse.data as GitlabCommit[];
             const lastCommit = lastCommits.length > 0 ? lastCommits[0] : null;
 
             return {
@@ -546,11 +548,30 @@ export class GitlabService {
     }
   }
 
+  async getCommit(projectPath: string, commitHash: string): Promise<GitlabCommit> {
+    try {
+      const response = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits/${commitHash}`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        },
+      );
+
+      return response.data as GitlabCommit;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get commit: ${errorMessage}`);
+    }
+  }
+
   async getProjectCommits(
     projectPath: string,
     page: number = 1,
     perPage: number = 20,
     branch?: string,
+    untilCommit?: string,
   ): Promise<{
     project: {
       id: number;
@@ -564,26 +585,42 @@ export class GitlabService {
     try {
       const project = await this.gitlab.Projects.show(projectPath);
 
-      const defaultBranch = typeof project.default_branch === 'string' ? project.default_branch : 'main';
-      const refName = branch || defaultBranch;
+      const refName = branch || 'develop';
 
-      const commitsResponse = await fetch(
-        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits?ref_name=${refName}&page=${page}&per_page=${perPage}&order_by=created_at&sort=desc`,
+      const params: Record<string, any> = {
+        ref_name: refName,
+        page,
+        per_page: perPage,
+        order_by: 'created_at',
+        sort: 'desc',
+      };
+
+      if (untilCommit && isCommitHash(untilCommit)) {
+        try {
+          const commit = await this.getCommit(projectPath, untilCommit);
+
+          if (commit && commit.committed_date) {
+            params.until = commit.committed_date;
+          }
+        } catch (commitError) {
+          logger.error('Error fetching commit for untilCommit parameter:', commitError);
+        }
+      }
+
+      const commitsResponse = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits`,
         {
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
           },
+          params,
         },
       );
 
-      if (!commitsResponse.ok) {
-        throw new Error(`API Failed: ${commitsResponse.status} ${commitsResponse.statusText}`);
-      }
-
-      const totalCommits = parseInt(commitsResponse.headers.get('x-total') || '0', 10);
+      const totalCommits = parseInt(commitsResponse.headers['x-total'] || '0', 10);
       const hasMore = page * perPage < totalCommits;
 
-      const commitsData = (await commitsResponse.json()) as GitlabCommit[];
+      const commitsData = commitsResponse.data as GitlabCommit[];
       const commits = commitsData.map((commit) => ({
         id: commit.id,
         short_id: commit.short_id,
@@ -638,17 +675,13 @@ export class GitlabService {
       }
 
       try {
-        const currentUserResponse = await fetch(`${this.gitlabUrl}/api/v4/user`, {
+        const currentUserResponse = await axios.get(`${this.gitlabUrl}/api/v4/user`, {
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
           },
         });
 
-        if (!currentUserResponse.ok) {
-          throw new Error(`API Failed: ${currentUserResponse.status} ${currentUserResponse.statusText}`);
-        }
-
-        const currentUser = (await currentUserResponse.json()) as GitlabUser;
+        const currentUser = currentUserResponse.data as GitlabUser;
 
         if (currentUser && currentUser.is_admin) {
           return true;

@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
 import { generateId } from '~/utils/fileUtils';
-import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
-import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from '~/lib/stores/repo';
-import { downloadProjectZip, getProjectCommits } from '~/lib/persistenceGitbase/api.client';
+import { getProjectCommits, fetchProjectFiles } from '~/lib/persistenceGitbase/api.client';
+import { useSearchParams } from '@remix-run/react';
+import { isCommitHash } from './utils';
 
 interface RepoChatsOptions {
   branch?: string;
@@ -61,10 +61,20 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   const [files, setFiles] = useState<FileMap>({});
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadedFiles, setLoadedFiles] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [searchParams] = useSearchParams();
+  const revertTo = ((r: string | null) => {
+    if (r && isCommitHash(r)) {
+      return r;
+    }
+
+    return null;
+  })(searchParams.get('revertTo'));
 
   // 이전 요청 매개변수를 추적하기 위한 ref
   const prevRequestParams = useRef<string | null>(null);
@@ -91,7 +101,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
 
         if (assistantContent) {
           messages.push({
-            id: `assistant-${commit.id}-${generateId()}`,
+            id: `${commit.id}`,
             role: 'assistant',
             content: assistantContent,
             parts: [
@@ -113,7 +123,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
 
         if (userContent) {
           messages.push({
-            id: `user-${commit.id}-${generateId()}`,
+            id: `user-${commit.id}`,
             role: 'user',
             content: userContent,
             parts: [
@@ -127,7 +137,11 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         }
       }
 
-      if (!assistantMatched && !userMatched && commit.message.toLowerCase().trim() !== 'initial commit') {
+      const isInitialCommit = (message: string) => {
+        return message.toLowerCase().trim() === 'initial commit' || message.toLowerCase().trim() === 'add readme.md';
+      };
+
+      if (!assistantMatched && !userMatched && !isInitialCommit(commit.message)) {
         messages.push({
           id: `commit-${commit.id}-${generateId()}`,
           role: 'assistant',
@@ -146,89 +160,26 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     return messages;
   }, []);
 
-  // Fetch project files
-  const fetchProjectFiles = useCallback(async (projectPath: string): Promise<FileMap> => {
-    setLoadingFiles(true);
+  const loadFiles = useCallback(async () => {
+    if (!repoId) {
+      return;
+    }
 
     try {
-      const zipBlob = await downloadProjectZip(projectPath);
+      setLoadedFiles(false);
 
-      // Load zip file using JSZip
-      const zip = await JSZip.loadAsync(zipBlob);
+      setLoadingFiles(true);
 
-      // Process zip contents into FileMap structure
-      const fileMap: FileMap = {};
-      const dirSet = new Set<string>(); // 디렉토리 경로 추적용 Set
+      const fileMap = await fetchProjectFiles(repoId, revertTo || undefined);
 
-      // 먼저 모든 디렉토리 경로를 수집
-      zip.forEach((relativePath) => {
-        // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
-        const pathParts = relativePath.split('/');
-
-        if (pathParts.length > 1) {
-          pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
-        }
-
-        // 파일 경로의 모든 상위 디렉토리를 찾아 dirSet에 추가
-        if (pathParts.length > 1) {
-          for (let i = 1; i < pathParts.length; i++) {
-            const dirPath = pathParts.slice(0, i).join('/');
-
-            if (dirPath) {
-              dirSet.add(dirPath);
-            }
-          }
-        }
-      });
-
-      // 디렉토리 먼저 FileMap에 추가
-      dirSet.forEach((dirPath) => {
-        const fullPath = `${WORK_DIR}/${dirPath}`;
-        fileMap[fullPath] = {
-          type: 'folder',
-        };
-      });
-
-      const promises: Promise<void>[] = [];
-
-      // 파일 처리
-      zip.forEach((relativePath, zipEntry) => {
-        if (!zipEntry.dir) {
-          const promise = async () => {
-            const content = await zipEntry.async('string');
-
-            // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
-            const pathParts = relativePath.split('/');
-
-            if (pathParts.length > 1) {
-              pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
-            }
-
-            const filePath = pathParts.join('/');
-            const fullPath = `${WORK_DIR}/${filePath}`;
-
-            // FileMap에 추가
-            fileMap[fullPath] = {
-              type: 'file',
-              content,
-              isBinary: false,
-            };
-          };
-
-          promises.push(promise());
-        }
-      });
-
-      await Promise.all(promises);
-
-      return fileMap;
-    } catch (error) {
-      console.error('Error fetching project files:', error);
-      throw error;
+      setFiles(fileMap);
+      setLoadedFiles(true);
+    } catch (fileError) {
+      console.error('Error fetching project files:', fileError);
     } finally {
       setLoadingFiles(false);
     }
-  }, []);
+  }, [repoId, fetchProjectFiles, revertTo]);
 
   // Fetch commits from the API
   const fetchCommits = useCallback(
@@ -258,8 +209,8 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
           queryParams.append('branch', currentOptions.branch);
         }
 
-        if (currentOptions.untilCommit) {
-          queryParams.append('untilCommit', currentOptions.untilCommit);
+        if (revertTo) {
+          queryParams.append('untilCommit', revertTo);
         }
 
         const requestParamsString = queryParams.toString();
@@ -275,7 +226,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
 
         const data = (await getProjectCommits(repoId, {
           branch: currentOptions.branch,
-          untilCommit: currentOptions.untilCommit,
+          untilCommit: revertTo || undefined,
           page,
         })) as CommitResponse;
 
@@ -287,32 +238,13 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
 
         const newMessages = parseCommitMessages(data.data.commits);
 
-        // 첫 페이지를 로드하고 append가 아닌 경우에만 파일을 가져옴
-        if (page === 1 && !append) {
-          try {
-            const fileMap = await fetchProjectFiles(repoId);
-            setFiles(fileMap);
-
-            // fileMap과 chats가 모두 로드되면 ready 상태를 true로 설정
-            if (Object.keys(fileMap).length > 0 && newMessages.length > 0) {
-              setLoaded(true);
-            }
-          } catch (fileError) {
-            console.error('Error fetching project files:', fileError);
-
-            // 파일 로드 실패해도 메시지는 표시
-            if (newMessages.length > 0) {
-              setLoaded(true);
-            }
-          }
-        }
-
         if (append) {
           setChats((prevChats) => [...prevChats, ...newMessages.reverse()]);
         } else {
           setChats(newMessages.reverse());
         }
 
+        setLoaded(true);
         setCurrentPage(page);
         setHasMore(data.data.pagination.hasMore);
       } catch (err) {
@@ -339,6 +271,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     // repo가 없으면 초기화만 하고 API 호출 안함
     if (!repoId) {
       setLoaded(true);
+      setLoadedFiles(true);
       setChats([]);
       setFiles({});
 
@@ -348,15 +281,16 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     // 다음 프레임에서 데이터 로드 (디바운싱 효과)
     const timeoutId = setTimeout(() => {
       fetchCommits(1, false);
+      loadFiles();
     }, 0);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [repoId, fetchCommits]);
+  }, [repoId, fetchCommits, loadFiles]);
 
   return {
-    loaded: loaded && !loadingFiles,
+    loaded: loaded && loadedFiles,
     chats,
     project,
     files,
