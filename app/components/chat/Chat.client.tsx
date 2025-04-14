@@ -716,6 +716,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
   const handleRetry = async (message: Message) => {
     const messageIndex = messages.findIndex((m) => m.id === message.id);
+    const projectPath = repoStore.get().path;
 
     if (messageIndex <= 0) {
       toast.error('Retry failed');
@@ -741,12 +742,14 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
       await wc.mount(convertFileMapToFileSystemTree(files));
-      setMessages(messages.slice(0, messageIndex + 1));
+      window.history.replaceState(null, '', '/chat/' + projectPath + '?revertTo=' + prevCommitHash);
+
+      const newMessages = [...messages.slice(0, messageIndex + 1)];
+      setMessages(newMessages);
       reload();
 
       // Dismiss the loading toast on success
       toast.dismiss(toastId);
-      toast.success('Previous version loaded successfully');
     } catch (error) {
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
