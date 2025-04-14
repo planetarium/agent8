@@ -139,5 +139,14 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
     }
   }
 
-  return json({ success: false, message: 'Invalid method' }, { status: 405 });
+  // For 405 Method Not Allowed, include the Allow header with supported methods
+  return json(
+    { success: false, message: 'Invalid method' },
+    {
+      status: 405,
+      headers: {
+        Allow: 'POST, DELETE',
+      },
+    },
+  );
 }
