@@ -4,9 +4,8 @@ import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { WORK_DIR } from '~/utils/constants';
-import { isCommitHash } from './utils';
+import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
-import JSZip from 'jszip';
 
 export const commitChanges = async (message: Message) => {
   const projectName = repoStore.get().name;
@@ -90,76 +89,7 @@ export const downloadProjectZip = async (projectPath: string, commitSha?: string
 
 export const fetchProjectFiles = async (projectPath: string, commitSha?: string): Promise<FileMap> => {
   const zipBlob = await downloadProjectZip(projectPath, commitSha);
-
-  // Load zip file using JSZip
-  const zip = await JSZip.loadAsync(zipBlob);
-
-  // Process zip contents into FileMap structure
-  const fileMap: FileMap = {};
-  const dirSet = new Set<string>(); // 디렉토리 경로 추적용 Set
-
-  // 먼저 모든 디렉토리 경로를 수집
-  zip.forEach((relativePath) => {
-    // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
-    const pathParts = relativePath.split('/');
-
-    if (pathParts.length > 1) {
-      pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
-    }
-
-    // 파일 경로의 모든 상위 디렉토리를 찾아 dirSet에 추가
-    if (pathParts.length > 1) {
-      for (let i = 1; i < pathParts.length; i++) {
-        const dirPath = pathParts.slice(0, i).join('/');
-
-        if (dirPath) {
-          dirSet.add(dirPath);
-        }
-      }
-    }
-  });
-
-  // 디렉토리 먼저 FileMap에 추가
-  dirSet.forEach((dirPath) => {
-    const fullPath = `${WORK_DIR}/${dirPath}`;
-    fileMap[fullPath] = {
-      type: 'folder',
-    };
-  });
-
-  const promises: Promise<void>[] = [];
-
-  // 파일 처리
-  zip.forEach((relativePath, zipEntry) => {
-    if (!zipEntry.dir) {
-      const promise = async () => {
-        const content = await zipEntry.async('string');
-
-        // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
-        const pathParts = relativePath.split('/');
-
-        if (pathParts.length > 1) {
-          pathParts.shift(); // 첫 번째 경로 부분(프로젝트 폴더) 제거
-        }
-
-        const filePath = pathParts.join('/');
-        const fullPath = `${WORK_DIR}/${filePath}`;
-
-        // FileMap에 추가
-        fileMap[fullPath] = {
-          type: 'file',
-          content,
-          isBinary: false,
-        };
-      };
-
-      promises.push(promise());
-    }
-  });
-
-  await Promise.all(promises);
-
-  return fileMap;
+  return unzipCode(zipBlob);
 };
 
 export const getProjectCommits = async (
@@ -208,6 +138,17 @@ export const deleteProject = async (projectId: string) => {
 export const updateProjectDescription = async (projectPath: string, description: string) => {
   const response = await axios.post('/api/gitlab/description', {
     projectPath,
+    description,
+  });
+
+  return response.data;
+};
+
+export const forkProject = async (projectPath: string, projectName: string, commitSha: string, description: string) => {
+  const response = await axios.post('/api/gitlab/fork', {
+    projectPath,
+    projectName,
+    commitSha,
     description,
   });
 

@@ -378,15 +378,6 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   <div className="flex overflow-y-auto">
                     <PanelHeaderButton
                       className="mr-1 text-sm"
-                      onClick={async () => {
-                        alert('Fork');
-                      }}
-                    >
-                      <div className="i-ph:arrows-split" />
-                      Fork
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className="mr-1 text-sm"
                       onClick={() => {
                         workbenchStore.downloadZip();
                       }}
