@@ -139,6 +139,10 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         }
       }
 
+      const isInitialCommit = (message: string) => {
+        return message.toLowerCase().trim() === 'initial commit' || message.toLowerCase().trim() === 'add readme.md';
+      };
+
       if (!assistantMatched && !userMatched) {
         messages.push({
           id: `commit-${commit.id}`,
@@ -151,7 +155,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
             },
           ],
           createdAt: new Date(commit.created_at),
-          annotations: ['hidden'],
+          annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
         });
       }
     });

@@ -172,11 +172,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       workbenchStore.setSelectedFile(assetsPath);
       workbenchStore.setCurrentDocumentContent(content);
       await workbenchStore.saveCurrentDocument();
-
-      toast.success('Created assets.json file');
     } catch (error) {
       console.error('Error creating assets.json file:', error);
-      toast.error('Failed to create assets.json file');
     }
   };
 
