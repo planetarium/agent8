@@ -7,6 +7,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
+import { extractTextContent } from '~/utils/message';
 
 const logger = createScopedLogger('search-resources');
 
@@ -309,11 +310,6 @@ export async function searchResources(props: {
       modelDetails = modelsList[0];
     }
   }
-
-  const extractTextContent = (message: Message) =>
-    Array.isArray(message.content)
-      ? (message.content.find((item) => item.type === 'text')?.text as string) || ''
-      : message.content;
 
   const lastUserMessage = processedMessages.filter((x) => x.role == 'user').pop();
 
