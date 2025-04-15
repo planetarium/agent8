@@ -7,7 +7,7 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
-
+import { extractTextContent } from '~/utils/message';
 export const isEnabledGitbasePersistence = import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
 
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
@@ -22,13 +22,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
   const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
   let files = [];
-  const content =
-    message.parts && message.parts.length > 1
-      ? message.parts
-          .filter((part) => part.type === 'text')
-          .map((part) => part.text)
-          .join('')
-      : message.content;
+  const content = extractTextContent(message);
 
   if (isFirstCommit) {
     // If repositoryName is not set, commit all files

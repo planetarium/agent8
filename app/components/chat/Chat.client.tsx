@@ -37,6 +37,7 @@ import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { extractTextContent } from '~/utils/message';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -182,12 +183,22 @@ const processSampledMessages = createSampler(
   50,
 );
 
-async function runAndPreview() {
+async function runAndPreview(message: Message) {
   workbenchStore.clearAlert();
+
+  const content = extractTextContent(message);
+
+  const isServerUpdated = /<boltAction[^>]*filePath="server.js"[^>]*>/g.test(content);
+  const isPackageJsonUpdated = /<boltAction[^>]*filePath="package.json"[^>]*>/g.test(content);
 
   const previews = workbenchStore.previews.get();
 
-  if (previews.length > 0 && previews.find((p) => p.ready && p.port === 5173)) {
+  if (
+    !isServerUpdated &&
+    !isPackageJsonUpdated &&
+    previews.length > 0 &&
+    previews.find((p) => p.ready && p.port === 5173)
+  ) {
     workbenchStore.currentView.set('preview');
     return;
   }
@@ -292,7 +303,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       }
 
       setFakeLoading(false);
-      await Promise.all([runAndPreview(), handleCommit(message)]);
+      await Promise.all([runAndPreview(message), handleCommit(message)]);
 
       logger.debug('Finished streaming');
     },
