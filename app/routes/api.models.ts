@@ -71,6 +71,7 @@ export async function loader({
         apiKeys,
         providerSettings,
         serverEnv: context.cloudflare?.env,
+        noFilter: true,
       });
     }
   } else {

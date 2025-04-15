@@ -158,6 +158,7 @@ export class LLMManager {
       apiKeys?: Record<string, string>;
       providerSettings?: Record<string, IProviderSetting>;
       serverEnv?: Record<string, string>;
+      noFilter?: boolean;
     },
   ): Promise<ModelInfo[]> {
     const provider = this._providers.get(providerArg.name);
@@ -184,7 +185,7 @@ export class LLMManager {
       logger.info(`Found ${cachedModels.length} cached models for ${provider.name}`);
 
       // 화이트리스트 적용
-      const filteredCachedModels = filterWhitelistedModels(cachedModels);
+      const filteredCachedModels = options.noFilter ? cachedModels : filterWhitelistedModels(cachedModels);
 
       return [...filteredCachedModels, ...staticModels];
     }
@@ -198,7 +199,7 @@ export class LLMManager {
         provider.storeDynamicModels(options, models);
 
         // 화이트리스트 적용
-        return filterWhitelistedModels(models);
+        return options.noFilter ? models : filterWhitelistedModels(models);
       })
       .catch((err) => {
         logger.error(`Error getting dynamic models ${provider.name} :`, err);
