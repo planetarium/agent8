@@ -76,19 +76,27 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
     }
 
     const gitlabService = new GitlabService(env);
-    const gitlabUser = await gitlabService.getOrCreateUser(email as string);
-    const project = await gitlabService.createProject(gitlabUser, projectRepo, title);
-    const commit = await gitlabService.commitFiles(project.id, templateCache[cacheKey].files, 'Initial commit');
+
+    if (gitlabService.enabled) {
+      const gitlabUser = await gitlabService.getOrCreateUser(email as string);
+      const project = await gitlabService.createProject(gitlabUser, projectRepo, title);
+      const commit = await gitlabService.commitFiles(project.id, templateCache[cacheKey].files, 'Initial commit');
+
+      return json({
+        data: templateCache[cacheKey].data,
+        project: {
+          id: project.id,
+          name: project.name,
+          path: project.path_with_namespace,
+          description: project.description,
+        },
+        commit: { id: commit.id },
+        cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+      });
+    }
 
     return json({
       data: templateCache[cacheKey].data,
-      project: {
-        id: project.id,
-        name: project.name,
-        path: project.path_with_namespace,
-        description: project.description,
-      },
-      commit: { id: commit.id },
       cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
     });
   } catch (error) {

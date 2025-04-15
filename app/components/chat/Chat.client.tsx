@@ -26,7 +26,12 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
-import { commitChanges, fetchProjectFiles, forkProject } from '~/lib/persistenceGitbase/api.client';
+import {
+  commitChanges,
+  fetchProjectFiles,
+  forkProject,
+  isEnabledGitbasePersistence,
+} from '~/lib/persistenceGitbase/api.client';
 import { webcontainer } from '~/lib/webcontainer';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
@@ -316,6 +321,10 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   }, [messages, isLoading, parseMessages]);
 
   const handleCommit = async (message: Message) => {
+    if (!isEnabledGitbasePersistence) {
+      return;
+    }
+
     try {
       await commitChanges(message, (commitHash) => {
         setMessages((prev: Message[]) =>
@@ -466,17 +475,26 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         const projectName = temResp?.project?.name;
         const templateCommitId = temResp?.commit?.id;
 
-        if (!projectPath || !projectName || !templateCommitId) {
-          throw new Error('Cannot create project');
+        if (isEnabledGitbasePersistence) {
+          if (!projectPath || !projectName || !templateCommitId) {
+            throw new Error('Cannot create project');
+          }
+
+          repoStore.set({
+            name: projectName,
+            path: projectPath,
+            title,
+          });
+
+          window.history.replaceState(null, '', '/chat/' + projectPath);
+        } else {
+          repoStore.set({
+            name: projectRepo,
+            path: projectRepo,
+            title,
+          });
+          window.history.replaceState(null, '', '/chat/' + projectRepo);
         }
-
-        repoStore.set({
-          name: projectName,
-          path: projectPath,
-          title,
-        });
-
-        window.history.replaceState(null, '', '/chat/' + projectPath);
 
         if (!temResp?.data) {
           throw new Error('Not Found Template Data');
@@ -492,7 +510,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
             annotations: ['hidden'],
           },
           {
-            id: `assistant-${templateCommitId}`,
+            id: `assistant-${templateCommitId || new Date().getTime()}`,
             role: 'assistant',
             content: assistantMessage,
           },

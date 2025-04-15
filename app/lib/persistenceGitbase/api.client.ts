@@ -7,6 +7,8 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 
+export const isEnabledGitbasePersistence = import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
+
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
