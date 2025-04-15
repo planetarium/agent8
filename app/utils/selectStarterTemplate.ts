@@ -228,11 +228,6 @@ export async function getTemplates(githubRepo: string, path: string, title?: str
 
 export async function getZipTemplates(zipFile: File, title?: string) {
   const fileMap = await extractZipTemplate(await zipFile.arrayBuffer());
-
-  if (!fileMap['PROJECT.md']) {
-    throw new Error('PROJECT.md file not found in the zip file');
-  }
-
   return { fileMap, messages: generateTemplateMessages(fileMap, title) };
 }
 
