@@ -3,7 +3,6 @@ import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { useLocation } from '@remix-run/react';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
 import { forwardRef } from 'react';
@@ -18,19 +17,13 @@ interface MessagesProps {
   messages?: Message[];
   onRetry?: (message: Message) => void;
   onFork?: (message: Message) => void;
+  onRevert?: (message: Message) => void;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [], onRetry, onFork } = props;
-    const location = useLocation();
+    const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert } = props;
     const profile = useStore(profileStore);
-
-    const handleRevert = (messageId: string) => {
-      const searchParams = new URLSearchParams(location.search);
-      searchParams.set('revertTo', messageId);
-      window.location.search = searchParams.toString();
-    };
 
     return (
       <div id={id} className={props.className} ref={ref}>
@@ -86,7 +79,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         }
                       >
                         {messageId && isCommitHash(messageId) && (
-                          <DropdownItem onSelect={() => handleRevert(messageId)} disabled={isLast}>
+                          <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
                             <span className="i-ph:arrow-u-up-left text-xl" />
                             Revert to this message
                           </DropdownItem>

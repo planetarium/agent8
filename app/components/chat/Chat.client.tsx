@@ -11,7 +11,7 @@ import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
@@ -722,12 +722,60 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     }
   };
 
+  const handleRevert = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+    const projectPath = repoStore.get().path;
+    const commitHash = message.id.split('-').pop();
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
+
+    const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+    // Show loading toast while retrying
+    const toastId = toast.loading('Loading previous version...');
+
+    try {
+      const wc = await webcontainer;
+
+      const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
+      const deleteFiles = [];
+
+      for (const name of Object.keys(files)) {
+        const path = name.replace(WORK_DIR + '/', '');
+
+        if (!retryFiles[path]) {
+          deleteFiles.push(path);
+        }
+      }
+
+      for (const name of deleteFiles) {
+        await wc.fs.rm(name, { recursive: true, force: true });
+      }
+
+      await wc.mount(convertFileMapToFileSystemTree(retryFiles));
+      window.history.replaceState(null, '', '/chat/' + projectPath + '?revertTo=' + commitHash);
+
+      const newMessages = [...messages.slice(0, messageIndex + 1)];
+      setMessages(newMessages);
+
+      toast.dismiss(toastId);
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error('Failed to load previous version');
+      logger.error('Error loading previous version:', error);
+    }
+  };
+
   const handleRetry = async (message: Message) => {
     workbenchStore.currentView.set('code');
     await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
     const messageIndex = messages.findIndex((m) => m.id === message.id);
-    const projectPath = repoStore.get().path;
 
     if (messageIndex <= 0) {
       toast.error('Retry failed');
@@ -736,28 +784,17 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
     const prevMessage = messages[messageIndex - 1];
 
-    const prevCommitHash = prevMessage.id.split('-').pop();
+    await handleRevert(prevMessage);
 
-    if (!prevCommitHash || !isCommitHash(prevCommitHash)) {
-      toast.error('No commit hash found');
-      return;
-    }
-
-    // Show loading toast while retrying
     const toastId = toast.loading('Loading previous version...');
 
     try {
-      const wc = await webcontainer;
-      await wc.fs.rm('/', { recursive: true, force: true });
-      await wc.fs.mkdir('/', { recursive: true });
+      await handleRevert(prevMessage);
+      setMessages((messages) => [...messages, message]);
 
-      const files = await fetchProjectFiles(repoStore.get().path, prevCommitHash);
-      await wc.mount(convertFileMapToFileSystemTree(files));
-      window.history.replaceState(null, '', '/chat/' + projectPath + '?revertTo=' + prevCommitHash);
-
-      const newMessages = [...messages.slice(0, messageIndex + 1)];
-      setMessages(newMessages);
-      reload();
+      setTimeout(() => {
+        reload();
+      }, 1000);
 
       // Dismiss the loading toast on success
       toast.dismiss(toastId);
@@ -797,6 +834,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       handleStop={abort}
       handleRetry={handleRetry}
       handleFork={handleFork}
+      handleRevert={handleRevert}
       description={description}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {
