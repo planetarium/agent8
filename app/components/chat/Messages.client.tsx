@@ -3,49 +3,27 @@ import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { useLocation } from '@remix-run/react';
-import WithTooltip from '~/components/ui/Tooltip';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 
 interface MessagesProps {
   id?: string;
   className?: string;
   isStreaming?: boolean;
   messages?: Message[];
+  onRetry?: (message: Message) => void;
+  onFork?: (message: Message) => void;
+  onRevert?: (message: Message) => void;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [] } = props;
-    const location = useLocation();
+    const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert } = props;
     const profile = useStore(profileStore);
-
-    const handleRewind = (messageId: string) => {
-      const searchParams = new URLSearchParams(location.search);
-      searchParams.set('rewindTo', messageId);
-      window.location.search = searchParams.toString();
-    };
-
-    /*
-     * const handleFork = async (messageId: string) => {
-     *   try {
-     *     if (!db || !chatId.get()) {
-     *       toast.error('Chat persistence is not available');
-     *       return;
-     *     }
-     *
-     *
-     *
-     *     const urlId = await forkChat(db, chatId.get()!, messageId);
-     *     window.location.href = `/chat/${urlId}`;
-     *   } catch (error) {
-     *     toast.error('Failed to fork chat: ' + (error as Error).message);
-     *   }
-     * };
-     */
 
     return (
       <div id={id} className={props.className} ref={ref}>
@@ -93,31 +71,37 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       <AssistantMessage content={message.content} annotations={message.annotations} />
                     )}
                   </div>
-                  {!isUserMessage && (
-                    <div className="flex gap-2 flex-col lg:flex-row">
-                      {messageId && (
-                        <WithTooltip tooltip="Revert to this message">
-                          <button
-                            onClick={() => handleRewind(messageId)}
-                            key="i-ph:arrow-u-up-left"
-                            className={classNames(
-                              'i-ph:arrow-u-up-left',
-                              'text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors',
-                            )}
-                          />
-                        </WithTooltip>
-                      )}
-
-                      {/* <WithTooltip tooltip="Fork chat from this message">
-                        <button
-                          onClick={() => handleFork(messageId)}
-                          key="i-ph:git-fork"
-                          className={classNames(
-                            'i-ph:git-fork',
-                            'text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors',
-                          )}
-                        />
-                      </WithTooltip> */}
+                  {!isUserMessage ? (
+                    <div className="flex items-start mt-2.5">
+                      <Dropdown
+                        trigger={
+                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                        }
+                      >
+                        {messageId && isCommitHash(messageId) && (
+                          <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
+                            <span className="i-ph:arrow-u-up-left text-xl" />
+                            Revert to this message
+                          </DropdownItem>
+                        )}
+                        <DropdownItem onSelect={() => onFork?.(message)}>
+                          <span className="i-ph:git-fork text-xl" />
+                          Fork chat from this message
+                        </DropdownItem>
+                      </Dropdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-start mt-2.5">
+                      <Dropdown
+                        trigger={
+                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                        }
+                      >
+                        <DropdownItem onSelect={() => onRetry?.(message)}>
+                          <span className="i-ph:arrow-clockwise text-xl" />
+                          Retry chat
+                        </DropdownItem>
+                      </Dropdown>
                     </div>
                   )}
                 </div>

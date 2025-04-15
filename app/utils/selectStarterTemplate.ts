@@ -4,6 +4,7 @@ import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
+import type { FileMap } from '~/lib/stores/files';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -26,6 +27,7 @@ Response Format:
 <selection>
   <templateName>{selected template name}</templateName>
   <title>{a proper title for the project}</title>
+  <projectRepo>{the name of the new project repository to use}</projectRepo>
 </selection>
 
 Examples:
@@ -36,6 +38,7 @@ Response:
 <selection>
   <templateName>basic-2d</templateName>
   <title>Simple 2d platformer game</title>
+  <projectRepo>basic-2d-game</projectRepo>
 </selection>
 </example>
 
@@ -52,17 +55,22 @@ MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
 
 let templates: Template[] = STARTER_TEMPLATES;
 
-const parseSelectedTemplate = (llmOutput: string): { template: string; title: string } | null => {
+const parseSelectedTemplate = (llmOutput: string): { template: string; title: string; projectRepo: string } | null => {
   try {
     // Extract content between <templateName> tags
     const templateNameMatch = llmOutput.match(/<templateName>(.*?)<\/templateName>/);
     const titleMatch = llmOutput.match(/<title>(.*?)<\/title>/);
+    const projectRepoMatch = llmOutput.match(/<projectRepo>(.*?)<\/projectRepo>/);
 
     if (!templateNameMatch) {
       return null;
     }
 
-    return { template: templateNameMatch[1].trim(), title: titleMatch?.[1].trim() || 'Untitled Project' };
+    return {
+      template: templateNameMatch[1].trim(),
+      title: titleMatch?.[1].trim() || 'Untitled Project',
+      projectRepo: projectRepoMatch?.[1].trim() || '',
+    };
   } catch (error) {
     console.error('Error parsing template selection:', error);
     return null;
@@ -112,17 +120,14 @@ export const selectStarterTemplate = async (options: { message: string; model: s
     return {
       template,
       title: selectedTemplate.title,
+      projectRepo: selectedTemplate.projectRepo,
     };
   }
 
   return {};
 };
 
-const getGitHubRepoContent = async (
-  repoName: string,
-  path: string = '',
-  env?: Env,
-): Promise<{ name: string; path: string; content: string }[]> => {
+const getGitHubRepoContent = async (repoName: string, path: string = '', env?: Env): Promise<FileMap> => {
   const baseUrl = 'https://api.github.com';
 
   try {
@@ -148,50 +153,59 @@ const getGitHubRepoContent = async (
 
     const data: any = await response.json();
 
+    const fileMap: FileMap = {};
+
     // If it's a single file, return its content
     if (!Array.isArray(data)) {
       if (data.type === 'file') {
-        // If it's a file, get its content
-        const content = atob(data.content); // Decode base64 content
-        return [
-          {
-            name: data.name,
-            path: data.path,
-            content,
-          },
-        ];
+        /*
+         * If it's a file, get its content
+         * Use TextDecoder to properly handle Korean and other non-ASCII characters
+         */
+        const content = new TextDecoder('utf-8').decode(Uint8Array.from(atob(data.content), (c) => c.charCodeAt(0)));
+        const filePath = `${data.path}`;
+        fileMap[filePath] = {
+          type: 'file',
+          content,
+          isBinary: false,
+        };
+
+        return fileMap;
       }
     }
 
     // Process directory contents recursively
-    const contents = await Promise.all(
+    await Promise.all(
       data.map(async (item: any) => {
         if (item.type === 'dir') {
           // Recursively get contents of subdirectories
-          return await getGitHubRepoContent(repoName, item.path, env);
+          const subDirContents = await getGitHubRepoContent(repoName, item.path, env);
+
+          // Merge subdirectory contents into the main fileMap
+          Object.assign(fileMap, subDirContents);
         } else if (item.type === 'file') {
           // Fetch file content
           const fileResponse = await fetch(item.url, {
             headers,
           });
           const fileData: any = await fileResponse.json();
-          const content = atob(fileData.content); // Decode base64 content
 
-          return [
-            {
-              name: item.name,
-              path: item.path,
-              content,
-            },
-          ];
+          // TextDecoder를 사용하여 UTF-8로 올바르게 디코딩
+          const content = new TextDecoder('utf-8').decode(
+            Uint8Array.from(atob(fileData.content), (c) => c.charCodeAt(0)),
+          );
+
+          const filePath = `${item.path}`;
+          fileMap[filePath] = {
+            type: 'file',
+            content,
+            isBinary: false,
+          };
         }
-
-        return [];
       }),
     );
 
-    // Flatten the array of contents
-    return contents.flat();
+    return fileMap;
   } catch (error) {
     console.error('Error fetching repo contents:', error);
     throw error;
@@ -200,33 +214,42 @@ const getGitHubRepoContent = async (
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
   const files = await getGitHubRepoContent(githubRepo, path, env);
-  return generateTemplateMessages(files, path, title);
+
+  const fileMap: FileMap = {};
+
+  if (path) {
+    for (const key in files) {
+      fileMap[key.replace(path + '/', '')] = files[key];
+    }
+  }
+
+  return { fileMap, messages: generateTemplateMessages(fileMap, title) };
 }
 
 export async function getZipTemplates(zipFile: File, title?: string) {
-  const files = await extractZipTemplate(await zipFile.arrayBuffer());
+  const fileMap = await extractZipTemplate(await zipFile.arrayBuffer());
 
-  if (!files.find((x) => x.name === 'PROJECT.md')) {
+  if (!fileMap['PROJECT.md']) {
     throw new Error('PROJECT.md file not found in the zip file');
   }
 
-  return generateTemplateMessages(files, '', title);
+  return { fileMap, messages: generateTemplateMessages(fileMap, title) };
 }
 
-function generateTemplateMessages(
-  files: { name: string; path: string; content: string }[],
-  path: string,
-  title?: string,
-) {
-  let filteredFiles = files;
+function generateTemplateMessages(fileMap: FileMap, title?: string) {
+  const files = [];
 
-  //remove default path from files
-  if (path) {
-    filteredFiles = filteredFiles.map((x) => ({
-      ...x,
-      path: x.path.replace(path + '/', ''),
-    }));
+  for (const key in fileMap) {
+    if (fileMap[key]!.type === 'file') {
+      files.push({
+        name: key,
+        path: key,
+        content: fileMap[key]!.content,
+      });
+    }
   }
+
+  let filteredFiles = files;
 
   /*
    * ignoring common unwanted files

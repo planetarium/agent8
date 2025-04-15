@@ -3,16 +3,15 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import { useStore } from '@nanostores/react';
-import type { Message } from 'ai';
+import { type Message } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
-import { description, useChatHistory } from '~/lib/persistence';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
@@ -22,11 +21,22 @@ import { useSettings } from '~/lib/hooks/useSettings';
 import type { ProviderInfo } from '~/types/model';
 import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
-import { selectStarterTemplate, getTemplates, getZipTemplates } from '~/utils/selectStarterTemplate';
+import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
-import { filesToArtifacts } from '~/utils/fileUtils';
+import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
+import {
+  commitChanges,
+  fetchProjectFiles,
+  forkProject,
+  isEnabledGitbasePersistence,
+} from '~/lib/persistenceGitbase/api.client';
+import { webcontainer } from '~/lib/webcontainer';
+import { repoStore } from '~/lib/stores/repo';
+import type { FileMap } from '~/lib/.server/llm/constants';
+import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -35,7 +45,7 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('Chat');
 
-async function fetchTemplateFromAPI(template: Template, title?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
@@ -46,17 +56,25 @@ async function fetchTemplateFromAPI(template: Template, title?: string) {
       params.append('title', title);
     }
 
+    if (projectRepo) {
+      params.append('projectRepo', projectRepo);
+    }
+
     const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch template: ${response.status}`);
     }
 
-    const result = (await response.json()) as { data: { assistantMessage: string; userMessage: string } };
+    const result = (await response.json()) as {
+      data: { assistantMessage: string; userMessage: string };
+      project: { id: number; name: string; path: string; description: string };
+      commit: { id: number };
+    };
 
-    return result.data;
+    return result;
   } catch (error) {
-    console.error('Error fetching template from API:', error);
+    logger.error('Error fetching template from API:', error);
     throw error;
   }
 }
@@ -72,32 +90,54 @@ function sendEventToParent(type: string, payload: any) {
         '*',
       );
 
-      console.log('Sent deployment info to parent window');
+      logger.info('Sent deployment info to parent window');
     }
   } catch (error) {
-    console.error('Error sending message to parent:', error);
+    logger.error('Error sending message to parent:', error);
   }
 }
 
 export function Chat() {
   renderLogger.trace('Chat');
 
-  const { ready, initialMessages, storeMessageHistory, importChat, exportChat } = useChatHistory();
-  const title = useStore(description);
+  const { loaded, chats, files, project } = useGitbaseChatHistory();
+  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+  const [ready, setReady] = useState(false);
+  const title = repoStore.get().title;
+
   useEffect(() => {
-    workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
-  }, [initialMessages]);
+    if (initialMessages.length > 0) {
+      workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
+    }
+
+    if (loaded) {
+      setReady(true);
+    }
+  }, [initialMessages, loaded]);
+
+  useEffect(() => {
+    if (loaded) {
+      if (chats.length > 0) {
+        setInitialMessages(chats);
+        webcontainer.then(async (wc) => {
+          wc.mount(convertFileMapToFileSystemTree(files));
+        });
+        workbenchStore.showWorkbench.set(true);
+      }
+
+      if (project.description) {
+        repoStore.set({
+          ...repoStore.get(),
+          title: project.description.split('\n')[0],
+        });
+      }
+    }
+  }, [loaded, files, chats, project]);
 
   return (
     <>
       {ready && (
-        <ChatImpl
-          description={title}
-          initialMessages={initialMessages}
-          exportChat={exportChat}
-          storeMessageHistory={storeMessageHistory}
-          importChat={importChat}
-        />
+        <ChatImpl description={title} initialMessages={initialMessages} setInitialMessages={setInitialMessages} />
       )}
       <ToastContainer
         closeButton={({ closeToast }) => {
@@ -133,17 +173,11 @@ export function Chat() {
 const processSampledMessages = createSampler(
   (options: {
     messages: Message[];
-    initialMessages: Message[];
     isLoading: boolean;
     parseMessages: (messages: Message[], isLoading: boolean) => void;
-    storeMessageHistory: (messages: Message[]) => Promise<void>;
   }) => {
-    const { messages, initialMessages, isLoading, parseMessages, storeMessageHistory } = options;
+    const { messages, isLoading, parseMessages } = options;
     parseMessages(messages, isLoading);
-
-    if (messages.length > initialMessages.length) {
-      storeMessageHistory(messages).catch((error) => toast.error(error.message));
-    }
   },
   50,
 );
@@ -169,544 +203,685 @@ async function runAndPreview() {
 
 interface ChatProps {
   initialMessages: Message[];
-  storeMessageHistory: (messages: Message[]) => Promise<void>;
-  importChat: (description: string, messages: Message[]) => Promise<void>;
-  exportChat: () => void;
+  setInitialMessages: (messages: Message[]) => void;
   description?: string;
 }
 
-export const ChatImpl = memo(
-  ({ description, initialMessages, storeMessageHistory, importChat, exportChat }: ChatProps) => {
-    useShortcuts();
+export const ChatImpl = memo(({ description, initialMessages, setInitialMessages }: ChatProps) => {
+  useShortcuts();
 
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-    const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [fakeLoading, setFakeLoading] = useState(false);
-    const files = useStore(workbenchStore.files);
-    const actionAlert = useStore(workbenchStore.alert);
-    const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const [model, setModel] = useState(() => {
-      const savedModel = Cookies.get('selectedModel');
-      return savedModel || DEFAULT_MODEL;
-    });
-    const [provider, setProvider] = useState(() => {
-      const savedProvider = Cookies.get('selectedProvider');
-      return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
-    });
+  const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
+  const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [fakeLoading, setFakeLoading] = useState(false);
+  const files = useStore(workbenchStore.files);
+  const actionAlert = useStore(workbenchStore.alert);
+  const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
-    const { showChat } = useStore(chatStore);
+  const [model, setModel] = useState(() => {
+    const savedModel = Cookies.get('selectedModel');
+    return savedModel || DEFAULT_MODEL;
+  });
+  const [provider, setProvider] = useState(() => {
+    const savedProvider = Cookies.get('selectedProvider');
+    return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
+  });
 
-    const [animationScope, animate] = useAnimate();
+  const { showChat } = useStore(chatStore);
 
-    const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [animationScope, animate] = useAnimate();
 
-    const {
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+
+  const {
+    messages,
+    isLoading,
+    input,
+    handleInputChange,
+    setInput,
+    stop,
+    append,
+    setMessages,
+    reload,
+    error,
+    data: chatData,
+    setData,
+  } = useChat({
+    api: '/api/chat',
+    body: {
+      apiKeys,
+      files,
+      promptId,
+      contextOptimization: contextOptimizationEnabled,
+    },
+    sendExtraMessageFields: true,
+    onError: (e) => {
+      logger.error('Request failed\n\n', e, error);
+      logStore.logError('Chat request failed', e, {
+        component: 'Chat',
+        action: 'request',
+        error: e.message,
+      });
+      toast.error(
+        'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+      );
+    },
+    onFinish: async (message, response) => {
+      const usage = response.usage;
+      setData(undefined);
+
+      if (usage) {
+        logStore.logProvider('Chat response completed', {
+          component: 'Chat',
+          action: 'response',
+          model,
+          provider: provider.name,
+          usage,
+          messageLength: message.content.length,
+        });
+      }
+
+      await Promise.all([runAndPreview(), handleCommit(message)]);
+
+      logger.debug('Finished streaming');
+    },
+    initialMessages,
+    initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
+  });
+  useEffect(() => {
+    const prompt = searchParams.get('prompt');
+
+    if (prompt) {
+      setSearchParams({});
+      runAnimation();
+      append({
+        role: 'user',
+        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
+      });
+    }
+  }, [model, provider, searchParams]);
+
+  const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
+  const { parsedMessages, parseMessages } = useMessageParser();
+
+  const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+
+  useEffect(() => {
+    chatStore.setKey('started', initialMessages.length > 0);
+  }, []);
+
+  useEffect(() => {
+    processSampledMessages({
       messages,
       isLoading,
-      input,
-      handleInputChange,
-      setInput,
-      stop,
-      append,
-      setMessages,
-      reload,
-      error,
-      data: chatData,
-      setData,
-    } = useChat({
-      api: '/api/chat',
-      body: {
-        apiKeys,
-        files,
-        promptId,
-        contextOptimization: contextOptimizationEnabled,
-      },
-      sendExtraMessageFields: true,
-      onError: (e) => {
-        logger.error('Request failed\n\n', e, error);
-        logStore.logError('Chat request failed', e, {
-          component: 'Chat',
-          action: 'request',
-          error: e.message,
-        });
-        toast.error(
-          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-        );
-      },
-      onFinish: async (message, response) => {
-        const usage = response.usage;
-        setData(undefined);
-
-        if (usage) {
-          console.log('Token usage:', usage);
-          logStore.logProvider('Chat response completed', {
-            component: 'Chat',
-            action: 'response',
-            model,
-            provider: provider.name,
-            usage,
-            messageLength: message.content.length,
-          });
-        }
-
-        await runAndPreview();
-
-        logger.debug('Finished streaming');
-      },
-      initialMessages,
-      initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
+      parseMessages,
     });
-    useEffect(() => {
-      const prompt = searchParams.get('prompt');
+  }, [messages, isLoading, parseMessages]);
 
-      if (prompt) {
-        setSearchParams({});
-        runAnimation();
-        append({
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
-        });
-      }
-    }, [model, provider, searchParams]);
+  const handleCommit = async (message: Message) => {
+    if (!isEnabledGitbasePersistence) {
+      return;
+    }
 
-    const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
-    const { parsedMessages, parseMessages } = useMessageParser();
+    try {
+      await commitChanges(message, (commitHash) => {
+        setMessages((prev: Message[]) =>
+          prev.map((m: Message) => {
+            if (m.id === message.id) {
+              return {
+                ...m,
+                id: commitHash,
+              };
+            }
 
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
-
-    useEffect(() => {
-      chatStore.setKey('started', initialMessages.length > 0);
-    }, []);
-
-    useEffect(() => {
-      processSampledMessages({
-        messages,
-        initialMessages,
-        isLoading,
-        parseMessages,
-        storeMessageHistory,
-      });
-    }, [messages, isLoading, parseMessages]);
-
-    const scrollTextArea = () => {
-      const textarea = textareaRef.current;
-
-      if (textarea) {
-        textarea.scrollTop = textarea.scrollHeight;
-      }
-    };
-
-    const abort = () => {
-      stop();
-      setFakeLoading(false);
-      chatStore.setKey('aborted', true);
-      workbenchStore.abortAllActions();
-
-      logStore.logProvider('Chat response aborted', {
-        component: 'Chat',
-        action: 'abort',
-        model,
-        provider: provider.name,
-      });
-    };
-
-    useEffect(() => {
-      const textarea = textareaRef.current;
-
-      if (textarea) {
-        textarea.style.height = 'auto';
-
-        const scrollHeight = textarea.scrollHeight;
-
-        textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
-        textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-      }
-    }, [input, textareaRef]);
-
-    const runAnimation = async () => {
-      if (chatStarted) {
-        return;
-      }
-
-      await Promise.all([
-        animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
-        animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
-      ]);
-
-      chatStore.setKey('started', true);
-
-      setChatStarted(true);
-    };
-
-    const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
-      const messageContent = messageInput || input;
-
-      if (!messageContent?.trim()) {
-        return;
-      }
-
-      if (isLoading) {
-        abort();
-        return;
-      }
-
-      runAnimation();
-
-      if (attachmentList.length > 0) {
-        const imageAttachments = attachmentList.filter((item) =>
-          ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
+            return m;
+          }),
         );
+      });
+    } catch (e) {
+      toast.error('The code commit has failed. You can download the code and restore it.');
+      console.log(e);
+    }
+  };
 
-        if (imageAttachments.length > 0) {
-          setFakeLoading(true);
+  const scrollTextArea = () => {
+    const textarea = textareaRef.current;
 
-          const urls = imageAttachments.map((item) => item.url);
+    if (textarea) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  };
 
-          try {
-            const descriptionResponse = await fetch('/api/image-description', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                message: messageContent,
-                imageUrls: urls,
-              }),
-            });
+  const abort = () => {
+    stop();
+    setFakeLoading(false);
+    chatStore.setKey('aborted', true);
+    workbenchStore.abortAllActions();
 
-            if (descriptionResponse.ok) {
-              const descriptions = await descriptionResponse.json();
+    logStore.logProvider('Chat response aborted', {
+      component: 'Chat',
+      action: 'abort',
+      model,
+      provider: provider.name,
+    });
+  };
 
-              if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
-                for (let i = 0; i < imageAttachments.length; i++) {
-                  imageAttachments[i].features = descriptions[i].features;
-                  imageAttachments[i].details = descriptions[i].details;
-                }
-              }
-            }
-          } catch (descError) {
-            console.error('Error generating image description:', descError);
-            toast.warning('Could not generate image description, using default');
-          }
-        }
-      }
+  useEffect(() => {
+    const textarea = textareaRef.current;
 
-      if (!chatStarted) {
+    if (textarea) {
+      textarea.style.height = 'auto';
+
+      const scrollHeight = textarea.scrollHeight;
+
+      textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
+      textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+    }
+  }, [input, textareaRef]);
+
+  const runAnimation = async () => {
+    if (chatStarted) {
+      return;
+    }
+
+    await Promise.all([
+      animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
+      animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
+    ]);
+
+    chatStore.setKey('started', true);
+
+    setChatStarted(true);
+  };
+
+  const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+    const messageContent = messageInput || input;
+
+    if (!messageContent?.trim()) {
+      return;
+    }
+
+    if (isLoading) {
+      abort();
+      return;
+    }
+
+    runAnimation();
+
+    if (attachmentList.length > 0) {
+      const imageAttachments = attachmentList.filter((item) =>
+        ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
+      );
+
+      if (imageAttachments.length > 0) {
+        setFakeLoading(true);
+
+        const urls = imageAttachments.map((item) => item.url);
+
         try {
-          setFakeLoading(true);
-
-          if (autoSelectTemplate) {
-            const { template, title } = await selectStarterTemplate({
+          const descriptionResponse = await fetch('/api/image-description', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
               message: messageContent,
-              model,
-              provider,
-            });
+              imageUrls: urls,
+            }),
+          });
 
-            if (template) {
-              const temResp = await fetchTemplateFromAPI(template!, title).catch((e) => {
-                if (e.message.includes('rate limit')) {
-                  toast.warning('Rate limit exceeded. Skipping starter template\n Continuing with blank template');
-                } else {
-                  toast.warning('Failed to import starter template\n Continuing with blank template');
-                }
-              });
+          if (descriptionResponse.ok) {
+            const descriptions = await descriptionResponse.json();
 
-              if (temResp) {
-                const { assistantMessage, userMessage } = temResp;
-                setMessages([
-                  {
-                    id: `1-${new Date().getTime()}`,
-                    role: 'user',
-                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-                    annotations: ['hidden'],
-                  },
-                  {
-                    id: `2-${new Date().getTime()}`,
-                    role: 'assistant',
-                    content: assistantMessage,
-                  },
-                  {
-                    id: `3-${new Date().getTime()}`,
-                    role: 'user',
-                    content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                      attachmentList,
-                    )}]\n\n${messageContent}`,
-                  },
-                ]);
-
-                setTimeout(() => {
-                  // wait for the files to be loaded
-                  reload();
-                }, 1000);
-                setInput('');
-                Cookies.remove(PROMPT_COOKIE_KEY);
-
-                sendEventToParent('EVENT', { name: 'START_EDITING' });
-
-                setAttachmentList([]);
-
-                resetEnhancer();
-
-                textareaRef.current?.blur();
-                setFakeLoading(false);
-
-                return;
+            if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+              for (let i = 0; i < imageAttachments.length; i++) {
+                imageAttachments[i].features = descriptions[i].features;
+                imageAttachments[i].details = descriptions[i].details;
               }
             }
           }
-
-          // If autoSelectTemplate is disabled or template selection failed, proceed with normal message
-          setMessages([
-            {
-              id: `${new Date().getTime()}`,
-              role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                attachmentList,
-              )}]\n\n${messageContent}`,
-            },
-          ]);
-          reload();
-          setFakeLoading(false);
-          setInput('');
-          Cookies.remove(PROMPT_COOKIE_KEY);
-
-          setAttachmentList([]);
-
-          resetEnhancer();
-
-          textareaRef.current?.blur();
-
-          return;
-        } catch {
-          setChatStarted(false);
-          setFakeLoading(false);
+        } catch (descError) {
+          logger.error('Error generating image description:', descError);
+          toast.warning('Could not generate image description, using default');
         }
       }
+    }
 
-      try {
-        if (error != null) {
-          setMessages(messages.slice(0, -1));
-        }
-
-        const modifiedFiles = workbenchStore.getModifiedFiles();
-
-        chatStore.setKey('aborted', false);
-
-        if (modifiedFiles !== undefined) {
-          const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
-          append({
-            role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-              attachmentList,
-            )}]\n\n${userUpdateArtifact}${messageContent}`,
-          });
-
-          workbenchStore.resetAllFileModifications();
-        } else {
-          append({
-            role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-              attachmentList,
-            )}]\n\n${messageContent}`,
-          });
-        }
-
-        setInput('');
-        Cookies.remove(PROMPT_COOKIE_KEY);
-
-        setAttachmentList([]);
-
-        resetEnhancer();
-
-        textareaRef.current?.blur();
-      } catch (error) {
-        console.error('Error sending message:', error);
-
-        if (error instanceof Error) {
-          toast.error('Error:' + error?.message);
-        }
-      }
-    };
-
-    /**
-     * Handles the change event for the textarea and updates the input state.
-     * @param event - The change event from the textarea.
-     */
-    const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      handleInputChange(event);
-    };
-
-    /**
-     * Debounced function to cache the prompt in cookies.
-     * Caches the trimmed value of the textarea input after a delay to optimize performance.
-     */
-    const debouncedCachePrompt = useCallback(
-      debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const trimmedValue = event.target.value.trim();
-        Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
-      }, 1000),
-      [],
-    );
-
-    const [messageRef, scrollRef] = useSnapScroll();
-
-    useEffect(() => {
-      const storedApiKeys = Cookies.get('apiKeys');
-
-      if (storedApiKeys) {
-        setApiKeys(JSON.parse(storedApiKeys));
-      }
-    }, []);
-
-    const handleModelChange = (newModel: string) => {
-      setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
-    };
-
-    const handleProviderChange = (newProvider: ProviderInfo) => {
-      setProvider(newProvider);
-      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
-    };
-
-    // 공통 로직을 처리하는 함수 추출
-    const handleTemplateImport = async (
-      source: { type: 'github' | 'zip'; title: string },
-      templateData: Promise<{ assistantMessage: string; userMessage: string }>,
-    ) => {
+    if (!chatStarted) {
       try {
         setFakeLoading(true);
 
-        // Show loading toast
-        const toastId = toast.loading(
-          `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
-        );
+        const { template, title, projectRepo } = await selectStarterTemplate({
+          message: messageContent,
+          model,
+          provider,
+        });
 
-        // 템플릿 데이터 가져오기
-        const { assistantMessage, userMessage } = await templateData;
-        toast.done(toastId);
+        if (!template) {
+          throw new Error('Not Found Template');
+        }
 
-        const messages = [
+        const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
+          if (e.message.includes('rate limit')) {
+            toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+          } else {
+            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+          }
+        });
+
+        const projectPath = temResp?.project?.path;
+        const projectName = temResp?.project?.name;
+        const templateCommitId = temResp?.commit?.id;
+
+        if (isEnabledGitbasePersistence) {
+          if (!projectPath || !projectName || !templateCommitId) {
+            throw new Error('Cannot create project');
+          }
+
+          repoStore.set({
+            name: projectName,
+            path: projectPath,
+            title,
+          });
+
+          window.history.replaceState(null, '', '/chat/' + projectPath);
+        } else {
+          repoStore.set({
+            name: projectRepo,
+            path: projectRepo,
+            title,
+          });
+          window.history.replaceState(null, '', '/chat/' + projectRepo);
+        }
+
+        if (!temResp?.data) {
+          throw new Error('Not Found Template Data');
+        }
+
+        const { assistantMessage, userMessage } = temResp.data;
+
+        setMessages([
           {
             id: `1-${new Date().getTime()}`,
             role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-              attachmentList,
-            )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+            annotations: ['hidden'],
           },
           {
-            id: `2-${new Date().getTime()}`,
+            id: `assistant-${templateCommitId || new Date().getTime()}`,
             role: 'assistant',
             content: assistantMessage,
           },
           {
             id: `3-${new Date().getTime()}`,
             role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-            annotations: ['hidden'],
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+              attachmentList,
+            )}]\n\n${messageContent}`,
           },
-        ] as Message[];
+        ]);
 
-        importChat(source.title, messages);
+        setTimeout(() => {
+          // wait for the files to be loaded
+          reload();
+        }, 1000);
+        setInput('');
+        Cookies.remove(PROMPT_COOKIE_KEY);
 
         sendEventToParent('EVENT', { name: 'START_EDITING' });
 
-        toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
-      } catch (error) {
-        console.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-        toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
-      } finally {
+        setAttachmentList([]);
+
+        resetEnhancer();
+
+        textareaRef.current?.blur();
         setFakeLoading(false);
-      }
-    };
 
-    // GitHub 임포트 함수 - 특화 로직만 남기고 공통 로직은 handleTemplateImport 호출
-    const handleGithubImport = async (repoUrl: string) => {
-      // GitHub 저장소 URL 파싱하여 owner/repo 형식 추출
-      const repoRegex = /github\.com\/([^\/]+\/[^\/]+)/;
-      const match = repoUrl.match(repoRegex);
+        return;
+      } catch (error) {
+        toast.warning(
+          `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
+        );
+        setChatStarted(false);
+        setFakeLoading(false);
 
-      if (!match) {
-        toast.error('Invalid GitHub repository URL. Please provide a valid URL.');
         return;
       }
+    }
 
-      const githubRepo = match[1].replace(/\.git$/, '');
-      const path = ''; // 저장소 루트에서 시작
-      const title = `GitHub: ${githubRepo}`;
+    try {
+      if (error != null) {
+        setMessages(messages.slice(0, -1));
+      }
 
-      // 공통 로직 함수 호출
-      await handleTemplateImport({ type: 'github', title }, getTemplates(githubRepo, path, title));
-    };
+      const modifiedFiles = workbenchStore.getModifiedFiles();
 
-    // ZIP 임포트 함수 - 특화 로직만 남기고 공통 로직은 handleTemplateImport 호출
-    const handleProjectZipImport = async (title: string, zipFile: File) => {
-      // 공통 로직 함수 호출
-      await handleTemplateImport({ type: 'zip', title }, getZipTemplates(zipFile, title));
-    };
+      chatStore.setKey('aborted', false);
 
-    return (
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isLoading || fakeLoading}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
-        messageRef={messageRef}
-        scrollRef={scrollRef}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        description={description}
-        importChat={importChat}
-        exportChat={exportChat}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
+      if (modifiedFiles !== undefined) {
+        const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
+        append({
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            attachmentList,
+          )}]\n\n${userUpdateArtifact}${messageContent}`,
+        });
 
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
-        attachmentList={attachmentList}
-        setAttachmentList={setAttachmentList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbenchStore.clearAlert()}
-        data={chatData}
-        onHandleTemplateImport={handleTemplateImport}
-        onGithubImport={handleGithubImport}
-        onProjectZipImport={handleProjectZipImport}
-      />
-    );
-  },
-);
+        workbenchStore.resetAllFileModifications();
+      } else {
+        append({
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            attachmentList,
+          )}]\n\n${messageContent}`,
+        });
+      }
+
+      setInput('');
+      Cookies.remove(PROMPT_COOKIE_KEY);
+
+      setAttachmentList([]);
+
+      resetEnhancer();
+
+      textareaRef.current?.blur();
+    } catch (error) {
+      logger.error('Error sending message:', error);
+
+      if (error instanceof Error) {
+        toast.error('Error:' + error?.message);
+      }
+    }
+  };
+
+  /**
+   * Handles the change event for the textarea and updates the input state.
+   * @param event - The change event from the textarea.
+   */
+  const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange(event);
+  };
+
+  /**
+   * Debounced function to cache the prompt in cookies.
+   * Caches the trimmed value of the textarea input after a delay to optimize performance.
+   */
+  const debouncedCachePrompt = useCallback(
+    debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const trimmedValue = event.target.value.trim();
+      Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+    }, 1000),
+    [],
+  );
+
+  const [messageRef, scrollRef] = useSnapScroll();
+
+  useEffect(() => {
+    const storedApiKeys = Cookies.get('apiKeys');
+
+    if (storedApiKeys) {
+      setApiKeys(JSON.parse(storedApiKeys));
+    }
+  }, []);
+
+  const handleModelChange = (newModel: string) => {
+    setModel(newModel);
+    Cookies.set('selectedModel', newModel, { expires: 30 });
+  };
+
+  const handleProviderChange = (newProvider: ProviderInfo) => {
+    setProvider(newProvider);
+    Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
+  };
+
+  const handleTemplateImport = async (
+    source: { type: 'github' | 'zip'; title: string },
+    files: FileMap,
+    templateData: { assistantMessage: string; userMessage: string },
+  ) => {
+    try {
+      setFakeLoading(true);
+
+      const toastId = toast.loading(
+        `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
+      );
+
+      // 템플릿 데이터 가져오기
+      const { assistantMessage, userMessage } = templateData;
+      toast.done(toastId);
+
+      const messages = [
+        {
+          id: `1-${new Date().getTime()}`,
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            attachmentList,
+          )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+        },
+        {
+          id: `2-${new Date().getTime()}`,
+          role: 'assistant',
+          content: assistantMessage,
+        },
+        {
+          id: `3-${new Date().getTime()}`,
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+          annotations: ['hidden'],
+        },
+      ] as Message[];
+
+      setInitialMessages(messages);
+      webcontainer.then(async (wc) => {
+        wc.mount(convertFileMapToFileSystemTree(files));
+      });
+      setChatStarted(true);
+      workbenchStore.showWorkbench.set(true);
+      reload();
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
+
+      toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
+    } catch (error) {
+      logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
+      toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
+    } finally {
+      setFakeLoading(false);
+    }
+  };
+
+  const handleProjectZipImport = async (title: string, zipFile: File) => {
+    const { fileMap, messages } = await getZipTemplates(zipFile, title);
+    await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
+  };
+
+  const handleFork = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+    const commitHash = message.id.split('-').pop();
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
+
+    const nameWords = repoStore.get().name.split('-');
+
+    let newRepoName = '';
+
+    if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
+      newRepoName = nameWords.slice(0, -1).join('-');
+    } else {
+      newRepoName = nameWords.join('-');
+    }
+
+    // Show loading toast while forking
+    const toastId = toast.loading('Forking project...');
+
+    try {
+      const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+
+      // Dismiss the loading toast
+      toast.dismiss(toastId);
+
+      if (forkedProject && forkedProject.success) {
+        toast.success('Forked project successfully');
+        window.location.href = '/chat/' + forkedProject.project.path;
+      } else {
+        toast.error('Failed to fork project');
+      }
+    } catch (error) {
+      // Dismiss the loading toast and show error
+      toast.dismiss(toastId);
+      toast.error('Failed to fork project');
+      logger.error('Error forking project:', error);
+    }
+  };
+
+  const handleRevert = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+    const projectPath = repoStore.get().path;
+    const commitHash = message.id.split('-').pop();
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
+
+    const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+    // Show loading toast while retrying
+    const toastId = toast.loading('Loading previous version...');
+
+    try {
+      const wc = await webcontainer;
+
+      const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
+      const deleteFiles = [];
+
+      for (const name of Object.keys(files)) {
+        const path = name.replace(WORK_DIR + '/', '');
+
+        if (!retryFiles[path]) {
+          deleteFiles.push(path);
+        }
+      }
+
+      for (const name of deleteFiles) {
+        await wc.fs.rm(name, { recursive: true, force: true });
+      }
+
+      await wc.mount(convertFileMapToFileSystemTree(retryFiles));
+      window.history.replaceState(null, '', '/chat/' + projectPath + '?revertTo=' + commitHash);
+
+      const newMessages = [...messages.slice(0, messageIndex + 1)];
+      setMessages(newMessages);
+
+      toast.dismiss(toastId);
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error('Failed to load previous version');
+      logger.error('Error loading previous version:', error);
+    }
+  };
+
+  const handleRetry = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+    const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+    if (messageIndex <= 0) {
+      toast.error('Retry failed');
+      return;
+    }
+
+    const prevMessage = messages[messageIndex - 1];
+
+    await handleRevert(prevMessage);
+
+    const toastId = toast.loading('Loading previous version...');
+
+    try {
+      await handleRevert(prevMessage);
+      setMessages((messages) => [...messages, message]);
+
+      setTimeout(() => {
+        reload();
+      }, 1000);
+
+      // Dismiss the loading toast on success
+      toast.dismiss(toastId);
+    } catch (error) {
+      // Dismiss the loading toast and show error
+      toast.dismiss(toastId);
+      toast.error('Failed to load previous version');
+      logger.error('Error loading previous version:', error);
+    }
+  };
+
+  return (
+    <BaseChat
+      ref={animationScope}
+      textareaRef={textareaRef}
+      input={input}
+      showChat={showChat}
+      chatStarted={chatStarted}
+      isStreaming={isLoading || fakeLoading}
+      onStreamingChange={(streaming) => {
+        streamingState.set(streaming);
+      }}
+      enhancingPrompt={enhancingPrompt}
+      promptEnhanced={promptEnhanced}
+      sendMessage={sendMessage}
+      model={model}
+      setModel={handleModelChange}
+      provider={provider}
+      setProvider={handleProviderChange}
+      providerList={activeProviders}
+      messageRef={messageRef}
+      scrollRef={scrollRef}
+      handleInputChange={(e) => {
+        onTextareaChange(e);
+        debouncedCachePrompt(e);
+      }}
+      handleStop={abort}
+      handleRetry={handleRetry}
+      handleFork={handleFork}
+      handleRevert={handleRevert}
+      description={description}
+      messages={messages.map((message, i) => {
+        if (message.role === 'user') {
+          return message;
+        }
+
+        return {
+          ...message,
+          content: parsedMessages[i] || '',
+        };
+      })}
+      enhancePrompt={() => {
+        enhancePrompt(
+          input,
+          (input) => {
+            setInput(input);
+            scrollTextArea();
+          },
+          model,
+          provider,
+          apiKeys,
+        );
+      }}
+      attachmentList={attachmentList}
+      setAttachmentList={setAttachmentList}
+      actionAlert={actionAlert}
+      clearAlert={() => workbenchStore.clearAlert()}
+      data={chatData}
+      onProjectZipImport={handleProjectZipImport}
+    />
+  );
+});

@@ -26,4 +26,7 @@ interface Env {
   V8_CREDIT_CLIENT_ID: string;
   V8_CREDIT_CLIENT_SECRET: string;
   VITE_ACCESS_CONTROL_ENABLED: string;
+  VITE_GITLAB_PERSISTENCE_ENABLED: string;
+  GITLAB_URL: string;
+  GITLAB_TOKEN: string;
 }

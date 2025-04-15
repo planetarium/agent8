@@ -1,4 +1,9 @@
+import type { FileNode } from '@webcontainer/api';
+import type { FileSystemTree } from '@webcontainer/api';
+import type { DirectoryNode } from '@webcontainer/api';
 import ignore from 'ignore';
+import { WORK_DIR } from './constants';
+import type { FileMap } from '~/lib/.server/llm/constants';
 
 // Common patterns to ignore, similar to .gitignore
 export const IGNORE_PATTERNS = [
@@ -119,3 +124,101 @@ ${files[filePath].content}
 </boltArtifact>
   `;
 };
+
+// FileMap을 FileSystemTree로 변환하는 유틸리티 함수
+export function convertFileMapToFileSystemTree(fileMap: FileMap): FileSystemTree {
+  const fileTree: FileSystemTree = {};
+  const dirSet = new Set<string>();
+
+  if (!fileMap) {
+    return {};
+  }
+
+  // 모든 디렉토리 경로 수집
+  Object.keys(fileMap).forEach((path) => {
+    if (fileMap[path]!.type === 'folder') {
+      // WORK_DIR 제거하고 경로 추출
+      const relativePath = path.replace(`${WORK_DIR}/`, '');
+
+      if (relativePath) {
+        dirSet.add(relativePath);
+      }
+    } else {
+      // 파일의 모든 상위 디렉토리 추출
+      const relativePath = path.replace(`${WORK_DIR}/`, '');
+      const pathParts = relativePath.split('/');
+
+      if (pathParts.length > 1) {
+        for (let i = 1; i < pathParts.length; i++) {
+          const dirPath = pathParts.slice(0, i).join('/');
+
+          if (dirPath) {
+            dirSet.add(dirPath);
+          }
+        }
+      }
+    }
+  });
+
+  // 디렉토리 구조 생성을 위한 헬퍼 함수
+  const ensureDirectoryExists = (tree: FileSystemTree, path: string[]): FileSystemTree => {
+    if (path.length === 0) {
+      return tree;
+    }
+
+    const [current, ...rest] = path;
+
+    if (!tree[current]) {
+      tree[current] = {
+        directory: {},
+      } as DirectoryNode;
+    }
+
+    if (rest.length === 0) {
+      return tree;
+    }
+
+    const dirNode = tree[current] as DirectoryNode;
+    ensureDirectoryExists(dirNode.directory, rest);
+
+    return tree;
+  };
+
+  // 모든 디렉토리 구조 생성
+  dirSet.forEach((dirPath) => {
+    const pathParts = dirPath.split('/');
+    ensureDirectoryExists(fileTree, pathParts);
+  });
+
+  // 파일 추가
+  Object.keys(fileMap).forEach((path) => {
+    if (fileMap[path]!.type === 'file') {
+      const relativePath = path.replace(`${WORK_DIR}/`, '');
+      const pathParts = relativePath.split('/');
+      const fileName = pathParts.pop() || '';
+
+      let currentTree = fileTree;
+
+      // 파일의 디렉토리 경로 탐색
+      for (let i = 0; i < pathParts.length; i++) {
+        const part = pathParts[i];
+
+        if (!currentTree[part]) {
+          currentTree[part] = { directory: {} } as DirectoryNode;
+        }
+
+        const dirNode = currentTree[part] as DirectoryNode;
+        currentTree = dirNode.directory;
+      }
+
+      // 파일 추가
+      currentTree[fileName] = {
+        file: {
+          contents: fileMap[path]!.content || '',
+        },
+      } as FileNode;
+    }
+  });
+
+  return fileTree;
+}

@@ -1,14 +1,7 @@
-import { useStore } from '@nanostores/react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import {
-  chatId as chatIdStore,
-  db,
-  description as descriptionStore,
-  getMessages,
-  updateChatDescription,
-} from '~/lib/persistence';
-
+import { repoStore } from '~/lib/stores/repo';
+import { updateProjectDescription } from '~/lib/persistenceGitbase/api.client';
 interface EditChatDescriptionOptions {
   initialDescription?: string;
   customChatId?: string;
@@ -18,9 +11,7 @@ interface EditChatDescriptionOptions {
 type EditChatDescriptionHook = {
   editing: boolean;
   handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleBlur: () => Promise<void>;
   handleSubmit: (event: React.FormEvent) => Promise<void>;
-  handleKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => Promise<void>;
   currentDescription: string;
   toggleEditMode: () => void;
 };
@@ -40,48 +31,28 @@ type EditChatDescriptionHook = {
  * @returns {EditChatDescriptionHook} Methods and state for managing description edits.
  */
 export function useEditChatDescription({
-  initialDescription = descriptionStore.get()!,
+  initialDescription,
   customChatId,
-  syncWithGlobalStore,
 }: EditChatDescriptionOptions): EditChatDescriptionHook {
-  const chatIdFromStore = useStore(chatIdStore);
   const [editing, setEditing] = useState(false);
-  const [currentDescription, setCurrentDescription] = useState(initialDescription);
-
-  const [chatId, setChatId] = useState<string>();
-
+  const [currentDescription, setCurrentDescription] = useState(initialDescription || 'No Name');
   useEffect(() => {
-    setChatId(customChatId || chatIdFromStore);
-  }, [customChatId, chatIdFromStore]);
-  useEffect(() => {
-    setCurrentDescription(initialDescription);
-  }, [initialDescription]);
+    const unsubscribe = repoStore.subscribe((state) => {
+      if (state.title !== currentDescription) {
+        setCurrentDescription(state.title);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const toggleEditMode = useCallback(() => setEditing((prev) => !prev), []);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentDescription(e.target.value);
   }, []);
-
-  const fetchLatestDescription = useCallback(async () => {
-    if (!db || !chatId) {
-      return initialDescription;
-    }
-
-    try {
-      const chat = await getMessages(db, chatId);
-      return chat?.description || initialDescription;
-    } catch (error) {
-      console.error('Failed to fetch latest description:', error);
-      return initialDescription;
-    }
-  }, [db, chatId, initialDescription]);
-
-  const handleBlur = useCallback(async () => {
-    const latestDescription = await fetchLatestDescription();
-    setCurrentDescription(latestDescription);
-    toggleEditMode();
-  }, [fetchLatestDescription, toggleEditMode]);
 
   const isValidDescription = useCallback((desc: string): boolean => {
     const trimmedDesc = desc.trim();
@@ -118,21 +89,12 @@ export function useEditChatDescription({
       }
 
       try {
-        if (!db) {
-          toast.error('Chat persistence is not available');
-          return;
-        }
+        await updateProjectDescription(repoStore.get().path, currentDescription);
 
-        if (!chatId) {
-          toast.error('Chat Id is not available');
-          return;
-        }
-
-        await updateChatDescription(db, chatId, currentDescription);
-
-        if (syncWithGlobalStore) {
-          descriptionStore.set(currentDescription);
-        }
+        repoStore.set({
+          ...repoStore.get(),
+          title: currentDescription,
+        });
 
         toast.success('Chat description updated successfully');
       } catch (error) {
@@ -141,24 +103,13 @@ export function useEditChatDescription({
 
       toggleEditMode();
     },
-    [currentDescription, db, chatId, initialDescription, customChatId],
-  );
-
-  const handleKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
-        await handleBlur();
-      }
-    },
-    [handleBlur],
+    [currentDescription, initialDescription, customChatId],
   );
 
   return {
     editing,
     handleChange,
-    handleBlur,
     handleSubmit,
-    handleKeyDown,
     currentDescription,
     toggleEditMode,
   };

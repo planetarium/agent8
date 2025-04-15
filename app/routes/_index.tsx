@@ -1,10 +1,12 @@
 import { json, type MetaFunction } from '@remix-run/cloudflare';
+import { useLoaderData } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
+import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 
 export const meta: MetaFunction = () => {
@@ -115,6 +117,18 @@ function AccessControlledChat() {
 }
 
 export default function Index() {
+  const { repoName, repoPath } = useLoaderData<{ repoName?: string; repoPath?: string }>();
+  useEffect(() => {
+    if (repoPath && repoName) {
+      repoStore.set({
+        name: repoName,
+        path: repoPath,
+        title: repoName,
+      });
+    }
+  }, [repoPath, repoName]);
+
   const isAccessControlEnabled = import.meta.env.VITE_ACCESS_CONTROL_ENABLED === 'true';
+
   return isAccessControlEnabled ? <AccessControlledChat /> : <DirectChatAccess />;
 }

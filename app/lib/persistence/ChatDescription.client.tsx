@@ -1,17 +1,14 @@
-import { useStore } from '@nanostores/react';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
 import WithTooltip from '~/components/ui/Tooltip';
 import { useEditChatDescription } from '~/lib/hooks';
-import { description as descriptionStore } from '~/lib/persistence';
+import { repoStore } from '~/lib/stores/repo';
 
 export function ChatDescription() {
-  const initialDescription = useStore(descriptionStore)!;
+  const initialDescription = repoStore.get().title;
 
-  const { editing, handleChange, handleBlur, handleSubmit, handleKeyDown, currentDescription, toggleEditMode } =
-    useEditChatDescription({
-      initialDescription,
-      syncWithGlobalStore: true,
-    });
+  const { editing, handleChange, handleSubmit, currentDescription, toggleEditMode } = useEditChatDescription({
+    initialDescription,
+  });
 
   if (!initialDescription) {
     // doing this to prevent showing edit button until chat description is set
@@ -28,8 +25,6 @@ export function ChatDescription() {
             autoFocus
             value={currentDescription}
             onChange={handleChange}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
             style={{ width: `${Math.max(currentDescription.length * 8, 100)}px` }}
           />
           <TooltipProvider>

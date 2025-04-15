@@ -28,7 +28,7 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
-import { ImportProject } from './ImportProject';
+import { ImportProjectZip } from './ImportProjectZip';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -63,20 +63,16 @@ interface BaseChatProps {
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   enhancePrompt?: () => void;
-  importChat?: (description: string, messages: Message[]) => Promise<void>;
-  exportChat?: () => void;
   attachmentList?: ChatAttachment[];
   setAttachmentList?: React.Dispatch<React.SetStateAction<ChatAttachment[]>>;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
-  onHandleTemplateImport?: (
-    source: { type: 'github' | 'zip'; title: string },
-    templateData: Promise<{ assistantMessage: string; userMessage: string }>,
-  ) => void;
-  onGithubImport?: (repoUrl: string) => void;
   onProjectZipImport?: (title: string, zipFile: File) => void;
+  handleRetry?: (message: Message) => void;
+  handleFork?: (message: Message) => void;
+  handleRevert?: (message: Message) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -102,7 +98,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       enhancePrompt,
       sendMessage,
       handleStop,
-      exportChat,
       attachmentList = [],
       setAttachmentList,
       messages,
@@ -110,9 +105,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       clearAlert,
       data,
       actionRunner,
-      onGithubImport,
       onProjectZipImport,
-      onHandleTemplateImport,
+      handleRetry,
+      handleFork,
+      handleRevert,
     },
     ref,
   ) => {
@@ -410,6 +406,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       });
     };
 
+    const exportChat = () => {
+      const chatData = {
+        messages,
+        exportDate: new Date().toISOString(),
+      };
+
+      const blob = new Blob([JSON.stringify(chatData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat-${new Date().toISOString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
     const baseChat = (
       <div
         ref={ref}
@@ -443,6 +456,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
                       messages={messages}
                       isStreaming={isStreaming}
+                      onRetry={handleRetry}
+                      onFork={handleFork}
+                      onRevert={handleRevert}
                     />
                   ) : null;
                 }}
@@ -654,9 +670,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           a new line
                         </div>
                       ) : (
-                        !chatStarted && (
-                          <ImportProject onGithubImport={onGithubImport} onZipImport={onProjectZipImport} />
-                        )
+                        !chatStarted && <ImportProjectZip onImport={onProjectZipImport} />
                       )}
                     </div>
                   </div>
@@ -664,14 +678,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </div>
             </div>
             <div className="flex flex-col justify-center gap-5">
-              {!chatStarted && (
-                <div className="flex justify-center gap-2">
-                  <div className="flex items-center gap-2">
-                    {/* {ImportButtons(importChat)} */}
-                    {/* <GitCloneButton importChat={importChat} className="min-w-[120px]" /> */}
-                  </div>
-                </div>
-              )}
               {!chatStarted &&
                 ExamplePrompts((event, messageInput) => {
                   if (isStreaming) {
@@ -690,7 +696,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 actionRunner={actionRunner ?? ({} as ActionRunner)}
                 chatStarted={chatStarted}
                 isStreaming={isStreaming}
-                onHandleTemplateImport={onHandleTemplateImport}
               />
             )}
           </ClientOnly>

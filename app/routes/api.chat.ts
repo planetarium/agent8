@@ -81,6 +81,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
     const dataStream = createDataStream({
       async execute(dataStream) {
+        const lastUserMessage = messages.filter((x) => x.role == 'user').pop();
+
+        if (lastUserMessage) {
+          dataStream.writeMessageAnnotation({
+            type: 'prompt',
+            prompt: lastUserMessage.content,
+          } as any);
+        }
+
         // Track unsubscribe functions to clean up later if needed
         const progressUnsubscribers: Array<() => void> = [];
 

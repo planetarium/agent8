@@ -11,14 +11,12 @@ import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
 import JSZip from 'jszip';
 import fileSaver from 'file-saver';
-import { Octokit, type RestEndpointMethodTypes } from '@octokit/rest';
 import { path } from '~/utils/path';
 import { extractRelativePath } from '~/utils/diff';
-import { description } from '~/lib/persistence';
-import Cookies from 'js-cookie';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
 import { WORK_DIR } from '~/utils/constants';
+import { repoStore } from './repo';
 
 const { saveAs } = fileSaver;
 
@@ -333,6 +331,12 @@ export class WorkbenchStore {
       return;
     }
 
+    // Don't run the action if it's a reload
+    if (this.#reloadedMessages.has(messageId)) {
+      artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+      return;
+    }
+
     if (data.action.type === 'file') {
       const wc = await webcontainer;
       const fullPath = path.join(wc.workdir, data.action.filePath);
@@ -405,7 +409,7 @@ export class WorkbenchStore {
 
   async downloadZip() {
     // Get the project name from the description input, or use a default name
-    const projectName = (description.value ?? 'project').toLocaleLowerCase().split(' ').join('_');
+    const projectName = (repoStore.get().name ?? 'project').toLocaleLowerCase().split(' ').join('_');
 
     // Generate a simple 6-character hash based on the current timestamp
     const timestampHash = Date.now().toString(36).slice(-6);
@@ -444,115 +448,6 @@ export class WorkbenchStore {
     }
 
     return syncedFiles;
-  }
-
-  async pushToGitHub(repoName: string, commitMessage?: string, githubUsername?: string, ghToken?: string) {
-    try {
-      // Use cookies if username and token are not provided
-      const githubToken = ghToken || Cookies.get('githubToken');
-      const owner = githubUsername || Cookies.get('githubUsername');
-
-      if (!githubToken || !owner) {
-        throw new Error('GitHub token or username is not set in cookies or provided.');
-      }
-
-      // Initialize Octokit with the auth token
-      const octokit = new Octokit({ auth: githubToken });
-
-      // Check if the repository already exists before creating it
-      let repo: RestEndpointMethodTypes['repos']['get']['response']['data'];
-
-      try {
-        const resp = await octokit.repos.get({ owner, repo: repoName });
-        repo = resp.data;
-      } catch (error) {
-        if (error instanceof Error && 'status' in error && error.status === 404) {
-          // Repository doesn't exist, so create a new one
-          const { data: newRepo } = await octokit.repos.createForAuthenticatedUser({
-            name: repoName,
-            private: false,
-            auto_init: true,
-          });
-          repo = newRepo;
-        } else {
-          console.log('cannot create repo!');
-          throw error; // Some other error occurred
-        }
-      }
-
-      // Get all files
-      const files = this.files.get();
-
-      if (!files || Object.keys(files).length === 0) {
-        throw new Error('No files found to push');
-      }
-
-      // Create blobs for each file
-      const blobs = await Promise.all(
-        Object.entries(files).map(async ([filePath, dirent]) => {
-          if (dirent?.type === 'file' && dirent.content) {
-            const { data: blob } = await octokit.git.createBlob({
-              owner: repo.owner.login,
-              repo: repo.name,
-              content: Buffer.from(dirent.content).toString('base64'),
-              encoding: 'base64',
-            });
-            return { path: extractRelativePath(filePath), sha: blob.sha };
-          }
-
-          return null;
-        }),
-      );
-
-      const validBlobs = blobs.filter(Boolean); // Filter out any undefined blobs
-
-      if (validBlobs.length === 0) {
-        throw new Error('No valid files to push');
-      }
-
-      // Get the latest commit SHA (assuming main branch, update dynamically if needed)
-      const { data: ref } = await octokit.git.getRef({
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch || 'main'}`, // Handle dynamic branch
-      });
-      const latestCommitSha = ref.object.sha;
-
-      // Create a new tree
-      const { data: newTree } = await octokit.git.createTree({
-        owner: repo.owner.login,
-        repo: repo.name,
-        base_tree: latestCommitSha,
-        tree: validBlobs.map((blob) => ({
-          path: blob!.path,
-          mode: '100644',
-          type: 'blob',
-          sha: blob!.sha,
-        })),
-      });
-
-      // Create a new commit
-      const { data: newCommit } = await octokit.git.createCommit({
-        owner: repo.owner.login,
-        repo: repo.name,
-        message: commitMessage || 'Initial commit from your app',
-        tree: newTree.sha,
-        parents: [latestCommitSha],
-      });
-
-      // Update the reference
-      await octokit.git.updateRef({
-        owner: repo.owner.login,
-        repo: repo.name,
-        ref: `heads/${repo.default_branch || 'main'}`, // Handle dynamic branch
-        sha: newCommit.sha,
-      });
-
-      alert(`Repository created and code pushed: ${repo.html_url}`);
-    } catch (error) {
-      console.error('Error pushing to GitHub:', error);
-      throw error; // Rethrow the error for further handling
-    }
   }
 
   // 퍼블리시된 URL 설정 메서드 추가
