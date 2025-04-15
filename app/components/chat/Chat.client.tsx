@@ -193,12 +193,7 @@ async function runAndPreview(message: Message) {
 
   const previews = workbenchStore.previews.get();
 
-  if (
-    !isServerUpdated &&
-    !isPackageJsonUpdated &&
-    previews.length > 0 &&
-    previews.find((p) => p.ready && p.port === 5173)
-  ) {
+  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready && p.port === 5173)) {
     workbenchStore.currentView.set('preview');
     return;
   }
