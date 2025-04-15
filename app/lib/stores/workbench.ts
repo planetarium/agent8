@@ -17,6 +17,7 @@ import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
 import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from './repo';
+import { isEnabledGitbasePersistence, commitUserChanged } from '~/lib/persistenceGitbase/api.client';
 
 const { saveAs } = fileSaver;
 
@@ -455,25 +456,30 @@ export class WorkbenchStore {
     this.#previewsStore.setPublishedUrl(url);
   }
 
+  async commitModifiedFiles(): Promise<{ id: string; message: string } | undefined> {
+    const modifiedFiles = this.getModifiedFiles();
+
+    let result;
+
+    if (modifiedFiles !== undefined) {
+      if (isEnabledGitbasePersistence) {
+        const { data: commit } = await commitUserChanged();
+        const id = 'assistant-' + commit.commitHash;
+        this.setReloadedMessages([...this.#reloadedMessages, id]);
+
+        result = { id, message: commit.message };
+      }
+
+      this.resetAllFileModifications();
+    }
+
+    return result;
+  }
+
   async publish(chatId: string, title: string) {
     this.currentView.set('code');
 
-    const envFilePath = `${WORK_DIR}/.env`;
-    const envFile = this.files.get()[envFilePath];
-    let verseId = '';
-
-    if (envFile && envFile.type === 'file') {
-      const envContent = envFile.content;
-      const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
-
-      if (matches && matches[1]) {
-        verseId = matches[1];
-      }
-    }
-
-    if (!verseId) {
-      throw new Error('Can not find verseId');
-    }
+    this.commitModifiedFiles();
 
     // WebContainer 터미널에 접근
     const shell = workbenchStore.boltTerminal;
@@ -512,6 +518,23 @@ export class WorkbenchStore {
     console.log('[Publish] Result:', result);
 
     if (result?.exitCode === 0) {
+      const envFilePath = `${WORK_DIR}/.env`;
+      const envFile = this.files.get()[envFilePath];
+      let verseId = '';
+
+      if (envFile && envFile.type === 'file') {
+        const envContent = envFile.content;
+        const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
+
+        if (matches && matches[1]) {
+          verseId = matches[1];
+        }
+      }
+
+      if (!verseId) {
+        throw new Error('Can not find verseId');
+      }
+
       const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${chatId}&buildAt=${Date.now()}`;
       this.setPublishedUrl(publishedUrl);
 
