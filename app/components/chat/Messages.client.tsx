@@ -78,7 +78,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
                         }
                       >
-                        {messageId && isCommitHash(messageId) && (
+                        {messageId && isCommitHash(messageId.split('-').pop() as string) && (
                           <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
                             <span className="i-ph:arrow-u-up-left text-xl" />
                             Revert to this message

@@ -27,6 +27,21 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     providerName: 'Anthropic',
     modelName: 'claude-3-7-sonnet-20250219',
   },
+  {
+    label: 'GPT-4.1',
+    providerName: 'OpenRouter',
+    modelName: 'openai/gpt-4.1',
+  },
+  {
+    label: 'Gemini 2.5 Pro Preview',
+    providerName: 'OpenRouter',
+    modelName: 'google/gemini-2.5-pro-preview-03-25',
+  },
+  {
+    label: 'Grok3 Beta',
+    providerName: 'OpenRouter',
+    modelName: 'x-ai/grok-3-beta',
+  },
 ];
 
 /**

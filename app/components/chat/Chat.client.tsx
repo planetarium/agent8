@@ -24,7 +24,7 @@ import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
-import { convertFileMapToFileSystemTree, filesToArtifacts } from '~/utils/fileUtils';
+import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import {
   commitChanges,
@@ -37,6 +37,7 @@ import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { extractTextContent } from '~/utils/message';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -182,8 +183,20 @@ const processSampledMessages = createSampler(
   50,
 );
 
-async function runAndPreview() {
+async function runAndPreview(message: Message) {
   workbenchStore.clearAlert();
+
+  const content = extractTextContent(message);
+
+  const isServerUpdated = /<boltAction[^>]*filePath="server.js"[^>]*>/g.test(content);
+  const isPackageJsonUpdated = /<boltAction[^>]*filePath="package.json"[^>]*>/g.test(content);
+
+  const previews = workbenchStore.previews.get();
+
+  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready && p.port === 5173)) {
+    workbenchStore.currentView.set('preview');
+    return;
+  }
 
   const shell = workbenchStore.boltTerminal;
   await shell.ready();
@@ -267,6 +280,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       toast.error(
         'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
       );
+      setFakeLoading(false);
     },
     onFinish: async (message, response) => {
       const usage = response.usage;
@@ -283,7 +297,8 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         });
       }
 
-      await Promise.all([runAndPreview(), handleCommit(message)]);
+      setFakeLoading(false);
+      await Promise.all([runAndPreview(message), handleCommit(message)]);
 
       logger.debug('Finished streaming');
     },
@@ -327,6 +342,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
     try {
       await commitChanges(message, (commitHash) => {
+        workbenchStore.setReloadedMessages([...messages.map((m) => m.id), commitHash]);
         setMessages((prev: Message[]) =>
           prev.map((m: Message) => {
             if (m.id === message.id) {
@@ -408,6 +424,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       return;
     }
 
+    setFakeLoading(true);
     runAnimation();
 
     if (attachmentList.length > 0) {
@@ -451,8 +468,6 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
     if (!chatStarted) {
       try {
-        setFakeLoading(true);
-
         const { template, title, projectRepo } = await selectStarterTemplate({
           message: messageContent,
           model,
@@ -556,28 +571,28 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         setMessages(messages.slice(0, -1));
       }
 
-      const modifiedFiles = workbenchStore.getModifiedFiles();
-
       chatStore.setKey('aborted', false);
 
-      if (modifiedFiles !== undefined) {
-        const userUpdateArtifact = filesToArtifacts(modifiedFiles, `${Date.now()}`);
-        append({
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\n${userUpdateArtifact}${messageContent}`,
-        });
+      const commit = await workbenchStore.commitModifiedFiles();
 
-        workbenchStore.resetAllFileModifications();
-      } else {
-        append({
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\n${messageContent}`,
-        });
+      if (commit) {
+        setMessages((prev: Message[]) => [
+          ...prev,
+          {
+            id: commit.id,
+            role: 'assistant',
+            content: commit.message || 'The user changed the files.',
+            parts: [],
+          },
+        ]);
       }
+
+      append({
+        role: 'user',
+        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+          attachmentList,
+        )}]\n\n${messageContent}`,
+      });
 
       setInput('');
       Cookies.remove(PROMPT_COOKIE_KEY);

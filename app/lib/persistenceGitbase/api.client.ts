@@ -6,7 +6,8 @@ import { repoStore } from '~/lib/stores/repo';
 import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
-
+import { filesToArtifactsNoContent } from '~/utils/fileUtils';
+import { extractTextContent } from '~/utils/message';
 export const isEnabledGitbasePersistence = import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
 
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
@@ -21,13 +22,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
   const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
   let files = [];
-  const content =
-    message.parts && message.parts.length > 1
-      ? message.parts
-          .filter((part) => part.type === 'text')
-          .map((part) => part.text)
-          .join('')
-      : message.content;
+  const content = extractTextContent(message);
 
   if (isFirstCommit) {
     // If repositoryName is not set, commit all files
@@ -95,6 +90,48 @@ ${content.replace(/(<boltAction[^>]*filePath[^>]*>)(.*?)(<\/boltAction>)/gs, '$1
   }
 
   callback?.(result.data.commitHash);
+
+  return result;
+};
+
+export const commitUserChanged = async () => {
+  const modifiedFiles = workbenchStore.getModifiedFiles();
+  const projectName = repoStore.get().name;
+  const title = repoStore.get().title;
+
+  const url = new URL(window.location.href);
+  const revertToParam = url.searchParams.get('revertTo');
+  const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
+
+  if (!modifiedFiles || Object.keys(modifiedFiles).length === 0) {
+    return {};
+  }
+
+  const files = Object.entries(modifiedFiles)
+    .filter(([_, file]) => file && (file as any).content)
+    .map(([path, file]) => ({
+      path: path.replace(WORK_DIR + '/', ''),
+      content: (file as any).content,
+    }));
+
+  const response = await axios.post('/api/gitlab/commits', {
+    projectName,
+    isFirstCommit: false,
+    description: title,
+    files,
+    commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
+    baseCommit: revertTo,
+  });
+
+  const result = response.data;
+
+  if (!result.data.commitHash) {
+    throw new Error('The user changed files commit has failed.');
+  }
+
+  if (revertTo) {
+    window.history.replaceState({}, '', location.pathname + '?revertTo=' + result.data.commitHash);
+  }
 
   return result;
 };
