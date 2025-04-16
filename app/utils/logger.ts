@@ -44,6 +44,11 @@ function setLevel(level: DebugLevel) {
   currentLevel = level;
 }
 
+function formatTime(): string {
+  const now = new Date();
+  return now.toTimeString().split(' ')[0] + '.' + now.getMilliseconds().toString().padStart(3, '0');
+}
+
 function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
   const levelOrder: DebugLevel[] = ['trace', 'debug', 'info', 'warn', 'error'];
 
@@ -68,6 +73,7 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
 
   const labelStyles = getLabelStyles(labelBackgroundColor, labelTextColor);
   const scopeStyles = getLabelStyles('#77828D', 'white');
+  const timeStyles = getLabelStyles('#555555', 'white');
 
   const styles = [labelStyles];
 
@@ -75,14 +81,27 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
     styles.push('', scopeStyles);
   }
 
+  styles.push('', timeStyles);
+
+  const timeString = formatTime();
+  const timeLabel = formatText(` ${timeString} `, '#FFFFFF', '#555555');
+
   let labelText = formatText(` ${level.toUpperCase()} `, labelTextColor, labelBackgroundColor);
 
   if (scope) {
     labelText = `${labelText} ${formatText(` ${scope} `, '#FFFFFF', '77828D')}`;
   }
 
+  labelText = `${timeLabel} ${labelText}`;
+
   if (typeof window !== 'undefined') {
-    console.log(`%c${level.toUpperCase()}${scope ? `%c %c${scope}` : ''}`, ...styles, allMessages);
+    console.log(
+      `%c${timeString}%c ${level.toUpperCase()}${scope ? `%c %c${scope}` : ''}`,
+      timeStyles,
+      labelStyles,
+      ...styles.slice(2),
+      allMessages,
+    );
   } else {
     console.log(`${labelText}`, allMessages);
   }
