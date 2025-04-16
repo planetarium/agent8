@@ -47,6 +47,20 @@ const messageParser = new StreamingMessageParser({
 export function useMessageParser() {
   const [parsedMessages, setParsedMessages] = useState<{ [key: number]: string }>({});
 
+  const resetParsedMessagesFrom = useCallback((fromIndex: number) => {
+    setParsedMessages((prevParsed: { [key: number]: string }) => {
+      const newParsedMessages = { ...prevParsed };
+
+      Object.keys(prevParsed).forEach((key: string) => {
+        if (Number(key) >= fromIndex) {
+          delete newParsedMessages[Number(key)];
+        }
+      });
+
+      return newParsedMessages;
+    });
+  }, []);
+
   const parseMessages = useCallback((messages: Message[], isLoading: boolean) => {
     let reset = false;
 
@@ -101,5 +115,5 @@ export function useMessageParser() {
     }
   }, []);
 
-  return { parsedMessages, parseMessages };
+  return { parsedMessages, parseMessages, resetParsedMessagesFrom };
 }

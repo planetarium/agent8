@@ -322,7 +322,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   }, [model, provider, searchParams]);
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
-  const { parsedMessages, parseMessages } = useMessageParser();
+  const { parsedMessages, parseMessages, resetParsedMessagesFrom } = useMessageParser();
 
   const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -350,8 +350,9 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     try {
       await commitChanges(message, (commitHash) => {
         workbenchStore.setReloadedMessages([...messages.map((m) => m.id), commitHash]);
-        setMessages((prev: Message[]) =>
-          prev.map((m: Message) => {
+
+        setMessages((prev: Message[]) => {
+          const newMessages = prev.map((m: Message) => {
             if (m.id === message.id) {
               return {
                 ...m,
@@ -360,8 +361,12 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
             }
 
             return m;
-          }),
-        );
+          });
+
+          resetParsedMessagesFrom(newMessages.length - 1);
+
+          return newMessages;
+        });
       });
     } catch (e) {
       toast.error('The code commit has failed. You can download the code and restore it.');
@@ -827,7 +832,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
         ignoreChangeEvent: true,
       });
       setMessages(newMessages);
-
+      resetParsedMessagesFrom(messageIndex);
       setTimeout(() => {
         reload();
       }, 1000);
