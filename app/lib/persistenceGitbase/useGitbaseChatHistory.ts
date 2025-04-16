@@ -68,21 +68,27 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [untilCommit, setUntilCommit] = useState<string | null>(null);
 
   const [searchParams] = useSearchParams();
-  const revertTo = ((r: string | null) => {
-    if (r && isCommitHash(r)) {
-      return r;
-    }
-
-    return null;
-  })(searchParams.get('revertTo'));
 
   // 이전 요청 매개변수를 추적하기 위한 ref
   const prevRequestParams = useRef<string | null>(null);
 
   // 옵션 객체를 ref로 저장하여 불필요한 리렌더링 방지
   const optionsRef = useRef(options);
+
+  useEffect(() => {
+    const revertTo = ((r: string | null) => {
+      if (r && isCommitHash(r)) {
+        return r;
+      }
+
+      return null;
+    })(searchParams.get('revertTo'));
+
+    setUntilCommit(revertTo);
+  }, [searchParams]);
 
   // 옵션이 변경되면 ref를 업데이트
   useEffect(() => {
@@ -173,7 +179,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
 
       setLoadingFiles(true);
 
-      const fileMap = await fetchProjectFiles(repoId, revertTo || undefined);
+      const fileMap = await fetchProjectFiles(repoId, untilCommit || undefined);
 
       setFiles(fileMap);
       setFilesLoaded(true);
@@ -182,7 +188,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     } finally {
       setLoadingFiles(false);
     }
-  }, [repoId, fetchProjectFiles, revertTo]);
+  }, [repoId, fetchProjectFiles, untilCommit]);
 
   // Fetch commits from the API
   const fetchCommits = useCallback(
@@ -197,6 +203,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         return;
       }
 
+      setLoaded(false);
       setLoading(true);
       setError(null);
 
@@ -212,24 +219,30 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
           queryParams.append('branch', currentOptions.branch);
         }
 
-        if (revertTo) {
-          queryParams.append('untilCommit', revertTo);
+        if (untilCommit) {
+          queryParams.append('untilCommit', untilCommit);
         }
 
         const requestParamsString = queryParams.toString();
 
         // 동일한 요청 파라미터로 이미 요청한 경우 (페이지가 다른 경우 제외)
         if (!append && prevRequestParams.current === requestParamsString) {
+          setLoaded(true);
           setLoading(false);
+
           return;
         }
 
         // 현재 요청 파라미터 저장
         prevRequestParams.current = requestParamsString;
 
+        if (page === 1) {
+          loadFiles();
+        }
+
         const data = (await getProjectCommits(repoId, {
           branch: currentOptions.branch,
-          untilCommit: revertTo || undefined,
+          untilCommit: untilCommit || undefined,
           page,
         })) as CommitResponse;
 
@@ -254,10 +267,11 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         setError(err instanceof Error ? err.message : 'Unknown error fetching commit history');
         logger.error('Error fetching commit history:', err);
       } finally {
+        setLoaded(true);
         setLoading(false);
       }
     },
-    [repoId, loading, parseCommitMessages, fetchProjectFiles],
+    [repoId, loading, parseCommitMessages, fetchProjectFiles, untilCommit],
   );
 
   // Load more commits
@@ -267,7 +281,30 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     }
 
     await fetchCommits(currentPage + 1, true);
-  }, [loading, hasMore, currentPage, fetchCommits]);
+  }, [loading, hasMore, currentPage, fetchCommits, untilCommit]);
+
+  // popstate 이벤트 리스너 추가 (브라우저 뒤로가기/앞으로가기 시 처리)
+  useEffect(() => {
+    const handleChangeState = () => {
+      const url = new URL(window.location.href);
+      const urlRevertTo = url.searchParams.get('revertTo');
+
+      // 현재 URL의 revertTo 값이 상태의 값과 다르면 데이터 다시 로드
+      if (urlRevertTo && isCommitHash(urlRevertTo) && urlRevertTo !== untilCommit) {
+        setUntilCommit(urlRevertTo);
+      } else {
+        setUntilCommit(null);
+      }
+    };
+
+    window.addEventListener('popstate', handleChangeState);
+    window.addEventListener('urlchange', handleChangeState);
+
+    return () => {
+      window.removeEventListener('popstate', handleChangeState);
+      window.removeEventListener('urlchange', handleChangeState);
+    };
+  }, [untilCommit]);
 
   // Initial load - useEffect 최적화
   useEffect(() => {
@@ -281,16 +318,14 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
       return () => 0;
     }
 
-    // 다음 프레임에서 데이터 로드 (디바운싱 효과)
     const timeoutId = setTimeout(() => {
       fetchCommits(1, false);
-      loadFiles();
     }, 0);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [repoId, fetchCommits, loadFiles]);
+  }, [repoId, fetchCommits, loadFiles, untilCommit]);
 
   return {
     loaded: loaded && filesLoaded,

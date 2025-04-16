@@ -62,13 +62,16 @@ function remarkThinkRawContent() {
   return (tree: any) => {
     visit(tree, (node: any) => {
       if (node.type === 'html' && node.value && node.value.startsWith('<think>')) {
-        const cleanedContent = node.value.slice(7);
-        node.value = `<div class="__boltThought__">${cleanedContent}`;
+        const match = node.value.match(/<think>([\s\S]*?)<\/think>/);
 
-        return;
-      }
-
-      if (node.type === 'html' && node.value && node.value.startsWith('</think>')) {
+        if (match) {
+          const cleanedContent = match[1];
+          node.value = `<div class="__boltThought__">${cleanedContent}</div>`;
+        } else {
+          const cleanedContent = node.value.slice(7);
+          node.value = `<div class="__boltThought__">${cleanedContent}`;
+        }
+      } else if (node.type === 'html' && node.value && node.value.startsWith('</think>')) {
         const cleanedContent = node.value.slice(8);
         node.value = `</div>${cleanedContent}`;
       }

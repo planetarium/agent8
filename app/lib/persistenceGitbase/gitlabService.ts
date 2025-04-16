@@ -144,7 +144,7 @@ export class GitlabService {
         params: {
           owned: true,
           search: projectName,
-          per_page: 100,
+          per_page: 1,
         },
       });
 
@@ -152,9 +152,7 @@ export class GitlabService {
 
       let finalProjectName = projectName;
 
-      const exactMatch = existingProjects.find((p: any) => p.name?.toLowerCase() === projectName.toLowerCase());
-
-      if (exactMatch) {
+      if (existingProjects.length > 0) {
         const timestamp = new Date().getTime();
         finalProjectName = `${projectName}-${timestamp}`;
       }

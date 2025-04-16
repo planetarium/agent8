@@ -18,6 +18,15 @@ export type ContextConsumeUserCredit = (args: {
   description?: string;
 }) => Promise<void>;
 
+export type ContextUser = {
+  accessToken: string;
+  uid: string;
+  email: string;
+  walletAddress: string;
+  isActivated: boolean;
+  credit: string;
+};
+
 export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
   return async (args: ActionFunctionArgs) => {
     const { context, request } = args;
@@ -72,7 +81,14 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       // 검증된 사용자 정보를 context에 추가
       const enhancedContext = {
         ...context,
-        user: { accessToken, uid: userUid, email, walletAddress, isActivated, credit: credit?.toString() },
+        user: {
+          accessToken,
+          uid: userUid,
+          email,
+          walletAddress,
+          isActivated,
+          credit: credit?.toString() || '0',
+        } as ContextUser,
         consumeUserCredit: (consumeArgs: {
           inputTokens: number;
           outputTokens: number;
