@@ -9,6 +9,7 @@ import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
+import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 
 interface MessagesProps {
   id?: string;
@@ -71,38 +72,42 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       <AssistantMessage content={message.content} annotations={message.annotations} />
                     )}
                   </div>
-                  {!isUserMessage ? (
-                    <div className="flex items-start mt-2.5">
-                      <Dropdown
-                        trigger={
-                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                        }
-                      >
-                        {messageId && isCommitHash(messageId.split('-').pop() as string) && (
-                          <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
-                            <span className="i-ph:arrow-u-up-left text-xl" />
-                            Revert to this message
-                          </DropdownItem>
-                        )}
-                        <DropdownItem onSelect={() => onFork?.(message)}>
-                          <span className="i-ph:git-fork text-xl" />
-                          Fork chat from this message
-                        </DropdownItem>
-                      </Dropdown>
-                    </div>
-                  ) : (
-                    <div className="flex items-start mt-2.5">
-                      <Dropdown
-                        trigger={
-                          <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                        }
-                      >
-                        <DropdownItem onSelect={() => onRetry?.(message)}>
-                          <span className="i-ph:arrow-clockwise text-xl" />
-                          Retry chat
-                        </DropdownItem>
-                      </Dropdown>
-                    </div>
+                  {isEnabledGitbasePersistence && (
+                    <>
+                      {!isUserMessage ? (
+                        <div className="flex items-start mt-2.5">
+                          <Dropdown
+                            trigger={
+                              <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                            }
+                          >
+                            {messageId && isCommitHash(messageId.split('-').pop() as string) && (
+                              <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
+                                <span className="i-ph:arrow-u-up-left text-xl" />
+                                Revert to this message
+                              </DropdownItem>
+                            )}
+                            <DropdownItem onSelect={() => onFork?.(message)}>
+                              <span className="i-ph:git-fork text-xl" />
+                              Fork chat from this message
+                            </DropdownItem>
+                          </Dropdown>
+                        </div>
+                      ) : (
+                        <div className="flex items-start mt-2.5">
+                          <Dropdown
+                            trigger={
+                              <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                            }
+                          >
+                            <DropdownItem onSelect={() => onRetry?.(message)}>
+                              <span className="i-ph:arrow-clockwise text-xl" />
+                              Retry chat
+                            </DropdownItem>
+                          </Dropdown>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );

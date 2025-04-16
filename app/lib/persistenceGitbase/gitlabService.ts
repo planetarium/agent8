@@ -20,10 +20,10 @@ export class GitlabService {
   gitlabToken: string;
   enabled: boolean;
 
-  constructor(env: Env) {
+  constructor(env: Env, temporaryMode?: boolean) {
     this.gitlabUrl = env.GITLAB_URL || 'https://gitlab.verse8.io';
     this.gitlabToken = env.GITLAB_TOKEN;
-    this.enabled = env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
+    this.enabled = env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' && !temporaryMode;
 
     if (!this.gitlabToken) {
       logger.warn('GITLAB_TOKEN is not set. GitLab API calls may fail.');
