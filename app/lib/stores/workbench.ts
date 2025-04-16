@@ -535,7 +535,7 @@ export class WorkbenchStore {
         throw new Error('Can not find verseId');
       }
 
-      const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${chatId}&buildAt=${Date.now()}`;
+      const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}&buildAt=${Date.now()}`;
       this.setPublishedUrl(publishedUrl);
 
       try {

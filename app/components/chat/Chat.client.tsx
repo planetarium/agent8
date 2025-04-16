@@ -108,6 +108,10 @@ export function Chat() {
   const title = repoStore.get().title;
 
   useEffect(() => {
+    changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+  }, []);
+
+  useEffect(() => {
     if (initialMessages.length > 0) {
       workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
     }

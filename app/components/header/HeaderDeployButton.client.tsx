@@ -4,7 +4,7 @@ import { repoStore } from '~/lib/stores/repo';
 
 export function HeaderDeployButton() {
   const handleDeploy = async () => {
-    const chatId = repoStore.get().name;
+    const chatId = repoStore.get().path;
     const title = repoStore.get().title || 'Game Project';
 
     if (chatId) {
