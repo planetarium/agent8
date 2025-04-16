@@ -53,11 +53,11 @@ export async function streamText(props: {
   let currentProvider = DEFAULT_PROVIDER.name;
   let processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content } = extractPropertiesFromMessage(message);
+      const { model, provider, content, parts } = extractPropertiesFromMessage(message);
       currentModel = model;
       currentProvider = provider;
 
-      return { ...message, content };
+      return { ...message, content, parts };
     } else if (message.role == 'assistant') {
       let content = message.content;
       content = content.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');

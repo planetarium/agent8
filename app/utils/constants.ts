@@ -7,6 +7,7 @@ export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
+export const DEV_TAG_REGEX = /<__DEV__>(.*?)<\/__DEV__>/;
 export const DEFAULT_MODEL = 'anthropic/claude-3.7-sonnet';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 

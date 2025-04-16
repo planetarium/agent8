@@ -233,6 +233,8 @@ async function filterRelevantExamples(props: {
 
       Only include examples that receive "yes" answers to ALL three questions.
 
+      CRITICAL: Return ONLY the most important examples (maximum of 3) that are most relevant to the user's request.
+
       IMPORTANT: Your response must be a valid JSON array containing only the IDs of highly relevant examples.
       Example format: ["1", "3", "5"]
 
@@ -357,46 +359,65 @@ export async function searchVectorDB(props: {
     totalTokens: 0,
   };
 
-  // Step 1: Extract specific requirements from the user's request
-  const requirements = await extractRequirements({
-    userMessage: userMessageText,
-    summary,
-    model,
-    contextFiles: contextFiles || {},
-    onStepFinish: (resp) => {
-      if (resp.usage) {
-        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-      }
-    },
-  });
+  // Check if the message contains <useVectordb> tag
+  const vectordbMatch = userMessageText.match(/<useVectordb>(.*?)<\/useVectordb>/s);
+  let relevantExamples = [];
+  let requirements = [];
 
-  logger.info(`Extracted ${requirements.length} requirements:`, requirements);
+  if (vectordbMatch) {
+    try {
+      // Parse the paths from the tag
+      const paths = JSON.parse(vectordbMatch[1]);
+      logger.info(`Found <useVectordb> tag with paths: ${paths.join(', ')}`);
 
-  // Step 2: Search vector database for relevant code examples
-  const codeExamples = await searchExamplesFromVectorDB({ requirements, supabase, openai });
+      // Skip steps 1-3 and directly search examples by paths
+      relevantExamples = await searchExamplesByPaths(paths);
+      logger.info(`Direct path search found ${relevantExamples.length} examples`);
+    } catch (error) {
+      logger.error('Failed to parse paths from <useVectordb> tag:', error);
+    }
+  } else {
+    // Step 1: Extract specific requirements from the user's request
+    requirements = await extractRequirements({
+      userMessage: userMessageText,
+      summary,
+      model,
+      contextFiles: contextFiles || {},
+      onStepFinish: (resp) => {
+        if (resp.usage) {
+          cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+          cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+          cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+        }
+      },
+    });
 
-  logger.info(`Found ${codeExamples.length} code examples`);
+    logger.info(`Extracted ${requirements.length} requirements:`, requirements);
 
-  // Step 3: Filter and evaluate the relevance of found examples
-  const relevantExamples = await filterRelevantExamples({
-    requirements,
-    examples: codeExamples,
-    userMessage: userMessageText,
-    summary,
-    model,
-    contextFiles: contextFiles || {},
-    onStepFinish: (resp) => {
-      if (resp.usage) {
-        cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-        cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-        cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
-      }
-    },
-  });
+    // Step 2: Search vector database for relevant code examples
+    const codeExamples = await searchExamplesFromVectorDB({ requirements, supabase, openai });
 
-  logger.info(`Selected ${relevantExamples.length} relevant examples`);
+    logger.info(`Found ${codeExamples.length} code examples`);
+
+    // Step 3: Filter and evaluate the relevance of found examples
+    relevantExamples = await filterRelevantExamples({
+      requirements,
+      examples: codeExamples,
+      userMessage: userMessageText,
+      summary,
+      model,
+      contextFiles: contextFiles || {},
+      onStepFinish: (resp) => {
+        if (resp.usage) {
+          cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
+          cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
+          cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+        }
+      },
+    });
+
+    logger.info(`Selected ${relevantExamples.length} relevant examples`);
+  }
 
   // Step 4: Format and return relevant examples
   const result: FileMap = {};
@@ -449,4 +470,41 @@ export function getFilePaths(files: FileMap) {
   });
 
   return filePaths;
+}
+
+/**
+ * Searches the vector database for code examples matching specific paths
+ */
+export async function searchExamplesByPaths(paths: string[]) {
+  if (!paths || paths.length === 0) {
+    logger.warn('No paths provided for searchExamplesByPaths');
+    return [];
+  }
+
+  logger.info(`Searching for examples matching ${paths.length} paths`);
+
+  try {
+    // Create Supabase client
+    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+    // Build query to match examples with the provided paths
+    const { data, error } = await supabase.from('codebase').select('*').in('path', paths);
+
+    if (error) {
+      logger.error('Error searching for examples by paths:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      logger.info('No examples found matching the provided paths');
+      return [];
+    }
+
+    logger.info(`Found ${data.length} examples matching the provided paths`);
+
+    return data;
+  } catch (error) {
+    logger.error('Failed to search examples by paths:', error);
+    return [];
+  }
 }
