@@ -38,6 +38,7 @@ import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
+import { changeChatUrl } from '~/utils/url';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -132,6 +133,8 @@ export function Chat() {
           title: project.description.split('\n')[0],
         });
       }
+    } else {
+      setInitialMessages([]);
     }
   }, [loaded, files, chats, project]);
 
@@ -328,6 +331,10 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   }, []);
 
   useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  useEffect(() => {
     processSampledMessages({
       messages,
       isLoading,
@@ -501,14 +508,14 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
             title,
           });
 
-          window.history.replaceState(null, '', '/chat/' + projectPath);
+          changeChatUrl(projectPath, { replace: true });
         } else {
           repoStore.set({
             name: projectRepo,
             path: projectRepo,
             title,
           });
-          window.history.replaceState(null, '', '/chat/' + projectRepo);
+          changeChatUrl(projectRepo, { replace: true });
         }
 
         if (!temResp?.data) {
@@ -767,7 +774,27 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       return;
     }
 
+    changeChatUrl(projectPath, { replace: false, searchParams: { revertTo: commitHash } });
+  };
+
+  const handleRetry = async (message: Message) => {
+    workbenchStore.currentView.set('code');
+    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
     const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+    if (messageIndex <= 0) {
+      toast.error('Retry failed');
+      return;
+    }
+
+    const prevMessage = messages[messageIndex - 1];
+    const commitHash = prevMessage.id.split('-').pop();
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      toast.error('No commit hash found');
+      return;
+    }
 
     // Show loading toast while retrying
     const toastId = toast.loading('Loading previous version...');
@@ -791,48 +818,22 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       }
 
       await wc.mount(convertFileMapToFileSystemTree(retryFiles));
-      window.history.replaceState(null, '', '/chat/' + projectPath + '?revertTo=' + commitHash);
+      message.id = `retry-${new Date().getTime()}`;
 
-      const newMessages = [...messages.slice(0, messageIndex + 1)];
+      const newMessages = [...messages.slice(0, messageIndex), message];
+      changeChatUrl(repoStore.get().path, {
+        replace: true,
+        searchParams: { revertTo: commitHash },
+        ignoreChangeEvent: true,
+      });
       setMessages(newMessages);
-
-      toast.dismiss(toastId);
-    } catch (error) {
-      toast.dismiss(toastId);
-      toast.error('Failed to load previous version');
-      logger.error('Error loading previous version:', error);
-    }
-  };
-
-  const handleRetry = async (message: Message) => {
-    workbenchStore.currentView.set('code');
-    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-    const messageIndex = messages.findIndex((m) => m.id === message.id);
-
-    if (messageIndex <= 0) {
-      toast.error('Retry failed');
-      return;
-    }
-
-    const prevMessage = messages[messageIndex - 1];
-
-    await handleRevert(prevMessage);
-
-    const toastId = toast.loading('Loading previous version...');
-
-    try {
-      await handleRevert(prevMessage);
-      setMessages((messages) => [...messages, message]);
 
       setTimeout(() => {
         reload();
       }, 1000);
 
-      // Dismiss the loading toast on success
       toast.dismiss(toastId);
     } catch (error) {
-      // Dismiss the loading toast and show error
       toast.dismiss(toastId);
       toast.error('Failed to load previous version');
       logger.error('Error loading previous version:', error);

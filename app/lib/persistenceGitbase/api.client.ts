@@ -8,6 +8,8 @@ import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractTextContent } from '~/utils/message';
+import { changeChatUrl } from '~/utils/url';
+
 export const isEnabledGitbasePersistence = import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
 
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
@@ -82,11 +84,11 @@ ${content.replace(/(<boltAction[^>]*filePath[^>]*>)(.*?)(<\/boltAction>)/gs, '$1
       path: result.data.project.path,
       title: result.data.project.description.split('\n')[0] || result.data.project.name,
     });
-    window.history.replaceState(null, '', '/chat/' + result.data.project.path);
+    changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   }
 
   if (revertTo) {
-    window.history.replaceState({}, '', location.pathname);
+    changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   }
 
   callback?.(result.data.commitHash);
@@ -130,7 +132,7 @@ export const commitUserChanged = async () => {
   }
 
   if (revertTo) {
-    window.history.replaceState({}, '', location.pathname + '?revertTo=' + result.data.commitHash);
+    changeChatUrl(location.pathname, { replace: true, searchParams: { revertTo: result.data.commitHash } });
   }
 
   return result;
