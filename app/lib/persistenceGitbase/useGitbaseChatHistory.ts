@@ -290,7 +290,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
       const urlRevertTo = url.searchParams.get('revertTo');
 
       // 현재 URL의 revertTo 값이 상태의 값과 다르면 데이터 다시 로드
-      if ((urlRevertTo && isCommitHash(urlRevertTo)) !== untilCommit) {
+      if (urlRevertTo && isCommitHash(urlRevertTo) && urlRevertTo !== untilCommit) {
         setUntilCommit(urlRevertTo);
       } else {
         setUntilCommit(null);
