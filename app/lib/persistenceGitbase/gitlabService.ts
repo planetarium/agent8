@@ -20,7 +20,7 @@ export class GitlabService {
   gitlabToken: string;
   enabled: boolean;
 
-  constructor(env: Env, temporaryMode?: boolean) {
+  constructor(env: Env, temporaryMode: boolean = false) {
     this.gitlabUrl = env.GITLAB_URL || 'https://gitlab.verse8.io';
     this.gitlabToken = env.GITLAB_TOKEN;
     this.enabled = env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' && !temporaryMode;
