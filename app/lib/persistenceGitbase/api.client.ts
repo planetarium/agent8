@@ -9,8 +9,11 @@ import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
+import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
-export const isEnabledGitbasePersistence = import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true';
+export const isEnabledGitbasePersistence =
+  import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
+  localStorage.getItem(SETTINGS_KEYS.TEMPORARY_MODE) !== 'true';
 
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;

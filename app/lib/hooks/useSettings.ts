@@ -23,6 +23,8 @@ import {
   removeMCPSSEServer,
   toggleMCPSSEServer,
   type MCPSSEServer,
+  temporaryModeStore,
+  updateTemporaryMode,
 } from '~/lib/stores/settings';
 import { useCallback, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
@@ -66,6 +68,8 @@ export interface UseSettingsReturn {
   setAutoSelectTemplate: (enabled: boolean) => void;
   contextOptimizationEnabled: boolean;
   enableContextOptimization: (enabled: boolean) => void;
+  temporaryMode: boolean;
+  setTemporaryMode: (enabled: boolean) => void;
 
   // Tab configuration
   tabConfiguration: TabWindowConfig;
@@ -97,6 +101,7 @@ export function useSettings(): UseSettingsReturn {
   const contextOptimizationEnabled = useStore(enableContextOptimizationStore);
   const tabConfiguration = useStore(tabConfigurationStore);
   const mcpSseServers = useStore(mcpSseServersStore);
+  const temporaryMode = useStore(temporaryModeStore);
   const [settings, setSettings] = useState<Settings>(() => {
     const storedSettings = getLocalStorage('settings');
     return {
@@ -161,6 +166,11 @@ export function useSettings(): UseSettingsReturn {
     logStore.logSystem(`Context optimization ${enabled ? 'enabled' : 'disabled'}`);
   }, []);
 
+  const setTemporaryMode = useCallback((enabled: boolean) => {
+    updateTemporaryMode(enabled);
+    logStore.logSystem(`Temporary mode ${enabled ? 'enabled' : 'disabled'}`);
+  }, []);
+
   const setTheme = useCallback(
     (theme: Settings['theme']) => {
       saveSettings({ theme });
@@ -215,6 +225,8 @@ export function useSettings(): UseSettingsReturn {
     setAutoSelectTemplate,
     contextOptimizationEnabled,
     enableContextOptimization,
+    temporaryMode,
+    setTemporaryMode,
     setTheme,
     setLanguage,
     setNotifications,

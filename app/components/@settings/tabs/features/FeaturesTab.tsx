@@ -253,6 +253,8 @@ export default function FeaturesTab() {
     setEventLogs,
     setPromptId,
     promptId,
+    temporaryMode,
+    setTemporaryMode,
   } = useSettings();
 
   // Enable features by default on first load
@@ -306,11 +308,17 @@ export default function FeaturesTab() {
           break;
         }
 
+        case 'temporaryMode': {
+          setTemporaryMode(enabled);
+          toast.success(`Temporary mode ${enabled ? 'enabled' : 'disabled'}`);
+          break;
+        }
+
         default:
           break;
       }
     },
-    [enableLatestBranch, setAutoSelectTemplate, enableContextOptimization, setEventLogs],
+    [enableLatestBranch, setAutoSelectTemplate, enableContextOptimization, setEventLogs, setTemporaryMode],
   );
 
   const features = {
@@ -346,6 +354,14 @@ export default function FeaturesTab() {
         icon: 'i-ph:list-bullets',
         enabled: eventLogs,
         tooltip: 'Enabled by default to record detailed logs of system events and user actions',
+      },
+      {
+        id: 'temporaryMode',
+        title: 'Temporary Mode',
+        description: 'Enable temporary mode',
+        icon: 'i-ph:clock',
+        enabled: temporaryMode,
+        tooltip: 'Enabled by default for improved AI responses',
       },
     ],
     beta: [],

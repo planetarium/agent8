@@ -4,6 +4,7 @@ import { getTemplates } from '~/utils/selectStarterTemplate';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
+import { parseCookies } from '~/lib/api/cookies';
 
 const logger = createScopedLogger('api.select-template');
 
@@ -35,6 +36,10 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const path = url.searchParams.get('path');
   const projectRepo = url.searchParams.get('projectRepo');
   const email = (context.user as { email: string }).email;
+
+  const cookieHeader = request.headers.get('Cookie');
+  const parsedCookies = parseCookies(cookieHeader || '');
+  const temporaryMode = JSON.parse(parsedCookies.temporaryMode || 'false');
 
   if (!templateName || !repo || !path) {
     return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
@@ -75,7 +80,7 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
       };
     }
 
-    const gitlabService = new GitlabService(env);
+    const gitlabService = new GitlabService(env, temporaryMode);
 
     if (gitlabService.enabled) {
       const gitlabUser = await gitlabService.getOrCreateUser(email as string);

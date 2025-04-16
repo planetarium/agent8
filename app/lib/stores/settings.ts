@@ -135,6 +135,7 @@ export const SETTINGS_KEYS = {
   LATEST_BRANCH: 'isLatestBranch',
   AUTO_SELECT_TEMPLATE: 'autoSelectTemplate',
   CONTEXT_OPTIMIZATION: 'contextOptimizationEnabled',
+  TEMPORARY_MODE: 'temporaryMode',
   EVENT_LOGS: 'isEventLogsEnabled',
   PROMPT_ID: 'promptId',
   DEVELOPER_MODE: 'isDeveloperMode',
@@ -185,6 +186,7 @@ const getInitialSettings = () => {
     latestBranch: getStoredBoolean(SETTINGS_KEYS.LATEST_BRANCH, false),
     autoSelectTemplate: getStoredBoolean(SETTINGS_KEYS.AUTO_SELECT_TEMPLATE, true),
     contextOptimization: getStoredBoolean(SETTINGS_KEYS.CONTEXT_OPTIMIZATION, true),
+    temporaryMode: getStoredBoolean(SETTINGS_KEYS.TEMPORARY_MODE, false),
     eventLogs: getStoredBoolean(SETTINGS_KEYS.EVENT_LOGS, true),
     promptId: isBrowser ? localStorage.getItem(SETTINGS_KEYS.PROMPT_ID) || 'agent8' : 'agent8',
     developerMode: getStoredBoolean(SETTINGS_KEYS.DEVELOPER_MODE, false),
@@ -197,6 +199,7 @@ const initialSettings = getInitialSettings();
 export const latestBranchStore = atom<boolean>(initialSettings.latestBranch);
 export const autoSelectStarterTemplate = atom<boolean>(initialSettings.autoSelectTemplate);
 export const enableContextOptimizationStore = atom<boolean>(initialSettings.contextOptimization);
+export const temporaryModeStore = atom<boolean>(initialSettings.temporaryMode);
 export const isEventLogsEnabled = atom<boolean>(initialSettings.eventLogs);
 export const promptStore = atom<string>(initialSettings.promptId);
 export const mcpSseServersStore = atom<MCPSSEServer[]>(getInitialMCPSSEServers());
@@ -215,6 +218,16 @@ export const updateAutoSelectTemplate = (enabled: boolean) => {
 export const updateContextOptimization = (enabled: boolean) => {
   enableContextOptimizationStore.set(enabled);
   localStorage.setItem(SETTINGS_KEYS.CONTEXT_OPTIMIZATION, JSON.stringify(enabled));
+};
+
+export const updateTemporaryMode = (enabled: boolean) => {
+  temporaryModeStore.set(enabled);
+  localStorage.setItem(SETTINGS_KEYS.TEMPORARY_MODE, JSON.stringify(enabled));
+  Cookies.set(SETTINGS_KEYS.TEMPORARY_MODE, JSON.stringify(enabled), {
+    expires: 365, // 1년간 유효
+    path: '/',
+    sameSite: 'lax',
+  });
 };
 
 export const updateEventLogs = (enabled: boolean) => {
