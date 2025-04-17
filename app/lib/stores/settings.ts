@@ -34,6 +34,7 @@ export interface MCPSSEServer {
   name: string;
   url: string;
   enabled: boolean;
+  v8AuthIntegrated: boolean;
 }
 
 export const URL_CONFIGURABLE_PROVIDERS = ['Ollama', 'LMStudio', 'OpenAILike'];
@@ -409,5 +410,12 @@ export const toggleMCPSSEServer = (index: number, enabled: boolean) => {
   const servers = mcpSseServersStore.get();
   const updatedServers = [...servers];
   updatedServers[index] = { ...updatedServers[index], enabled };
+  updateMCPSSEServers(updatedServers);
+};
+
+export const toggleMCPSSEServerV8Auth = (index: number, v8AuthIntegrated: boolean) => {
+  const servers = mcpSseServersStore.get();
+  const updatedServers = [...servers];
+  updatedServers[index] = { ...updatedServers[index], v8AuthIntegrated };
   updateMCPSSEServers(updatedServers);
 };
