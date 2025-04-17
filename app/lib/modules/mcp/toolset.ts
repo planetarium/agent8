@@ -3,9 +3,10 @@
  */
 
 import { type Tool } from 'ai';
+import { type JSONSchema7 } from '@ai-sdk/provider';
+import { jsonSchema } from '@ai-sdk/ui-utils';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { JSONSchemaToZod } from '@dmitryrechkin/json-schema-to-zod';
 import { createScopedLogger } from '~/utils/logger';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { MCPConfig } from './config';
@@ -146,18 +147,18 @@ export async function createToolSet(config: MCPConfig): Promise<ToolSet> {
         // Replace spaces with dashes due to AI SDK tool name restrictions
         toolName = toolName.replaceAll(' ', '-');
 
-        /*
-         * Convert JSON Schema to Zod object
-         * Type assert tool.inputSchema as any to resolve type errors
-         */
-        const zodSchema = JSONSchemaToZod.convert(tool.inputSchema as any);
+        const parameters = jsonSchema({
+          ...tool.inputSchema,
+          properties: tool.inputSchema.properties ?? {},
+          additionalProperties: false,
+        } as JSONSchema7);
 
         // Create a progress emitter for this tool
         const progressEmitter = new ProgressEmitter(toolName);
 
         toolset.tools[toolName] = {
           description: tool.description || '',
-          parameters: zodSchema, // Use converted Zod schema
+          parameters,
           progressEmitter,
           execute: async (args) => {
             // Emit start event
