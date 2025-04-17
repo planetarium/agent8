@@ -9,6 +9,7 @@ export interface MCPServerConfig {
   name: string;
   url: string;
   enabled: boolean;
+  v8AuthIntegrated: boolean;
 }
 
 export type MCPConfigSource = 'cookie' | 'env';

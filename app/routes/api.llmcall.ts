@@ -9,7 +9,7 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie, getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
 import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
-import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withV8AuthUser, type ContextConsumeUserCredit, type ContextUser } from '~/lib/verse8/middleware';
 
 export const action = withV8AuthUser(llmCallAction, { checkCredit: true });
 
@@ -54,7 +54,7 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   const apiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
   const mcpConfig = getMCPConfigFromCookie(cookieHeader);
-  const mcpToolset = await createToolSet(mcpConfig);
+  const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
   const mcpTools = mcpToolset.tools;
 
   if (streamOutput) {

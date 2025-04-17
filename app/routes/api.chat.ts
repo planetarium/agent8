@@ -15,7 +15,7 @@ import { searchVectorDB } from '~/lib/.server/llm/search-vectordb';
 import { searchResources } from '~/lib/.server/llm/search-resources';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
-import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withV8AuthUser, type ContextConsumeUserCredit, type ContextUser } from '~/lib/verse8/middleware';
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
@@ -70,7 +70,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
-    const mcpToolset = await createToolSet(mcpConfig);
+    const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
     const mcpTools = mcpToolset.tools;
     logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
 

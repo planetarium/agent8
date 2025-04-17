@@ -108,7 +108,8 @@ const FeatureSection = memo(
 
 // MCP SSE Server Management Component
 const McpSseServerManager = () => {
-  const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer } = useSettings();
+  const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer, toggleMCPSSEServerV8Auth } =
+    useSettings();
 
   const [newServer, setNewServer] = useState<{ name: string; url: string }>({
     name: '',
@@ -121,6 +122,7 @@ const McpSseServerManager = () => {
         name: newServer.name,
         url: newServer.url,
         enabled: true,
+        v8AuthIntegrated: false,
       };
 
       addMCPSSEServer(server);
@@ -221,7 +223,33 @@ const McpSseServerManager = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Switch checked={server.enabled} onCheckedChange={(checked) => handleToggleServer(index, checked)} />
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-bolt-elements-textSecondary mr-1">
+                    {server.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <Switch checked={server.enabled} onCheckedChange={(checked) => handleToggleServer(index, checked)} />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span
+                    className={classNames(
+                      'text-xs mr-1',
+                      server.enabled ? 'text-bolt-elements-textSecondary' : 'text-bolt-elements-textTertiary',
+                    )}
+                  >
+                    V8 Auth
+                  </span>
+                  <div
+                    className={classNames(
+                      'i-ph:lock w-4 h-4',
+                      server.enabled ? 'text-bolt-elements-textSecondary' : 'text-bolt-elements-textTertiary',
+                    )}
+                  />
+                  <Switch
+                    checked={server.v8AuthIntegrated}
+                    disabled={!server.enabled}
+                    onCheckedChange={(checked) => toggleMCPSSEServerV8Auth(index, checked)}
+                  />
+                </div>
                 <button
                   onClick={() => handleRemoveServer(index)}
                   className="p-1 rounded-full hover:bg-red-500/10 text-red-500"

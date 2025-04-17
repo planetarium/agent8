@@ -97,10 +97,21 @@ export interface ToolSet {
  * @param config Toolset configuration
  * @returns Toolset and MCP clients
  */
-export async function createToolSet(config: MCPConfig): Promise<ToolSet> {
+export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Promise<ToolSet> {
   const toolset: ToolSet = {
     tools: {},
     clients: {},
+  };
+
+  if (!v8AuthToken) {
+    logger.warn('No V8 auth token provided, MCP server will not be authenticated');
+  }
+
+  const fetchWithV8Auth = (url: string | URL, options?: RequestInit) => {
+    const headers = new Headers(options?.headers);
+    headers.set('Authorization', `Bearer ${v8AuthToken}`);
+
+    return fetch(url.toString(), { ...options, headers });
   };
 
   for (const [serverName, serverConfig] of Object.entries(config.servers)) {
@@ -111,7 +122,17 @@ export async function createToolSet(config: MCPConfig): Promise<ToolSet> {
 
     // Create SSE transport layer - direct initialization
     const url = new URL(serverConfig.url);
-    const transport = new SSEClientTransport(url);
+    const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
+    const transport = new SSEClientTransport(url, {
+      eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
+      requestInit: v8AuthIntegrated
+        ? {
+            headers: {
+              Authorization: `Bearer ${v8AuthToken}`,
+            },
+          }
+        : undefined,
+    });
 
     // Create MCP client
     const client = new Client({
