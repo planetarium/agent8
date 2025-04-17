@@ -313,7 +313,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     await shell.ready();
 
-    await shell.executeCommand(Date.now().toString(), 'npm install && npx -y @agent8/deploy && npm run dev');
+    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
   }, []);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
