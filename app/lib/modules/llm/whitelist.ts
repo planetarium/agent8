@@ -33,6 +33,11 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'openai/gpt-4.1',
   },
   {
+    label: 'GPT-o4-mini',
+    providerName: 'OpenRouter',
+    modelName: 'openai/o4-mini',
+  },
+  {
     label: 'Gemini 2.5 Pro Preview',
     providerName: 'OpenRouter',
     modelName: 'google/gemini-2.5-pro-preview-03-25',

@@ -8,10 +8,12 @@ export const changeChatUrl = (
 
   const appendQueryString = queryString ? `?${queryString}` : '';
 
+  const url = projectPath && projectPath !== '/' ? '/chat/' + projectPath + appendQueryString : '/';
+
   if (replace) {
-    window.history.replaceState({}, '', '/chat/' + projectPath + appendQueryString);
+    window.history.replaceState({}, '', url);
   } else {
-    window.history.pushState({}, '', '/chat/' + projectPath + appendQueryString);
+    window.history.pushState({}, '', url);
   }
 
   if (!ignoreChangeEvent) {

@@ -108,6 +108,10 @@ export function Chat() {
   const title = repoStore.get().title;
 
   useEffect(() => {
+    if (repoStore.get().path) {
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
+    }
+
     changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
   }, []);
 

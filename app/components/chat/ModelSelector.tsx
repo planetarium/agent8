@@ -3,9 +3,11 @@ import { useEffect, useState, useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { classNames } from '~/utils/classNames';
-import * as React from 'react';
 import { MODEL_WHITELIST } from '~/lib/modules/llm/whitelist';
 import type { WhitelistItem } from '~/lib/modules/llm/whitelist';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ModelSelector');
 
 interface ModelSelectorProps {
   model?: string;
@@ -62,6 +64,19 @@ export const ModelSelector = ({
     model && provider
       ? MODEL_WHITELIST.find((item) => item.providerName === provider.name && item.modelName === model)
       : undefined;
+
+  if (!selectedOption) {
+    try {
+      const firstModel = MODEL_WHITELIST[0];
+
+      if (firstModel) {
+        setModel?.(firstModel.modelName);
+        setProvider?.(providerList.find((p) => p.name === firstModel.providerName)!);
+      }
+    } catch {
+      logger.error('Failed to set default model and provider');
+    }
+  }
 
   // 검색어로 화이트리스트 항목 필터링
   const filteredOptions = whitelistOptions.filter((item) =>
