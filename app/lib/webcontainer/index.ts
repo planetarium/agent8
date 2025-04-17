@@ -1,6 +1,9 @@
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
+import { createScopedLogger } from '~/utils/logger';
 import { cleanStackTrace } from '~/utils/stacktrace';
+
+const logger = createScopedLogger('webcontainer');
 
 interface WebContainerContext {
   loaded: boolean;
@@ -52,6 +55,10 @@ if (!import.meta.env.SSR) {
         });
 
         return webcontainer;
+      })
+      .catch((error) => {
+        logger.error('Failed to boot WebContainer:', error);
+        return null;
       });
 
   if (import.meta.hot) {
