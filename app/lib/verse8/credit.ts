@@ -53,7 +53,7 @@ export async function consumeUserCredit(
     throw new Error('User token is required');
   }
 
-  const response = await fetch(endpoint + '/v1/credits/consume', {
+  const response = await fetch(endpoint + '/v1/llm/usages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
