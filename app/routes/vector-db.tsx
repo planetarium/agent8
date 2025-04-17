@@ -4,7 +4,6 @@ import { useLoaderData, useSearchParams, useFetcher } from '@remix-run/react';
 import { createClient } from '@supabase/supabase-js';
 import { embed } from 'ai';
 import { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import { ClientOnly } from 'remix-utils/client-only';
 
 // 페이지당 항목 수
@@ -13,12 +12,12 @@ const ITEMS_PER_PAGE = 20;
 // 레코드 타입 정의
 interface Record {
   id: string;
-  client_code?: string;
-  server_code?: string;
   description?: string;
   metadata: {
     category?: string;
   };
+  path?: string;
+  similarity?: number;
   created_at: string;
 }
 
@@ -47,23 +46,48 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
       const { data: similarityData, error: similarityError } = await supabase.rpc('match_codebase', {
         query_embedding: embedding,
-        match_count: 10,
+        match_count: 5,
         filter: {},
       });
-
-      console.log(similarityData);
 
       if (similarityError) {
         throw similarityError;
       }
 
-      data = similarityData || [];
+      if (similarityData && similarityData.length > 0) {
+        // Extract IDs from similarity results
+        const ids = similarityData.map((item: any) => item.id);
+
+        // Fetch complete data using the found IDs
+        const { data: completeData, error: completeDataError } = await supabase
+          .from('codebase')
+          .select('id, description, path, metadata, created_at')
+          .in('id', ids);
+
+        if (completeDataError) {
+          throw completeDataError;
+        }
+
+        // Merge similarity scores with complete data
+        data =
+          completeData?.map((item: any) => {
+            const similarityItem = similarityData.find((s: any) => s.id === item.id);
+            return {
+              ...item,
+              similarity: similarityItem?.similarity,
+            };
+          }) || [];
+
+        // Sort by similarity in descending order
+        data = data.sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
+      } else {
+        data = [];
+      }
+
       count = data.length;
     } else {
       // 일반 검색 또는 전체 목록
-      let query = supabase
-        .from('codebase')
-        .select('id, server_code, client_code, description, metadata, created_at', { count: 'exact' });
+      let query = supabase.from('codebase').select('id, description, path, metadata, created_at', { count: 'exact' });
 
       // 검색어가 있으면 description에서 매칭
       if (searchQuery && searchMode === 'match') {
@@ -116,17 +140,6 @@ interface ThemedContentProps {
   currentPage: number;
   searchQuery: string;
   searchMode: string;
-  clientCode: string;
-  setClientCode: (code: string) => void;
-  serverCode: string;
-  setServerCode: (code: string) => void;
-  description: string;
-  setDescription: (description: string) => void;
-  category: string;
-  setCategory: (category: string) => void;
-  isSubmitting: boolean;
-  handleInsert: (e: React.FormEvent) => Promise<void>;
-  handleDelete: (id: string) => Promise<void>;
   handlePageChange: (page: number) => void;
   handleSearch: (e: React.FormEvent) => void;
   setSearchQuery: (query: string) => void;
@@ -141,17 +154,6 @@ function ThemedContent({
   currentPage,
   searchQuery,
   searchMode,
-  clientCode,
-  setClientCode,
-  serverCode,
-  setServerCode,
-  description,
-  setDescription,
-  category,
-  setCategory,
-  isSubmitting,
-  handleInsert,
-  handleDelete,
   handlePageChange,
   handleSearch,
   setSearchQuery,
@@ -169,64 +171,9 @@ function ThemedContent({
 
   return (
     <>
-      {/* 레코드 삽입 폼 */}
-      <div className={`${styles.bgClass} p-4 rounded-lg mb-8 border ${styles.borderClass}`}>
-        <h2 className={`text-xl font-semibold mb-4 ${styles.textClass}`}>Insert New Record</h2>
-        <form onSubmit={handleInsert}>
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className={`w-full p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} ${styles.textClass}`}
-            >
-              <option value="code">Code</option>
-              <option value="text">Text</option>
-              <option value="documentation">Documentation</option>
-            </select>
-          </div>
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Description</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the content"
-              className={`w-full p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} ${styles.textClass}`}
-              required
-            />
-          </div>
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Client Code</label>
-            <textarea
-              value={clientCode}
-              onChange={(e) => setClientCode(e.target.value)}
-              placeholder="Enter client-side code here"
-              className={`w-full p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} h-32 ${styles.textClass}`}
-            />
-          </div>
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Server Code</label>
-            <textarea
-              value={serverCode}
-              onChange={(e) => setServerCode(e.target.value)}
-              placeholder="Enter server-side code here"
-              className={`w-full p-2 border ${styles.borderClass} rounded ${styles.inputBgClass} h-32 ${styles.textClass}`}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={isSubmitting || (!clientCode && !serverCode)}
-            className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded disabled:opacity-50"
-          >
-            {isSubmitting ? 'Inserting...' : 'Insert Record'}
-          </button>
-        </form>
-      </div>
-
       {/* 검색 폼 */}
       <div className={`${styles.bgClass} p-4 rounded-lg mb-8 border ${styles.borderClass}`}>
-        <h2 className={`text-xl font-semibold mb-4 ${styles.textClass}`}>Search Records</h2>
+        <h2 className={`text-xl font-semibold mb-4 ${styles.textClass}`}>Search Vector Database</h2>
         <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
           <div className="flex-grow">
             <label className={`block text-sm font-medium mb-1 ${styles.textClass}`}>Search Query</label>
@@ -274,7 +221,7 @@ function ThemedContent({
       <div className={`${styles.bgClass} p-4 rounded-lg border ${styles.borderClass}`}>
         <div className="flex justify-between items-center mb-4">
           <h2 className={`text-xl font-semibold ${styles.textClass}`}>
-            Records{' '}
+            Search Results{' '}
             {searchQuery &&
               `- Search: "${searchQuery}" (${searchMode === 'match' ? 'Keyword Match' : 'Similarity Search'})`}
           </h2>
@@ -295,10 +242,8 @@ function ThemedContent({
                 <tr className={`border-b ${styles.borderClass}`}>
                   <th className="px-4 py-2 text-left">ID</th>
                   <th className="px-4 py-2 text-left">Description</th>
-                  <th className="px-4 py-2 text-left">Client Code</th>
-                  <th className="px-4 py-2 text-left">Server Code</th>
-                  <th className="px-4 py-2 text-left">Category</th>
-                  <th className="px-4 py-2 text-left">Actions</th>
+                  <th className="px-4 py-2 text-left">Path</th>
+                  {searchMode === 'similarity' && <th className="px-4 py-2 text-left">Similarity</th>}
                 </tr>
               </thead>
               <tbody>
@@ -306,33 +251,19 @@ function ThemedContent({
                   <tr key={record.id} className={`border-b ${styles.borderClass}`}>
                     <td className="px-4 py-2">{record.id}</td>
                     <td className="px-4 py-2">
-                      <div className="max-w-xs overflow-hidden text-ellipsis">
-                        {record.description || 'No description'}
-                      </div>
+                      <textarea
+                        readOnly
+                        value={record.description || 'No description'}
+                        rows={2}
+                        className={`w-full resize-none ${styles.inputBgClass} ${styles.textClass} border ${styles.borderClass} rounded p-2`}
+                      />
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="max-w-md overflow-hidden text-ellipsis">
-                        {record.client_code && record.client_code.length > 50
-                          ? `${record.client_code.substring(0, 50)}...`
-                          : record.client_code || 'N/A'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="max-w-md overflow-hidden text-ellipsis">
-                        {record.server_code && record.server_code.length > 50
-                          ? `${record.server_code.substring(0, 50)}...`
-                          : record.server_code || 'N/A'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">{record.metadata?.category || 'N/A'}</td>
-                    <td className="px-4 py-2">
-                      <button
-                        onClick={() => handleDelete(record.id)}
-                        className="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm"
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    <td className="px-4 py-2">{record.path || 'N/A'}</td>
+                    {searchMode === 'similarity' && (
+                      <td className="px-4 py-2">
+                        {record.similarity ? (record.similarity * 100).toFixed(2) + '%' : 'N/A'}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -399,11 +330,6 @@ export default function vectorDBManager() {
   }>();
   const isDarkMode = true;
 
-  const [clientCode, setClientCode] = useState('');
-  const [serverCode, setServerCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('code');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [searchMode, setSearchMode] = useState(initialSearchMode || 'match');
 
@@ -447,89 +373,9 @@ export default function vectorDBManager() {
     fetcher.load(`/vector-db${queryString ? `?${queryString}` : ''}`);
   };
 
-  // 레코드 삽입 핸들러
-  const handleInsert = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!description) {
-      toast.error('Description is required');
-      return;
-    }
-
-    if (!clientCode && !serverCode) {
-      toast.error('At least one of Client Code or Server Code is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('intent', 'insert');
-      formData.append('clientCode', clientCode);
-      formData.append('serverCode', serverCode);
-      formData.append('description', description);
-      formData.append('category', category);
-
-      const response = await fetch('/api/vector-db', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = (await response.json()) as { success: boolean; error?: string };
-
-      if (result.success) {
-        toast.success('Record inserted successfully');
-        setClientCode('');
-        setServerCode('');
-        setDescription('');
-
-        // 데이터 새로고침
-        refreshData();
-      } else {
-        toast.error(`Failed to insert record: ${result.error}`);
-      }
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // 레코드 삭제 핸들러
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this record?')) {
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('intent', 'delete');
-      formData.append('id', id);
-
-      const response = await fetch('/api/vector-db', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = (await response.json()) as { success: boolean; error?: string };
-
-      if (result.success) {
-        toast.success('Record deleted successfully');
-
-        // 데이터 새로고침
-        refreshData();
-      } else {
-        toast.error(`Failed to delete record: ${result.error}`);
-      }
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-    }
-  };
-
   return (
     <div className={`container mx-auto p-4 ${isDarkMode ? 'text-white' : 'text-bolt-elements-textPrimary'}`}>
-      <h1 className="text-2xl font-bold mb-6">Vector Database Manager</h1>
+      <h1 className="text-2xl font-bold mb-6">Vector Database Search</h1>
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">Error: {error}</div>
@@ -543,17 +389,6 @@ export default function vectorDBManager() {
             currentPage={fetcher.data?.currentPage || currentPage}
             searchQuery={searchQuery}
             searchMode={searchMode}
-            clientCode={clientCode}
-            setClientCode={setClientCode}
-            serverCode={serverCode}
-            setServerCode={setServerCode}
-            description={description}
-            setDescription={setDescription}
-            category={category}
-            setCategory={setCategory}
-            isSubmitting={isSubmitting}
-            handleInsert={handleInsert}
-            handleDelete={handleDelete}
             handlePageChange={handlePageChange}
             handleSearch={handleSearch}
             setSearchQuery={setSearchQuery}
