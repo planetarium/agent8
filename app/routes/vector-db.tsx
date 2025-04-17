@@ -1,4 +1,4 @@
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { useLoaderData, useSearchParams, useFetcher } from '@remix-run/react';
 import { createClient } from '@supabase/supabase-js';
@@ -39,6 +39,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   try {
     if (searchMode === 'similarity' && searchQuery) {
+      const openai = createOpenAI({
+        apiKey: env.OPENAI_API_KEY,
+      });
       const { embedding } = await embed({
         model: openai.embedding('text-embedding-ada-002'),
         value: searchQuery,
