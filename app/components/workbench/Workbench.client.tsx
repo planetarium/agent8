@@ -314,7 +314,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     await shell.ready();
 
-    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) !== 'true') {
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
       await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
     } else {
       await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');

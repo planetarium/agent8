@@ -599,7 +599,7 @@ export class WorkbenchStore {
         return;
       }
 
-      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) !== 'true') {
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
         return;
       }
