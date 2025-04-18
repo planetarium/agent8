@@ -137,6 +137,7 @@ export const SETTINGS_KEYS = {
   AUTO_SELECT_TEMPLATE: 'autoSelectTemplate',
   CONTEXT_OPTIMIZATION: 'contextOptimizationEnabled',
   TEMPORARY_MODE: 'temporaryMode',
+  AGENT8_DEPLOY: 'agent8Deploy',
   EVENT_LOGS: 'isEventLogsEnabled',
   PROMPT_ID: 'promptId',
   DEVELOPER_MODE: 'isDeveloperMode',
@@ -188,6 +189,7 @@ const getInitialSettings = () => {
     autoSelectTemplate: getStoredBoolean(SETTINGS_KEYS.AUTO_SELECT_TEMPLATE, true),
     contextOptimization: getStoredBoolean(SETTINGS_KEYS.CONTEXT_OPTIMIZATION, true),
     temporaryMode: getStoredBoolean(SETTINGS_KEYS.TEMPORARY_MODE, false),
+    agent8Deploy: getStoredBoolean(SETTINGS_KEYS.AGENT8_DEPLOY, true),
     eventLogs: getStoredBoolean(SETTINGS_KEYS.EVENT_LOGS, true),
     promptId: isBrowser ? localStorage.getItem(SETTINGS_KEYS.PROMPT_ID) || 'agent8' : 'agent8',
     developerMode: getStoredBoolean(SETTINGS_KEYS.DEVELOPER_MODE, false),
@@ -201,6 +203,7 @@ export const latestBranchStore = atom<boolean>(initialSettings.latestBranch);
 export const autoSelectStarterTemplate = atom<boolean>(initialSettings.autoSelectTemplate);
 export const enableContextOptimizationStore = atom<boolean>(initialSettings.contextOptimization);
 export const temporaryModeStore = atom<boolean>(initialSettings.temporaryMode);
+export const agent8DeployStore = atom<boolean>(initialSettings.agent8Deploy);
 export const isEventLogsEnabled = atom<boolean>(initialSettings.eventLogs);
 export const promptStore = atom<string>(initialSettings.promptId);
 export const mcpSseServersStore = atom<MCPSSEServer[]>(getInitialMCPSSEServers());
@@ -229,6 +232,11 @@ export const updateTemporaryMode = (enabled: boolean) => {
     path: '/',
     sameSite: 'lax',
   });
+};
+
+export const updateAgent8Deploy = (enabled: boolean) => {
+  agent8DeployStore.set(enabled);
+  localStorage.setItem(SETTINGS_KEYS.AGENT8_DEPLOY, JSON.stringify(enabled));
 };
 
 export const updateEventLogs = (enabled: boolean) => {

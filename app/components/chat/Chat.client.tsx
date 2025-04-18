@@ -39,6 +39,7 @@ import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHi
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
+import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -220,7 +221,14 @@ async function runAndPreview(message: Message) {
       continue;
     }
 
-    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    await workbenchStore.setupDeployConfig(shell);
+
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) !== 'true') {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    } else {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+    }
+
     break;
   }
 }

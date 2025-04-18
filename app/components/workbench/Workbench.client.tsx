@@ -24,6 +24,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
+import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -313,7 +314,11 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     await shell.ready();
 
-    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) !== 'true') {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    } else {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+    }
   }, []);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
