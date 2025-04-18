@@ -376,7 +376,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   )}
                 >
                   <div className="i-ph:play" />
-                  <span>Run</span>
+                  <span>Run Preview</span>
                 </button>
                 <div className="ml-auto" />
                 {(selectedView === 'code' || selectedView === 'resource') && (

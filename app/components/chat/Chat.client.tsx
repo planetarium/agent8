@@ -365,7 +365,8 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       const boltShell = workbenchStore.boltTerminal;
       boltShell.ready().then(async () => {
-        await boltShell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+        await workbenchStore.setupDeployConfig(boltShell);
+        await boltShell.executeCommand(Date.now().toString(), 'pnpm install');
       });
     }
   }, [files, installNpm]);

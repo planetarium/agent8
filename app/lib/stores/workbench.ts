@@ -15,9 +15,13 @@ import { path } from '~/utils/path';
 import { extractRelativePath } from '~/utils/diff';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
-import { WORK_DIR } from '~/utils/constants';
 import { repoStore } from './repo';
 import { isEnabledGitbasePersistence, commitUserChanged } from '~/lib/persistenceGitbase/api.client';
+import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import type { BoltShell } from '~/utils/shell';
+import { logger } from '~/utils/logger';
+import { SETTINGS_KEYS } from './settings';
+import { toast } from 'react-toastify';
 
 const { saveAs } = fileSaver;
 
@@ -476,91 +480,190 @@ export class WorkbenchStore {
     return result;
   }
 
+  async injectTokenEnvironment(shell: BoltShell, accessToken: string) {
+    try {
+      const wc = await webcontainer;
+      const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
+      await wc.fs.writeFile('setup.sh', setupScript);
+      await shell.executeCommand(Date.now().toString(), 'source ./setup.sh');
+      await wc.fs.rm('setup.sh');
+    } catch {
+      throw new Error('Failed to inject user data into the shell.');
+    }
+  }
+
+  async setupEnvFile(walletAddress: string, reset: boolean = false) {
+    const wc = await webcontainer;
+    let envFile = '';
+
+    try {
+      envFile = await wc.fs.readFile('.env', 'utf-8');
+    } catch {
+      // File might not exist yet, continue with empty content
+    }
+
+    // Parse existing environment variables
+    const envVars = this.#parseEnvFile(envFile);
+    const currentAccount = envVars.VITE_AGENT8_ACCOUNT;
+    const currentVerse = envVars.VITE_AGENT8_VERSE;
+
+    if (currentAccount === walletAddress && currentVerse?.startsWith(walletAddress) && !reset) {
+      return currentVerse;
+    }
+
+    envVars.VITE_AGENT8_ACCOUNT = walletAddress;
+
+    const verseId = walletAddress + '-' + Math.random().toString(36).substring(2, 10);
+    envVars.VITE_AGENT8_VERSE = verseId;
+
+    const updatedEnvContent = Object.entries(envVars)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+
+    await this.#filesStore.saveFile('.env', updatedEnvContent);
+
+    return verseId;
+  }
+
+  // Helper method to parse .env file
+  #parseEnvFile(content: string): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    if (!content) {
+      return result;
+    }
+
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        continue;
+      }
+
+      const separatorIndex = trimmedLine.indexOf('=');
+
+      if (separatorIndex > 0) {
+        const key = trimmedLine.substring(0, separatorIndex);
+        const value = trimmedLine.substring(separatorIndex + 1);
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  async setupDeployConfig(shell: BoltShell) {
+    // Get access token
+    const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+    if (!accessToken) {
+      throw new Error('No access token found');
+    }
+
+    // Verify user
+    const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
+
+    if (!user.isActivated) {
+      throw new Error('Account is not activated');
+    }
+
+    if (!user.walletAddress) {
+      throw new Error('Wallet address not found');
+    }
+
+    // Setup environment
+    await this.injectTokenEnvironment(shell, accessToken);
+
+    const verseId = await this.setupEnvFile(user.walletAddress);
+
+    return { user, verseId };
+  }
+
   async publish(chatId: string, title: string) {
     this.currentView.set('code');
 
-    this.commitModifiedFiles();
-
-    // WebContainer 터미널에 접근
-    const shell = workbenchStore.boltTerminal;
-
-    // 터미널이 준비되었는지 확인
+    const shell = this.boltTerminal;
     await shell.ready();
 
-    await shell.executeCommand(Date.now().toString(), 'npm install');
+    try {
+      // Install dependencies
+      await this.#runShellCommand(shell, 'pnpm install');
 
-    await shell.waitTillOscCode('prompt');
+      // Build project
+      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
 
-    const buildResult = await shell.executeCommand(Date.now().toString(), 'npm run build');
+      if (buildResult?.exitCode === 2) {
+        this.#handleBuildError(buildResult.output);
+        return;
+      }
 
-    await shell.waitTillOscCode('prompt');
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) !== 'true') {
+        toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
+        return;
+      }
 
-    console.log('[Publish] Build Result:', buildResult);
+      const { user, verseId } = await this.setupDeployConfig(shell);
+      await this.commitModifiedFiles();
 
-    if (buildResult?.exitCode === 2) {
-      console.log('[Publish] Build Failed:', buildResult.output);
+      // Deploy project
+      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy');
 
-      this.actionAlert.set({
-        type: 'build',
-        title: 'Build Error',
-        description: 'Failed to build the project',
-        content: buildResult.output || 'Unknown build error',
-        source: 'terminal',
-      });
+      if (deployResult?.exitCode !== 0) {
+        throw new Error('Failed to publish');
+      }
 
-      return;
+      // Handle successful deployment
+      this.#handleSuccessfulDeployment(user.walletAddress, verseId, chatId, title);
+    } catch (error) {
+      logger.error('[Publish] Error:', error);
+      throw error;
     }
+  }
 
-    const result = await shell.executeCommand(Date.now().toString(), 'npx -y @agent8/deploy');
-
+  // Helper methods for publish
+  async #runShellCommand(shell: BoltShell, command: string) {
+    const result = await shell.executeCommand(Date.now().toString(), command);
     await shell.waitTillOscCode('prompt');
 
-    console.log('[Publish] Result:', result);
+    return result;
+  }
 
-    if (result?.exitCode === 0) {
-      const envFilePath = `${WORK_DIR}/.env`;
-      const envFile = this.files.get()[envFilePath];
-      let verseId = '';
+  #handleBuildError(output: string) {
+    logger.error('[Publish] Build Failed:', output);
+    this.actionAlert.set({
+      type: 'build',
+      title: 'Build Error',
+      description: 'Failed to build the project',
+      content: output || 'Unknown build error',
+      source: 'terminal',
+    });
+  }
 
-      if (envFile && envFile.type === 'file') {
-        const envContent = envFile.content;
-        const matches = envContent.match(/VITE_AGENT8_VERSE=([^\s]+)/);
+  #handleSuccessfulDeployment(walletAddress: string, verseId: string, chatId: string, title: string) {
+    const publishedUrl = `${import.meta.env.VITE_PUBLISHED_BASE_URL || 'https://agent8-games.verse8.io'}/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}&buildAt=${Date.now()}`;
+    this.setPublishedUrl(publishedUrl);
 
-        if (matches && matches[1]) {
-          verseId = matches[1];
-        }
-      }
-
-      if (!verseId) {
-        throw new Error('Can not find verseId');
-      }
-
-      const publishedUrl = `https://agent8-games.verse8.io/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}&buildAt=${Date.now()}`;
-      this.setPublishedUrl(publishedUrl);
-
-      try {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(
-            {
-              type: 'PUBLISH_GAME',
-              payload: {
-                title,
-                gameId: verseId,
-                playUrl: publishedUrl,
-              },
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          {
+            type: 'PUBLISH_GAME',
+            payload: {
+              title,
+              gameId: verseId,
+              playUrl: publishedUrl,
             },
-            '*',
-          );
-
-          console.log('[Publish] Sent deployment info to parent window');
-        }
-      } catch (error) {
-        console.error('[Publish] Error sending message to parent:', error);
-
-        // 부모 창 통신 실패는 배포 성공에 영향을 주지 않으므로 오류만 기록
+          },
+          '*',
+        );
+        logger.info('[Publish] Sent deployment info to parent window');
       }
-    } else {
-      throw new Error('Failed to publish');
+    } catch (error) {
+      logger.error('[Publish] Error sending message to parent:', error);
+
+      // Communication failure doesn't affect deployment success
     }
   }
 }
