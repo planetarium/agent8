@@ -515,7 +515,7 @@ export class WorkbenchStore {
 
     envVars.VITE_AGENT8_ACCOUNT = walletAddress;
 
-    const verseId = walletAddress + '-' + Math.random().toString(36).substring(2, 10);
+    const verseId = walletAddress + '-' + new Date().getTime();
     envVars.VITE_AGENT8_VERSE = verseId;
 
     const updatedEnvContent = Object.entries(envVars)
