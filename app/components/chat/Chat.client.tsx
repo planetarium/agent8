@@ -220,7 +220,7 @@ async function runAndPreview(message: Message) {
       continue;
     }
 
-    await shell.executeCommand(Date.now().toString(), 'npm install && npx -y @agent8/deploy && npm run dev');
+    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
     break;
   }
 }
@@ -240,6 +240,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [fakeLoading, setFakeLoading] = useState(false);
+  const [installNpm, setInstallNpm] = useState(false);
   const files = useStore(workbenchStore.files);
   const actionAlert = useStore(workbenchStore.alert);
   const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -349,6 +350,17 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       parseMessages,
     });
   }, [messages, isLoading, parseMessages]);
+
+  useEffect(() => {
+    if (Object.keys(files).length > 0 && !installNpm) {
+      setInstallNpm(true);
+
+      const boltShell = workbenchStore.boltTerminal;
+      boltShell.ready().then(async () => {
+        await boltShell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      });
+    }
+  }, [files, installNpm]);
 
   const handleCommit = async (message: Message) => {
     if (!isEnabledGitbasePersistence) {

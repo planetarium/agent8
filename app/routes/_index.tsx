@@ -8,6 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { webcontainer } from '~/lib/webcontainer';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -35,6 +36,7 @@ function AccessControlledChat() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
+  const [loadedWebcontainer, setLoadedWebcontainer] = useState(false);
 
   useEffect(() => {
     if (accessToken) {
@@ -54,6 +56,14 @@ function AccessControlledChat() {
       verifyToken();
     }
   }, [accessToken]);
+
+  useEffect(() => {
+    webcontainer.then((wc) => {
+      if (wc?.workdir) {
+        setLoadedWebcontainer(true);
+      }
+    });
+  }, [webcontainer]);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -100,6 +110,62 @@ function AccessControlledChat() {
     </div>
   );
 
+  // 웹컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
+  const NotLoadedWebcontainer = () => {
+    const [countdown, setCountdown] = useState(5);
+    const [showMessage, setShowMessage] = useState(false);
+
+    useEffect(() => {
+      // 1.5초 후에 메시지 표시
+      const messageTimer = setTimeout(() => {
+        setShowMessage(true);
+      }, 1500);
+
+      return () => {
+        clearTimeout(messageTimer);
+      };
+    }, []);
+
+    useEffect(() => {
+      if (showMessage) {
+        const countdownTimer = setInterval(() => {
+          setCountdown((prevCount) => {
+            if (prevCount <= 1) {
+              clearInterval(countdownTimer);
+              location.reload();
+
+              return 0;
+            }
+
+            return prevCount - 1;
+          });
+        }, 1000);
+
+        return () => {
+          clearInterval(countdownTimer);
+        };
+      }
+
+      return () => {};
+    }, [showMessage]);
+
+    if (!showMessage) {
+      return <div className="flex flex-col items-center justify-center h-full w-full"></div>;
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
+        <div className="bg-gradient-to-br from-gray-900 to-purple-950 p-8 rounded-lg border border-purple-800 max-w-md shadow-lg shadow-purple-900/50 min-w-[500px]">
+          <h2 className="text-2xl font-bold text-purple-300 mb-3">The service is temporarily busy.</h2>
+          <p className="text-gray-400 mb-4">
+            Please wait a moment.
+            <br /> We will reload the page in {countdown} seconds.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
       <BackgroundRays />
@@ -109,6 +175,8 @@ function AccessControlledChat() {
         <LoadingScreen />
       ) : isActivated === false ? (
         <AccessRestricted />
+      ) : !loadedWebcontainer ? (
+        <NotLoadedWebcontainer />
       ) : (
         <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
       )}
