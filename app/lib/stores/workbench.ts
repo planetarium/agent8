@@ -481,14 +481,16 @@ export class WorkbenchStore {
   }
 
   async injectTokenEnvironment(shell: BoltShell, accessToken: string) {
+    const wc = await webcontainer;
+
     try {
-      const wc = await webcontainer;
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
-      await wc.fs.writeFile('setup.sh', setupScript);
-      await shell.executeCommand(Date.now().toString(), 'source ./setup.sh');
-      await wc.fs.rm('setup.sh');
+      await wc.fs.writeFile('.secret', setupScript);
+      await shell.executeCommand(Date.now().toString(), 'source ./.secret && rm -f ./.secret');
     } catch {
       throw new Error('Failed to inject user data into the shell.');
+    } finally {
+      await wc.fs.rm('.secret');
     }
   }
 
