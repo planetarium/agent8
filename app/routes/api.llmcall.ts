@@ -1,15 +1,14 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import type { IProviderSetting, ProviderInfo } from '~/types/model';
-import { generateText, type Tool } from 'ai';
+import { generateText } from 'ai';
 import { PROVIDER_LIST } from '~/utils/constants';
 import { MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import { getApiKeysFromCookie, getProviderSettingsFromCookie, getMCPConfigFromCookie } from '~/lib/api/cookies';
+import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
-import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
-import { withV8AuthUser, type ContextConsumeUserCredit, type ContextUser } from '~/lib/verse8/middleware';
+import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 
 export const action = withV8AuthUser(llmCallAction, { checkCredit: true });
 
@@ -53,9 +52,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
   const cookieHeader = request.headers.get('Cookie');
   const apiKeys = getApiKeysFromCookie(cookieHeader);
   const providerSettings = getProviderSettingsFromCookie(cookieHeader);
-  const mcpConfig = getMCPConfigFromCookie(cookieHeader);
-  const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
-  const mcpTools = mcpToolset.tools;
 
   if (streamOutput) {
     try {
@@ -72,8 +68,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
                 description: 'Start Call',
               });
             }
-
-            await cleanupToolSet(mcpToolset);
           },
         },
         messages: [
@@ -85,7 +79,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         env: context.cloudflare?.env as any,
         apiKeys,
         providerSettings,
-        tools: mcpTools,
       });
 
       return new Response(result.textStream, {
@@ -156,7 +149,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         maxTokens: dynamicMaxTokens,
         maxSteps: 100,
         toolChoice: 'auto',
-        tools: mcpTools as Record<string, Tool>,
         abortSignal: request.signal,
       });
       logger.info(`Generated response`);
@@ -181,8 +173,6 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         status: 500,
         statusText: 'Internal Server Error',
       });
-    } finally {
-      await cleanupToolSet(mcpToolset);
     }
   }
 }
