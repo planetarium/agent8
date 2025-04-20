@@ -561,7 +561,7 @@ export class WorkbenchStore {
     return result;
   }
 
-  async setupDeployConfig(shell: BoltShell) {
+  async setupDeployConfig(shell: BoltShell, options: { reset: boolean } = { reset: false }) {
     // Get access token
     const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
@@ -583,7 +583,7 @@ export class WorkbenchStore {
     // Setup environment
     await this.injectTokenEnvironment(shell, accessToken);
 
-    const verseId = await this.setupEnvFile(user.walletAddress);
+    const verseId = await this.setupEnvFile(user.walletAddress, options.reset);
 
     return { user, verseId };
   }
@@ -598,14 +598,6 @@ export class WorkbenchStore {
       // Install dependencies
       await this.#runShellCommand(shell, 'pnpm install');
 
-      // Build project
-      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
-
-      if (buildResult?.exitCode === 2) {
-        this.#handleBuildError(buildResult.output);
-        return;
-      }
-
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
         return;
@@ -613,6 +605,14 @@ export class WorkbenchStore {
 
       const { user, verseId } = await this.setupDeployConfig(shell);
       await this.commitModifiedFiles();
+
+      // Build project
+      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
+
+      if (buildResult?.exitCode === 2) {
+        this.#handleBuildError(buildResult.output);
+        return;
+      }
 
       // Deploy project
       const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
