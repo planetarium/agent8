@@ -487,10 +487,15 @@ export class WorkbenchStore {
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
       await wc.fs.writeFile('.secret', setupScript);
       await shell.executeCommand(Date.now().toString(), 'source ./.secret && rm -f ./.secret');
+      await shell.waitTillOscCode('prompt');
     } catch {
       throw new Error('Failed to inject user data into the shell.');
     } finally {
-      await wc.fs.rm('.secret');
+      try {
+        await wc.fs.rm('.secret');
+      } catch {
+        // File might not exist yet, continue with empty content
+      }
     }
   }
 
@@ -610,7 +615,7 @@ export class WorkbenchStore {
       await this.commitModifiedFiles();
 
       // Deploy project
-      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy');
+      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
 
       if (deployResult?.exitCode !== 0) {
         throw new Error('Failed to publish');
