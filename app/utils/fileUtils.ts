@@ -214,3 +214,123 @@ export function convertFileMapToFileSystemTree(fileMap: FileMap): FileSystemTree
 
   return fileTree;
 }
+
+/**
+ * Search file contents in FileMap by pattern
+ * @param fileMap FileMap to search through
+ * @param pattern Regular expression or string pattern to search for
+ * @param caseSensitive Whether the search is case sensitive (default: false)
+ * @returns Array of search results with {path, content, matches}
+ */
+export function searchFileContentsByPattern(
+  fileMap: FileMap,
+  pattern: string | RegExp,
+  caseSensitive: boolean = false,
+): Array<{
+  path: string;
+  content: string;
+  matches: Array<{ line: number; text: string; index: number }>;
+}> {
+  const results: Array<{
+    path: string;
+    content: string;
+    matches: Array<{ line: number; text: string; index: number }>;
+  }> = [];
+
+  // Create regex object
+  const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+
+  // Search all files
+  Object.keys(fileMap).forEach((path) => {
+    const file = fileMap[path];
+
+    // Skip folders and binary files
+    if (!file || file.type === 'folder' || file.isBinary) {
+      return;
+    }
+
+    // Check if file matches pattern and is not in ignore list
+    const relativePath = path.replace(`${WORK_DIR}/`, '');
+
+    if (ig.ignores(relativePath)) {
+      return;
+    }
+
+    const content = file.content || '';
+    const lines = content.split('\n');
+    const matches: Array<{ line: number; text: string; index: number }> = [];
+
+    // Search pattern in each line
+    lines.forEach((text, lineIndex) => {
+      const lineMatches = [...text.matchAll(regex)];
+
+      if (lineMatches.length > 0) {
+        lineMatches.forEach((match) => {
+          matches.push({
+            line: lineIndex + 1, // Line number starting at 1
+            text,
+            index: match.index || 0,
+          });
+        });
+      }
+    });
+
+    // Add to results if matches found
+    if (matches.length > 0) {
+      results.push({
+        path,
+        content,
+        matches,
+      });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Search files in FileMap by filename
+ * @param fileMap FileMap to search through
+ * @param pattern Regular expression or string pattern to search for
+ * @param caseSensitive Whether the search is case sensitive (default: false)
+ * @returns Array of found file paths and types
+ */
+export function searchFilesByName(
+  fileMap: FileMap,
+  pattern: string | RegExp,
+  caseSensitive: boolean = false,
+): Array<{ path: string; type: 'file' | 'folder' }> {
+  const results: Array<{ path: string; type: 'file' | 'folder' }> = [];
+
+  // Create regex object
+  const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+
+  // Search all files and folders
+  Object.keys(fileMap).forEach((path) => {
+    const file = fileMap[path];
+
+    if (!file) {
+      return;
+    }
+
+    // Check if file is not in ignore list
+    const relativePath = path.replace(`${WORK_DIR}/`, '');
+
+    if (ig.ignores(relativePath)) {
+      return;
+    }
+
+    // Extract filename
+    const fileName = path.split('/').pop() || '';
+
+    // Check if filename matches pattern
+    if (regex.test(fileName)) {
+      results.push({
+        path,
+        type: file.type,
+      });
+    }
+  });
+
+  return results;
+}
