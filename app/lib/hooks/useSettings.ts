@@ -26,6 +26,8 @@ import {
   type MCPSSEServer,
   temporaryModeStore,
   updateTemporaryMode,
+  updateAgent8Deploy,
+  agent8DeployStore,
 } from '~/lib/stores/settings';
 import { useCallback, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
@@ -71,6 +73,8 @@ export interface UseSettingsReturn {
   enableContextOptimization: (enabled: boolean) => void;
   temporaryMode: boolean;
   setTemporaryMode: (enabled: boolean) => void;
+  agent8Deploy: boolean;
+  setAgent8Deploy: (enabled: boolean) => void;
 
   // Tab configuration
   tabConfiguration: TabWindowConfig;
@@ -104,6 +108,7 @@ export function useSettings(): UseSettingsReturn {
   const tabConfiguration = useStore(tabConfigurationStore);
   const mcpSseServers = useStore(mcpSseServersStore);
   const temporaryMode = useStore(temporaryModeStore);
+  const agent8Deploy = useStore(agent8DeployStore);
   const [settings, setSettings] = useState<Settings>(() => {
     const storedSettings = getLocalStorage('settings');
     return {
@@ -173,6 +178,11 @@ export function useSettings(): UseSettingsReturn {
     logStore.logSystem(`Temporary mode ${enabled ? 'enabled' : 'disabled'}`);
   }, []);
 
+  const setAgent8Deploy = useCallback((enabled: boolean) => {
+    updateAgent8Deploy(enabled);
+    logStore.logSystem(`Agent8 deploy ${enabled ? 'enabled' : 'disabled'}`);
+  }, []);
+
   const setTheme = useCallback(
     (theme: Settings['theme']) => {
       saveSettings({ theme });
@@ -229,6 +239,8 @@ export function useSettings(): UseSettingsReturn {
     enableContextOptimization,
     temporaryMode,
     setTemporaryMode,
+    agent8Deploy,
+    setAgent8Deploy,
     setTheme,
     setLanguage,
     setNotifications,

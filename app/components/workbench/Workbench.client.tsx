@@ -24,6 +24,7 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
+import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -313,7 +314,14 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     await shell.ready();
 
-    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+    } else {
+      await shell.executeCommand(
+        Date.now().toString(),
+        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
+      );
+    }
   }, []);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
@@ -371,7 +379,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   )}
                 >
                   <div className="i-ph:play" />
-                  <span>Run</span>
+                  <span>Run Preview</span>
                 </button>
                 <div className="ml-auto" />
                 {(selectedView === 'code' || selectedView === 'resource') && (

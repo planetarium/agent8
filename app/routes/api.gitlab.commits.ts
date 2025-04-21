@@ -104,6 +104,10 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
     return json({ success: false, message: 'Files are required' }, { status: 400 });
   }
 
+  if (files.find((file) => file.path === '.secret')) {
+    return json({ success: false, message: 'Secret file is not allowed' }, { status: 400 });
+  }
+
   try {
     // Get or create GitLab user
     const gitlabUser = await gitlabService.getOrCreateUser(email);

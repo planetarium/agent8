@@ -41,7 +41,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     // If not, commit the files in the message
     const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>/g;
     const matches = [...content.matchAll(regex)];
-    const filePaths = matches.map((match) => match[1]);
+    const filePaths = [...matches.map((match) => match[1]), '.env'];
 
     files = filePaths.map((filePath) => ({
       path: filePath,

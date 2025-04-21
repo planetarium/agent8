@@ -39,6 +39,7 @@ import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHi
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
+import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -220,7 +221,17 @@ async function runAndPreview(message: Message) {
       continue;
     }
 
-    await shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy && pnpm run dev');
+    await workbenchStore.setupDeployConfig(shell);
+
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+    } else {
+      await shell.executeCommand(
+        Date.now().toString(),
+        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
+      );
+    }
+
     break;
   }
 }
@@ -357,7 +368,8 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       const boltShell = workbenchStore.boltTerminal;
       boltShell.ready().then(async () => {
-        await boltShell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+        await workbenchStore.setupDeployConfig(boltShell);
+        await boltShell.executeCommand(Date.now().toString(), 'pnpm install');
       });
     }
   }, [files, installNpm]);

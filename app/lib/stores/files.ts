@@ -7,7 +7,6 @@ import { bufferWatchEvents } from '~/utils/buffer';
 import { WORK_DIR } from '~/utils/constants';
 import { computeFileModifications } from '~/utils/diff';
 import { createScopedLogger } from '~/utils/logger';
-import { unreachable } from '~/utils/unreachable';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -115,14 +114,10 @@ export class FilesStore {
 
       const oldContent = this.getFile(filePath)?.content;
 
-      if (!oldContent && oldContent !== '') {
-        unreachable('Expected content to be defined');
-      }
-
       await webcontainer.fs.writeFile(relativePath, content);
 
       if (!this.#modifiedFiles.has(filePath)) {
-        this.#modifiedFiles.set(filePath, oldContent);
+        this.#modifiedFiles.set(filePath, oldContent ?? '');
       }
 
       // we immediately update the file and don't rely on the `change` event coming from the watcher

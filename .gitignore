@@ -26,6 +26,7 @@ dist-ssr
 /.cache
 /build
 .env.local
+.env.prod
 .env
 .dev.vars
 *.vars

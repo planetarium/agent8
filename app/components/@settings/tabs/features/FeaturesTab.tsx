@@ -283,6 +283,8 @@ export default function FeaturesTab() {
     promptId,
     temporaryMode,
     setTemporaryMode,
+    agent8Deploy,
+    setAgent8Deploy,
   } = useSettings();
 
   // Enable features by default on first load
@@ -342,11 +344,24 @@ export default function FeaturesTab() {
           break;
         }
 
+        case 'agent8Deploy': {
+          setAgent8Deploy(enabled);
+          toast.success(`Agent8 deploy ${enabled ? 'enabled' : 'disabled'}`);
+          break;
+        }
+
         default:
           break;
       }
     },
-    [enableLatestBranch, setAutoSelectTemplate, enableContextOptimization, setEventLogs, setTemporaryMode],
+    [
+      enableLatestBranch,
+      setAutoSelectTemplate,
+      enableContextOptimization,
+      setEventLogs,
+      setTemporaryMode,
+      setAgent8Deploy,
+    ],
   );
 
   const features = {
@@ -386,10 +401,18 @@ export default function FeaturesTab() {
       {
         id: 'temporaryMode',
         title: 'Temporary Mode',
-        description: 'Enable temporary mode',
+        description: 'Use temporarily without interacting with GitLab',
         icon: 'i-ph:clock',
         enabled: temporaryMode,
-        tooltip: 'Enabled by default for improved AI responses',
+        tooltip: 'Enabled by default to use temporarily without interacting with GitLab',
+      },
+      {
+        id: 'agent8Deploy',
+        title: 'Agent8 Deploy',
+        description: 'Deploy your project to Agent8',
+        icon: 'i-ph:rocket',
+        enabled: agent8Deploy,
+        tooltip: 'Enabled by default to deploy your project to Agent8',
       },
     ],
     beta: [],
