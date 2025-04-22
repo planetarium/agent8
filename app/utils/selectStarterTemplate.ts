@@ -1,7 +1,6 @@
 import ignore from 'ignore';
-import type { ProviderInfo } from '~/types/model';
 import type { Template } from '~/types/template';
-import { STARTER_TEMPLATES } from './constants';
+import { FIXED_MODELS, STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
@@ -28,6 +27,7 @@ Response Format:
   <templateName>{selected template name}</templateName>
   <title>{a proper title for the project}</title>
   <projectRepo>{the name of the new project repository to use}</projectRepo>
+  <nextActionSuggestion>{Suggestions for action users might do after calling this template. If there is no suggestion, just return an empty string.}</nextActionSuggestion>
 </selection>
 
 Examples:
@@ -39,6 +39,29 @@ Response:
   <templateName>basic-2d</templateName>
   <title>Simple 2d platformer game</title>
   <projectRepo>basic-2d-game</projectRepo>
+  <nextActionSuggestion>Please change background image.</nextActionSuggestion>
+</selection>
+</example>
+
+<example>
+User: Make a simple 3d rpg game
+Response:
+<selection>
+  <templateName>basic-3d-quarterview</templateName>
+  <title>Simple 3d rpg game</title>
+  <projectRepo>basic-3d-rpg-game</projectRepo>
+  <nextActionSuggestion>Add a floor texture and skybox.</nextActionSuggestion>
+</selection>
+</example>
+
+<example>
+User: Make a simple 3d rpg game
+Response:
+<selection>
+  <templateName>basic-3d-quarterview</templateName>
+  <title>Simple 3d rpg game</title>
+  <projectRepo>basic-3d-rpg-game</projectRepo>
+  <nextActionSuggestion>Please plant a tree on the floor.</nextActionSuggestion>
 </selection>
 </example>
 
@@ -49,18 +72,31 @@ Instructions:
 4. Consider both technical requirements and tags
 5. If no perfect match exists, recommend the closest option
 
+nextActionSuggestion:
+1. It's unacceptable for a project build to fail due to simple changes or code modifications. Please request the simplest next task.
+2. The requested task should not cause the program build to fail once the unit task is completed.
+3. To handle the first requested task, it is appropriate to have work at the level of modifying about one file.
+4. Think of it as a work unit when developing rather than an implementation unit in the game.
+BAD: Setting the surrounding environment of the 3d map (This can involve many tasks.)
+GOOD: Changing the texture of the map specifically
+GOOD: Placing trees on the map
+
+
 Important: Provide only the selection tags in your response, no additional text.
 MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH 
 `;
 
 let templates: Template[] = STARTER_TEMPLATES;
 
-const parseSelectedTemplate = (llmOutput: string): { template: string; title: string; projectRepo: string } | null => {
+const parseSelectedTemplate = (
+  llmOutput: string,
+): { template: string; title: string; projectRepo: string; nextActionSuggestion: string } | null => {
   try {
     // Extract content between <templateName> tags
     const templateNameMatch = llmOutput.match(/<templateName>(.*?)<\/templateName>/);
     const titleMatch = llmOutput.match(/<title>(.*?)<\/title>/);
     const projectRepoMatch = llmOutput.match(/<projectRepo>(.*?)<\/projectRepo>/);
+    const nextActionSuggestionMatch = llmOutput.match(/<nextActionSuggestion>(.*?)<\/nextActionSuggestion>/);
 
     if (!templateNameMatch) {
       return null;
@@ -70,6 +106,7 @@ const parseSelectedTemplate = (llmOutput: string): { template: string; title: st
       template: templateNameMatch[1].trim(),
       title: titleMatch?.[1].trim() || 'Untitled Project',
       projectRepo: projectRepoMatch?.[1].trim() || '',
+      nextActionSuggestion: nextActionSuggestionMatch?.[1].trim() || '',
     };
   } catch (error) {
     console.error('Error parsing template selection:', error);
@@ -77,7 +114,7 @@ const parseSelectedTemplate = (llmOutput: string): { template: string; title: st
   }
 };
 
-export const selectStarterTemplate = async (options: { message: string; model: string; provider: ProviderInfo }) => {
+export const selectStarterTemplate = async (options: { message: string }) => {
   try {
     const response = await fetch('https://raw.githubusercontent.com/planetarium/agent8-templates/main/templates.json');
     templates = await response.json();
@@ -86,9 +123,8 @@ export const selectStarterTemplate = async (options: { message: string; model: s
     templates = STARTER_TEMPLATES;
   }
 
-  console.log('templates', templates);
-
-  const { message, model, provider } = options;
+  const { message } = options;
+  const { model, provider } = FIXED_MODELS.SELECT_STARTER_TEMPLATE;
   const requestBody = {
     message,
     model,
@@ -121,6 +157,7 @@ export const selectStarterTemplate = async (options: { message: string; model: s
       template,
       title: selectedTemplate.title,
       projectRepo: selectedTemplate.projectRepo,
+      nextActionSuggestion: selectedTemplate.nextActionSuggestion,
     };
   }
 

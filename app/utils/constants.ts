@@ -8,13 +8,32 @@ export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
 export const DEV_TAG_REGEX = /<__DEV__>(.*?)<\/__DEV__>/gs;
-export const DEFAULT_MODEL = 'anthropic/claude-3.7-sonnet';
+export const DEFAULT_MODEL = 'auto';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 
 const llmManager = LLMManager.getInstance(import.meta.env);
 
 export const PROVIDER_LIST = llmManager.getAllProviders();
-export const DEFAULT_PROVIDER = llmManager.getDefaultProvider();
+export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!;
+
+export const FIXED_MODELS = {
+  SELECT_STARTER_TEMPLATE: {
+    model: 'openai/o4-mini',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+  },
+  FIRST_2D_CHAT: {
+    model: 'anthropic/claude-3.7-sonnet',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+  },
+  FIRST_3D_CHAT: {
+    model: 'openai/o4-mini',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+  },
+  DEFAULT_MODEL: {
+    model: 'anthropic/claude-3.7-sonnet',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+  },
+};
 
 export const providerBaseUrlEnvKeys: Record<string, { baseUrlKey?: string; apiTokenKey?: string }> = {};
 PROVIDER_LIST.forEach((provider) => {
