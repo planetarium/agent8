@@ -11,7 +11,14 @@ import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROMPT_COOKIE_KEY, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import {
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
+  FIXED_MODELS,
+  PROMPT_COOKIE_KEY,
+  PROVIDER_LIST,
+  WORK_DIR,
+} from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
@@ -257,11 +264,11 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
   const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
   const [model, setModel] = useState(() => {
-    const savedModel = Cookies.get('selectedModel');
+    const savedModel = Cookies.get('SelectedModel');
     return savedModel || DEFAULT_MODEL;
   });
   const [provider, setProvider] = useState(() => {
-    const savedProvider = Cookies.get('selectedProvider');
+    const savedProvider = Cookies.get('SelectedProvider');
     return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
   });
 
@@ -512,10 +519,8 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
     if (!chatStarted) {
       try {
-        const { template, title, projectRepo } = await selectStarterTemplate({
+        const { template, title, projectRepo, nextActionSuggestion } = await selectStarterTemplate({
           message: messageContent,
-          model,
-          provider,
         });
 
         if (!template) {
@@ -561,11 +566,21 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
         const { assistantMessage, userMessage } = temResp.data;
 
+        const firstChatModel =
+          model === 'auto'
+            ? template.name.includes('3d')
+              ? FIXED_MODELS.FIRST_3D_CHAT
+              : FIXED_MODELS.FIRST_2D_CHAT
+            : {
+                model,
+                provider,
+              };
+
         setMessages([
           {
             id: `1-${new Date().getTime()}`,
             role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+            content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n${userMessage}`,
             annotations: ['hidden'],
           },
           {
@@ -576,9 +591,9 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
           {
             id: `3-${new Date().getTime()}`,
             role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
               attachmentList,
-            )}]\n\n${messageContent}`,
+            )}]\n\n${messageContent}${nextActionSuggestion && `\n\n<think>Proceed with the following task first.\n${nextActionSuggestion}</think>`}`,
           },
         ]);
 
@@ -617,18 +632,20 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
       chatStore.setKey('aborted', false);
 
-      const commit = await workbenchStore.commitModifiedFiles();
+      if (repoStore.get().path) {
+        const commit = await workbenchStore.commitModifiedFiles();
 
-      if (commit) {
-        setMessages((prev: Message[]) => [
-          ...prev,
-          {
-            id: commit.id,
-            role: 'assistant',
-            content: commit.message || 'The user changed the files.',
-            parts: [],
-          },
-        ]);
+        if (commit) {
+          setMessages((prev: Message[]) => [
+            ...prev,
+            {
+              id: commit.id,
+              role: 'assistant',
+              content: commit.message || 'The user changed the files.',
+              parts: [],
+            },
+          ]);
+        }
       }
 
       append({
@@ -687,12 +704,12 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
-    Cookies.set('selectedModel', newModel, { expires: 30 });
+    Cookies.set('SelectedModel', newModel, { expires: 1 });
   };
 
   const handleProviderChange = (newProvider: ProviderInfo) => {
     setProvider(newProvider);
-    Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
+    Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
   };
 
   const handleTemplateImport = async (

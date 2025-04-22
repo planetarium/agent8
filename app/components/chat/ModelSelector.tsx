@@ -5,9 +5,6 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import { classNames } from '~/utils/classNames';
 import { MODEL_WHITELIST } from '~/lib/modules/llm/whitelist';
 import type { WhitelistItem } from '~/lib/modules/llm/whitelist';
-import { createScopedLogger } from '~/utils/logger';
-
-const logger = createScopedLogger('ModelSelector');
 
 interface ModelSelectorProps {
   model?: string;
@@ -18,6 +15,9 @@ interface ModelSelectorProps {
   providerList: ProviderInfo[];
   modelLoading?: string;
 }
+
+// Special model name for Auto mode
+const AUTO_MODEL_NAME = 'auto';
 
 export const ModelSelector = ({
   model,
@@ -59,29 +59,49 @@ export const ModelSelector = ({
     return providerEnabled && modelExists;
   });
 
+  // Auto 옵션 생성 - OpenRouter의 Claude 모델을 기본값으로 사용
+  const autoOption: WhitelistItem = {
+    label: 'Agent8 Auto',
+    providerName: 'OpenRouter',
+    modelName: AUTO_MODEL_NAME, // Using special name for Auto
+  };
+
   // 현재 선택된 화이트리스트 항목 찾기
   const selectedOption =
-    model && provider
-      ? MODEL_WHITELIST.find((item) => item.providerName === provider.name && item.modelName === model)
-      : undefined;
+    model === AUTO_MODEL_NAME
+      ? autoOption // Special handling for Auto model
+      : model && provider
+        ? MODEL_WHITELIST.find((item) => item.providerName === provider.name && item.modelName === model)
+        : undefined;
 
-  if (!selectedOption) {
-    try {
-      const firstModel = MODEL_WHITELIST[0];
-
-      if (firstModel) {
-        setModel?.(firstModel.modelName);
-        setProvider?.(providerList.find((p) => p.name === firstModel.providerName)!);
+  // Set default model if none is selected
+  useEffect(() => {
+    if (!model || !provider) {
+      // Default to Auto mode
+      if (setModel) {
+        setModel(AUTO_MODEL_NAME);
       }
-    } catch {
-      logger.error('Failed to set default model and provider');
+
+      if (setProvider) {
+        const openRouterProvider = providerList.find((p) => p.name === 'OpenRouter');
+
+        if (openRouterProvider) {
+          setProvider(openRouterProvider);
+        }
+      }
     }
-  }
+  }, [model, provider, setModel, setProvider, providerList]);
 
   // 검색어로 화이트리스트 항목 필터링
   const filteredOptions = whitelistOptions.filter((item) =>
     item.label.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  // Auto 옵션 추가 (검색어가 비어있거나 "auto"를 포함하는 경우만)
+  const displayOptions =
+    searchQuery === '' || 'auto'.includes(searchQuery.toLowerCase())
+      ? [autoOption, ...filteredOptions]
+      : filteredOptions;
 
   // Reset focused index when search query changes or dropdown opens/closes
   useEffect(() => {
@@ -107,7 +127,7 @@ export const ModelSelector = ({
         setFocusedIndex((prev) => {
           const next = prev + 1;
 
-          if (next >= filteredOptions.length) {
+          if (next >= displayOptions.length) {
             return 0;
           }
 
@@ -121,7 +141,7 @@ export const ModelSelector = ({
           const next = prev - 1;
 
           if (next < 0) {
-            return filteredOptions.length - 1;
+            return displayOptions.length - 1;
           }
 
           return next;
@@ -131,8 +151,8 @@ export const ModelSelector = ({
       case 'Enter':
         e.preventDefault();
 
-        if (focusedIndex >= 0 && focusedIndex < filteredOptions.length) {
-          const selectedItem = filteredOptions[focusedIndex];
+        if (focusedIndex >= 0 && focusedIndex < displayOptions.length) {
+          const selectedItem = displayOptions[focusedIndex];
           selectWhitelistItem(selectedItem);
         }
 
@@ -145,7 +165,7 @@ export const ModelSelector = ({
         break;
 
       case 'Tab':
-        if (!e.shiftKey && focusedIndex === filteredOptions.length - 1) {
+        if (!e.shiftKey && focusedIndex === displayOptions.length - 1) {
           setIsDropdownOpen(false);
         }
 
@@ -208,7 +228,7 @@ export const ModelSelector = ({
           tabIndex={0}
         >
           <div className="flex items-center gap-1">
-            <span className="max-w-[300px] truncate">{selectedOption?.label || 'Select model'}</span>
+            <span className="max-w-[300px] truncate">{selectedOption?.label || 'Auto'}</span>
             <span
               className={classNames(
                 'i-ph:caret-down opacity-75 transform transition-transform',
@@ -267,21 +287,26 @@ export const ModelSelector = ({
             >
               {modelLoading === 'all' ? (
                 <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">Loading...</div>
-              ) : filteredOptions.length === 0 ? (
+              ) : displayOptions.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">No models found</div>
               ) : (
-                filteredOptions.map((option, index) => (
+                displayOptions.map((option, index) => (
                   <div
                     ref={(el) => (optionsRef.current[index] = el)}
                     key={index}
                     role="option"
-                    aria-selected={selectedOption?.label === option.label}
+                    aria-selected={
+                      (model === AUTO_MODEL_NAME && option.modelName === AUTO_MODEL_NAME) ||
+                      selectedOption?.label === option.label
+                    }
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
                       'hover:bg-bolt-elements-background-depth-3',
                       'text-bolt-elements-textPrimary opacity-90',
                       'outline-none',
-                      selectedOption?.label === option.label || focusedIndex === index
+                      (model === AUTO_MODEL_NAME && option.modelName === AUTO_MODEL_NAME) ||
+                        selectedOption?.label === option.label ||
+                        focusedIndex === index
                         ? 'bg-bolt-elements-background-depth-2'
                         : undefined,
                       focusedIndex === index ? 'ring-1 ring-inset ring-bolt-elements-focus' : undefined,

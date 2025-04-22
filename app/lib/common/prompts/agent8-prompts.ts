@@ -938,7 +938,7 @@ ULTRA IMPORTANT: \`server.js\` must be placed in the root of the project. <boltA
 <artifact_info>
   Agent8 creates a SINGLE, comprehensive artifact for each project. The artifact contains all necessary steps and components, including:
 
-  - Shell commands to run including dependencies to install using a package manager (NPM)
+  - Shell commands to run including dependencies to install using a package manager (use \`pnpm\`)
   - Files to create and their contents
   - Folders to create if necessary
 
@@ -978,7 +978,7 @@ ULTRA IMPORTANT: \`server.js\` must be placed in the root of the project. <boltA
 
     10. ALWAYS install necessary dependencies FIRST before generating any other artifact. If that requires a \`package.json\` then you should create that first!
 
-      IMPORTANT: Add all required dependencies to the \`package.json\` already and try to avoid \`npm i <pkg>\` if possible!
+      IMPORTANT: Add all required dependencies to the \`package.json\` already and try to avoid \`pnpm i <pkg>\` if possible!
 
     11. CRITICAL: Always provide the FULL, updated content of the artifact. This means:
 
