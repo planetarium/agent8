@@ -9,6 +9,7 @@ import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { createFilesContext, extractPropertiesFromMessage } from './utils';
 import { getFilePaths } from './select-context';
+import { createFileSearchTools } from './tools/file-search';
 
 export type Messages = Message[];
 
@@ -46,7 +47,7 @@ export async function streamText(props: {
     summary,
     vectorDbExamples,
     relevantResources,
-    tools,
+    tools: providedTools,
     abortSignal,
   } = props;
   let currentModel = DEFAULT_MODEL;
@@ -224,7 +225,7 @@ ${props.summary}
 
 
   CRITICAL: Follow these strict resource management rules to prevent application errors:
-    
+
   1. If appropriate resources are not available in assets.json:
      - Never create images directly using base64 or similar methods. even in assets.json's url part.
      - Never create URLs that are not provided.
@@ -233,12 +234,12 @@ ${props.summary}
      - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
      - Consider simplifying the visual design to work with available resources
      - NEVER create images directly using base64 or similar methods.
-     
-  
+
+
   2. Resource reference pattern:
      \`\`\`js
      import Assets from './assets.json'
-     
+
      // Correct way to use assets
      const knightImageUrl = Assets.character.knight.url;
      \`\`\`
@@ -270,6 +271,18 @@ ${examplesContext}
    * );
    */
 
+  // Create file search tools if files are provided
+  let combinedTools = { ...providedTools };
+
+  if (files) {
+    // Add file search tools
+    const fileSearchTools = createFileSearchTools(files);
+    combinedTools = {
+      ...combinedTools,
+      ...fileSearchTools,
+    };
+  }
+
   return await _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
@@ -282,7 +295,7 @@ ${examplesContext}
     maxTokens: dynamicMaxTokens,
     maxSteps: 100,
     messages: convertToCoreMessages(processedMessages as any),
-    tools,
+    tools: combinedTools,
     ...options,
   });
 }
