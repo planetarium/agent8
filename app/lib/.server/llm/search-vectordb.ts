@@ -114,10 +114,12 @@ async function searchExamplesFromVectorDB({
   requirements,
   supabase,
   openai,
+  isProduction = false,
 }: {
   requirements: string[];
   supabase: any;
   openai: any;
+  isProduction?: boolean;
 }) {
   const results = [];
   const seenIds = new Set<string>();
@@ -130,7 +132,7 @@ async function searchExamplesFromVectorDB({
         value: requirement,
       });
 
-      const { data, error } = await supabase.rpc('match_codebase', {
+      const { data, error } = await supabase.rpc(isProduction ? 'match_codebase_prod' : 'match_codebase', {
         query_embedding: embedding,
         match_count: 5,
       });
@@ -395,7 +397,12 @@ export async function searchVectorDB(props: {
     logger.info(`Extracted ${requirements.length} requirements:`, requirements);
 
     // Step 2: Search vector database for relevant code examples
-    const codeExamples = await searchExamplesFromVectorDB({ requirements, supabase, openai });
+    const codeExamples = await searchExamplesFromVectorDB({
+      requirements,
+      supabase,
+      openai,
+      isProduction: serverEnv?.USE_PRODUCTION_VECTOR_DB === 'true',
+    });
 
     logger.info(`Found ${codeExamples.length} code examples`);
 

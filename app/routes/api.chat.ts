@@ -46,6 +46,7 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
+  const env = { ...context.cloudflare.env, ...process.env } as Env;
   const { messages, files, promptId, contextOptimization } = await request.json<{
     messages: Messages;
     files: any;
@@ -167,7 +168,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           summary = await createSummary({
             messages: [...messages],
-            env: context.cloudflare?.env,
+            env,
             apiKeys,
             providerSettings,
             promptId,
@@ -210,7 +211,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           logger.debug(`Messages count: ${messages.length}`);
           filteredFiles = await selectContext({
             messages: [...messages],
-            env: context.cloudflare?.env,
+            env,
             apiKeys,
             files,
             providerSettings,
@@ -269,7 +270,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const [vectorDBResult, relevantResources] = await Promise.all([
           searchVectorDB({
             messages: [...messages],
-            env: context.cloudflare?.env,
+            env,
             apiKeys,
             files,
             providerSettings,
@@ -288,7 +289,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           }),
           searchResources({
             messages: [...messages],
-            env: context.cloudflare?.env,
+            env,
             apiKeys,
             files,
             providerSettings,
@@ -420,7 +421,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             const result = await streamText({
               messages,
-              env: context.cloudflare?.env,
+              env,
               options,
               apiKeys,
               files,
@@ -472,7 +473,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const result = await streamText({
           messages,
-          env: context.cloudflare?.env,
+          env,
           options,
           apiKeys,
           files,

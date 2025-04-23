@@ -179,8 +179,10 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
       headers.Authorization = 'token ' + token;
     }
 
+    const ref = env?.USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
+
     // Fetch contents of the path
-    const response = await fetch(`${baseUrl}/repos/${repoName}/contents/${path}`, {
+    const response = await fetch(`${baseUrl}/repos/${repoName}/contents/${path}?ref=${ref}`, {
       headers,
     });
 
@@ -221,8 +223,10 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
           // Merge subdirectory contents into the main fileMap
           Object.assign(fileMap, subDirContents);
         } else if (item.type === 'file') {
-          // Fetch file content
-          const fileResponse = await fetch(item.url, {
+          // Fetch file content (construct URL with ref if provided)
+          const fileUrl = `${baseUrl}/repos/${repoName}/contents/${item.path}?ref=${ref}`;
+
+          const fileResponse = await fetch(fileUrl, {
             headers,
           });
           const fileData: any = await fileResponse.json();
