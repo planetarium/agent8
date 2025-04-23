@@ -17,7 +17,7 @@ import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
 import { repoStore } from './repo';
 import { isEnabledGitbasePersistence, commitUserChanged } from '~/lib/persistenceGitbase/api.client';
-import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken, type V8User } from '~/lib/verse8/userAuth';
 import type { BoltShell } from '~/utils/shell';
 import { logger } from '~/utils/logger';
 import { SETTINGS_KEYS } from './settings';
@@ -499,7 +499,7 @@ export class WorkbenchStore {
     }
   }
 
-  async setupEnvFile(walletAddress: string, reset: boolean = false) {
+  async setupEnvFile(user: V8User, reset: boolean = false) {
     const wc = await webcontainer;
     let envFile = '';
 
@@ -514,13 +514,17 @@ export class WorkbenchStore {
     const currentAccount = envVars.VITE_AGENT8_ACCOUNT;
     const currentVerse = envVars.VITE_AGENT8_VERSE;
 
-    if (currentAccount === walletAddress && currentVerse?.startsWith(walletAddress) && !reset) {
+    if (
+      (currentAccount === user.walletAddress || currentAccount === user.userUid) &&
+      currentVerse?.startsWith(currentAccount) &&
+      !reset
+    ) {
       return currentVerse;
     }
 
-    envVars.VITE_AGENT8_ACCOUNT = walletAddress;
+    envVars.VITE_AGENT8_ACCOUNT = user.walletAddress || user.userUid;
 
-    const verseId = walletAddress + '-' + new Date().getTime();
+    const verseId = envVars.VITE_AGENT8_ACCOUNT + '-' + new Date().getTime();
     envVars.VITE_AGENT8_VERSE = verseId;
 
     const updatedEnvContent = Object.entries(envVars)
@@ -576,14 +580,10 @@ export class WorkbenchStore {
       throw new Error('Account is not activated');
     }
 
-    if (!user.walletAddress) {
-      throw new Error('Wallet address not found');
-    }
-
     // Setup environment
     await this.injectTokenEnvironment(shell, accessToken);
 
-    const verseId = await this.setupEnvFile(user.walletAddress, options.reset);
+    const verseId = await this.setupEnvFile(user, options.reset);
 
     return { user, verseId };
   }
@@ -603,7 +603,7 @@ export class WorkbenchStore {
         return;
       }
 
-      const { user, verseId } = await this.setupDeployConfig(shell);
+      const { verseId } = await this.setupDeployConfig(shell);
       await this.commitModifiedFiles();
 
       // Build project
@@ -622,7 +622,7 @@ export class WorkbenchStore {
       }
 
       // Handle successful deployment
-      this.#handleSuccessfulDeployment(user.walletAddress, verseId, chatId, title);
+      this.#handleSuccessfulDeployment(verseId, chatId, title);
     } catch (error) {
       logger.error('[Publish] Error:', error);
       throw error;
@@ -648,7 +648,7 @@ export class WorkbenchStore {
     });
   }
 
-  #handleSuccessfulDeployment(walletAddress: string, verseId: string, chatId: string, title: string) {
+  #handleSuccessfulDeployment(verseId: string, chatId: string, title: string) {
     const publishedUrl = `${import.meta.env.VITE_PUBLISHED_BASE_URL || 'https://agent8-games.verse8.io'}/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}&buildAt=${Date.now()}`;
     this.setPublishedUrl(publishedUrl);
 

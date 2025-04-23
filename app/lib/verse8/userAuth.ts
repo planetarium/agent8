@@ -5,6 +5,13 @@ const logger = createScopedLogger('userAuth');
 
 export const V8_ACCESS_TOKEN_KEY = 'v8AccessToken';
 
+export interface V8User {
+  userUid: string;
+  isActivated: boolean;
+  email: string;
+  walletAddress: string;
+}
+
 export const updateV8AccessToken = (v8AccessToken: string) => {
   if (v8AccessToken) {
     Cookies.set(V8_ACCESS_TOKEN_KEY, v8AccessToken);
@@ -12,10 +19,7 @@ export const updateV8AccessToken = (v8AccessToken: string) => {
   }
 };
 
-export const verifyV8AccessToken = async (
-  v8ApiEndpoint: string,
-  accessToken: string,
-): Promise<{ userUid: string; isActivated: boolean; email: string; walletAddress: string }> => {
+export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: string): Promise<V8User> => {
   try {
     const response = await fetch(v8ApiEndpoint + '/v1/auth/verify', {
       headers: {
