@@ -312,7 +312,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     const shell = workbenchStore.boltTerminal;
 
-    await shell.ready();
+    await shell.ready;
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
       await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');

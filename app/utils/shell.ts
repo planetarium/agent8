@@ -1,13 +1,13 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { Container, ContainerProcess } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from './promises';
 import { atom } from 'nanostores';
 
-export async function newShellProcess(webcontainer: WebContainer, terminal: ITerminal) {
+export async function newShellProcess(container: Container, terminal: ITerminal) {
   const args: string[] = [];
 
   // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-  const process = await webcontainer.spawn('/bin/jsh', ['--osc', ...args], {
+  const process = await container.spawn('/bin/jsh', ['--osc', ...args], {
     terminal: {
       cols: terminal.cols ?? 80,
       rows: terminal.rows ?? 15,
@@ -57,9 +57,9 @@ export type ExecutionResult = { output: string; exitCode: number } | undefined;
 export class BoltShell {
   #initialized: (() => void) | undefined;
   #readyPromise: Promise<void>;
-  #webcontainer: WebContainer | undefined;
+  #container: Container | undefined;
   #terminal: ITerminal | undefined;
-  #process: WebContainerProcess | undefined;
+  #process: ContainerProcess | undefined;
   executionState = atom<
     { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
   >();
@@ -72,27 +72,31 @@ export class BoltShell {
     });
   }
 
-  ready() {
+  get ready() {
     return this.#readyPromise;
   }
 
-  async init(webcontainer: WebContainer, terminal: ITerminal) {
-    this.#webcontainer = webcontainer;
-    this.#terminal = terminal;
+  get isInit() {
+    return !!this.#container;
+  }
 
-    const { process, output } = await this.newBoltShellProcess(webcontainer, terminal);
-    this.#process = process;
-    this.#outputStream = output.getReader();
-    await this.waitTillOscCode('interactive');
-    this.#initialized?.();
+  get process() {
+    return this.#process;
   }
 
   get terminal() {
     return this.#terminal;
   }
 
-  get process() {
-    return this.#process;
+  async init(container: Container, terminal: ITerminal) {
+    this.#container = container;
+    this.#terminal = terminal;
+
+    const { process, output } = await this.newBoltShellProcess(container, terminal);
+    this.#process = process;
+    this.#outputStream = output.getReader();
+    await this.waitTillOscCode('interactive');
+    this.#initialized?.();
   }
 
   async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult> {
@@ -138,11 +142,11 @@ export class BoltShell {
     return resp;
   }
 
-  async newBoltShellProcess(webcontainer: WebContainer, terminal: ITerminal) {
+  async newBoltShellProcess(container: Container, terminal: ITerminal) {
     const args: string[] = [];
 
     // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-    const process = await webcontainer.spawn('/bin/jsh', ['--osc', ...args], {
+    const process = await container.spawn('/bin/jsh', ['--osc', ...args], {
       terminal: {
         cols: terminal.cols ?? 80,
         rows: terminal.rows ?? 15,

@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import type { Container } from '~/lib/container/interfaces';
 import { atom } from 'nanostores';
 
 // Extend Window interface to include our custom property
@@ -19,7 +19,7 @@ const PREVIEW_CHANNEL = 'preview-updates';
 
 export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
-  #webcontainer: Promise<WebContainer>;
+  #container: Promise<Container>;
   #broadcastChannel: BroadcastChannel;
   #lastUpdate = new Map<string, number>();
   #watchedFiles = new Set<string>();
@@ -29,8 +29,8 @@ export class PreviewsStore {
 
   previews = atom<PreviewInfo[]>([]);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(containerPromise: Promise<Container>) {
+    this.#container = containerPromise;
     this.#broadcastChannel = new BroadcastChannel(PREVIEW_CHANNEL);
     this.#storageChannel = new BroadcastChannel('storage-sync-channel');
 
@@ -141,10 +141,10 @@ export class PreviewsStore {
   }
 
   async #init() {
-    const webcontainer = await this.#webcontainer;
+    const container = await this.#container;
 
     // Listen for server ready events
-    webcontainer.on('server-ready', (port, url) => {
+    container.on('server-ready', (port, url) => {
       console.log('[Preview] Server ready on port:', port, url);
       this.broadcastUpdate(url);
 
@@ -154,10 +154,10 @@ export class PreviewsStore {
 
     try {
       // Watch for file changes
-      const watcher = await webcontainer.fs.watch('**/*', { persistent: true });
+      const watcher = await container.fs.watch('**/*', { persistent: true });
 
       // Use the native watch events
-      (watcher as any).addEventListener('change', async () => {
+      watcher.addEventListener('change', async () => {
         const previews = this.previews.get();
 
         for (const preview of previews) {
@@ -188,7 +188,7 @@ export class PreviewsStore {
     }
 
     // Listen for port events
-    webcontainer.on('port', (port, type, url) => {
+    container.on('port', (port: number, type: string, url: string) => {
       console.log('[Preview] Port event received:', port, type, url);
 
       let previewInfo = this.#availablePreviews.get(port);
@@ -317,10 +317,10 @@ let previewsStore: PreviewsStore | null = null;
 export function usePreviewStore() {
   if (!previewsStore) {
     /*
-     * Initialize with a Promise that resolves to WebContainer
-     * This should match how you're initializing WebContainer elsewhere
+     * Initialize with a Promise that resolves to Container
+     * This should match how you're initializing Container elsewhere
      */
-    previewsStore = new PreviewsStore(Promise.resolve({} as WebContainer));
+    previewsStore = new PreviewsStore(Promise.resolve({} as Container));
   }
 
   return previewsStore;

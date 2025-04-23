@@ -2,7 +2,7 @@ import { atom, map, type MapStore, type ReadableAtom, type WritableAtom } from '
 import type { EditorDocument, ScrollPosition } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
-import { webcontainer } from '~/lib/webcontainer';
+import { container } from '~/lib/container';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
@@ -40,10 +40,10 @@ type Artifacts = MapStore<Record<string, ArtifactState>>;
 export type WorkbenchViewType = 'code' | 'diff' | 'preview' | 'resource';
 
 export class WorkbenchStore {
-  #previewsStore = new PreviewsStore(webcontainer);
-  #filesStore = new FilesStore(webcontainer);
+  #previewsStore = new PreviewsStore(container);
+  #filesStore = new FilesStore(container);
   #editorStore = new EditorStore(this.#filesStore);
-  #terminalStore = new TerminalStore(webcontainer);
+  #terminalStore = new TerminalStore(container);
 
   #reloadedMessages = new Set<string>();
 
@@ -275,7 +275,7 @@ export class WorkbenchStore {
       closed: false,
       type,
       runner: new ActionRunner(
-        webcontainer,
+        container,
         () => this.boltTerminal,
         (alert) => {
           if (this.#reloadedMessages.has(messageId)) {
@@ -343,7 +343,7 @@ export class WorkbenchStore {
     }
 
     if (data.action.type === 'file') {
-      const wc = await webcontainer;
+      const wc = await container;
       const fullPath = path.join(wc.workdir, data.action.filePath);
 
       if (this.selectedFile.value !== fullPath) {
@@ -481,7 +481,7 @@ export class WorkbenchStore {
   }
 
   async injectTokenEnvironment(shell: BoltShell, accessToken: string) {
-    const wc = await webcontainer;
+    const wc = await container;
 
     try {
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
@@ -500,7 +500,7 @@ export class WorkbenchStore {
   }
 
   async setupEnvFile(user: V8User, reset: boolean = false) {
-    const wc = await webcontainer;
+    const wc = await container;
     let envFile = '';
 
     try {
@@ -592,7 +592,7 @@ export class WorkbenchStore {
     this.currentView.set('code');
 
     const shell = this.boltTerminal;
-    await shell.ready();
+    await shell.ready;
 
     try {
       // Install dependencies
