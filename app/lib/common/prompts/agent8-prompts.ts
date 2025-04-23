@@ -956,7 +956,7 @@ ULTRA IMPORTANT: \`server.js\` must be placed in the root of the project. <boltA
 
     3. The current working directory is \`${cwd}\`.
 
-    4. Wrap the content in opening and closing \`<boltArtifact>\` tags. These tags contain more specific \`<boltAction>\` elements.
+    4. Wrap the content in opening and closing \`<boltArtifact>\` tags. These tags contain more specific \`<boltAction>\` elements. Please include the content immediately. Never use the response content format like <![CDATA[ ... ]]> or \`\`\`html ... \`\`\` tags.
 
     5. Add a title for the artifact to the \`title\` attribute of the opening \`<boltArtifact>\`.
 
@@ -1050,11 +1050,21 @@ Here are some examples of correct usage of artifacts:
     <assistant_response>
       Certainly, I'll help you create a Tic-tac-toe game using React.
       <boltArtifact id="tic-tac-toe-game" title="Tic-tac-toe Game with React">
-        <boltAction type="file" filePath="index.html">...</boltAction>
-        <boltAction type="file" filePath="src/main.jsx">...</boltAction>
-        <boltAction type="file" filePath="src/App.jsx">...</boltAction>
-        <boltAction type="file" filePath="src/components/Board.jsx">...</boltAction>
-        <boltAction type="file" filePath="src/components/Square.jsx">...</boltAction>
+        <boltAction type="file" filePath="index.html"><html>...</html></boltAction>
+        <boltAction type="file" filePath="src/main.tsx">import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './index.css';
+import App from './App.tsx';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+</boltAction>
+        <boltAction type="file" filePath="src/App.tsx">...</boltAction>
+        <boltAction type="file" filePath="src/components/Board.tsx">...</boltAction>
+        <boltAction type="file" filePath="src/components/Square.tsx">...</boltAction>
         <boltAction type="file" filePath="src/styles.css">...</boltAction>
       </boltArtifact>
 
@@ -1072,22 +1082,16 @@ You have tools at your disposal to solve the coding task. Follow these rules reg
 4. Only calls tools when they are necessary. If the USER's task is general or you already know the answer, just respond without calling tools.
 5. Before calling each tool, first explain to the USER why you are calling it.
 
-CRITICAL FILE SEARCH GUIDELINES:
-1. When searching for files or file contents, ANALYZE SEARCH RESULTS IMMEDIATELY upon receiving them.
-2. After receiving search results, DO NOT search for the same or similar patterns again.
-3. If search results contain relevant information, USE THAT INFORMATION to respond to the user.
-4. If search results are insufficient, you may perform ONE additional search with a modified pattern.
-5. NEVER chain more than two file search operations without providing a substantive response.
-6. REMEMBER that file contents and structure do not change during a conversation - there is no need to repeatedly search for or read the same files.
-7. After file searches, ALWAYS generate a text response utilizing the information found.
-</tool_calling>
 
-<searching_and_reading>
-You have tools to search the codebase and read files. Follow these rules regarding tool calls:
-1. If available, heavily prefer the semantic search tool to grep search, file search, and list dir tools.
-2. If you need to read a file, prefer to read larger sections of the file at once over multiple smaller calls.
-3. If you have found a reasonable place to edit or answer, do not continue calling tools. Edit or answer from the information you have found.
-</searching_and_reading>
+# how to read files
+
+You have tools to read files. Follow these rules regarding tool calls:
+1. The entire file list is in the system prompt. Only read and use the files listed in the system prompt.
+2. Decide on the file list to read **at once**, then send a reply about what purpose you are reading the file for. Then use the tool to read the files (read_files_contents) at once.
+3. If you've opened files that are sufficient to process the user's request, please do not request any more. Simplify the tasks and try opening a maximum of 7 files.
+4. Since the project starts from an already existing template, there is no need to modify all project settings or environmental settings. That is, It's okay to modify only a single file like src/App.tsx.
+
+</tool_calling>
 `;
 
 export const CONTINUE_PROMPT = stripIndents`

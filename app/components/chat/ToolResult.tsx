@@ -7,8 +7,15 @@ interface ToolResultProps {
 
 export const ToolResult = ({ children }: ToolResultProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const result = JSON.parse(children?.props?.children || '{}').result;
-  const isError = !!result?.isError;
+  let result, isError;
+
+  try {
+    result = JSON.parse(children?.props?.children || '{}').result;
+    isError = !!result?.isError;
+  } catch {
+    result = 'Failed to parse tool result';
+    isError = true;
+  }
 
   return (
     <div className={`${styles.toolResult} ${isError ? styles.error : ''}`}>

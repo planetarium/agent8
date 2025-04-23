@@ -22,6 +22,18 @@ interface MarkdownProps {
 export const Markdown = memo(({ children, html = false, limitedMarkdown = false }: MarkdownProps) => {
   logger.trace('Render');
 
+  /*
+   * If a message starts with a tag, there is an issue where it cannot be parsed correctly in ToolCall, etc.
+   * To solve this, we add an empty character.
+   */
+  const processedContent = useMemo(() => {
+    if (children.trim().startsWith('<div')) {
+      return `&nbsp;${children}`;
+    }
+
+    return children;
+  }, [children]);
+
   const components = useMemo(() => {
     return {
       div: ({ className, children, node, ...props }) => {
@@ -40,10 +52,12 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
         }
 
         if (className?.includes('__toolCall__')) {
+          console.log('toolCall', children, node);
           return <ToolCall>{children as React.ReactElement<any, 'code'>}</ToolCall>;
         }
 
         if (className?.includes('__toolResult__')) {
+          console.log('toolResult', children, node);
           return <ToolResult>{children as React.ReactElement<any, 'code'>}</ToolResult>;
         }
 
@@ -83,7 +97,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
       remarkPlugins={remarkPlugins(limitedMarkdown)}
       rehypePlugins={rehypePlugins(html)}
     >
-      {stripCodeFenceFromArtifact(children)}
+      {stripCodeFenceFromArtifact(processedContent)}
     </ReactMarkdown>
   );
 });

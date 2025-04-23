@@ -1,14 +1,16 @@
 import { z } from 'zod';
-import { searchFileContentsByPattern, searchFilesByName, getFileContents } from '~/utils/fileUtils';
+import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
 import type { FileMap } from '~/lib/.server/llm/constants';
+import { tool } from 'ai';
+import { WORK_DIR } from '~/utils/constants';
 
 /**
  * Tool for searching file contents with pattern matching (similar to grep)
  */
 export const createFileContentSearchTool = (fileMap: FileMap) => {
-  return {
+  return tool({
     description:
-      'Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
+      'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
     parameters: z.object({
       pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
       caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
@@ -36,9 +38,10 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
 
       // Format results to be more user-friendly
       return {
+        pattern,
         totalMatches: results.length,
         matchingFiles: results.map((result) => ({
-          path: result.path,
+          path: result.path.replace(WORK_DIR, ''),
           matches: result.matches.map((match) => ({
             line: match.line,
             text: match.text,
@@ -47,65 +50,43 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
         })),
       };
     },
-  };
-};
-
-/**
- * Tool for searching files by filename
- */
-export const createFileNameSearchTool = (fileMap: FileMap) => {
-  return {
-    description:
-      'Search for files by their filename or pattern. Use this tool when you need to find specific files by name or extension. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
-    parameters: z.object({
-      pattern: z.string().describe('Text pattern or regular expression to match against filenames'),
-      caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
-    }),
-    execute: async ({ pattern, caseSensitive }: { pattern: string; caseSensitive?: boolean }) => {
-      const results = searchFilesByName(fileMap, pattern, caseSensitive);
-
-      return {
-        totalFiles: results.length,
-        files: results.map((file) => ({
-          path: file.path,
-          type: file.type,
-        })),
-      };
-    },
-  };
+  });
 };
 
 /**
  * Tool for getting all contents of a file
  */
-export const createFileReadTool = (fileMap: FileMap) => {
-  return {
+export const createFilesReadTool = (fileMap: FileMap) => {
+  return tool({
     description:
-      'Read the full contents of a file from the specified path. Use this tool when you need to examine the complete contents of a specific file. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
+      'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     parameters: z.object({
-      path: z
-        .string()
-        .describe(
-          'The path to the file you want to read. Can be relative or absolute (prefixed with workspace directory)',
-        ),
+      pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
     }),
-    execute: async ({ path }: { path: string }) => {
-      const content = getFileContents(fileMap, path);
+    execute: async ({ pathList }: { pathList: string[] }) => {
+      const files: Record<string, { content?: string; error?: string }> = {};
 
-      if (content === null) {
-        return {
-          success: false,
-          error: `File not found or cannot be read: ${path}. The file may not exist, might be a directory, or could be a binary file.`,
-        };
-      }
+      pathList.forEach((path) => {
+        const content = getFileContents(fileMap, path);
+
+        if (content === null) {
+          files[path] = {
+            error: `File not found or cannot be read: ${path}. The file may not exist, might be a directory, or could be a binary file.`,
+          };
+        } else {
+          files[path] = { content };
+        }
+      });
 
       return {
-        success: true,
-        path,
-        content,
+        message: `Read (${pathList.join(', ')}) files, Do not read the same file again.`,
+        pathList,
+        files,
+        totalFiles: pathList.length,
+        successCount: pathList.length,
       };
     },
-  };
+  });
 };
 
 /**
@@ -114,7 +95,6 @@ export const createFileReadTool = (fileMap: FileMap) => {
 export const createFileSearchTools = (fileMap: FileMap) => {
   return {
     search_file_contents: createFileContentSearchTool(fileMap),
-    search_files_by_name: createFileNameSearchTool(fileMap),
-    read_file_contents: createFileReadTool(fileMap),
+    read_files_contents: createFilesReadTool(fileMap),
   };
 };
