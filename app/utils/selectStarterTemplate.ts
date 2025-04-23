@@ -179,7 +179,7 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
       headers.Authorization = 'token ' + token;
     }
 
-    const ref = env?.GITHUB_TEMPLATE_REF || 'main';
+    const ref = env?.USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
 
     // Fetch contents of the path
     const response = await fetch(`${baseUrl}/repos/${repoName}/contents/${path}?ref=${ref}`, {
