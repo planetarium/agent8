@@ -1,14 +1,18 @@
-import { convertToCoreMessages, streamText as _streamText, type Message } from 'ai';
+import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
-import { getSystemPrompt } from '~/lib/common/prompts/prompts';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODIFICATIONS_TAG_NAME, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import type { IProviderSetting } from '~/types/model';
-import { PromptLibrary } from '~/lib/common/prompt-library';
-import { allowedHTMLElements } from '~/utils/markdown';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
-import { createFilesContext, extractPropertiesFromMessage } from './utils';
-import { getFilePaths } from './select-context';
+import { extractPropertiesFromMessage } from './utils';
+import { createFileSearchTools } from './tools/file-search';
+import {
+  getResourceSystemPrompt,
+  getProjectFilesPrompt,
+  getProjectMdPrompt,
+  getProjectPackagesPrompt,
+  getAgent8Prompt,
+} from '~/lib/common/prompts/agent8-prompts';
 
 export type Messages = Message[];
 
@@ -17,53 +21,37 @@ export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model'>;
 const logger = createScopedLogger('stream-text');
 
 export async function streamText(props: {
-  messages: Omit<Message, 'id'>[];
+  messages: Array<Omit<Message, 'id'>>;
   env?: Env;
   options?: StreamingOptions;
-  apiKeys?: Record<string, string>;
   files?: FileMap;
   providerSettings?: Record<string, IProviderSetting>;
-  promptId?: string;
-  contextOptimization?: boolean;
-  contextFiles?: FileMap;
-  summary?: string;
-  messageSliceId?: number;
-  vectorDbExamples?: FileMap;
-  relevantResources?: Record<string, any>;
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
 }) {
-  const {
-    messages,
-    env: serverEnv,
-    options,
-    apiKeys,
-    files,
-    providerSettings,
-    promptId,
-    contextOptimization,
-    contextFiles,
-    summary,
-    vectorDbExamples,
-    relevantResources,
-    tools,
-    abortSignal,
-  } = props;
+  const { messages, env: serverEnv, options, files, providerSettings, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
-  let processedMessages = messages.map((message) => {
+
+  const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content, parts } = extractPropertiesFromMessage(message);
+      const { model, provider, parts } = extractPropertiesFromMessage(message);
       currentModel = model === 'auto' ? DEFAULT_MODEL : model;
       currentProvider = model === 'auto' ? DEFAULT_PROVIDER.name : provider;
 
-      return { ...message, content, parts };
+      return { ...message, parts };
     } else if (message.role == 'assistant') {
-      let content = message.content;
-      content = content.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
-      content = content.replace(/<think>.*?<\/think>/s, '');
+      const parts = [...(message.parts || [])];
 
-      return { ...message, content };
+      for (const part of parts) {
+        if (part.type === 'text') {
+          part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
+          part.text = part.text.replace(/<think>.*?<\/think>/s, '');
+          part.text = part.text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3');
+        }
+      }
+
+      return { ...message, parts };
     }
 
     return message;
@@ -77,8 +65,6 @@ export async function streamText(props: {
     const modelsList = [
       ...(provider.staticModels || []),
       ...(await LLMManager.getInstance().getModelListFromProvider(provider, {
-        apiKeys,
-        providerSettings,
         serverEnv: serverEnv as any,
       })),
     ];
@@ -100,189 +86,75 @@ export async function streamText(props: {
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
 
-  let systemPrompt =
-    PromptLibrary.getPropmtFromLibrary(promptId || 'default', {
-      cwd: WORK_DIR,
-      allowedHtmlElements: allowedHTMLElements,
-      modificationTagName: MODIFICATIONS_TAG_NAME,
-    }) ?? getSystemPrompt();
+  const systemPrompt = getAgent8Prompt(WORK_DIR);
 
-  if (files && contextFiles && contextOptimization) {
-    const codeContext = createFilesContext(contextFiles, true);
-    const filePaths = getFilePaths(files);
+  let combinedTools: Record<string, any> = { ...tools };
 
-    systemPrompt = `${systemPrompt}
-Below are all the files present in the project:
----
-${filePaths.join('\n')}
----
-
-Below is the artifact containing the context loaded into context buffer for you to have knowledge of and might need changes to fullfill current user request.
-CONTEXT BUFFER:
----
-${codeContext}
----
-`;
-
-    if (summary) {
-      systemPrompt = `${systemPrompt}
-    below is the chat history till now
-CHAT SUMMARY:
----
-${props.summary}
----
-`;
-    }
-
-    if (props.messageSliceId) {
-      processedMessages = processedMessages.slice(props.messageSliceId);
-    } else {
-      const lastMessage = processedMessages.pop();
-
-      if (lastMessage) {
-        processedMessages = [lastMessage];
-      }
-    }
+  if (files) {
+    // Add file search tools
+    const fileSearchTools = createFileSearchTools(files);
+    combinedTools = {
+      ...combinedTools,
+      ...fileSearchTools,
+    };
   }
 
-  let resourceContext = '';
-
-  if (files && files['/home/project/src/assets.json']) {
-    const assetFile: FileMap = {};
-    assetFile['/home/project/src/assets.json'] = files['/home/project/src/assets.json'];
-
-    const assetContext = createFilesContext(assetFile, true);
-    resourceContext += `\n${assetContext}\n`;
-  }
-
-  if (relevantResources && Object.keys(relevantResources).length > 0) {
-    let resourcesXml = '<availableResources>\n';
-
-    for (const key in relevantResources) {
-      const resource = relevantResources[key];
-      resourcesXml += '    <resource>\n';
-      resourcesXml += `        <url>${resource.url}</url>\n`;
-      resourcesXml += `        <description>${resource.description}</description>\n`;
-
-      if (resource.metadata) {
-        resourcesXml += '        <metadata>\n';
-
-        for (const metaKey in resource.metadata) {
-          resourcesXml += `            <${metaKey}>${resource.metadata[metaKey]}</${metaKey}>\n`;
-        }
-        resourcesXml += '        </metadata>\n';
-      }
-
-      resourcesXml += '    </resource>\n';
-    }
-
-    resourcesXml += '</availableResources>';
-
-    resourceContext += `\n${resourcesXml}\n`;
-  }
-
-  systemPrompt = `${systemPrompt}
-
-
-  <resource_constraints>
-    <ResourceContext>
-    ${resourceContext}
-    </ResourceContext>
-
-    The resources needed to fulfill the user's request are provided in the ResourceContext.
-    You can only use resource urls from \`src/assets.json\` or listed in \`availableResources\` or listed url in \`<Attachments />\` user attached
-    If you want to use a resource from \`<availableResources>\`, \`<Attachments />\`, add that resource to \`src/assets.json\` in your response.
-    When adding to assets.json, it's good to include description and metadata along with the url. This will help the LLM utilize these resources better in future interactions.
-    src/assets.json format:
-    \`\`\`js filename="src/assets.json"
+  const coreMessages = [
+    ...[
+      systemPrompt,
+      getProjectFilesPrompt(files),
+      getProjectPackagesPrompt(files),
+      getResourceSystemPrompt(files),
+    ].map(
+      (content) =>
+        ({
+          role: 'system',
+          content,
+          providerOptions: {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+          },
+        }) as CoreSystemMessage,
+    ), // A maximum of 4 blocks with cache_control may be provided.
     {
-      "images": {
-        "character": {
-          "url": "https://example.com/resource.png",
-          "description": "A beautiful image",
-          "metadata": {
-            "width": 100,
-            "height": 100
-          }
-        }
-      }
-    }
-    \`\`\`
+      role: 'system',
+      content: getProjectMdPrompt(files),
+    } as CoreSystemMessage,
+    ...convertToCoreMessages(processedMessages).slice(-5),
+  ];
 
-    The structure of assets.json is fixed at 2 levels deep. The first key is the category and the second key is the resource ID. Please always maintain this structure.
-    \`\`\`js
-    {
-      "CATEGORY": {
-        "RESOURCE_ID": {
-          "url": "...",
-          "description": "...",
-          "metadata": {}
-        }
-      }
-    }
-    \`\`\`
-
-
-  CRITICAL: Follow these strict resource management rules to prevent application errors:
-    
-  1. If appropriate resources are not available in assets.json:
-     - Never create images directly using base64 or similar methods. even in assets.json's url part.
-     - Never create URLs that are not provided.
-     - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
-     - For 3D games: Use Three.js to generate geometric shapes and programmatic textures
-     - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
-     - Consider simplifying the visual design to work with available resources
-     - NEVER create images directly using base64 or similar methods.
-     
-  
-  2. Resource reference pattern:
-     \`\`\`js
-     import Assets from './assets.json'
-     
-     // Correct way to use assets
-     const knightImageUrl = Assets.character.knight.url;
-     \`\`\`
-
-</resource_constraints>
-`;
-
-  if (vectorDbExamples && Object.keys(vectorDbExamples).length > 0) {
-    const examplesContext = createFilesContext(vectorDbExamples, true);
-    systemPrompt = `${systemPrompt}
-Below are relevant code examples that might help with the current request:
-EXAMPLES:
----
-${examplesContext}
----
-`;
-  }
-
-  logger.info(`Sending llm call to ${provider.name} with model ${modelDetails.name}`);
-
-  /*
-   * fs.appendFileSync(
-   *   'last-prompt.logs',
-   *   `time: ${new Date().toISOString()}\n\nsystemPrompt: ${systemPrompt}\n\nprocessedMessages: ${JSON.stringify(
-   *     convertToCoreMessages(processedMessages as any),
-   *     null,
-   *     2,
-   *   )}\n\n`,
-   * );
-   */
-
-  return await _streamText({
+  const result = await _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
-      apiKeys,
       providerSettings,
     }),
     abortSignal,
-    system: systemPrompt,
     maxTokens: dynamicMaxTokens,
-    maxSteps: 100,
-    messages: convertToCoreMessages(processedMessages as any),
-    tools,
+    maxSteps: 10,
+    messages: coreMessages,
+    tools: combinedTools,
     ...options,
   });
+
+  (async () => {
+    try {
+      for await (const part of result.fullStream) {
+        if (part.type === 'error') {
+          const error: any = part.error;
+          logger.error(`${error}`);
+
+          return;
+        }
+      }
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        logger.info('Request aborted.');
+        return;
+      }
+
+      throw e;
+    }
+  })();
+
+  return result;
 }
