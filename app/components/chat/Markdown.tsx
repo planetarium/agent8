@@ -22,18 +22,6 @@ interface MarkdownProps {
 export const Markdown = memo(({ children, html = false, limitedMarkdown = false }: MarkdownProps) => {
   logger.trace('Render');
 
-  /*
-   * If a message starts with a tag, there is an issue where it cannot be parsed correctly in ToolCall, etc.
-   * To solve this, we add an empty character.
-   */
-  const processedContent = useMemo(() => {
-    if (children.trim().startsWith('<div')) {
-      return `&nbsp;${children}`;
-    }
-
-    return children;
-  }, [children]);
-
   const components = useMemo(() => {
     return {
       div: ({ className, children, node, ...props }) => {
