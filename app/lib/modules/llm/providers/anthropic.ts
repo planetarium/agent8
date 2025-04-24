@@ -74,6 +74,9 @@ export default class AnthropicProvider extends BaseProvider {
     });
     const anthropic = createAnthropic({
       apiKey,
+      headers: {
+        'anthropic-beta': 'token-efficient-tools-2025-02-19',
+      },
     });
 
     return anthropic(model);

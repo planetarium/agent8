@@ -3,6 +3,9 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModelV1 } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('open-router');
 
 interface OpenRouterModel {
   name: string;
@@ -81,6 +84,41 @@ export default class OpenRouterProvider extends BaseProvider {
 
     const openRouter = createOpenRouter({
       apiKey,
+      fetch: (url, options: any) => {
+        try {
+          const body = JSON.parse(options.body as string);
+
+          /*
+           * When using the Anthropic model on OpenRouter, the cache_control format differs and needs to be adjusted accordingly.
+           * See: https://openrouter.ai/docs/features/prompt-caching#anthropic-claude
+           */
+
+          if (body.model?.startsWith('anthropic') && body.messages?.length > 0) {
+            body.messages = body.messages.map((message: any) => {
+              if (message.cache_control) {
+                return {
+                  role: message.role,
+                  content: [
+                    {
+                      type: 'text',
+                      text: message.content,
+                      cache_control: message.cache_control,
+                    },
+                  ],
+                };
+              }
+
+              return message;
+            });
+
+            options.body = JSON.stringify(body);
+          }
+        } catch {
+          logger.error('Error parsing OpenRouter request body', { url, options });
+        }
+
+        return fetch(url, options);
+      },
     });
     const instance = openRouter.chat(model) as LanguageModelV1;
 
