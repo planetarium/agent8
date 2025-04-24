@@ -212,3 +212,249 @@ export function convertFileMapToFileSystemTree(fileMap: FileMap): FileSystemTree
 
   return fileTree;
 }
+
+/**
+ * Search file contents in FileMap by pattern
+ * @param fileMap FileMap to search through
+ * @param pattern Regular expression or string pattern to search for
+ * @param caseSensitive Whether the search is case sensitive (default: false)
+ * @param beforeLines Number of lines to include before each match (default: 0)
+ * @param afterLines Number of lines to include after each match (default: 0)
+ * @returns Array of search results with {path, content, matches}
+ */
+export function searchFileContentsByPattern(
+  fileMap: FileMap,
+  pattern: string | RegExp,
+  caseSensitive: boolean = false,
+  beforeLines: number = 0,
+  afterLines: number = 0,
+): Array<{
+  path: string;
+  content: string;
+  matches: Array<{
+    line: number;
+    text: string;
+    index: number;
+    contextLines?: Array<{ line: number; text: string; isMatch: boolean }>;
+  }>;
+}> {
+  const results: Array<{
+    path: string;
+    content: string;
+    matches: Array<{
+      line: number;
+      text: string;
+      index: number;
+      contextLines?: Array<{ line: number; text: string; isMatch: boolean }>;
+    }>;
+  }> = [];
+
+  // Create regex object
+  const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+
+  // Search all files
+  Object.keys(fileMap).forEach((path) => {
+    const file = fileMap[path];
+
+    // Skip folders and binary files
+    if (!file || file.type === 'folder' || file.isBinary) {
+      return;
+    }
+
+    // Check if file matches pattern and is not in ignore list
+    const relativePath = path.replace(`${WORK_DIR}/`, '');
+
+    if (ig.ignores(relativePath)) {
+      return;
+    }
+
+    const content = file.content || '';
+    const lines = content.split('\n');
+    const tempMatches: Array<{
+      line: number;
+      text: string;
+      index: number;
+      rangeStart: number;
+      rangeEnd: number;
+      contextLines?: Array<{ line: number; text: string; isMatch: boolean }>;
+    }> = [];
+
+    // Search pattern in each line
+    lines.forEach((text, lineIndex) => {
+      const lineMatches = [...text.matchAll(regex)];
+
+      if (lineMatches.length > 0) {
+        lineMatches.forEach((match) => {
+          const matchLine = lineIndex + 1; // Line number starting at 1
+          const rangeStart = Math.max(1, matchLine - beforeLines);
+          const rangeEnd = Math.min(lines.length, matchLine + afterLines);
+
+          tempMatches.push({
+            line: matchLine,
+            text,
+            index: match.index || 0,
+            rangeStart,
+            rangeEnd,
+            contextLines: undefined, // Temporarily set as undefined, will fill later
+          });
+        });
+      }
+    });
+
+    // Sort results by line number
+    tempMatches.sort((a, b) => a.line - b.line);
+
+    // Merge overlapping ranges
+    const mergedRanges: Array<{
+      start: number;
+      end: number;
+      matchLines: Set<number>;
+    }> = [];
+
+    tempMatches.forEach((match) => {
+      const { rangeStart, rangeEnd, line } = match;
+
+      // Find the last overlapping range
+      let overlapIndex = -1;
+
+      for (let i = mergedRanges.length - 1; i >= 0; i--) {
+        const range = mergedRanges[i];
+
+        // If current range overlaps with existing range
+        if (rangeStart <= range.end + 1) {
+          overlapIndex = i;
+          break;
+        }
+      }
+
+      if (overlapIndex >= 0) {
+        // Expand overlapping range
+        const range = mergedRanges[overlapIndex];
+        range.end = Math.max(range.end, rangeEnd);
+        range.matchLines.add(line);
+      } else {
+        // Add new range
+        mergedRanges.push({
+          start: rangeStart,
+          end: rangeEnd,
+          matchLines: new Set([line]),
+        });
+      }
+    });
+
+    // Generate context lines for merged ranges
+    const matches: Array<{
+      line: number;
+      text: string;
+      index: number;
+      contextLines?: Array<{ line: number; text: string; isMatch: boolean }>;
+    }> = [];
+
+    mergedRanges.forEach((range) => {
+      const contextLines: Array<{ line: number; text: string; isMatch: boolean }> = [];
+
+      // Add all lines in the merged range
+      for (let i = range.start; i <= range.end; i++) {
+        const lineIndex = i - 1; // Convert to 0-based index
+
+        if (lineIndex >= 0 && lineIndex < lines.length) {
+          contextLines.push({
+            line: i,
+            text: lines[lineIndex],
+            isMatch: range.matchLines.has(i),
+          });
+        }
+      }
+
+      // Find the first match line
+      const firstMatchLine = [...range.matchLines].sort((a, b) => a - b)[0];
+      const firstMatchText = lines[firstMatchLine - 1] || '';
+
+      // Add to results
+      matches.push({
+        line: firstMatchLine,
+        text: firstMatchText,
+        index: firstMatchText.search(regex),
+        contextLines: contextLines.length > 1 ? contextLines : undefined,
+      });
+    });
+
+    // Add to results if matches found
+    if (matches.length > 0) {
+      results.push({
+        path,
+        content,
+        matches,
+      });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Search files in FileMap by filename
+ * @param fileMap FileMap to search through
+ * @param pattern Regular expression or string pattern to search for
+ * @param caseSensitive Whether the search is case sensitive (default: false)
+ * @returns Array of found file paths and types
+ */
+export function searchFilesByName(
+  fileMap: FileMap,
+  pattern: string | RegExp,
+  caseSensitive: boolean = false,
+): Array<{ path: string; type: 'file' | 'folder' }> {
+  const results: Array<{ path: string; type: 'file' | 'folder' }> = [];
+
+  // Create regex object
+  const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+
+  // Search all files and folders
+  Object.keys(fileMap).forEach((path) => {
+    const file = fileMap[path];
+
+    if (!file) {
+      return;
+    }
+
+    // Check if file is not in ignore list
+    const relativePath = path.replace(`${WORK_DIR}/`, '');
+
+    if (ig.ignores(relativePath)) {
+      return;
+    }
+
+    // Extract filename
+    const fileName = path.split('/').pop() || '';
+
+    // Check if filename matches pattern
+    if (regex.test(fileName)) {
+      results.push({
+        path,
+        type: file.type,
+      });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Get full contents of a file by path
+ * @param fileMap FileMap containing all files
+ * @param path Path of the file to read
+ * @returns File content or null if file not found or is a directory
+ */
+export function getFileContents(fileMap: FileMap, path: string): string | null {
+  // Normalize path to ensure it includes WORK_DIR
+  const fullPath = path.startsWith(WORK_DIR) ? path : `${WORK_DIR}/${path}`;
+
+  const file = fileMap[fullPath];
+
+  // Check if file exists and is not a directory
+  if (!file || file.type === 'folder' || file.isBinary) {
+    return null;
+  }
+
+  return file.content || '';
+}
