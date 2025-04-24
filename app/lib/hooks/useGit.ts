@@ -1,6 +1,6 @@
-import type { WebContainer } from '@webcontainer/api';
+import type { Container } from '~/lib/container/interfaces';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { webcontainer as webcontainerPromise } from '~/lib/webcontainer';
+import { container as containerPromise } from '~/lib/container';
 import git, { type GitAuth, type PromiseFsClient } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import Cookies from 'js-cookie';
@@ -30,22 +30,22 @@ const saveGitAuth = (url: string, auth: GitAuth) => {
 
 export function useGit() {
   const [ready, setReady] = useState(false);
-  const [webcontainer, setWebcontainer] = useState<WebContainer>();
+  const [container, setContainer] = useState<Container>();
   const [fs, setFs] = useState<PromiseFsClient>();
   const fileData = useRef<Record<string, { data: any; encoding?: string }>>({});
   useEffect(() => {
-    webcontainerPromise.then((container) => {
+    containerPromise.then((containerInstance) => {
       fileData.current = {};
-      setWebcontainer(container);
-      setFs(getFs(container, fileData));
+      setContainer(containerInstance);
+      setFs(getFs(containerInstance, fileData));
       setReady(true);
     });
   }, []);
 
   const gitClone = useCallback(
     async (url: string) => {
-      if (!webcontainer || !fs || !ready) {
-        throw 'Webcontainer not initialized';
+      if (!container || !fs || !ready) {
+        throw 'Container not initialized';
       }
 
       fileData.current = {};
@@ -66,7 +66,7 @@ export function useGit() {
         await git.clone({
           fs,
           http,
-          dir: webcontainer.workdir,
+          dir: container.workdir,
           url,
           depth: 1,
           singleBranch: true,
@@ -105,7 +105,7 @@ export function useGit() {
           data[key] = value;
         }
 
-        return { workdir: webcontainer.workdir, data };
+        return { workdir: container.workdir, data };
       } catch (error) {
         console.error('Git clone error:', error);
 
@@ -113,23 +113,20 @@ export function useGit() {
         throw error;
       }
     },
-    [webcontainer, fs, ready],
+    [container, fs, ready],
   );
 
   return { ready, gitClone };
 }
 
-const getFs = (
-  webcontainer: WebContainer,
-  record: MutableRefObject<Record<string, { data: any; encoding?: string }>>,
-) => ({
+const getFs = (container: Container, record: MutableRefObject<Record<string, { data: any; encoding?: string }>>) => ({
   promises: {
     readFile: async (path: string, options: any) => {
       const encoding = options?.encoding;
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        const result = await webcontainer.fs.readFile(relativePath, encoding);
+        const result = await container.fs.readFile(relativePath, encoding);
 
         return result;
       } catch (error) {
@@ -138,14 +135,14 @@ const getFs = (
     },
     writeFile: async (path: string, data: any, options: any) => {
       const encoding = options.encoding;
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       if (record.current) {
         record.current[relativePath] = { data, encoding };
       }
 
       try {
-        const result = await webcontainer.fs.writeFile(relativePath, data, { ...options, encoding });
+        const result = await container.fs.writeFile(relativePath, data, { ...options, encoding });
 
         return result;
       } catch (error) {
@@ -153,10 +150,10 @@ const getFs = (
       }
     },
     mkdir: async (path: string, options: any) => {
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        const result = await webcontainer.fs.mkdir(relativePath, { ...options, recursive: true });
+        const result = await container.fs.mkdir(relativePath, { ...options, recursive: true });
 
         return result;
       } catch (error) {
@@ -164,10 +161,10 @@ const getFs = (
       }
     },
     readdir: async (path: string, options: any) => {
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        const result = await webcontainer.fs.readdir(relativePath, options);
+        const result = await container.fs.readdir(relativePath, options);
 
         return result;
       } catch (error) {
@@ -175,10 +172,10 @@ const getFs = (
       }
     },
     rm: async (path: string, options: any) => {
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        const result = await webcontainer.fs.rm(relativePath, { ...(options || {}) });
+        const result = await container.fs.rm(relativePath, { ...(options || {}) });
 
         return result;
       } catch (error) {
@@ -186,10 +183,10 @@ const getFs = (
       }
     },
     rmdir: async (path: string, options: any) => {
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        const result = await webcontainer.fs.rm(relativePath, { recursive: true, ...options });
+        const result = await container.fs.rm(relativePath, { recursive: true, ...options });
 
         return result;
       } catch (error) {
@@ -197,18 +194,18 @@ const getFs = (
       }
     },
     unlink: async (path: string) => {
-      const relativePath = pathUtils.relative(webcontainer.workdir, path);
+      const relativePath = pathUtils.relative(container.workdir, path);
 
       try {
-        return await webcontainer.fs.rm(relativePath, { recursive: false });
+        return await container.fs.rm(relativePath, { recursive: false });
       } catch (error) {
         throw error;
       }
     },
     stat: async (path: string) => {
       try {
-        const relativePath = pathUtils.relative(webcontainer.workdir, path);
-        const resp = await webcontainer.fs.readdir(pathUtils.dirname(relativePath), { withFileTypes: true });
+        const relativePath = pathUtils.relative(container.workdir, path);
+        const resp = await container.fs.readdir(pathUtils.dirname(relativePath), { withFileTypes: true });
         const name = pathUtils.basename(relativePath);
         const fileInfo = resp.find((x) => x.name == name);
 
@@ -238,7 +235,7 @@ const getFs = (
       }
     },
     lstat: async (path: string) => {
-      return await getFs(webcontainer, record).promises.stat(path);
+      return await getFs(container, record).promises.stat(path);
     },
     readlink: async (path: string) => {
       throw new Error(`EINVAL: invalid argument, readlink '${path}'`);

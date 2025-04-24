@@ -39,7 +39,7 @@ import {
   forkProject,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
-import { webcontainer } from '~/lib/webcontainer';
+import { container } from '~/lib/container';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
@@ -137,8 +137,8 @@ export function Chat() {
     if (loaded) {
       if (chats.length > 0) {
         setInitialMessages(chats);
-        webcontainer.then(async (wc) => {
-          wc.mount(convertFileMapToFileSystemTree(files));
+        container.then(async (containerInstance) => {
+          containerInstance.mount(convertFileMapToFileSystemTree(files));
         });
         workbenchStore.showWorkbench.set(true);
       }
@@ -218,7 +218,7 @@ async function runAndPreview(message: Message) {
   }
 
   const shell = workbenchStore.boltTerminal;
-  await shell.ready();
+  await shell.ready;
 
   for (let retry = 0; retry < 60; retry++) {
     const state = await shell.executionState.get();
@@ -374,7 +374,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       setInstallNpm(true);
 
       const boltShell = workbenchStore.boltTerminal;
-      boltShell.ready().then(async () => {
+      boltShell.ready.then(async () => {
         await workbenchStore.setupDeployConfig(boltShell);
         await boltShell.executeCommand(Date.now().toString(), 'pnpm install');
       });
@@ -750,8 +750,8 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       ] as Message[];
 
       setInitialMessages(messages);
-      webcontainer.then(async (wc) => {
-        wc.mount(convertFileMapToFileSystemTree(files));
+      container.then(async (containerInstance) => {
+        containerInstance.mount(convertFileMapToFileSystemTree(files));
       });
       setChatStarted(true);
       workbenchStore.showWorkbench.set(true);
@@ -854,7 +854,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     const toastId = toast.loading('Loading previous version...');
 
     try {
-      const wc = await webcontainer;
+      const wc = await container;
 
       const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
       const deleteFiles = [];

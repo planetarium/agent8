@@ -1,18 +1,19 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { ContainerProcess } from '~/lib/container/interfaces';
+import type { Container } from '~/lib/container/interfaces';
 import { atom, type WritableAtom } from 'nanostores';
 import type { ITerminal } from '~/types/terminal';
 import { newBoltShellProcess, newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 
 export class TerminalStore {
-  #webcontainer: Promise<WebContainer>;
-  #terminals: Array<{ terminal: ITerminal; process: WebContainerProcess }> = [];
+  #container: Promise<Container>;
+  #terminals: Array<{ terminal: ITerminal; process: ContainerProcess }> = [];
   #boltTerminal = newBoltShellProcess();
 
   showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(true);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(containerPromise: Promise<Container>) {
+    this.#container = containerPromise;
 
     if (import.meta.hot) {
       import.meta.hot.data.showTerminal = this.showTerminal;
@@ -27,8 +28,8 @@ export class TerminalStore {
   }
   async attachBoltTerminal(terminal: ITerminal) {
     try {
-      const wc = await this.#webcontainer;
-      await this.#boltTerminal.init(wc, terminal);
+      const container = await this.#container;
+      await this.#boltTerminal.init(container, terminal);
     } catch (error: any) {
       terminal.write(coloredText.red('Failed to spawn bolt shell\n\n') + error.message);
       return;
@@ -37,7 +38,7 @@ export class TerminalStore {
 
   async attachTerminal(terminal: ITerminal) {
     try {
-      const shellProcess = await newShellProcess(await this.#webcontainer, terminal);
+      const shellProcess = await newShellProcess(await this.#container, terminal);
       this.#terminals.push({ terminal, process: shellProcess });
     } catch (error: any) {
       terminal.write(coloredText.red('Failed to spawn shell\n\n') + error.message);

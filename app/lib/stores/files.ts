@@ -1,4 +1,4 @@
-import type { PathWatcherEvent, WebContainer } from '@webcontainer/api';
+import type { Container, PathWatcherEvent } from '~/lib/container/interfaces';
 import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
 import { Buffer } from 'node:buffer';
@@ -27,7 +27,7 @@ type Dirent = File | Folder;
 export type FileMap = Record<string, Dirent | undefined>;
 
 export class FilesStore {
-  #webcontainer: Promise<WebContainer>;
+  #container: Promise<Container>;
 
   /**
    * Tracks the number of files without folders.
@@ -42,7 +42,7 @@ export class FilesStore {
   #modifiedFiles: Map<string, string> = import.meta.hot?.data.modifiedFiles ?? new Map();
 
   /**
-   * Map of files that matches the state of WebContainer.
+   * Map of files that matches the state of Container.
    */
   files: MapStore<FileMap> = import.meta.hot?.data.files ?? map({});
 
@@ -50,8 +50,8 @@ export class FilesStore {
     return this.#size;
   }
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(containerPromise: Promise<Container>) {
+    this.#container = containerPromise;
 
     if (import.meta.hot) {
       import.meta.hot.data.files = this.files;
@@ -103,10 +103,10 @@ export class FilesStore {
   }
 
   async saveFile(filePath: string, content: string) {
-    const webcontainer = await this.#webcontainer;
+    const container = await this.#container;
 
     try {
-      const relativePath = path.relative(webcontainer.workdir, filePath);
+      const relativePath = path.relative(container.workdir, filePath);
 
       if (!relativePath) {
         throw new Error(`EINVAL: invalid file path, write '${relativePath}'`);
@@ -114,7 +114,7 @@ export class FilesStore {
 
       const oldContent = this.getFile(filePath)?.content;
 
-      await webcontainer.fs.writeFile(relativePath, content);
+      await container.fs.writeFile(relativePath, content);
 
       if (!this.#modifiedFiles.has(filePath)) {
         this.#modifiedFiles.set(filePath, oldContent ?? '');
@@ -132,9 +132,9 @@ export class FilesStore {
   }
 
   async #init() {
-    const webcontainer = await this.#webcontainer;
+    const container = await this.#container;
 
-    webcontainer.internal.watchPaths(
+    container.internal.watchPaths(
       { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
       bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
     );

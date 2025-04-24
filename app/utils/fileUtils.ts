@@ -1,6 +1,4 @@
-import type { FileNode } from '@webcontainer/api';
-import type { FileSystemTree } from '@webcontainer/api';
-import type { DirectoryNode } from '@webcontainer/api';
+import type { FileNode, FileSystemTree, DirectoryNode } from '~/lib/container/interfaces';
 import ignore from 'ignore';
 import { WORK_DIR } from './constants';
 import type { FileMap } from '~/lib/.server/llm/constants';
