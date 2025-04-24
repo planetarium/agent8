@@ -1,10 +1,9 @@
 import { stripIndents } from '~/utils/stripIndent';
-import type { PromptOptions } from '~/lib/common/prompt-library';
-import type { FileMap } from '~/lib/.server/llm/constants';
-import { createFilesContext } from '~/lib/.server/llm/utils';
 import { WORK_DIR } from '~/utils/constants';
+import { IGNORE_PATTERNS } from '~/utils/fileUtils';
+import ignore from 'ignore';
 
-export const getAgent8Prompt = ({ cwd, files }: PromptOptions) => {
+export const getAgent8Prompt = (cwd: string = WORK_DIR) => {
   const systemPrompt = `
 You are a specialized AI advisor for developing browser-based games using the modern Typescript + Vite + React framework.
 
@@ -18,8 +17,8 @@ Your main goal is to build the game project from user's request.
 To solve the user's request, follow the following steps:
 We already have a working React codebase. Our goal is to modify or add new features to this codebase.
 
-1. Analyze the user's request and derive the task
-- The user's request may be vague or verbose. So you need to select one task to perform directly.
+1. Analyze the user's request and derive the only one task to perform
+- CRITICAL IMPORTANT: The user's request may be vague or verbose. So you need to select just ONE task to perform directly.
 - Selection criteria: The task should not be too complex to be handled in a single response.
 - Selection criteria: The task should have a visual effect. Since we are building a game, it is important to have a noticeable change.
 - Selection criteria: There must be no issues when running the game after modifications.
@@ -27,6 +26,7 @@ We already have a working React codebase. Our goal is to modify or add new featu
 2. Collect relevant information
 - Read the information in <project_description> to understand the overall structure of the project.
 - Read the necessary files to perform the tasks.(Use the read_files tool to read all the necessary files at once. If there are any additional files that need to be read sequentially, please read those files as well. However, since reading files is a very expensive task, you must operate very efficiently.)
+- PROJECT.md, package.json, src/assets.json are always latest version provided in the <project_description>, <resource_constraints>. so you don't need to read them again.
 - If the tasks to be performed are complex, you can use the provided tools to receive assistance in generating code samples, resources, images, etc.
 
 3. Generate the response
@@ -118,7 +118,7 @@ Remember: Proper documentation is as important as the code itself. It enables ef
     4. Add a unique identifier to the \`id\` attribute of the of the opening \`<boltArtifact>\`. For updates, reuse the prior identifier. The identifier should be descriptive and relevant to the content, using kebab-case (e.g., "platformer-game"). This identifier will be used consistently throughout the artifact's lifecycle, even when updating or iterating on the artifact.
     5. Use \`<boltAction>\` tags to define specific actions to perform.
     6. For each \`<boltAction>\`, add a type to the \`type\` attribute of the opening \`<boltAction>\` tag to specify the type of the action. Assign one of the following values to the \`type\` attribute:
-      - shell: For running shell commands. Use it only when installing a new package. When you need a new package, do not edit the \`package.json\` file directly. Always use the \`pnpm add <pkg>\` command.
+      - shell: Use it only when installing a new package. When you need a new package, do not edit the \`package.json\` file directly. Always use the \`pnpm add <pkg>\` command. Do not use this for other purposes (e.g. \`npm run dev\`, \`pnpm run build\`, etc).
       - file: For writing new files or updating existing files. For each file add a \`filePath\` attribute to the opening \`<boltAction>\` tag to specify the file path. The content of the file artifact is the file contents. All file paths MUST BE relative to the current working directory.
     7. CRITICAL: Always provide the FULL, updated content of the artifact. This means:
       - Include ALL code, even if parts are unchanged
@@ -126,7 +126,7 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - ALWAYS show the complete, up-to-date file contents when updating files
       - Avoid any form of truncation or summarization
     8. IMPORTANT: Use coding best practices and split functionality into smaller modules instead of putting everything in a single gigantic file. Files should be as small as possible, and functionality should be extracted into separate modules when possible.
-      - Keep individual files under 500 lines when possible
+      - Keep individual files under 500 lines when possible. Never exceed 700 lines.
       - Ensure code is clean, readable, and maintainable.
       - Adhere to proper naming conventions and consistent formatting.
       - Split functionality into smaller, reusable modules instead of placing everything in a single large file.
@@ -145,7 +145,6 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       <boltAction type="file" filePath="src/App.tsx">...</boltAction>
       <boltAction type="file" filePath="src/components/Board.tsx">...</boltAction>
       <boltAction type="file" filePath="src/components/Square.tsx">...</boltAction>
-      <boltAction type="shell">pnpm add <pkg></boltAction>
     </boltArtifact>
 
     You can now play the Tic-tac-toe game. Click on any square to place your mark. The game will automatically determine the winner or if it's a draw.
@@ -162,32 +161,45 @@ There are tools available to resolve coding tasks. Please follow these guideline
 6. Before calling each tool, first explain to the user why you are calling that tool.
 </tool_calling>
 ULTRA IMPORTANT: Do NOT be verbose and DO NOT explain anything unless the user is asking for more information. That is VERY important.
-
-
-${files && getResourceSystemPrompt(files)}
-
-${files && getProjectDescription(files)}
 `;
 
   return systemPrompt;
 };
 
-function getProjectDescription(files: FileMap) {
+export function getProjectFilesPrompt(files: any) {
   const filePaths = Object.keys(files)
     .filter((x) => files[x]?.type == 'file')
     .map((x) => x.replace(WORK_DIR + '/', ''));
 
+  return `
+<PROJECT_DESCRIPTION>
+    This is a list of files that are part of the project. Always refer to the latest list. Use the tool to read the file contents. When reading the files, read the necessary files at once without multiple calls.
+    <project_files>
+      ${filePaths.join('\n')}
+    </project_files>
+</PROJECT_DESCRIPTION>
+`;
+}
+
+export function getProjectMdPrompt(files: any) {
   const projectMd = files[`${WORK_DIR}/PROJECT.md`];
+
+  return `
+<PROJECT_DESCRIPTION>
+    This is a PROJECT.md file that describes the project. The contents are always up-to-date, so please do not read this file through tools.
+    <boltAction type="file" filePath="PROJECT.md">
+      ${projectMd?.type === 'file' ? projectMd.content : ''}
+    </boltAction>
+</PROJECT_DESCRIPTION>
+`;
+}
+
+export function getProjectPackagesPrompt(files: any) {
   const packageJson = files[`${WORK_DIR}/package.json`];
 
   return `
 <PROJECT_DESCRIPTION>
-    <project_files>
-      ${filePaths.join('\n')}
-    </project_files>
-    <boltAction type="file" filePath="PROJECT.md">
-      ${projectMd?.type === 'file' ? projectMd.content : ''}
-    </boltAction>
+    This is a package.json that configures the project. Please do not edit it directly. If you want to make changes, use command \`pnpm add <pkg>\`. The contents are always up-to-date, so please do not read this file through tools.
     <boltAction type="file" filePath="package.json">
       ${packageJson?.type === 'file' ? packageJson.content : ''}
     </boltAction>
@@ -195,11 +207,11 @@ function getProjectDescription(files: FileMap) {
 `;
 }
 
-function getResourceSystemPrompt(files: FileMap) {
+export function getResourceSystemPrompt(files: any) {
   let resourceContext = '';
 
   if (files && files['/home/project/src/assets.json']) {
-    const assetFile: FileMap = {};
+    const assetFile: any = {};
     assetFile['/home/project/src/assets.json'] = files['/home/project/src/assets.json'];
 
     const assetContext = createFilesContext(assetFile, true);
@@ -274,3 +286,37 @@ export const CONTINUE_PROMPT = stripIndents`
   Continue your prior response. IMPORTANT: Immediately begin from where you left off without any interruptions.
   Do not repeat any content, including artifact and action tags.
 `;
+
+function createFilesContext(files: any, useRelativePath?: boolean) {
+  const ig = ignore().add(IGNORE_PATTERNS);
+  let filePaths = Object.keys(files);
+  filePaths = filePaths.filter((x) => {
+    const relPath = x.replace('/home/project/', '');
+    return !ig.ignores(relPath);
+  });
+
+  const fileContexts = filePaths
+    .filter((x) => files[x] && files[x].type == 'file')
+    .map((path) => {
+      const dirent = files[path];
+
+      if (!dirent || dirent.type == 'folder') {
+        return '';
+      }
+
+      const codeWithLinesNumbers = dirent.content
+        .split('\n')
+        // .map((v, i) => `${i + 1}|${v}`)
+        .join('\n');
+
+      let filePath = path;
+
+      if (useRelativePath) {
+        filePath = path.replace('/home/project/', '');
+      }
+
+      return `<boltAction type="file" filePath="${filePath}">${codeWithLinesNumbers}</boltAction>`;
+    });
+
+  return `<boltArtifact id="code-content" title="Code Content" >\n${fileContexts.join('\n')}\n</boltArtifact>`;
+}
