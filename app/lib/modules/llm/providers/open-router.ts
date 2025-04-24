@@ -3,6 +3,9 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModelV1 } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('open-router');
 
 interface OpenRouterModel {
   name: string;
@@ -110,7 +113,9 @@ export default class OpenRouterProvider extends BaseProvider {
 
             options.body = JSON.stringify(body);
           }
-        } catch {}
+        } catch {
+          logger.error('Error parsing OpenRouter request body', { url, options });
+        }
 
         return fetch(url, options);
       },
