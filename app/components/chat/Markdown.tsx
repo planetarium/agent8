@@ -40,34 +40,20 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
         }
 
         if (className?.includes('__toolCall__')) {
-          let content;
-
-          if (typeof children === 'string') {
-            content = children.replaceAll('`', '').replaceAll('&grave;', '`');
-          } else {
-            content = (children as React.ReactElement<any, 'code'>).props.children;
-          }
-
           try {
+            const content = (children as React.ReactElement<any, 'code'>).props.children;
             return <ToolCall toolCall={JSON.parse(content)} />;
           } catch {
-            return <pre>{content}</pre>;
+            return <pre>{children}</pre>;
           }
         }
 
         if (className?.includes('__toolResult__')) {
-          let content;
-
-          if (typeof children === 'string') {
-            content = children.replaceAll('`', '').replaceAll('&grave;', '`');
-          } else {
-            content = (children as React.ReactElement<any, 'code'>).props.children;
-          }
-
           try {
+            const content = (children as React.ReactElement<any, 'code'>).props.children;
             return <ToolResult toolResult={JSON.parse(content)} />;
           } catch {
-            return <pre>{content}</pre>;
+            return <pre>{children}</pre>;
           }
         }
 
@@ -107,7 +93,9 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
       remarkPlugins={remarkPlugins(limitedMarkdown)}
       rehypePlugins={rehypePlugins(html)}
     >
-      {stripCodeFenceFromArtifact(children)}
+      {/* Prepending `&nbsp;` to parse childrens same way regardless of contents. */}
+      {/* See also: https://github.com/planetarium/agent8/pull/80 */}
+      {'&nbsp;' + stripCodeFenceFromArtifact(children)}
     </ReactMarkdown>
   );
 });
