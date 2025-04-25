@@ -18,7 +18,7 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'openai/o4-mini',
+    model: 'google/gemini-2.0-flash-001',
     provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
   FIRST_2D_CHAT: {
@@ -26,7 +26,7 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
   FIRST_3D_CHAT: {
-    model: 'openai/o4-mini',
+    model: 'anthropic/claude-3.7-sonnet',
     provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
   DEFAULT_MODEL: {
