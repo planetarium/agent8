@@ -40,11 +40,35 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
         }
 
         if (className?.includes('__toolCall__')) {
-          return <ToolCall>{children as React.ReactElement<any, 'code'>}</ToolCall>;
+          let content;
+
+          if (typeof children === 'string') {
+            content = children.replaceAll('`', '').replaceAll('&grave;', '`');
+          } else {
+            content = (children as React.ReactElement<any, 'code'>).props.children;
+          }
+
+          try {
+            return <ToolCall toolCall={JSON.parse(content)} />;
+          } catch {
+            return <pre>{content}</pre>;
+          }
         }
 
         if (className?.includes('__toolResult__')) {
-          return <ToolResult>{children as React.ReactElement<any, 'code'>}</ToolResult>;
+          let content;
+
+          if (typeof children === 'string') {
+            content = children.replaceAll('`', '').replaceAll('&grave;', '`');
+          } else {
+            content = (children as React.ReactElement<any, 'code'>).props.children;
+          }
+
+          try {
+            return <ToolResult toolResult={JSON.parse(content)} />;
+          } catch {
+            return <pre>{content}</pre>;
+          }
         }
 
         return (
