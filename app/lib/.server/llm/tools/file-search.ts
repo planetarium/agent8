@@ -41,7 +41,7 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
         pattern,
         totalMatches: results.length,
         matchingFiles: results.map((result) => ({
-          path: result.path.replace(WORK_DIR, ''),
+          path: result.path.replace(WORK_DIR + '/', ''),
           matches: result.matches.map((match) => ({
             line: match.line,
             text: match.text,
