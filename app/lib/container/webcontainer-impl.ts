@@ -16,7 +16,10 @@ import type {
  * WebContainer file system implementation
  */
 export class WebContainerFileSystem implements FileSystem {
-  constructor(private _nativeFs: FileSystemAPI) {}
+  constructor(
+    private _nativeFs: FileSystemAPI,
+    private _wc: WebContainer,
+  ) {}
 
   readFile(path: string): Promise<Uint8Array>;
   readFile(path: string, encoding: BufferEncoding): Promise<string>;
@@ -53,6 +56,10 @@ export class WebContainerFileSystem implements FileSystem {
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher {
     return this._nativeFs.watch(pattern, options) as FileSystemWatcher;
   }
+
+  watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void {
+    this._wc.internal.watchPaths(options, callback);
+  }
 }
 
 /**
@@ -65,7 +72,7 @@ export class WebContainerFactory implements ContainerFactory {
 
       // Directly implement the Container interface instead of using an adapter
       return {
-        fs: new WebContainerFileSystem(container.fs),
+        fs: new WebContainerFileSystem(container.fs, container),
         workdir: container.workdir,
         mount: (data: FileSystemTree) => {
           return container.mount(data);
@@ -78,11 +85,6 @@ export class WebContainerFactory implements ContainerFactory {
             exit: process.exit,
             resize: (dimensions) => process.resize(dimensions),
           };
-        },
-        internal: {
-          watchPaths: (options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void) => {
-            return container.internal.watchPaths(options, callback);
-          },
         },
         on(event: 'port' | 'server-ready' | 'preview-message' | 'error', listener: any) {
           return (container as any).on(event, listener);

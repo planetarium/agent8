@@ -44,6 +44,7 @@ export interface FileSystem {
   readdir(path: string, options?: { withFileTypes?: boolean }): Promise<FileEntry[]>;
   rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void>;
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher;
+  watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void;
 }
 
 /**
@@ -107,9 +108,6 @@ export interface Container {
   on(event: 'error', listener: ErrorListener): Unsubscribe;
   mount(data: FileSystemTree): Promise<void>;
   spawn(command: string, args?: string[], options?: SpawnOptions): Promise<ContainerProcess>;
-  internal: {
-    watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void;
-  };
 }
 
 /**
