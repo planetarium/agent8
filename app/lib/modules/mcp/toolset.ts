@@ -114,104 +114,106 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
     return fetch(url.toString(), { ...options, headers });
   };
 
-  for (const [serverName, serverConfig] of Object.entries(config.servers)) {
-    if (!serverConfig.enabled) {
-      logger.info(`MCP server ${serverName} is disabled`);
-      continue;
-    }
-
-    // Create SSE transport layer - direct initialization
-    const url = new URL(serverConfig.url);
-    const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
-    const transport = new SSEClientTransport(url, {
-      eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
-      requestInit: v8AuthIntegrated
-        ? {
-            headers: {
-              Authorization: `Bearer ${v8AuthToken}`,
-            },
-          }
-        : undefined,
-    });
-
-    // Create MCP client
-    const client = new Client({
-      name: `${serverName}-client`,
-      version: '1.0.0',
-    });
-
-    client.onerror = (error) => {
-      logger.error(`MCP client error: ${error}`);
-    };
-
-    client.onclose = () => {
-      logger.info(`MCP client ${serverName} closed`);
-    };
-
-    toolset.clients[serverName] = client;
-
-    try {
-      // Connect client
-      await client.connect(transport);
-
-      // Get list of tools
-      const toolList = await client.listTools();
-
-      // Convert each tool to AI SDK tool
-      for (const tool of toolList.tools) {
-        let toolName = tool.name;
-
-        if (toolName !== serverName) {
-          toolName = `${serverName}_${toolName}`;
-        }
-
-        // Replace spaces with dashes due to AI SDK tool name restrictions
-        toolName = toolName.replaceAll(' ', '-');
-
-        const parameters = jsonSchema({
-          ...tool.inputSchema,
-          properties: tool.inputSchema.properties ?? {},
-          additionalProperties: false,
-        } as JSONSchema7);
-
-        // Create a progress emitter for this tool
-        const progressEmitter = new ProgressEmitter(toolName);
-
-        toolset.tools[toolName] = {
-          description: tool.description || '',
-          parameters,
-          progressEmitter,
-          execute: async (args) => {
-            // Emit start event
-            progressEmitter.emit('start', { status: 'started' });
-
-            const result = await client.callTool(
-              {
-                name: tool.name,
-                arguments: args,
-              },
-              CallToolResultSchema,
-              {
-                onprogress: (progress) => {
-                  logger.info(`Progress: ${JSON.stringify(progress)}`);
-
-                  // Emit progress event
-                  progressEmitter.emit('progress', progress);
-                },
-              },
-            );
-
-            // Emit complete event
-            progressEmitter.emit('complete', { status: 'completed' });
-
-            return result;
-          },
-        } as ProgressAwareTool;
+  await Promise.all(
+    Object.entries(config.servers).map(async ([serverName, serverConfig]) => {
+      if (!serverConfig.enabled) {
+        logger.info(`MCP server ${serverName} is disabled`);
+        return;
       }
-    } catch (error) {
-      logger.error(`Failed to connect to MCP server ${serverName}:`, error);
-    }
-  }
+
+      // Create SSE transport layer - direct initialization
+      const url = new URL(serverConfig.url);
+      const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
+      const transport = new SSEClientTransport(url, {
+        eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
+        requestInit: v8AuthIntegrated
+          ? {
+              headers: {
+                Authorization: `Bearer ${v8AuthToken}`,
+              },
+            }
+          : undefined,
+      });
+
+      // Create MCP client
+      const client = new Client({
+        name: `${serverName}-client`,
+        version: '1.0.0',
+      });
+
+      client.onerror = (error) => {
+        logger.error(`MCP client error: ${error}`);
+      };
+
+      client.onclose = () => {
+        logger.info(`MCP client ${serverName} closed`);
+      };
+
+      toolset.clients[serverName] = client;
+
+      try {
+        // Connect client
+        await client.connect(transport);
+
+        // Get list of tools
+        const toolList = await client.listTools();
+
+        // Convert each tool to AI SDK tool
+        for (const tool of toolList.tools) {
+          let toolName = tool.name;
+
+          if (toolName !== serverName) {
+            toolName = `${serverName}_${toolName}`;
+          }
+
+          // Replace spaces with dashes due to AI SDK tool name restrictions
+          toolName = toolName.replaceAll(' ', '-');
+
+          const parameters = jsonSchema({
+            ...tool.inputSchema,
+            properties: tool.inputSchema.properties ?? {},
+            additionalProperties: false,
+          } as JSONSchema7);
+
+          // Create a progress emitter for this tool
+          const progressEmitter = new ProgressEmitter(toolName);
+
+          toolset.tools[toolName] = {
+            description: tool.description || '',
+            parameters,
+            progressEmitter,
+            execute: async (args) => {
+              // Emit start event
+              progressEmitter.emit('start', { status: 'started' });
+
+              const result = await client.callTool(
+                {
+                  name: tool.name,
+                  arguments: args,
+                },
+                CallToolResultSchema,
+                {
+                  onprogress: (progress) => {
+                    logger.info(`Progress: ${JSON.stringify(progress)}`);
+
+                    // Emit progress event
+                    progressEmitter.emit('progress', progress);
+                  },
+                },
+              );
+
+              // Emit complete event
+              progressEmitter.emit('complete', { status: 'completed' });
+
+              return result;
+            },
+          } as ProgressAwareTool;
+        }
+      } catch (error) {
+        logger.error(`Failed to connect to MCP server ${serverName}:`, error);
+      }
+    }),
+  );
 
   return toolset;
 }
