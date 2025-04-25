@@ -2,6 +2,8 @@
  * File system related types and interfaces
  */
 
+import type { ITerminal } from '~/types/terminal';
+
 export type Unsubscribe = () => void;
 export type PortListener = (port: number, type: string, url: string) => void;
 export type ServerReadyListener = (port: number, url: string) => void;
@@ -70,6 +72,37 @@ export interface SpawnOptions {
 }
 
 /**
+ * Shell session interface for integrated shell functionality
+ */
+export interface ShellSession {
+  process: ContainerProcess;
+  input: WritableStreamDefaultWriter<string>;
+  output: ReadableStream<string>;
+  internalOutput?: ReadableStream<string>;
+  ready: Promise<void>;
+
+  executeCommand?(command: string): Promise<ExecutionResult>;
+  waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
+}
+
+/**
+ * Shell options interface
+ */
+export interface ShellOptions {
+  args?: string[];
+  interactive?: boolean;
+  splitOutput?: boolean;
+}
+
+/**
+ * Shell execution result interface
+ */
+export interface ExecutionResult {
+  output: string;
+  exitCode: number;
+}
+
+/**
  * Path watcher event interface
  */
 export interface PathWatcherEvent {
@@ -108,6 +141,14 @@ export interface Container {
   on(event: 'error', listener: ErrorListener): Unsubscribe;
   mount(data: FileSystemTree): Promise<void>;
   spawn(command: string, args?: string[], options?: SpawnOptions): Promise<ContainerProcess>;
+
+  /**
+   * Spawn a shell process with enhanced functionality
+   * @param terminal Terminal interface to connect with the shell
+   * @param options Shell specific options
+   * @returns Shell session with standard and enhanced shell functionality
+   */
+  spawnShell(terminal: ITerminal, options?: ShellOptions): Promise<ShellSession>;
 }
 
 /**

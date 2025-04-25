@@ -1,58 +1,11 @@
-import type { Container, ContainerProcess } from '~/lib/container/interfaces';
+import type { Container, ContainerProcess, ExecutionResult } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
-import { withResolvers } from './promises';
 import { atom } from 'nanostores';
 
 export async function newShellProcess(container: Container, terminal: ITerminal) {
-  const args: string[] = [];
-
-  // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-  const process = await container.spawn('/bin/jsh', ['--osc', ...args], {
-    terminal: {
-      cols: terminal.cols ?? 80,
-      rows: terminal.rows ?? 15,
-    },
-  });
-
-  const input = process.input.getWriter();
-  const output = process.output;
-
-  const jshReady = withResolvers<void>();
-
-  let isInteractive = false;
-  output.pipeTo(
-    new WritableStream({
-      write(data) {
-        if (!isInteractive) {
-          const [, osc] = data.match(/\x1b\]654;([^\x07]+)\x07/) || [];
-
-          if (osc === 'interactive') {
-            // wait until we see the interactive OSC
-            isInteractive = true;
-
-            jshReady.resolve();
-          }
-        }
-
-        terminal.write(data);
-      },
-    }),
-  );
-
-  terminal.onData((data) => {
-    // console.log('terminal onData', { data, isInteractive });
-
-    if (isInteractive) {
-      input.write(data);
-    }
-  });
-
-  await jshReady.promise;
-
-  return process;
+  const shellSession = await container.spawnShell(terminal);
+  return shellSession.process;
 }
-
-export type ExecutionResult = { output: string; exitCode: number } | undefined;
 
 export class BoltShell {
   #initialized: (() => void) | undefined;
@@ -92,14 +45,15 @@ export class BoltShell {
     this.#container = container;
     this.#terminal = terminal;
 
-    const { process, output } = await this.newBoltShellProcess(container, terminal);
-    this.#process = process;
-    this.#outputStream = output.getReader();
-    await this.waitTillOscCode('interactive');
+    const shellSession = await container.spawnShell(terminal, { splitOutput: true });
+    this.#process = shellSession.process;
+    this.#outputStream = shellSession.internalOutput!.getReader();
+    this.#shellInputStream = shellSession.input;
+    await shellSession.ready;
     this.#initialized?.();
   }
 
-  async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult> {
+  async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult | undefined> {
     if (!this.process || !this.terminal) {
       return undefined;
     }
@@ -110,10 +64,26 @@ export class BoltShell {
       state.abort();
     }
 
-    /*
-     * interrupt the current execution
-     *  this.#shellInputStream?.write('\x03');
-     */
+    // Utilize advanced features from container API
+    if (this.#container && this.#terminal) {
+      const shellSession = await this.#container.spawnShell(this.#terminal, {
+        splitOutput: true,
+        interactive: false,
+      });
+
+      if (shellSession.executeCommand) {
+        // Use the pre-implemented executeCommand function
+        const executionPromise = shellSession.executeCommand(command);
+        this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
+
+        const resp = await executionPromise;
+        this.executionState.set({ sessionId, active: false });
+
+        return resp;
+      }
+    }
+
+    // Fallback to existing code if needed
     this.terminal.input('\x03');
     await this.waitTillOscCode('prompt');
 
@@ -121,10 +91,10 @@ export class BoltShell {
       await state.executionPrms;
     }
 
-    //start a new execution
+    // Start a new execution
     this.terminal.input(command.trim() + '\n');
 
-    //wait for the execution to finish
+    // Wait for the execution to finish
     const executionPromise = this.getCurrentExecutionResult();
     this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
 
@@ -143,54 +113,13 @@ export class BoltShell {
   }
 
   async newBoltShellProcess(container: Container, terminal: ITerminal) {
-    const args: string[] = [];
+    const shellSession = await container.spawnShell(terminal, { splitOutput: true });
+    this.#shellInputStream = shellSession.input;
 
-    // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-    const process = await container.spawn('/bin/jsh', ['--osc', ...args], {
-      terminal: {
-        cols: terminal.cols ?? 80,
-        rows: terminal.rows ?? 15,
-      },
-    });
-
-    const input = process.input.getWriter();
-    this.#shellInputStream = input;
-
-    const [internalOutput, terminalOutput] = process.output.tee();
-
-    const jshReady = withResolvers<void>();
-
-    let isInteractive = false;
-    terminalOutput.pipeTo(
-      new WritableStream({
-        write(data) {
-          if (!isInteractive) {
-            const [, osc] = data.match(/\x1b\]654;([^\x07]+)\x07/) || [];
-
-            if (osc === 'interactive') {
-              // wait until we see the interactive OSC
-              isInteractive = true;
-
-              jshReady.resolve();
-            }
-          }
-
-          terminal.write(data);
-        },
-      }),
-    );
-
-    terminal.onData((data) => {
-      // console.log('terminal onData', { data, isInteractive });
-
-      if (isInteractive) {
-        input.write(data);
-      }
-    });
-
-    await jshReady.promise;
-
-    return { process, output: internalOutput };
+    return {
+      process: shellSession.process,
+      output: shellSession.internalOutput!,
+    };
   }
 
   async getCurrentExecutionResult(): Promise<ExecutionResult> {
