@@ -1,33 +1,32 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import styles from './ToolCall.module.scss';
 
-interface ToolCallProps {
-  children: React.ReactElement<any, 'code'>;
+export interface ToolCall {
+  toolName: string;
+  args: Record<string, any>;
 }
 
-export const ToolCall = ({ children }: ToolCallProps) => {
+interface ToolCallProps {
+  toolCall: ToolCall;
+}
+
+export const ToolCall = ({ toolCall }: ToolCallProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  try {
-    const content = JSON.parse(children?.props?.children || '{}');
-
-    return (
-      <div className={styles.toolCall}>
-        <div className={styles.toolCallHeader} onClick={() => setIsExpanded(!isExpanded)}>
-          <h4>Tool Call: {content?.toolName}</h4>
-          <span>{isExpanded ? '▼' : '▶'}</span>
-        </div>
-        {isExpanded && (
-          <div className={styles.toolCallContent}>
-            <div>
-              <strong>Parameters:</strong>
-              <pre>{JSON.stringify(content?.args, null, 2)}</pre>
-            </div>
-          </div>
-        )}
+  return (
+    <div className={styles.toolCall}>
+      <div className={styles.toolCallHeader} onClick={() => setIsExpanded(!isExpanded)}>
+        <h4>Tool Call: {toolCall.toolName}</h4>
+        <span>{isExpanded ? '▼' : '▶'}</span>
       </div>
-    );
-  } catch {
-    return <div className={styles.toolCall}>Tool call parsing error: {String(children)}</div>;
-  }
+      {isExpanded && (
+        <div className={styles.toolCallContent}>
+          <div>
+            <strong>Parameters:</strong>
+            <pre>{JSON.stringify(toolCall.args, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };

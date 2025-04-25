@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import styles from './ToolResult.module.scss';
 
-interface ToolResultProps {
-  children: React.ReactElement<any, 'code'>;
+export interface ToolResult {
+  isError: boolean;
+  error?: string;
+  result: any;
 }
 
-export const ToolResult = ({ children }: ToolResultProps) => {
+interface ToolResultProps {
+  toolResult: ToolResult;
+}
+
+export const ToolResult = ({ toolResult }: ToolResultProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const result = JSON.parse(children?.props?.children || '{}').result;
-  const isError = !!result?.isError;
 
   return (
-    <div className={`${styles.toolResult} ${isError ? styles.error : ''}`}>
+    <div className={`${styles.toolResult} ${toolResult.isError ? styles.error : ''}`}>
       <div className={styles.toolResultHeader} onClick={() => setIsExpanded(!isExpanded)}>
-        <h4>Tool Result {isError ? '(Error)' : ''}</h4>
+        <h4>Tool Result {toolResult.isError ? '(Error)' : ''}</h4>
         <span>{isExpanded ? '▼' : '▶'}</span>
       </div>
       {isExpanded && (
         <div className={styles.toolResultContent}>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
+          <pre>{JSON.stringify(toolResult.result, null, 2)}</pre>
         </div>
       )}
     </div>
