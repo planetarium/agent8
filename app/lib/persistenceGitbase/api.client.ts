@@ -220,3 +220,14 @@ export const forkProject = async (projectPath: string, projectName: string, comm
 
   return response.data;
 };
+
+export const getCommitDiff = async (projectPath: string, commitHash: string) => {
+  const response = await axios.get(`/api/gitlab/diff`, {
+    params: {
+      projectPath,
+      commitHash,
+    },
+  });
+
+  return response.data;
+};

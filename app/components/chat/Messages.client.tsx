@@ -19,11 +19,12 @@ interface MessagesProps {
   onRetry?: (message: Message) => void;
   onFork?: (message: Message) => void;
   onRevert?: (message: Message) => void;
+  onViewDiff?: (message: Message) => void;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert } = props;
+    const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert, onViewDiff } = props;
     const profile = useStore(profileStore);
 
     return (
@@ -82,10 +83,17 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             }
                           >
                             {messageId && isCommitHash(messageId.split('-').pop() as string) && (
-                              <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
-                                <span className="i-ph:arrow-u-up-left text-xl" />
-                                Revert to this message
-                              </DropdownItem>
+                              <>
+                                <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
+                                  <span className="i-ph:arrow-u-up-left text-xl" />
+                                  Revert to this message
+                                </DropdownItem>
+
+                                <DropdownItem onSelect={() => onViewDiff?.(message)}>
+                                  <span className="i-ph:git-diff text-xl" />
+                                  View diff for this message
+                                </DropdownItem>
+                              </>
                             )}
                             <DropdownItem onSelect={() => onFork?.(message)}>
                               <span className="i-ph:git-fork text-xl" />
