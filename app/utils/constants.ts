@@ -21,6 +21,10 @@ export const FIXED_MODELS = {
     model: 'claude-3-7-sonnet-20250219',
     provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
   },
+  PROMPT_ENHANCER_TEMPLATE: {
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+  },
   FIRST_2D_CHAT: {
     model: 'claude-3-7-sonnet-20250219',
     provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,

@@ -1,50 +1,33 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { streamText } from '~/lib/.server/llm/stream-text';
+import { streamText as _streamText } from 'ai';
 import { stripIndents } from '~/utils/stripIndent';
-import type { ProviderInfo } from '~/types/model';
-import { getProviderSettingsFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { FIXED_MODELS } from '~/utils/constants';
 
 export const action = withV8AuthUser(enhancerAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.enhancher');
 
 async function enhancerAction({ context, request }: ActionFunctionArgs) {
-  const { message, model, provider } = await request.json<{
+  const { message } = await request.json<{
     message: string;
-    model: string;
-    provider: ProviderInfo;
-    apiKeys?: Record<string, string>;
   }>();
 
-  const { name: providerName } = provider;
-
-  // validate 'model' and 'provider' fields
-  if (!model || typeof model !== 'string') {
-    throw new Response('Invalid or missing model', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-  }
-
-  if (!providerName || typeof providerName !== 'string') {
-    throw new Response('Invalid or missing provider', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-  }
-
-  const cookieHeader = request.headers.get('Cookie');
-  const providerSettings = getProviderSettingsFromCookie(cookieHeader);
+  const provider = FIXED_MODELS.PROMPT_ENHANCER_TEMPLATE.provider;
+  const model = FIXED_MODELS.PROMPT_ENHANCER_TEMPLATE.model;
 
   try {
-    const result = await streamText({
+    const result = await _streamText({
+      model: provider.getModelInstance({
+        model,
+        serverEnv: context.cloudflare?.env as any,
+      }),
       messages: [
         {
           role: 'user',
           content:
-            `[Model: ${model}]\n\n[Provider: ${providerName}]\n\n` +
+            `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n` +
             stripIndents`
             You are a professional prompt engineer specializing in crafting precise, effective prompts.
             Your task is to enhance prompts by making them more specific, actionable, and effective.
@@ -75,32 +58,31 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
           `,
         },
       ],
-      env: context.cloudflare?.env as any,
-      providerSettings,
-      options: {
-        system:
-          'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
+      system:
+        'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
 
-        onFinish: ({ usage }) => {
-          if (usage) {
-            const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-            consumeUserCredit({
-              model: { provider: providerName, name: model },
-              inputTokens: usage.promptTokens,
-              outputTokens: usage.completionTokens,
-              description: 'Prompt Enhancer',
-            });
+      onFinish: ({ usage, providerMetadata }) => {
+        if (usage) {
+          let cacheRead = 0;
+          let cacheWrite = 0;
+
+          if (providerMetadata?.anthropic) {
+            const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
+
+            cacheRead += Number(cacheReadInputTokens || 0);
+            cacheWrite += Number(cacheCreationInputTokens || 0);
           }
-        },
 
-        /*
-         * onError: (event) => {
-         *   throw new Response(null, {
-         *     status: 500,
-         *     statusText: 'Internal Server Error',
-         *   });
-         * }
-         */
+          const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+          consumeUserCredit({
+            model: { provider: provider.name, name: model },
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            cacheRead,
+            cacheWrite,
+            description: 'Prompt Enhancer',
+          });
+        }
       },
     });
 
