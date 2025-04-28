@@ -111,6 +111,10 @@ export default class OpenRouterProvider extends BaseProvider {
               return message;
             });
 
+            body.provider = {
+              order: ['Anthropic'],
+            };
+
             options.body = JSON.stringify(body);
           }
         } catch {
