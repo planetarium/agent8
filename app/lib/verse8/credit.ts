@@ -46,6 +46,8 @@ export async function consumeUserCredit(
     };
     inputTokens: number;
     outputTokens: number;
+    cacheRead?: number;
+    cacheWrite?: number;
     description?: string;
   },
 ) {
@@ -66,6 +68,8 @@ export async function consumeUserCredit(
       llmModelName: consumeArgs.model.name,
       inputTokens: consumeArgs.inputTokens,
       outputTokens: consumeArgs.outputTokens,
+      cacheReadTokens: consumeArgs.cacheRead,
+      cacheWriteTokens: consumeArgs.cacheWrite,
       description: consumeArgs.description || 'Agent8 Chat',
     }),
   });

@@ -1,7 +1,6 @@
 import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
-import type { IProviderSetting } from '~/types/model';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -27,19 +26,18 @@ export async function streamText(props: {
   env?: Env;
   options?: StreamingOptions;
   files?: FileMap;
-  providerSettings?: Record<string, IProviderSetting>;
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
 }) {
-  const { messages, env: serverEnv, options, files, providerSettings, tools, abortSignal } = props;
+  const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
       const { model, provider, parts } = extractPropertiesFromMessage(message);
-      currentModel = model === 'auto' ? DEFAULT_MODEL : model;
-      currentProvider = model === 'auto' ? DEFAULT_PROVIDER.name : provider;
+      currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
+      currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
 
       return { ...message, parts };
     } else if (message.role == 'assistant') {
@@ -115,23 +113,27 @@ export async function streamText(props: {
         ({
           role: 'system',
           content,
-          providerOptions: {
-            anthropic: { cacheControl: { type: 'ephemeral' } },
-          },
         }) as CoreSystemMessage,
-    ), // A maximum of 4 blocks with cache_control may be provided.
+    ),
     {
       role: 'system',
       content: getProjectMdPrompt(files),
+
+      providerOptions: {
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
     } as CoreSystemMessage,
-    ...convertToCoreMessages(processedMessages).slice(-5),
+    ...convertToCoreMessages(processedMessages).slice(-3),
   ];
+
+  coreMessages[coreMessages.length - 1].providerOptions = {
+    anthropic: { cacheControl: { type: 'ephemeral' } },
+  };
 
   const result = await _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
-      providerSettings,
     }),
     abortSignal,
     maxTokens: dynamicMaxTokens,

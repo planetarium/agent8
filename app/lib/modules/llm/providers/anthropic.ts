@@ -3,6 +3,9 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { LanguageModelV1 } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('llm.providers.anthropic');
 
 export default class AnthropicProvider extends BaseProvider {
   name = 'Anthropic';
@@ -64,18 +67,33 @@ export default class AnthropicProvider extends BaseProvider {
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
   }) => LanguageModelV1 = (options) => {
-    const { apiKeys, providerSettings, serverEnv, model } = options;
-    const { apiKey } = this.getProviderBaseUrlAndKey({
-      apiKeys,
-      providerSettings,
-      serverEnv: serverEnv as any,
-      defaultBaseUrlKey: '',
-      defaultApiTokenKey: 'ANTHROPIC_API_KEY',
-    });
+    const { serverEnv, model } = options;
+    const apiKey = serverEnv.ANTHROPIC_API_KEY;
     const anthropic = createAnthropic({
       apiKey,
       headers: {
+        'anthropic-version': '2023-06-01',
         'anthropic-beta': 'token-efficient-tools-2025-02-19',
+      },
+      fetch: (url, options: any) => {
+        try {
+          const body = JSON.parse(options.body as string);
+
+          /*
+           * When using tools on the Anthropic model, apply the cache_control to the tool call.
+           * See alse: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching?q=cach#caching-tool-definitions
+           */
+
+          if (body.tools?.length > 0) {
+            body.tools[body.tools.length - 1].cache_control = { type: 'ephemeral' };
+          }
+
+          options.body = JSON.stringify(body);
+        } catch {
+          logger.error('Error parsing Anthropic request body', { url, options });
+        }
+
+        return fetch(url, options);
       },
     });
 

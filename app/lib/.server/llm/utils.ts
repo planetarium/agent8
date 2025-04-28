@@ -76,7 +76,7 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
       if (part.type === 'text') {
         return {
           type: part.type,
-          text: stripMetadata(part.text),
+          text: stripMetadata(part.text) + attachmentsText,
         };
       }
 

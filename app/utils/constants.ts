@@ -18,19 +18,27 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'google/gemini-2.0-flash-001',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+  },
+  PROMPT_ENHANCER_TEMPLATE: {
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
   },
   FIRST_2D_CHAT: {
-    model: 'anthropic/claude-3.7-sonnet',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
   },
   FIRST_3D_CHAT: {
-    model: 'anthropic/claude-3.7-sonnet',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
   },
   DEFAULT_MODEL: {
-    model: 'anthropic/claude-3.7-sonnet',
+    model: 'claude-3-7-sonnet-20250219',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+  },
+  IMAGE_DESCRIPTION: {
+    model: 'google/gemini-2.0-flash-001',
     provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
 };
