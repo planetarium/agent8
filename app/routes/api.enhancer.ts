@@ -1,6 +1,5 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText as _streamText } from 'ai';
-import { stripIndents } from '~/utils/stripIndent';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { FIXED_MODELS } from '~/utils/constants';
@@ -10,6 +9,7 @@ export const action = withV8AuthUser(enhancerAction, { checkCredit: true });
 const logger = createScopedLogger('api.enhancher');
 
 async function enhancerAction({ context, request }: ActionFunctionArgs) {
+  const env = { ...context.cloudflare?.env, ...process.env } as Env;
   const { message } = await request.json<{
     message: string;
   }>();
@@ -21,14 +21,12 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
     const result = await _streamText({
       model: provider.getModelInstance({
         model,
-        serverEnv: context.cloudflare?.env as any,
+        serverEnv: env,
       }),
       messages: [
         {
-          role: 'user',
-          content:
-            `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n` +
-            stripIndents`
+          role: 'system',
+          content: `
             You are a professional prompt engineer specializing in crafting precise, effective prompts.
             Your task is to enhance prompts by making them more specific, actionable, and effective.
 
@@ -51,16 +49,20 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
 
             IMPORTANT: Your response must ONLY contain the enhanced prompt text.
             Do not include any explanations, metadata, or wrapper tags.
-
+          `,
+          providerOptions: {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+          },
+        },
+        {
+          role: 'user',
+          content: `
             <original_prompt>
               ${message}
             </original_prompt>
           `,
         },
       ],
-      system:
-        'You are a senior software principal architect, you should help the user analyse the user query and enrich it with the necessary context and constraints to make it more specific, actionable, and effective. You should also ensure that the prompt is self-contained and uses professional language. Your response should ONLY contain the enhanced prompt text. Do not include any explanations, metadata, or wrapper tags.',
-
       onFinish: ({ usage, providerMetadata }) => {
         if (usage) {
           let cacheRead = 0;
@@ -105,13 +107,14 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
     return new Response(result.textStream, {
       status: 200,
       headers: {
-        'Content-Type': 'text/event-stream',
+        'Content-Type': 'text/event-stream; charset=utf-8',
         Connection: 'keep-alive',
         'Cache-Control': 'no-cache',
+        'Text-Encoding': 'chunked',
       },
     });
   } catch (error: unknown) {
-    console.log(error);
+    logger.error(error);
 
     if (error instanceof Error && error.message?.includes('API key')) {
       throw new Response('Invalid or missing API key', {
