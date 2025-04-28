@@ -28,6 +28,7 @@ We already have a working React codebase. Our goal is to modify or add new featu
 - Read the necessary files to perform the tasks.(Use the read_files tool to read all the necessary files at once. If there are any additional files that need to be read sequentially, please read those files as well. However, since reading files is a very expensive task, you must operate very efficiently.)
 - PROJECT.md, package.json, src/assets.json are always latest version provided in the <project_description>, <resource_constraints>. so you don't need to read them again.
 - If the tasks to be performed are complex, you can use the provided tools to receive assistance in generating code samples, resources, images, etc.
+- IMPORTANT: Searching on vectordb is allowed only once. If you can't find a good example within the first attempt, resolve it independently.
 
 3. Generate the response
 - Please refer to the <project_documentation> and update the PROJECT.md. (You must do this.)
