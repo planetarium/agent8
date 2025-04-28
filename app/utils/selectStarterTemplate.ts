@@ -1,6 +1,6 @@
 import ignore from 'ignore';
 import type { Template } from '~/types/template';
-import { FIXED_MODELS, STARTER_TEMPLATES } from './constants';
+import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
@@ -124,14 +124,11 @@ export const selectStarterTemplate = async (options: { message: string }) => {
   }
 
   const { message } = options;
-  const { model, provider } = FIXED_MODELS.SELECT_STARTER_TEMPLATE;
   const requestBody = {
     message,
-    model,
-    provider,
     system: starterTemplateSelectionPrompt(templates),
   };
-  const response = await fetch('/api/llmcall', {
+  const response = await fetch('/api/startcall', {
     method: 'POST',
     body: JSON.stringify(requestBody),
   });
