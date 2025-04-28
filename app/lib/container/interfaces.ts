@@ -2,6 +2,8 @@
  * File system related types and interfaces
  */
 
+import type { ITerminal } from '~/types/terminal';
+
 export type Unsubscribe = () => void;
 export type PortListener = (port: number, type: string, url: string) => void;
 export type ServerReadyListener = (port: number, url: string) => void;
@@ -44,6 +46,7 @@ export interface FileSystem {
   readdir(path: string, options?: { withFileTypes?: boolean }): Promise<FileEntry[]>;
   rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void>;
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher;
+  watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void;
 }
 
 /**
@@ -66,6 +69,37 @@ export interface SpawnOptions {
     cols: number;
     rows: number;
   };
+}
+
+/**
+ * Shell session interface for integrated shell functionality
+ */
+export interface ShellSession {
+  process: ContainerProcess;
+  input: WritableStreamDefaultWriter<string>;
+  output: ReadableStream<string>;
+  internalOutput?: ReadableStream<string>;
+  ready: Promise<void>;
+
+  executeCommand?(command: string): Promise<ExecutionResult>;
+  waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
+}
+
+/**
+ * Shell options interface
+ */
+export interface ShellOptions {
+  args?: string[];
+  interactive?: boolean;
+  splitOutput?: boolean;
+}
+
+/**
+ * Shell execution result interface
+ */
+export interface ExecutionResult {
+  output: string;
+  exitCode: number;
 }
 
 /**
@@ -107,9 +141,14 @@ export interface Container {
   on(event: 'error', listener: ErrorListener): Unsubscribe;
   mount(data: FileSystemTree): Promise<void>;
   spawn(command: string, args?: string[], options?: SpawnOptions): Promise<ContainerProcess>;
-  internal: {
-    watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void;
-  };
+
+  /**
+   * Spawn a shell process with enhanced functionality
+   * @param terminal Terminal interface to connect with the shell
+   * @param options Shell specific options
+   * @returns Shell session with standard and enhanced shell functionality
+   */
+  spawnShell(terminal: ITerminal, options?: ShellOptions): Promise<ShellSession>;
 }
 
 /**
