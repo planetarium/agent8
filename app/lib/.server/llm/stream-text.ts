@@ -13,6 +13,8 @@ import {
   getProjectPackagesPrompt,
   getAgent8Prompt,
 } from '~/lib/common/prompts/agent8-prompts';
+import { createDocTools } from './tools/docs';
+import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 
 export type Messages = Message[];
 
@@ -88,7 +90,10 @@ export async function streamText(props: {
 
   const systemPrompt = getAgent8Prompt(WORK_DIR);
 
-  let combinedTools: Record<string, any> = { ...tools };
+  const docTools = await createDocTools(serverEnv as Env);
+  const codebaseTools = await createSearchCodebase(serverEnv as Env);
+  const resourcesTools = await createSearchResources(serverEnv as Env);
+  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
 
   if (files) {
     // Add file search tools
