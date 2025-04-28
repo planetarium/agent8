@@ -199,6 +199,7 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
                     // Emit progress event
                     progressEmitter.emit('progress', progress);
                   },
+                  resetTimeoutOnProgress: true,
                 },
               );
 
