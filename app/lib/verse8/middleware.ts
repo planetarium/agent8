@@ -15,6 +15,8 @@ export type ContextConsumeUserCredit = (args: {
   model: { provider: string; name: string };
   inputTokens: number;
   outputTokens: number;
+  cacheRead?: number;
+  cacheWrite?: number;
   description?: string;
 }) => Promise<void>;
 
@@ -92,6 +94,8 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
         consumeUserCredit: (consumeArgs: {
           inputTokens: number;
           outputTokens: number;
+          cacheWrite?: number;
+          cacheRead?: number;
           description?: string;
           model: { provider: string; name: string };
         }) =>
