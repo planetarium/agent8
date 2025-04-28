@@ -50,14 +50,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
-  const parsedCookies = parseCookies(cookieHeader || '');
 
-  const providerSettings: Record<string, IProviderSetting> = JSON.parse(parsedCookies.providers || '{}');
   const stream = new SwitchableStream();
 
   const cumulativeUsage = {
     completionTokens: 0,
     promptTokens: 0,
+    cacheWrite: 0,
+    cacheRead: 0,
     totalTokens: 0,
   };
   const encoder: TextEncoder = new TextEncoder();
@@ -139,7 +139,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         // Stream the text
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, usage }) => {
+          onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
             logger.debug('usage', JSON.stringify(usage));
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
@@ -151,6 +151,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.totalTokens += usage.totalTokens || 0;
             }
 
+            if (providerMetadata?.anthropic) {
+              const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
+
+              cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
+              cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
+            }
+
             if (finishReason !== 'length') {
               dataStream.writeMessageAnnotation({
                 type: 'usage',
@@ -158,6 +165,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   completionTokens: cumulativeUsage.completionTokens,
                   promptTokens: cumulativeUsage.promptTokens,
                   totalTokens: cumulativeUsage.totalTokens,
+                  cacheWrite: cumulativeUsage.cacheWrite,
+                  cacheRead: cumulativeUsage.cacheRead,
                 },
               });
 
@@ -175,6 +184,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 model: { provider, name: model },
                 inputTokens: cumulativeUsage.promptTokens,
                 outputTokens: cumulativeUsage.completionTokens,
+                cacheRead: cumulativeUsage.cacheRead,
+                cacheWrite: cumulativeUsage.cacheWrite,
                 description: `Generate Response`,
               });
 
@@ -202,7 +213,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               env,
               options,
               files,
-              providerSettings,
               tools: mcpTools,
               abortSignal: request.signal,
             });
@@ -226,7 +236,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           env,
           options,
           files,
-          providerSettings,
           tools: mcpTools,
           abortSignal: request.signal,
         });

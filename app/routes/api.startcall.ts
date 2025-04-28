@@ -37,13 +37,25 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
           content: `${message}`,
         },
       ],
-      onStepFinish: async ({ usage }) => {
+      onStepFinish: async ({ usage, providerMetadata }) => {
         if (usage) {
+          let cacheRead = 0;
+          let cacheWrite = 0;
+
+          if (providerMetadata?.anthropic) {
+            const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
+
+            cacheRead += Number(cacheReadInputTokens || 0);
+            cacheWrite += Number(cacheCreationInputTokens || 0);
+          }
+
           const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
           await consumeUserCredit({
             model: { provider: provider.name, name: model },
             inputTokens: usage.promptTokens,
             outputTokens: usage.completionTokens,
+            cacheRead,
+            cacheWrite,
             description: 'Start Call',
           });
         }
