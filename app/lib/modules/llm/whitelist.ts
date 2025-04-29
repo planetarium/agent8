@@ -48,6 +48,11 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'google/gemini-2.0-flash-001',
   },
   {
+    label: 'Gemini 2.5 Flash',
+    providerName: 'OpenRouter',
+    modelName: 'google/gemini-2.5-flash-preview',
+  },
+  {
     label: 'Grok3 Beta',
     providerName: 'OpenRouter',
     modelName: 'x-ai/grok-3-beta',

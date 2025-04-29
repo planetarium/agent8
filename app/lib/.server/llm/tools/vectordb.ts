@@ -79,7 +79,7 @@ export async function createSearchCodebase(env: Env): Promise<Record<string, any
           }
 
           return {
-            content: `Found ${results.length} relevant 3D game code examples`,
+            content: `Found ${results.length} relevant 3D game code examples. If you want to see an example, please use the \`read_codebase_vectordb_contents\` tool.`,
             items: results,
           };
         } catch (error) {
