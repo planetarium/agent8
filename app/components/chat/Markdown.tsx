@@ -22,6 +22,14 @@ interface MarkdownProps {
 export const Markdown = memo(({ children, html = false, limitedMarkdown = false }: MarkdownProps) => {
   logger.trace('Render');
 
+  const processedChildren = useMemo(() => {
+    if (children.trim().startsWith('<div')) {
+      return `&nbsp;${children}`;
+    }
+
+    return children;
+  }, [children]);
+
   const components = useMemo(() => {
     return {
       div: ({ className, children, node, ...props }) => {
@@ -95,7 +103,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
     >
       {/* Prepending `&nbsp;` to parse childrens same way regardless of contents. */}
       {/* See also: https://github.com/planetarium/agent8/pull/80 */}
-      {'&nbsp;' + stripCodeFenceFromArtifact(children)}
+      {stripCodeFenceFromArtifact(processedChildren)}
     </ReactMarkdown>
   );
 });
