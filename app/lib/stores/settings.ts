@@ -153,8 +153,28 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
   try {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
 
-    if (!stored) {
-      return [];
+    if (!stored || stored === '[]' || stored === '""') {
+      let defaultServers: MCPSSEServer[] = [];
+
+      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
+        defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
+      } else {
+        defaultServers = JSON.parse(
+          '[{"name":"All-in-one","url":"https://mcp.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"2D-Image","url":"https://mcp-image.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Cinematic","url":"https://mcp-cinematic.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Audio","url":"https://mcp-audio.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Skybox","url":"https://mcp-skybox.verse8.io/sse","enabled":true,"v8AuthIntegrated":true}]',
+        );
+      }
+
+      localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
+
+      if (typeof Cookies !== 'undefined') {
+        Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers), {
+          expires: 365,
+          path: '/',
+          sameSite: 'lax',
+        });
+      }
+
+      return defaultServers;
     }
 
     return JSON.parse(stored);
