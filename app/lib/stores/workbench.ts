@@ -54,6 +54,8 @@ export class WorkbenchStore {
   unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
   actionAlert: WritableAtom<ActionAlert | undefined> =
     import.meta.hot?.data.unsavedFiles ?? atom<ActionAlert | undefined>(undefined);
+  diffCommitHash: WritableAtom<string | null> = import.meta.hot?.data.diffCommitHash ?? atom<string | null>(null);
+  diffEnabled: WritableAtom<boolean> = import.meta.hot?.data.diffEnabled ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
@@ -64,6 +66,8 @@ export class WorkbenchStore {
       import.meta.hot.data.showWorkbench = this.showWorkbench;
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.actionAlert = this.actionAlert;
+      import.meta.hot.data.diffCommitHash = this.diffCommitHash;
+      import.meta.hot.data.diffEnabled = this.diffEnabled;
     }
   }
 

@@ -894,6 +894,25 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
     }
   };
 
+  const handleViewDiff = async (message: Message) => {
+    try {
+      const commitHash = message.id?.split('-').pop();
+
+      if (!commitHash || !isCommitHash(commitHash)) {
+        toast.error('Invalid commit information');
+        return;
+      }
+
+      workbenchStore.currentView.set('diff');
+      workbenchStore.showWorkbench.set(true);
+      workbenchStore.diffEnabled.set(true);
+      workbenchStore.diffCommitHash.set(commitHash);
+    } catch (error) {
+      console.error('Diff view error:', error);
+      toast.error('Error displaying diff view');
+    }
+  };
+
   return (
     <BaseChat
       ref={animationScope}
@@ -923,6 +942,7 @@ export const ChatImpl = memo(({ description, initialMessages, setInitialMessages
       handleRetry={handleRetry}
       handleFork={handleFork}
       handleRevert={handleRevert}
+      onViewDiff={handleViewDiff}
       description={description}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {

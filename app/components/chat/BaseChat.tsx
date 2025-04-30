@@ -73,6 +73,7 @@ interface BaseChatProps {
   handleRetry?: (message: Message) => void;
   handleFork?: (message: Message) => void;
   handleRevert?: (message: Message) => void;
+  onViewDiff?: (message: Message) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -109,6 +110,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleRetry,
       handleFork,
       handleRevert,
+      onViewDiff,
     },
     ref,
   ) => {
@@ -459,6 +461,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       onRetry={handleRetry}
                       onFork={handleFork}
                       onRevert={handleRevert}
+                      onViewDiff={onViewDiff}
                     />
                   ) : null;
                 }}

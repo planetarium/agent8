@@ -1,6 +1,7 @@
 import { memo, useMemo, useState, useEffect, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/stores/files';
 import type { EditorDocument } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { diffLines, type Change } from 'diff';
@@ -11,6 +12,41 @@ import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { FileHistory } from '~/types/actions';
 import { getLanguageFromExtension } from '~/utils/getLanguageFromExtension';
 import { themeStore } from '~/lib/stores/theme';
+import { getCommitDiff } from '~/lib/persistenceGitbase/api.client';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { toast } from 'react-toastify';
+
+interface RenderSelectedDiffFileProps {
+  selectedDiffFile: string;
+  fileHistory: Record<string, FileHistory>;
+  files: FileMap;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const RenderSelectedDiffFile: React.FC<RenderSelectedDiffFileProps> = ({ selectedDiffFile, fileHistory, files }) => {
+  const diffFileHistory = fileHistory[selectedDiffFile];
+
+  if (!diffFileHistory) {
+    return <div className="p-4 text-center text-bolt-elements-textTertiary">No file change history</div>;
+  }
+
+  const diffFile = files[selectedDiffFile];
+  const diffOrigContent =
+    diffFileHistory.originalContent || (diffFile && 'content' in diffFile ? diffFile.content : '');
+  const diffCurrentContent = diffFileHistory.versions[diffFileHistory.versions.length - 1]?.content || '';
+  const diffLang = getLanguageFromExtension(selectedDiffFile.split('.').pop() || '');
+
+  return (
+    <InlineDiffComparison
+      beforeCode={diffOrigContent}
+      afterCode={diffCurrentContent}
+      language={diffLang}
+      filename={selectedDiffFile}
+      lightTheme="github-light"
+      darkTheme="github-dark"
+    />
+  );
+};
 
 interface CodeComparisonProps {
   beforeCode: string;
@@ -518,7 +554,7 @@ const FileInfo = memo(
 
     return (
       <div className="flex items-center bg-bolt-elements-background-depth-1 p-2 text-sm text-bolt-elements-textPrimary shrink-0">
-        <div className="i-ph:file mr-2 h-4 w-4 shrink-0" />
+        <div className="i-ph:file mr-2 h-4 w-4 shrink-0 text-white" />
         <span className="truncate">{filename}</span>
         <span className="ml-auto shrink-0 flex items-center gap-2">
           {hasChanges ? (
@@ -618,17 +654,156 @@ const InlineDiffComparison = memo(({ beforeCode, afterCode, filename, language }
   );
 });
 
+interface GitlabDiff {
+  old_path: string;
+  new_path: string;
+  diff: string;
+  new_file: boolean;
+  renamed_file: boolean;
+  deleted_file: boolean;
+}
+
 interface DiffViewProps {
   fileHistory: Record<string, FileHistory>;
   setFileHistory: React.Dispatch<React.SetStateAction<Record<string, FileHistory>>>;
   actionRunner: ActionRunner;
+  initialCommitHash?: string;
 }
 
-export const DiffView = memo(({ fileHistory, setFileHistory }: DiffViewProps) => {
+interface FileListSidebarProps {
+  files: Array<{ path: string; isNew?: boolean; isDeleted?: boolean }>;
+  selectedFile: string | null;
+  onFileSelect: (path: string) => void;
+  title: string;
+}
+
+const FileListSidebar = memo(({ files, selectedFile, onFileSelect, title }: FileListSidebarProps) => (
+  <div className="w-64 border-r border-bolt-elements-borderColor overflow-y-auto bg-bolt-elements-background-depth-1">
+    <div className="py-2 px-3 border-b border-bolt-elements-borderColor text-sm font-medium text-bolt-elements-textPrimary">
+      {title} ({files.length})
+    </div>
+    <div className="overflow-y-auto">
+      {files.map(({ path, isNew, isDeleted }) => (
+        <button
+          key={path}
+          onClick={() => onFileSelect(path)}
+          className={`w-full text-left px-3 py-2 text-sm truncate ${
+            selectedFile === path
+              ? 'bg-blue-500/10 text-blue-500 border-l-2 border-blue-500'
+              : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2'
+          }`}
+          title={path}
+        >
+          <div className="flex items-center">
+            {isNew ? (
+              <div className="i-ph:plus-circle text-green-500 mr-2" />
+            ) : isDeleted ? (
+              <div className="i-ph:minus-circle text-red-500 mr-2" />
+            ) : (
+              <div className="i-ph:pencil-simple text-blue-500 mr-2" />
+            )}
+            <span className="truncate">{path.split('/').pop()}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  </div>
+));
+
+interface GitLabDiffContentProps {
+  diff: string;
+}
+
+const GitLabDiffContent = memo(({ diff }: GitLabDiffContentProps) => (
+  <pre className="p-4 text-sm font-mono text-bolt-elements-textPrimary whitespace-pre-wrap break-all">
+    {diff.split('\n').map((line, index) => {
+      let className = '';
+
+      if (line.startsWith('+')) {
+        className = 'bg-green-500/10 text-green-700 dark:text-green-500';
+      } else if (line.startsWith('-')) {
+        className = 'bg-red-500/10 text-red-700 dark:text-red-500';
+      } else if (line.startsWith('@')) {
+        className = 'bg-blue-500/10 text-blue-700 dark:text-blue-500';
+      }
+
+      return (
+        <div key={index} className={`${className} px-1`}>
+          {line}
+        </div>
+      );
+    })}
+  </pre>
+));
+
+interface FileHeaderProps {
+  path: string;
+  isNew?: boolean;
+  isDeleted?: boolean;
+}
+
+const FileHeader = memo(({ path, isNew, isDeleted }: FileHeaderProps) => (
+  <div className="sticky top-0 px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 z-10">
+    <div className="flex items-center">
+      <div className="i-ph:file-code mr-2 text-white" />
+      <span className="font-medium text-bolt-elements-textPrimary">{path}</span>
+      {isNew && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-500">New</span>}
+      {isDeleted && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">Deleted</span>}
+    </div>
+  </div>
+));
+
+export const DiffView = memo(({ fileHistory, setFileHistory, initialCommitHash }: DiffViewProps) => {
   const files = useStore(workbenchStore.files) as FileMap;
   const selectedFile = useStore(workbenchStore.selectedFile);
   const currentDocument = useStore(workbenchStore.currentDocument) as EditorDocument;
   const unsavedFiles = useStore(workbenchStore.unsavedFiles);
+
+  const [gitlabDiffs, setGitlabDiffs] = useState<GitlabDiff[]>([]);
+  const [isLoadingDiff, setIsLoadingDiff] = useState<boolean>(false);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [useGitlabDiff, setUseGitlabDiff] = useState<boolean>(true);
+
+  const [commitHash, setCommitHash] = useState<string | null>(initialCommitHash || null);
+  const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
+  const [showAllDiffs, setShowAllDiffs] = useState<boolean>(false);
+  const [localChangedFiles, setLocalChangedFiles] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (initialCommitHash && isCommitHash(initialCommitHash)) {
+      setCommitHash(initialCommitHash);
+    }
+  }, [initialCommitHash]);
+
+  useEffect(() => {
+    const projectPath = repoStore.get().path;
+
+    if (projectPath && commitHash && useGitlabDiff) {
+      setIsLoadingDiff(true);
+
+      getCommitDiff(projectPath, commitHash)
+        .then((response) => {
+          if (response.success && response.data) {
+            setGitlabDiffs(response.data);
+
+            if (response.data.length > 0) {
+              setSelectedDiffFile(response.data[0].new_path);
+            }
+          } else {
+            console.error('API error:', response);
+            toast.error('Failed to load diff data');
+          }
+        })
+        .catch((error) => {
+          console.error('Error fetching GitLab diff:', error);
+          toast.error('Failed to load diff: ' + (error.message || 'Unknown error'));
+        })
+        .finally(() => {
+          setIsLoadingDiff(false);
+        });
+    }
+  }, [commitHash, useGitlabDiff]);
 
   useEffect(() => {
     if (selectedFile && currentDocument) {
@@ -712,6 +887,37 @@ export const DiffView = memo(({ fileHistory, setFileHistory }: DiffViewProps) =>
     }
   }, [selectedFile, currentDocument?.value, files, setFileHistory, unsavedFiles]);
 
+  const toggleShowAllDiffs = () => {
+    setShowAllDiffs((prev) => !prev);
+  };
+
+  const handleDiffFileSelect = (path: string) => {
+    setSelectedDiffFile(path);
+    setShowAllDiffs(false);
+  };
+
+  // Update local changed file list - keep but don't run
+  useEffect(() => {
+    // Not executed because useGitlabDiff is always true
+    if (!useGitlabDiff) {
+      const changedFiles = Object.keys(fileHistory).filter((filePath) => {
+        const history = fileHistory[filePath];
+
+        if (!history) {
+          return false;
+        }
+
+        return history.changes.some((change) => (change.added || change.removed) && change.value.trim().length > 0);
+      });
+
+      setLocalChangedFiles(changedFiles);
+
+      if (changedFiles.length > 0 && !selectedDiffFile) {
+        setSelectedDiffFile(changedFiles[0]);
+      }
+    }
+  }, [fileHistory, useGitlabDiff, selectedDiffFile]);
+
   if (!selectedFile || !currentDocument) {
     return (
       <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
@@ -720,25 +926,109 @@ export const DiffView = memo(({ fileHistory, setFileHistory }: DiffViewProps) =>
     );
   }
 
-  const file = files[selectedFile];
-  const originalContent = file && 'content' in file ? file.content : '';
-  const currentContent = currentDocument.value;
+  if (useGitlabDiff && isLoadingDiff) {
+    return (
+      <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1">
+        <div className="text-center">
+          <div className="i-ph:circle-notch animate-spin text-4xl mb-2 text-blue-500" />
+          <p className="text-bolt-elements-textPrimary">Loading diff data...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const history = fileHistory[selectedFile];
-  const effectiveOriginalContent = history?.originalContent || originalContent;
-  const language = getLanguageFromExtension(selectedFile.split('.').pop() || '');
+  if (useGitlabDiff && gitlabDiffs.length === 0) {
+    return (
+      <div className="flex w-full h-full flex-col justify-center items-center bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
+        <div className="text-center">
+          <div className="i-ph:info-circle text-4xl mb-2 text-blue-500" />
+          <p>No diff data available for this commit</p>
+        </div>
+      </div>
+    );
+  }
 
   try {
+    const diffFiles = useGitlabDiff
+      ? gitlabDiffs.map((diff) => ({
+          path: diff.new_path,
+          isNew: diff.new_file,
+          isDeleted: diff.deleted_file,
+        }))
+      : localChangedFiles.map((path) => ({ path }));
+
+    const currentDiff = useGitlabDiff ? gitlabDiffs.find((diff) => diff.new_path === selectedDiffFile) : null;
+
+    const headerProps = {
+      commitHash,
+      useGitlabDiff,
+      showAllDiffs,
+      toggleShowAllDiffs,
+      showToggleButton: gitlabDiffs.length > 1,
+    };
+
     return (
-      <div className="h-full overflow-hidden">
-        <InlineDiffComparison
-          beforeCode={effectiveOriginalContent}
-          afterCode={currentContent}
-          language={language}
-          filename={selectedFile}
-          lightTheme="github-light"
-          darkTheme="github-dark"
-        />
+      <div className="h-full overflow-hidden flex flex-col">
+        <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+          <div className="font-medium text-bolt-elements-textPrimary flex items-center">
+            <span className="i-ph:file-diff mr-2 text-white" />
+            <div className="flex items-center space-x-2">
+              {commitHash && (
+                <button className="px-2 py-1 text-sm rounded-md transition-colors bg-blue-500/20 text-blue-600 dark:text-blue-400 font-medium">
+                  Commit changes <span className="font-mono text-xs">{commitHash?.substring(0, 6)}</span>
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {headerProps.showToggleButton && (
+              <button
+                onClick={toggleShowAllDiffs}
+                className="px-3 py-1 text-sm 
+                  bg-blue-500/20 text-blue-600/80 dark:text-blue-400/80 hover:text-blue-600 dark:hover:text-blue-400
+                  rounded transition-colors"
+              >
+                {showAllDiffs ? 'Individual file view' : 'All changes view'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {!showAllDiffs && gitlabDiffs.length > 1 && (
+            <FileListSidebar
+              files={diffFiles}
+              selectedFile={selectedDiffFile}
+              onFileSelect={handleDiffFileSelect}
+              title="Changed Files"
+            />
+          )}
+
+          <div className="flex-1 overflow-auto">
+            {showAllDiffs ? (
+              <div className="flex flex-col divide-y divide-bolt-elements-borderColor">
+                {gitlabDiffs.map((diff) => (
+                  <div key={diff.new_path} className="flex flex-col">
+                    <FileHeader path={diff.new_path} isNew={diff.new_file} isDeleted={diff.deleted_file} />
+                    <GitLabDiffContent diff={diff.diff} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              selectedDiffFile &&
+              currentDiff && (
+                <>
+                  <FileHeader
+                    path={currentDiff.new_path}
+                    isNew={currentDiff.new_file}
+                    isDeleted={currentDiff.deleted_file}
+                  />
+                  <GitLabDiffContent diff={currentDiff.diff} />
+                </>
+              )
+            )}
+          </div>
+        </div>
       </div>
     );
   } catch (error) {

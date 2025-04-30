@@ -15,7 +15,7 @@ import {
 } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { IconButton } from '~/components/ui/IconButton';
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
-import { Slider, type SliderOptions } from '~/components/ui/Slider';
+import { Slider } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
@@ -38,20 +38,24 @@ interface WorkspaceProps {
 
 const viewTransition = { ease: cubicEasingFn };
 
-const sliderOptions: SliderOptions<WorkbenchViewType> = {
-  left: {
-    value: 'code',
+const sliderOptions = [
+  {
+    value: 'code' as WorkbenchViewType,
     text: 'Code',
   },
-  middle: {
-    value: 'resource',
+  {
+    value: 'resource' as WorkbenchViewType,
     text: 'Resources',
   },
-  right: {
-    value: 'preview',
+  {
+    value: 'diff' as WorkbenchViewType,
+    text: 'Diff',
+  },
+  {
+    value: 'preview' as WorkbenchViewType,
     text: 'Preview',
   },
-};
+];
 
 const workbenchVariants = {
   closed: {
@@ -91,14 +95,6 @@ const FileModifiedDropdown = memo(
         <Popover className="relative">
           {({ open }: { open: boolean }) => (
             <>
-              <Popover.Button className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textPrimary border border-bolt-elements-borderColor">
-                <span className="font-medium">File Changes</span>
-                {hasChanges && (
-                  <span className="w-5 h-5 rounded-full bg-accent-500/20 text-accent-500 text-xs flex items-center justify-center border border-accent-500/30">
-                    {modifiedFiles.length}
-                  </span>
-                )}
-              </Popover.Button>
               <Transition
                 show={open}
                 enter="transition duration-100 ease-out"
@@ -276,6 +272,42 @@ const FileModifiedDropdown = memo(
   },
 );
 
+// View component for rendering content with motion transitions
+interface ViewProps extends HTMLMotionProps<'div'> {
+  children: JSX.Element;
+}
+
+const View = memo(({ children, ...props }: ViewProps) => {
+  return (
+    <motion.div className="absolute inset-0" transition={viewTransition} {...props}>
+      {children}
+    </motion.div>
+  );
+});
+
+const DiffViewWithCommitHash = memo(
+  ({
+    fileHistory,
+    setFileHistory,
+    actionRunner,
+  }: {
+    fileHistory: Record<string, FileHistory>;
+    setFileHistory: React.Dispatch<React.SetStateAction<Record<string, FileHistory>>>;
+    actionRunner: ActionRunner;
+  }) => {
+    const diffCommitHash = useStore(workbenchStore.diffCommitHash);
+
+    return (
+      <DiffView
+        fileHistory={fileHistory}
+        setFileHistory={setFileHistory}
+        actionRunner={actionRunner}
+        initialCommitHash={diffCommitHash || undefined}
+      />
+    );
+  },
+);
+
 export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: WorkspaceProps) => {
   renderLogger.trace('Workbench');
 
@@ -290,8 +322,19 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const unsavedFiles = useStore(workbenchStore.unsavedFiles);
   const files = useStore(workbenchStore.files);
   const selectedView = useStore(workbenchStore.currentView);
+  const diffEnabled = useStore(workbenchStore.diffEnabled);
 
   const isSmallViewport = useViewport(1024);
+
+  const filteredSliderOptions = useMemo(() => {
+    return sliderOptions.filter((option) => {
+      if (!diffEnabled && option.value === 'diff') {
+        return false;
+      }
+
+      return true;
+    });
+  }, [diffEnabled]);
 
   const setSelectedView = (view: WorkbenchViewType) => {
     workbenchStore.currentView.set(view);
@@ -302,6 +345,12 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
       setSelectedView('preview');
     }
   }, [hasPreview]);
+
+  useEffect(() => {
+    if (!diffEnabled && selectedView === 'diff') {
+      setSelectedView('code');
+    }
+  }, [diffEnabled, selectedView]);
 
   useEffect(() => {
     workbenchStore.setDocuments(files);
@@ -368,7 +417,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           <div className="absolute inset-0 px-2 lg:px-6">
             <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
               <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
-                <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
                 <button
                   onClick={() => {
                     onRun();
@@ -446,7 +495,11 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   initial={{ x: '100%' }}
                   animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
                 >
-                  <DiffView fileHistory={fileHistory} setFileHistory={setFileHistory} actionRunner={actionRunner} />
+                  <DiffViewWithCommitHash
+                    fileHistory={fileHistory}
+                    setFileHistory={setFileHistory}
+                    actionRunner={actionRunner}
+                  />
                 </View>
                 <View
                   initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
@@ -460,18 +513,5 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         </div>
       </motion.div>
     )
-  );
-});
-
-// View component for rendering content with motion transitions
-interface ViewProps extends HTMLMotionProps<'div'> {
-  children: JSX.Element;
-}
-
-const View = memo(({ children, ...props }: ViewProps) => {
-  return (
-    <motion.div className="absolute inset-0" transition={viewTransition} {...props}>
-      {children}
-    </motion.div>
   );
 });

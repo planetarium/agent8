@@ -14,6 +14,17 @@ import { isCommitHash } from './utils';
 
 const logger = createScopedLogger('gitlabService');
 
+interface GitlabDiff {
+  old_path: string;
+  new_path: string;
+  a_mode: string;
+  b_mode: string;
+  diff: string;
+  new_file: boolean;
+  renamed_file: boolean;
+  deleted_file: boolean;
+}
+
 export class GitlabService {
   gitlab: InstanceType<typeof Gitlab>;
   gitlabUrl: string;
@@ -736,6 +747,24 @@ export class GitlabService {
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to update project description: ${errorMessage}`);
+    }
+  }
+
+  async getCommitDiff(projectPath: string, commitHash: string): Promise<GitlabDiff[]> {
+    try {
+      const response = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits/${commitHash}/diff`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        },
+      );
+
+      return response.data as GitlabDiff[];
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get commit diff: ${errorMessage}`);
     }
   }
 }
