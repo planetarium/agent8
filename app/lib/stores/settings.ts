@@ -160,7 +160,7 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
         defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
       } else {
         defaultServers = JSON.parse(
-          '[{"name":"All-in-one","url":"https://mcp.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"2D-Image","url":"https://mcp-image.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Cinematic","url":"https://mcp-cinematic.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Audio","url":"https://mcp-audio.verse8.io/sse","enabled":true,"v8AuthIntegrated":true},{"name":"Skybox","url":"https://mcp-skybox.verse8.io/sse","enabled":true,"v8AuthIntegrated":true}]',
+          '[{"name":"All-in-one","url":"https://mcp.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"2D-Image","url":"https://mcp-image.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Cinematic","url":"https://mcp-cinematic.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Audio","url":"https://mcp-audio.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Skybox","url":"https://mcp-skybox.verse8.io/sse","enabled":false,"v8AuthIntegrated":false}]',
         );
       }
 
