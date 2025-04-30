@@ -32,6 +32,7 @@ export const Preview = memo(() => {
   const [isPreviewOnly, setIsPreviewOnly] = useState(false);
   const hasSelectedPreview = useRef(false);
   const previews = useStore(workbenchStore.previews);
+  const selectedView = useStore(workbenchStore.currentView);
   const activePreview = previews[activePreviewIndex];
 
   const [url, setUrl] = useState('');
@@ -108,6 +109,14 @@ export const Preview = memo(() => {
       iframeRef.current.src = iframeRef.current.src;
     }
   };
+
+  useEffect(() => {
+    if (selectedView === 'preview') {
+      setTimeout(() => {
+        reloadPreview();
+      }, 300);
+    }
+  }, [selectedView, reloadPreview]);
 
   const toggleFullscreen = async () => {
     if (!isFullscreen && containerRef.current) {

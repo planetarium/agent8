@@ -93,9 +93,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
       remarkPlugins={remarkPlugins(limitedMarkdown)}
       rehypePlugins={rehypePlugins(html)}
     >
-      {/* Prepending `&nbsp;` to parse childrens same way regardless of contents. */}
-      {/* See also: https://github.com/planetarium/agent8/pull/80 */}
-      {'&nbsp;' + stripCodeFenceFromArtifact(children)}
+      {stripCodeFenceFromArtifact(children)}
     </ReactMarkdown>
   );
 });
