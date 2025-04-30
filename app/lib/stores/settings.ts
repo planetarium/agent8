@@ -159,9 +159,38 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
       if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
         defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
       } else {
-        defaultServers = JSON.parse(
-          '[{"name":"All-in-one","url":"https://mcp.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"2D-Image","url":"https://mcp-image.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Cinematic","url":"https://mcp-cinematic.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Audio","url":"https://mcp-audio.verse8.io/sse","enabled":false,"v8AuthIntegrated":false},{"name":"Skybox","url":"https://mcp-skybox.verse8.io/sse","enabled":false,"v8AuthIntegrated":false}]',
-        );
+        defaultServers = [
+          {
+            name: 'All-in-one',
+            url: 'https://mcp.verse8.io/sse',
+            enabled: false,
+            v8AuthIntegrated: false,
+          },
+          {
+            name: '2D-Image',
+            url: 'https://mcp-image.verse8.io/sse',
+            enabled: false,
+            v8AuthIntegrated: false,
+          },
+          {
+            name: 'Cinematic',
+            url: 'https://mcp-cinematic.verse8.io/sse',
+            enabled: false,
+            v8AuthIntegrated: false,
+          },
+          {
+            name: 'Audio',
+            url: 'https://mcp-audio.verse8.io/sse',
+            enabled: false,
+            v8AuthIntegrated: false,
+          },
+          {
+            name: 'Skybox',
+            url: 'https://mcp-skybox.verse8.io/sse',
+            enabled: false,
+            v8AuthIntegrated: false,
+          },
+        ];
       }
 
       localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
