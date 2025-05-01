@@ -6,128 +6,24 @@ import type {
   FileSystemTree,
   FileSystemWatcher,
   PathWatcherEvent,
-  WatchPathsOptions,
-  SpawnOptions,
-  ShellSession,
-  ShellOptions,
-  ExecutionResult,
-  PortListener,
-  ServerReadyListener,
-  PreviewMessageListener,
-  ErrorListener,
   Unsubscribe,
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
-
-type BufferEncoding =
-  | 'ascii'
-  | 'utf8'
-  | 'utf-8'
-  | 'utf16le'
-  | 'ucs2'
-  | 'ucs-2'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'binary'
-  | 'hex';
-
-interface ContainerRequest {
-  id: string;
-  operation:
-    | FileSystemOperation
-    | ProcessOperation
-    | PreviewOperation
-    | WatchOperation
-    | WatchPathsOperation
-    | AuthOperation;
-}
-
-interface ContainerResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-interface FileSystemOperation {
-  type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'mount';
-  path?: string;
-  content?: string | Uint8Array;
-  options?: {
-    encoding?: BufferEncoding;
-    withFileTypes?: boolean;
-    recursive?: boolean;
-    force?: boolean;
-  };
-}
-
-interface ProcessOperation {
-  type: 'spawn' | 'input' | 'resize' | 'kill';
-  command?: string;
-  args?: string[];
-  pid?: number;
-  data?: string;
-  cols?: number;
-  rows?: number;
-  options?: SpawnOptions;
-}
-
-interface ProcessResponse {
-  success: boolean;
-  pid: number;
-  process: any;
-}
-
-interface PreviewOperation {
-  type: 'server-ready' | 'port' | 'preview-message';
-  data?: {
-    port?: number;
-    type?: string;
-    url?: string;
-    previewId?: string;
-    error?: string;
-  };
-}
-
-interface WatchOperation {
-  type: 'watch';
-  options?: {
-    patterns?: string[];
-    persistent?: boolean;
-  };
-}
-
-interface WatchPathsOperation {
-  type: 'watch-paths';
-  options?: WatchPathsOptions;
-}
-
-interface AuthOperation {
-  type: 'auth';
-  token: string;
-}
-
-interface EventListeners {
-  port: Set<PortListener>;
-  'server-ready': Set<ServerReadyListener>;
-  'preview-message': Set<PreviewMessageListener>;
-  error: Set<ErrorListener>;
-  'file-change': Set<FileSystemEventHandler>;
-}
-
-type FileSystemEventHandler = (eventType: string, filename: string) => void;
-
-type EventListenerMap = {
-  port: PortListener;
-  'server-ready': ServerReadyListener;
-  'preview-message': PreviewMessageListener;
-  error: ErrorListener;
-  'file-change': FileSystemEventHandler;
-};
+import type {
+  BufferEncoding,
+  ContainerRequest,
+  ContainerResponse,
+  EventListeners,
+  EventListenerMap,
+  FileSystemEventHandler,
+  ProcessResponse,
+  SpawnOptions,
+  WatchPathsOptions,
+  ShellSession,
+  ShellOptions,
+  ExecutionResult,
+} from './remote-container-protocol';
 
 /**
  * Class to manage remote WebSocket connection and communication
