@@ -144,6 +144,52 @@ export const SETTINGS_KEYS = {
   MCP_SSE_SERVERS: 'mcpSseServers',
 } as const;
 
+/**
+ * Helper function to get default MCP server configuration
+ */
+const getDefaultMCPServers = (): MCPSSEServer[] => {
+  let defaultServers: MCPSSEServer[] = [];
+
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
+    defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
+  } else {
+    defaultServers = [
+      {
+        name: 'All-in-one',
+        url: 'https://mcp.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+      },
+      {
+        name: '2D-Image',
+        url: 'https://mcp-image.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+      },
+      {
+        name: 'Cinematic',
+        url: 'https://mcp-cinematic.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+      },
+      {
+        name: 'Audio',
+        url: 'https://mcp-audio.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+      },
+      {
+        name: 'Skybox',
+        url: 'https://mcp-skybox.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+      },
+    ];
+  }
+
+  return defaultServers;
+};
+
 // Get initial MCP SSE server settings from localStorage
 const getInitialMCPSSEServers = (): MCPSSEServer[] => {
   if (!isBrowser) {
@@ -154,44 +200,8 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
 
     if (!stored || stored === '[]' || stored === '""') {
-      let defaultServers: MCPSSEServer[] = [];
-
-      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
-        defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
-      } else {
-        defaultServers = [
-          {
-            name: 'All-in-one',
-            url: 'https://mcp.verse8.io/sse',
-            enabled: false,
-            v8AuthIntegrated: false,
-          },
-          {
-            name: '2D-Image',
-            url: 'https://mcp-image.verse8.io/sse',
-            enabled: false,
-            v8AuthIntegrated: false,
-          },
-          {
-            name: 'Cinematic',
-            url: 'https://mcp-cinematic.verse8.io/sse',
-            enabled: false,
-            v8AuthIntegrated: false,
-          },
-          {
-            name: 'Audio',
-            url: 'https://mcp-audio.verse8.io/sse',
-            enabled: false,
-            v8AuthIntegrated: false,
-          },
-          {
-            name: 'Skybox',
-            url: 'https://mcp-skybox.verse8.io/sse',
-            enabled: false,
-            v8AuthIntegrated: false,
-          },
-        ];
-      }
+      // Get default server configuration
+      const defaultServers = getDefaultMCPServers();
 
       localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
 
@@ -442,6 +452,16 @@ export const updateMCPSSEServers = (servers: MCPSSEServer[]) => {
   } catch (e) {
     console.error('Failed to set mcpSseServers cookie:', e);
   }
+};
+
+export const resetMCPSSEServers = () => {
+  // Get default server configuration
+  const defaultServers = getDefaultMCPServers();
+
+  // Update store and cookies
+  updateMCPSSEServers(defaultServers);
+
+  return defaultServers;
 };
 
 export const addMCPSSEServer = (server: MCPSSEServer) => {

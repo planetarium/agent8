@@ -23,6 +23,7 @@ import {
   removeMCPSSEServer,
   toggleMCPSSEServer,
   toggleMCPSSEServerV8Auth,
+  resetMCPSSEServers,
   type MCPSSEServer,
   temporaryModeStore,
   updateTemporaryMode,
@@ -89,6 +90,7 @@ export interface UseSettingsReturn {
   removeMCPSSEServer: (index: number) => void;
   toggleMCPSSEServer: (index: number, enabled: boolean) => void;
   toggleMCPSSEServerV8Auth: (index: number, v8AuthIntegrated: boolean) => void;
+  resetMCPSSEServers: () => MCPSSEServer[];
 }
 
 // Add interface to match ProviderSetting type
@@ -256,5 +258,6 @@ export function useSettings(): UseSettingsReturn {
     removeMCPSSEServer,
     toggleMCPSSEServer,
     toggleMCPSSEServerV8Auth,
+    resetMCPSSEServers,
   };
 }
