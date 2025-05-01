@@ -109,13 +109,17 @@ interface EventListeners {
   'server-ready': Set<ServerReadyListener>;
   'preview-message': Set<PreviewMessageListener>;
   error: Set<ErrorListener>;
+  'file-change': Set<FileSystemEventHandler>;
 }
+
+type FileSystemEventHandler = (eventType: string, filename: string) => void;
 
 type EventListenerMap = {
   port: PortListener;
   'server-ready': ServerReadyListener;
   'preview-message': PreviewMessageListener;
   error: ErrorListener;
+  'file-change': FileSystemEventHandler;
 };
 
 /**
@@ -131,6 +135,7 @@ class RemoteContainerConnection {
     'server-ready': new Set(),
     'preview-message': new Set(),
     error: new Set(),
+    'file-change': new Set(),
   };
 
   constructor(
@@ -225,6 +230,9 @@ class RemoteContainerConnection {
           break;
         case 'preview-message':
           this._listeners['preview-message'].forEach((listener) => listener(message.data));
+          break;
+        case 'file-change':
+          this._listeners['file-change'].forEach((listener) => listener(message.data.eventType, message.data.filename));
           break;
         case 'error':
           this._notifyError(new Error(message.data?.message || 'Unknown error'));
@@ -388,25 +396,20 @@ export class RemoteContainerFileSystem implements FileSystem {
       })
       .catch(console.error);
 
-    // Return FileSystemWatcher implementation
-    type FileSystemEventHandler = (eventType: string, filename: string) => void;
-
-    const eventListeners: Record<string, Set<FileSystemEventHandler>> = {
-      change: new Set(),
-      error: new Set(),
-    };
+    const connection = this._connection;
+    const unsubscribers: Unsubscribe[] = [];
 
     return {
       addEventListener(event: string, listener: FileSystemEventHandler) {
-        if (!eventListeners[event]) {
-          eventListeners[event] = new Set();
-        }
-
-        eventListeners[event].add(listener);
+        const unsubscribe = connection.on('file-change', (eventType, filename) => {
+          if (event === eventType) {
+            listener(eventType, filename);
+          }
+        });
+        unsubscribers.push(unsubscribe);
       },
       close() {
-        // Remove event listeners
-        Object.values(eventListeners).forEach((listeners) => listeners.clear());
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
       },
     };
   }
