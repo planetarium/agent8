@@ -108,13 +108,24 @@ const FeatureSection = memo(
 
 // MCP SSE Server Management Component
 const McpSseServerManager = () => {
-  const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer, toggleMCPSSEServerV8Auth } =
-    useSettings();
+  const {
+    mcpSseServers,
+    addMCPSSEServer,
+    removeMCPSSEServer,
+    toggleMCPSSEServer,
+    toggleMCPSSEServerV8Auth,
+    resetMCPSSEServers,
+  } = useSettings();
 
   const [newServer, setNewServer] = useState<{ name: string; url: string }>({
     name: '',
     url: '',
   });
+
+  const handleResetMCPServers = useCallback(() => {
+    resetMCPSSEServers();
+    toast.success('Default MCP Servers restored');
+  }, [resetMCPSSEServers]);
 
   const handleAddServer = () => {
     if (newServer.name && newServer.url) {
@@ -163,7 +174,22 @@ const McpSseServerManager = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium text-bolt-elements-textPrimary">Add MCP SSE Server</h4>
+        <div className="flex justify-between items-center">
+          <h4 className="text-sm font-medium text-bolt-elements-textPrimary">Add MCP SSE Server</h4>
+          <button
+            onClick={handleResetMCPServers}
+            className={classNames(
+              'px-3 py-1 rounded-lg text-xs',
+              'bg-blue-500 hover:bg-blue-600',
+              'text-white',
+              'transition-colors duration-200',
+              'flex items-center gap-1',
+            )}
+          >
+            <div className="i-ph:arrow-counter-clockwise w-4 h-4" />
+           Restore default MCP Servers
+          </button>
+        </div>
         <div className="flex gap-2">
           <input
             type="text"
