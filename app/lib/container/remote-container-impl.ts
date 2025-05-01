@@ -57,7 +57,6 @@ interface FileSystemOperation {
   type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'mount';
   path?: string;
   content?: string | Uint8Array;
-  data?: FileSystemTree;
   options?: {
     encoding?: BufferEncoding;
     withFileTypes?: boolean;
@@ -460,7 +459,8 @@ export class RemoteContainer implements Container {
       id: `mount-${Date.now()}`,
       operation: {
         type: 'mount',
-        data,
+        path: '/',
+        content: JSON.stringify(data),
       },
     });
 
