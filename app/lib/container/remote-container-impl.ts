@@ -35,7 +35,13 @@ type BufferEncoding =
 
 interface ContainerRequest {
   id: string;
-  operation: FileSystemOperation | ProcessOperation | PreviewOperation | WatchOperation | AuthOperation;
+  operation:
+    | FileSystemOperation
+    | ProcessOperation
+    | PreviewOperation
+    | WatchOperation
+    | WatchPathsOperation
+    | AuthOperation;
 }
 
 interface ContainerResponse<T = any> {
@@ -48,7 +54,7 @@ interface ContainerResponse<T = any> {
 }
 
 interface FileSystemOperation {
-  type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'watch' | 'mount';
+  type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'mount';
   path?: string;
   content?: string | Uint8Array;
   data?: FileSystemTree;
@@ -57,11 +63,6 @@ interface FileSystemOperation {
     withFileTypes?: boolean;
     recursive?: boolean;
     force?: boolean;
-    watchOptions?: {
-      persistent?: boolean;
-      recursive?: boolean;
-      encoding?: string;
-    };
   };
 }
 
@@ -94,8 +95,15 @@ interface PreviewOperation {
 }
 
 interface WatchOperation {
+  type: 'watch';
+  options?: {
+    patterns?: string[];
+    persistent?: boolean;
+  };
+}
+
+interface WatchPathsOperation {
   type: 'watch-paths';
-  path?: string;
   options?: WatchPathsOptions;
 }
 
@@ -385,12 +393,9 @@ export class RemoteContainerFileSystem implements FileSystem {
         id: watcherId,
         operation: {
           type: 'watch',
-          path: pattern,
           options: {
-            watchOptions: {
-              persistent: options?.persistent,
-              recursive: false,
-            },
+            persistent: options?.persistent,
+            patterns: [pattern],
           },
         },
       })
