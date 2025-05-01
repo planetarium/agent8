@@ -187,7 +187,7 @@ const McpSseServerManager = () => {
             )}
           >
             <div className="i-ph:arrow-counter-clockwise w-4 h-4" />
-            default MCP Servers
+           Restore default MCP Servers
           </button>
         </div>
         <div className="flex gap-2">
