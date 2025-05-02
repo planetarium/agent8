@@ -359,7 +359,7 @@ export class RemoteContainerFileSystem implements FileSystem {
     };
   }
 
-  watchPaths(options: WatchPathsOptions, _callback: (events: PathWatcherEvent[]) => void): void {
+  watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void {
     const watcherId = `watch-paths-${Date.now()}`;
 
     this._connection
@@ -372,7 +372,9 @@ export class RemoteContainerFileSystem implements FileSystem {
       })
       .catch(console.error);
 
-    // Actual server events will be processed in RemoteContainerConnection
+    this._connection.on('file-change', (eventType, filename) => {
+      callback([{ type: eventType as any, path: filename }]);
+    });
   }
 }
 

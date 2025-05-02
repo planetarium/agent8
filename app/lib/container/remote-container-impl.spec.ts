@@ -221,14 +221,14 @@ describe('RemoteContainer 통합 테스트', () => {
   it('watchPaths로 여러 파일 변경을 감지해야 함', async () => {
     // 테스트 디렉토리 및 파일 준비
     const testDir = '/workspace/watch-test-dir';
-    await container.fs.mkdir(testDir);
+    await container.fs.mkdir(testDir, { recursive: true });
     await container.fs.writeFile(`${testDir}/test1.txt`, '파일1');
 
     // 이벤트 감지 준비
     const eventPromise = new Promise<boolean>((resolve) => {
       const eventsReceived: PathWatcherEvent[] = [];
 
-      container.fs.watchPaths({ include: [`${testDir}/**`] }, (events) => {
+      container.fs.watchPaths({ include: [`workspace/watch-test-dir/**`] }, (events) => {
         eventsReceived.push(...events);
 
         // 첫 번째 이벤트가 발생하면 확인
