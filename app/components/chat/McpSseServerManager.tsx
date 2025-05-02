@@ -89,10 +89,6 @@ const McpSseServerManager: React.FC = () => {
     } else {
       toggleMCPSSEServerV8Auth(index, false);
     }
-
-    const serverName = mcpSseServers[index].name;
-
-    toast.success(enabled ? `${serverName} tool enabled` : `${serverName} tool disabled`, { autoClose: 1500 });
   };
 
   return (
@@ -285,26 +281,12 @@ const McpSseServerManager: React.FC = () => {
             </motion.div>
           )}
 
-          <div className="flex justify-end mt-3">
+          <div className="flex justify-end mr-2">
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className={classNames(
-                'flex items-center gap-1.5',
-                'text-sm font-medium',
-                'bg-gray-200 dark:bg-gray-700',
-                'text-gray-700 dark:text-gray-300',
-                'transition-colors duration-200',
-                'px-3 py-1.5 rounded-full',
-                'border border-gray-300 dark:border-gray-600',
-                'shadow-sm',
-                'group relative overflow-hidden',
-              )}
+              className={classNames('bg-transparent text-gray-500 hover:underline text-sm font-medium')}
             >
-              <div className="absolute inset-0 bg-purple-500 dark:bg-purple-600 opacity-0 group-hover:opacity-10 transition-opacity duration-200"></div>
-              <div className="i-ph:plus-circle-fill w-3.5 h-3.5 mr-0.5 text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-200" />
-              <span className="group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-200">
-                Add Custom MCP Tool
-              </span>
+              Add Custom MCP Tool
             </button>
           </div>
         </motion.div>
@@ -316,19 +298,11 @@ const McpSseServerManager: React.FC = () => {
           .map(({ server, index }) => (
             <div
               key={index}
-              className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-600 rounded-full px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200"
+              className="flex items-center gap-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200"
               title={server.url}
             >
               <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
               {server.name}
-              {isDefaultServer(server.name) && (
-                <div className="relative group cursor-help">
-                  <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-100 whitespace-nowrap pointer-events-none">
-                    Default tool
-                  </div>
-                </div>
-              )}
             </div>
           ))}
 
@@ -337,15 +311,13 @@ const McpSseServerManager: React.FC = () => {
           className={classNames(
             'flex items-center gap-1.5',
             'text-sm font-medium',
-            'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600',
-            'text-gray-800 dark:text-gray-200',
+            'bg-transparent',
+            'text-bolt-elements-textSecondary hover:text-gray-500',
             'transition-colors duration-200',
-            'px-3 py-1.5 rounded-full',
-            'border border-gray-300 dark:border-gray-600',
           )}
         >
-          <div className="i-ph:plus-circle w-4 h-4 mr-0.5" />
-          <span className="font-semibold">more</span>
+          <div className="i-ph:plus-circle w-4 h-4" />
+          <span className="font-normal">Use Tools</span>
         </button>
       </div>
     </div>
