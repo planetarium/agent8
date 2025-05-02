@@ -363,4 +363,14 @@ describe('RemoteContainer 통합 테스트', () => {
     await container.fs.rm(watchDir, { recursive: true });
     await container.fs.rm(watchPathsDir, { recursive: true });
   });
+
+  it('preview 이벤트가 트리거 되어야함', async () => {
+    container.on('port', (port: number, type: string) => {
+      expect(port).toBe(5174);
+      expect(type).toBe('open');
+    });
+    container.on('server-ready', (port: number) => {
+      expect(port).toBe(5174);
+    });
+  });
 });
