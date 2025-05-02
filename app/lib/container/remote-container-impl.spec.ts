@@ -266,6 +266,10 @@ describe('RemoteContainer 통합 테스트', () => {
     container.on('server-ready', (port: number) => {
       expect(port).toBe(5174);
     });
+
+    const process = await container.spawn('bun', ['/workspace/preview.ts']);
+
+    await process.exit;
   });
 });
 >>>>>>> 29ba62b (Add preview test)
