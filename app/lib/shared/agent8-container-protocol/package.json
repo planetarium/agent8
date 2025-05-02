@@ -1,0 +1,23 @@
+{
+  "name": "remote-container-protocol",
+  "version": "1.0.0",
+  "description": "Protocol definitions for remote container communication",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "container",
+    "protocol",
+    "remote"
+  ],
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
