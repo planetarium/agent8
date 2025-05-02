@@ -6,117 +6,24 @@ import type {
   FileSystemTree,
   FileSystemWatcher,
   PathWatcherEvent,
-  WatchPathsOptions,
-  SpawnOptions,
-  ShellSession,
-  ShellOptions,
-  ExecutionResult,
-  PortListener,
-  ServerReadyListener,
-  PreviewMessageListener,
-  ErrorListener,
   Unsubscribe,
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
-
-type BufferEncoding =
-  | 'ascii'
-  | 'utf8'
-  | 'utf-8'
-  | 'utf16le'
-  | 'ucs2'
-  | 'ucs-2'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'binary'
-  | 'hex';
-
-interface ContainerRequest {
-  id: string;
-  operation: FileSystemOperation | ProcessOperation | PreviewOperation | WatchOperation | AuthOperation;
-}
-
-interface ContainerResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-interface FileSystemOperation {
-  type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'watch' | 'mount';
-  path?: string;
-  content?: string | Uint8Array;
-  data?: FileSystemTree;
-  options?: {
-    encoding?: BufferEncoding;
-    withFileTypes?: boolean;
-    recursive?: boolean;
-    force?: boolean;
-    watchOptions?: {
-      persistent?: boolean;
-      recursive?: boolean;
-      encoding?: string;
-    };
-  };
-}
-
-interface ProcessOperation {
-  type: 'spawn' | 'input' | 'resize' | 'kill';
-  command?: string;
-  args?: string[];
-  pid?: number;
-  data?: string;
-  cols?: number;
-  rows?: number;
-  options?: SpawnOptions;
-}
-
-interface ProcessResponse {
-  success: boolean;
-  pid: number;
-  process: any;
-}
-
-interface PreviewOperation {
-  type: 'server-ready' | 'port' | 'preview-message';
-  data?: {
-    port?: number;
-    type?: string;
-    url?: string;
-    previewId?: string;
-    error?: string;
-  };
-}
-
-interface WatchOperation {
-  type: 'watch-paths';
-  path?: string;
-  options?: WatchPathsOptions;
-}
-
-interface AuthOperation {
-  type: 'auth';
-  token: string;
-}
-
-interface EventListeners {
-  port: Set<PortListener>;
-  'server-ready': Set<ServerReadyListener>;
-  'preview-message': Set<PreviewMessageListener>;
-  error: Set<ErrorListener>;
-}
-
-type EventListenerMap = {
-  port: PortListener;
-  'server-ready': ServerReadyListener;
-  'preview-message': PreviewMessageListener;
-  error: ErrorListener;
-};
+import type {
+  BufferEncoding,
+  ContainerRequest,
+  ContainerResponse,
+  EventListeners,
+  EventListenerMap,
+  FileSystemEventHandler,
+  ProcessResponse,
+  SpawnOptions,
+  WatchPathsOptions,
+  ShellSession,
+  ShellOptions,
+  ExecutionResult,
+} from '~/lib/shared/agent8-container-protocol/src';
 
 /**
  * Class to manage remote WebSocket connection and communication
@@ -131,6 +38,7 @@ class RemoteContainerConnection {
     'server-ready': new Set(),
     'preview-message': new Set(),
     error: new Set(),
+    'file-change': new Set(),
   };
 
   constructor(
@@ -225,6 +133,9 @@ class RemoteContainerConnection {
           break;
         case 'preview-message':
           this._listeners['preview-message'].forEach((listener) => listener(message.data));
+          break;
+        case 'file-change':
+          this._listeners['file-change'].forEach((listener) => listener(message.data.eventType, message.data.filename));
           break;
         case 'error':
           this._notifyError(new Error(message.data?.message || 'Unknown error'));
@@ -377,36 +288,28 @@ export class RemoteContainerFileSystem implements FileSystem {
         id: watcherId,
         operation: {
           type: 'watch',
-          path: pattern,
           options: {
-            watchOptions: {
-              persistent: options?.persistent,
-              recursive: false,
-            },
+            persistent: options?.persistent,
+            patterns: [pattern],
           },
         },
       })
       .catch(console.error);
 
-    // Return FileSystemWatcher implementation
-    type FileSystemEventHandler = (eventType: string, filename: string) => void;
-
-    const eventListeners: Record<string, Set<FileSystemEventHandler>> = {
-      change: new Set(),
-      error: new Set(),
-    };
+    const connection = this._connection;
+    const unsubscribers: Unsubscribe[] = [];
 
     return {
       addEventListener(event: string, listener: FileSystemEventHandler) {
-        if (!eventListeners[event]) {
-          eventListeners[event] = new Set();
-        }
-
-        eventListeners[event].add(listener);
+        const unsubscribe = connection.on('file-change', (eventType, filename) => {
+          if (event === eventType) {
+            listener(eventType, filename);
+          }
+        });
+        unsubscribers.push(unsubscribe);
       },
       close() {
-        // Remove event listeners
-        Object.values(eventListeners).forEach((listeners) => listeners.clear());
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
       },
     };
   }
@@ -452,7 +355,8 @@ export class RemoteContainer implements Container {
       id: `mount-${Date.now()}`,
       operation: {
         type: 'mount',
-        data,
+        path: '/',
+        content: JSON.stringify(data),
       },
     });
 
