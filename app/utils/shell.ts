@@ -48,7 +48,7 @@ export class BoltShell {
     const shellSession = await container.spawnShell(terminal, { splitOutput: true });
     this.#process = shellSession.process;
     this.#outputStream = shellSession.internalOutput!.getReader();
-    this.#shellInputStream = shellSession.input;
+    this.#shellInputStream = shellSession.input.getWriter();
     await shellSession.ready;
     this.#initialized?.();
   }
@@ -114,7 +114,7 @@ export class BoltShell {
 
   async newBoltShellProcess(container: Container, terminal: ITerminal) {
     const shellSession = await container.spawnShell(terminal, { splitOutput: true });
-    this.#shellInputStream = shellSession.input;
+    this.#shellInputStream = shellSession.input.getWriter();
 
     return {
       process: shellSession.process,

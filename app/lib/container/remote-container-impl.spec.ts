@@ -102,20 +102,24 @@ describe('RemoteContainer 통합 테스트', () => {
     // 출력 캡처
     const output = await new Promise<string>((resolve) => {
       let result = '';
-      process.output.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            result += chunk;
-          },
-          close() {
-            resolve(result.trim());
-          },
-        }),
-      );
+      const reader = process.output.getReader();
+
+      reader.read().then(function processText({ done, value }) {
+        if (done) {
+          resolve(result.trim());
+          return;
+        }
+
+        result += value;
+        reader.read().then(processText);
+      });
     });
 
+    const exitCode = await process.exit;
+
     // 검증
-    expect(output).toBe('Hello, World!');
+    expect(output.trim()).toBe('Hello, World!');
+    expect(exitCode).toBe(0);
   });
 
   it('셸 세션을 생성하고 명령을 실행할 수 있어야 함', async () => {
@@ -129,13 +133,16 @@ describe('RemoteContainer 통합 테스트', () => {
     await shellSession.ready;
 
     // 명령어 입력을 위한 Writer 가져오기
-    const writer = shellSession.input;
+    const writer = shellSession.input.getWriter();
 
     // 간단한 명령어 실행 (echo)
-    writer.write('echo "Shell Command Test"\n');
+    await writer.write('echo "Shell Command Test"\n');
+    writer.releaseLock();
 
     // 셸 세션 종료
-    writer.write('exit\n');
+    const writer2 = shellSession.input.getWriter();
+    await writer2.write('exit\n');
+    writer2.releaseLock();
 
     // 정리
     await new Promise((resolve) => setTimeout(resolve, 1000)); // 셸 세션 종료 대기

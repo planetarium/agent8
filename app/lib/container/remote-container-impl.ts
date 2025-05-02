@@ -5,8 +5,9 @@ import type {
   FileSystem,
   FileSystemTree,
   FileSystemWatcher,
-  PathWatcherEvent,
   Unsubscribe,
+  ContainerProcess,
+  PathWatcherEvent,
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
@@ -19,11 +20,11 @@ import type {
   FileSystemEventHandler,
   ProcessResponse,
   SpawnOptions,
-  WatchPathsOptions,
   ShellSession,
   ShellOptions,
   ExecutionResult,
-} from '~/lib/shared/agent8-container-protocol/src';
+  WatchPathsOptions,
+} from '~/lib/shared/agent8-container-protocol';
 
 /**
  * Class to manage remote WebSocket connection and communication
@@ -40,6 +41,7 @@ class RemoteContainerConnection {
     error: new Set(),
     'file-change': new Set(),
   };
+  private _processListeners = new Map<string, Set<(data: any) => void>>();
 
   constructor(
     private _serverUrl: string,
@@ -122,15 +124,19 @@ class RemoteContainerConnection {
   }
 
   private _handleMessage(message: any) {
+    console.log('message', message);
+
     // Handle server events
     if (message.event) {
       switch (message.event) {
         case 'port':
           this._listeners.port.forEach((listener) => listener(message.data.port, message.data.type, message.data.url));
           break;
+
         case 'server-ready':
           this._listeners['server-ready'].forEach((listener) => listener(message.data.port, message.data.url));
           break;
+
         case 'preview-message':
           this._listeners['preview-message'].forEach((listener) => listener(message.data));
           break;
@@ -139,6 +145,18 @@ class RemoteContainerConnection {
           break;
         case 'error':
           this._notifyError(new Error(message.data?.message || 'Unknown error'));
+          break;
+
+        case 'process':
+          {
+            const { pid, data, stream } = message.data;
+            const channel = `process:${pid}`;
+            const listeners = this._processListeners.get(channel);
+
+            if (listeners) {
+              listeners.forEach((listener) => listener({ data, stream }));
+            }
+          }
           break;
       }
       return;
@@ -166,7 +184,31 @@ class RemoteContainerConnection {
       };
     }
 
-    return () => {};
+    return () => {
+      console.log('unregistered event:', 'on', event, listener.toString());
+    };
+  }
+
+  onProcess(pid: number, listener: (data: any) => void): Unsubscribe {
+    const channel = `process:${pid}`;
+
+    if (!this._processListeners.has(channel)) {
+      this._processListeners.set(channel, new Set());
+    }
+
+    this._processListeners.get(channel)!.add(listener);
+
+    return () => {
+      const listeners = this._processListeners.get(channel);
+
+      if (listeners) {
+        listeners.delete(listener);
+
+        if (listeners.size === 0) {
+          this._processListeners.delete(channel);
+        }
+      }
+    };
   }
 
   private _notifyError(error: Error) {
@@ -186,6 +228,9 @@ class RemoteContainerConnection {
       reject(new Error('Connection closed'));
       this._requestMap.delete(id);
     }
+
+    // Clean up process listeners
+    this._processListeners.clear();
   }
 }
 
@@ -351,7 +396,7 @@ export class RemoteContainer implements Container {
   }
 
   async mount(data: FileSystemTree): Promise<void> {
-    const response = await this._connection.sendRequest({
+    await this._connection.sendRequest({
       id: `mount-${Date.now()}`,
       operation: {
         type: 'mount',
@@ -359,13 +404,9 @@ export class RemoteContainer implements Container {
         content: JSON.stringify(data),
       },
     });
-
-    if (!response.success) {
-      throw new Error(response.error?.message || 'Failed to mount file system');
-    }
   }
 
-  async spawn(command: string, args: string[] = [], options?: SpawnOptions): Promise<any> {
+  async spawn(command: string, args: string[] = [], options?: SpawnOptions): Promise<ContainerProcess> {
     const response = await this._connection.sendRequest<ProcessResponse>({
       id: `spawn-${Date.now()}`,
       operation: {
@@ -380,44 +421,42 @@ export class RemoteContainer implements Container {
       throw new Error(response.error?.message || 'Failed to execute process');
     }
 
-    const pid = response.data.pid;
-
-    // ContainerProcess interface implementation for remote process
-    const input = {
-      getWriter: () => {
-        return new WritableStreamDefaultWriter<string>({
-          write: async (chunk: string) => {
-            await this._connection.sendRequest({
-              id: `input-${Date.now()}`,
-              operation: {
-                type: 'input',
-                pid,
-                data: chunk,
-              },
-            });
-          },
-          close: () => {},
-          abort: () => {},
-        } as any);
-      },
-    };
+    const { pid } = response.data;
+    const { promise: exit, resolve: resolveExit } = withResolvers<number>();
 
     // Create output stream
-    const { promise: exit } = withResolvers<number>();
+    const outputStream = new ReadableStream<string>({
+      start: (controller) => {
+        this._connection.onProcess(pid, (data) => {
+          if (data.stream === 'exit') {
+            process.nextTick(() => {
+              resolveExit(parseInt(data.data, 10));
+              controller.close();
+            });
+          } else {
+            controller.enqueue(data.data);
+          }
+        });
+      },
+    });
 
-    // ReadableStream implementation
-    const output = new ReadableStream<string>({
-      start(_controller) {
-        /*
-         * Output data from the server is received via WebSocket messages
-         * In a real implementation, add output stream processing logic here
-         */
+    // Create input stream
+    const inputStream = new WritableStream<string>({
+      write: async (chunk) => {
+        await this._connection.sendRequest({
+          id: `input-${Date.now()}`,
+          operation: {
+            type: 'input',
+            pid,
+            data: chunk,
+          },
+        });
       },
     });
 
     return {
-      input,
-      output,
+      input: inputStream,
+      output: outputStream,
       exit,
       resize: async (dimensions: { cols: number; rows: number }) => {
         await this._connection.sendRequest({
@@ -444,7 +483,7 @@ export class RemoteContainer implements Container {
       },
     });
 
-    const input = process.input.getWriter();
+    const input = process.input;
     const output = process.output;
 
     // Shell ready signal
@@ -462,7 +501,9 @@ export class RemoteContainer implements Container {
 
     // Handle terminal input
     terminal.onData((data) => {
-      input.write(data);
+      const writer = input.getWriter();
+      writer.write(data);
+      writer.releaseLock();
     });
 
     // Return basic shell session

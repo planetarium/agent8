@@ -3,19 +3,6 @@
  * This file can be shared between client and server projects
  */
 
-// Stream-related type definitions
-export interface WritableStreamDefaultWriter<T> {
-  write(chunk: T): Promise<void>;
-  close(): Promise<void>;
-  abort(reason?: any): Promise<void>;
-
-  // Additional properties needed for compatibility
-  closed: Promise<void>;
-  desiredSize: number | null;
-  ready: Promise<void>;
-  releaseLock(): void;
-}
-
 // Basic types definitions
 export type BufferEncoding =
   | 'ascii'
@@ -57,14 +44,16 @@ export type FileSystemEventHandler = (eventType: string, filename: string) => vo
 // Request and response types
 export interface ContainerRequest {
   id: string;
-  operation:
-    | FileSystemOperation
-    | ProcessOperation
-    | PreviewOperation
-    | WatchOperation
-    | WatchPathsOperation
-    | AuthOperation;
+  operation: ContainerOperation;
 }
+
+export type ContainerOperation =
+  | FileSystemOperation
+  | ProcessOperation
+  | PreviewOperation
+  | WatchOperation
+  | WatchPathsOperation
+  | AuthOperation;
 
 export interface ContainerResponse<T = any> {
   success: boolean;
@@ -73,6 +62,16 @@ export interface ContainerResponse<T = any> {
     code: string;
     message: string;
   };
+}
+
+export interface ContainerResponseWithId<T = unknown> extends ContainerResponse<T> {
+  id: string;
+}
+
+export interface ContainerEventMessage<T = unknown> {
+  id: string;
+  event: string;
+  data: T;
 }
 
 // Operation type definitions
@@ -100,9 +99,13 @@ export interface ProcessOperation {
 }
 
 export interface ProcessResponse {
-  success: boolean;
   pid: number;
-  process: any;
+}
+
+export interface ProcessEventMessage {
+  pid: number;
+  stream: string;
+  data: string;
 }
 
 export interface PreviewOperation {
@@ -154,9 +157,7 @@ export type EventListenerMap = {
 
 // Container process interface
 export interface ContainerProcess {
-  input: {
-    getWriter(): WritableStreamDefaultWriter<string>;
-  };
+  input: WritableStream<string>;
   output: ReadableStream<string>;
   exit: Promise<number>;
   resize(dimensions: { cols: number; rows: number }): void;
@@ -176,11 +177,25 @@ export interface ExecutionResult {
 
 export interface ShellSession {
   process: ContainerProcess;
-  input: WritableStreamDefaultWriter<string>;
+  input: WritableStream<string>;
   output: ReadableStream<string>;
   internalOutput?: ReadableStream<string>;
   ready: Promise<void>;
 
   executeCommand?(command: string): Promise<ExecutionResult>;
   waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
+}
+
+export interface FileNode {
+  file: {
+    contents: string;
+  };
+}
+
+export interface DirectoryNode {
+  directory: FileSystemTree;
+}
+
+export interface FileSystemTree {
+  [name: string]: FileNode | DirectoryNode;
 }
