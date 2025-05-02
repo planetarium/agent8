@@ -134,6 +134,7 @@ export class FilesStore {
   async #init() {
     const container = await this.#container;
 
+    // @ts-ignore TODO: remove ts-ignore after merge watchPaths
     container.fs.watchPaths(
       { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
       bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
