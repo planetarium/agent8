@@ -13,6 +13,7 @@ import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { toast } from 'react-toastify';
 
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
@@ -21,7 +22,6 @@ import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 import FilePreview from './FilePreview';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
-import { toast } from 'react-toastify';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
@@ -29,6 +29,7 @@ import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { ImportProjectZip } from './ImportProjectZip';
+import McpSseServerManager from '~/components/chat/McpSseServerManager';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -448,7 +449,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               className={classNames('pt-6 px-2 sm:px-6', {
                 'h-full flex flex-col': chatStarted,
               })}
-              ref={scrollRef}
             >
               <ClientOnly>
                 {() => {
@@ -466,6 +466,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   ) : null;
                 }}
               </ClientOnly>
+
               <div
                 className={classNames('flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt mb-6', {
                   'sticky bottom-2': chatStarted,
@@ -493,6 +494,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   )}
                 </div>
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
+                {/* MCP SSE Server 관리 컴포넌트 추가~! ㅠㅠ */}
+                <McpSseServerManager />
                 <div
                   className={classNames(
                     'bg-bolt-elements-background-depth-2 p-3 rounded-lg border border-bolt-elements-borderColor relative w-full max-w-chat mx-auto z-prompt',
