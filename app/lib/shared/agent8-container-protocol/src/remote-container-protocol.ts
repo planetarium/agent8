@@ -39,7 +39,7 @@ export type PortListener = (port: number, type: string, url?: string) => void;
 export type ServerReadyListener = (port: number, url?: string) => void;
 export type PreviewMessageListener = (data: any) => void;
 export type ErrorListener = (error: Error) => void;
-export type FileSystemEventHandler = (eventType: string, filename: string) => void;
+export type FileSystemEventHandler = (watcherId: string, eventType: string, filename: string) => void;
 
 // Request and response types
 export interface ContainerRequest {
@@ -100,6 +100,10 @@ export interface ProcessOperation {
 
 export interface ProcessResponse {
   pid: number;
+}
+
+export interface WatchResponse {
+  watcherId: string;
 }
 
 export interface ProcessEventMessage {

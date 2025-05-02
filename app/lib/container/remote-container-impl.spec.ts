@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws';
-import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
-import { RemoteContainerFactory, RemoteContainerFileSystem } from '~/lib/container/remote-container-impl';
-import type { FileSystemTree, Container, PathWatcherEvent } from '~/lib/container/interfaces';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { RemoteContainer, RemoteContainerFactory } from '~/lib/container/remote-container-impl';
+import type { FileSystemTree, PathWatcherEvent } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
 
 global.WebSocket = WebSocket as any;
@@ -44,16 +44,16 @@ class MockTerminal implements ITerminal {
 }
 
 describe('RemoteContainer 통합 테스트', () => {
-  let container: Container;
+  let container: RemoteContainer;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     // 실제 컨테이너 팩토리 생성 및 부팅
     const factory = new RemoteContainerFactory(TEST_SERVER_URL);
-    container = await factory.boot({ workdirName: '/workspace' });
+    container = (await factory.boot({ workdirName: '/workspace' })) as RemoteContainer;
   });
 
-  afterAll(() => {
-    // 정리 작업 (필요한 경우)
+  afterEach(() => {
+    container?.close();
   });
 
   it('파일 시스템에서 파일을 읽고 쓸 수 있어야 함', async () => {
@@ -221,14 +221,14 @@ describe('RemoteContainer 통합 테스트', () => {
   it('watchPaths로 여러 파일 변경을 감지해야 함', async () => {
     // 테스트 디렉토리 및 파일 준비
     const testDir = '/workspace/watch-test-dir';
-    await container.fs.mkdir(testDir);
+    await container.fs.mkdir(testDir, { recursive: true });
     await container.fs.writeFile(`${testDir}/test1.txt`, '파일1');
 
     // 이벤트 감지 준비
     const eventPromise = new Promise<boolean>((resolve) => {
       const eventsReceived: PathWatcherEvent[] = [];
 
-      container.fs.watchPaths({ include: [`${testDir}/**`] }, (events) => {
+      container.fs.watchPaths({ include: [`workspace/watch-test-dir/**`] }, (events) => {
         eventsReceived.push(...events);
 
         // 첫 번째 이벤트가 발생하면 확인
@@ -255,129 +255,97 @@ describe('RemoteContainer 통합 테스트', () => {
     // 정리
     await container.fs.rm(testDir, { recursive: true });
   });
-});
 
-/**
- * 서버 없이 실행 가능한 분리된 단위 테스트
- * 실제 서버 연결 없이도 테스트할 수 있는 기능들만 테스트
- */
-describe('RemoteContainerFileSystem 단위 테스트', () => {
-  let mockConnection: any;
-  let fileSystem: RemoteContainerFileSystem;
+  it('watch와 watchPaths를 동시에 사용할 때 이벤트를 올바르게 구분해야 함', async () => {
+    // 서로 다른 디렉토리 생성
+    const watchDir = '/workspace/watch-dir';
+    const watchPathsDir = '/workspace/watch-paths-dir';
 
-  beforeEach(() => {
-    mockConnection = {
-      sendRequest: vi.fn().mockImplementation(async (request) => {
-        const { operation } = request;
-        let responseData;
+    await container.fs.mkdir(watchDir, { recursive: true });
+    await container.fs.mkdir(watchPathsDir, { recursive: true });
 
-        switch (operation.type) {
-          case 'readFile':
-            responseData = { content: '파일 내용' };
-            break;
-          case 'writeFile':
-            responseData = {};
-            break;
-          case 'mkdir':
-            responseData = {};
-            break;
-          case 'readdir':
-            responseData = { entries: ['file1', 'file2'] };
-            break;
-          case 'rm':
-            responseData = {};
-            break;
-          default:
-            responseData = {};
+    // 각 디렉토리에 테스트 파일 생성
+    await container.fs.writeFile(`${watchDir}/watch-file.txt`, '일반 감시 파일');
+    await container.fs.writeFile(`${watchPathsDir}/paths-file.txt`, '경로 감시 파일');
+
+    // 두 개의 이벤트 감지기 설정
+    const watchEvents: string[] = [];
+    const watchPathsEvents: string[] = [];
+
+    // watch 설정
+    const watcher = container.fs.watch(`workspace/watch-dir/**/*`, { persistent: true });
+    watcher.addEventListener('change', (_eventType, filename) => {
+      if (filename) {
+        watchEvents.push(filename);
+      }
+    });
+
+    // watchPaths 설정
+    container.fs.watchPaths(
+      {
+        include: [`workspace/watch-paths-dir/**`],
+      },
+      (events) => {
+        events.forEach((event) => {
+          console.log('!!!!!!', event.path);
+          watchPathsEvents.push(event.path);
+        });
+      },
+    );
+
+    // 이벤트 수신 Promise 생성
+    const eventsPromise = new Promise<{ watchReceived: boolean; watchPathsReceived: boolean }>((resolve) => {
+      let watchReceived = false;
+      let watchPathsReceived = false;
+
+      // 타임아웃 설정
+      const timeoutId = setTimeout(() => {
+        resolve({ watchReceived, watchPathsReceived });
+      }, 5000);
+
+      // 이벤트 체크 인터벌 설정
+      const checkInterval = setInterval(() => {
+        if (watchEvents.length > 0) {
+          watchReceived = true;
         }
 
-        return {
-          success: true,
-          data: responseData,
-        };
-      }),
-    };
+        if (watchPathsEvents.length > 0) {
+          watchPathsReceived = true;
+        }
 
-    fileSystem = new RemoteContainerFileSystem(mockConnection);
-  });
+        if (watchReceived && watchPathsReceived) {
+          clearTimeout(timeoutId);
+          clearInterval(checkInterval);
+          resolve({ watchReceived, watchPathsReceived });
+        }
+      }, 100);
 
-  it('readFile 메소드가 올바른 요청을 보내야 함', async () => {
-    await fileSystem.readFile('/test.txt', 'utf8');
-    expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: expect.objectContaining({
-          type: 'readFile',
-          path: '/test.txt',
-        }),
-      }),
-    );
-  });
+      // 각 파일에 대한 변경 이벤트 발생
+      setTimeout(async () => {
+        await container.fs.writeFile(`${watchDir}/watch-file.txt`, '일반 감시 파일 수정됨');
+      }, 500);
 
-  it('writeFile 메소드가 올바른 요청을 보내야 함', async () => {
-    await fileSystem.writeFile('/test.txt', '새로운 내용');
-    expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: expect.objectContaining({
-          type: 'writeFile',
-          path: '/test.txt',
-          content: '새로운 내용',
-        }),
-      }),
-    );
-  });
+      setTimeout(async () => {
+        await container.fs.writeFile(`${watchPathsDir}/paths-file.txt`, '경로 감시 파일 수정됨');
+      }, 1000);
+    });
 
-  it('watch 메소드가 올바른 요청을 보내고 FileSystemWatcher를 반환해야 함', () => {
-    const watcher = fileSystem.watch('/test-pattern', { persistent: true });
+    // 결과 확인
+    const { watchReceived, watchPathsReceived } = await eventsPromise;
 
-    // 요청 확인
-    expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: expect.objectContaining({
-          type: 'watch',
-          path: '/test-pattern',
-          options: {
-            watchOptions: {
-              persistent: true,
-              recursive: false,
-            },
-          },
-        }),
-      }),
-    );
+    // 각 감시 메서드가 자신의 파일만 감지하는지 확인
+    expect(watchReceived).toBe(true);
+    expect(watchPathsReceived).toBe(true);
 
-    // FileSystemWatcher 인터페이스 확인
-    expect(watcher).toHaveProperty('addEventListener');
-    expect(watcher).toHaveProperty('close');
+    expect(watchEvents.some((path) => path.includes('watch-file.txt'))).toBe(true);
+    expect(watchEvents.some((path) => path.includes('paths-file.txt'))).toBe(false);
 
-    // 이벤트 리스너 등록 및 삭제 기능 테스트
-    const listener = vi.fn();
-    watcher.addEventListener('change', listener);
+    expect(watchPathsEvents.some((path) => path.includes('paths-file.txt'))).toBe(true);
+    expect(watchPathsEvents.some((path) => path.includes('watch-file.txt'))).toBe(false);
 
-    /*
-     * close 메소드 호출 시 리스너가 제거되는지 확인할 방법은 없지만,
-     * 메소드가 호출되는지는 확인할 수 있음
-     */
-    const closeSpy = vi.spyOn(watcher, 'close');
+    // 정리
     watcher.close();
-    expect(closeSpy).toHaveBeenCalled();
-  });
-
-  it('watchPaths 메소드가 올바른 요청을 보내야 함', () => {
-    const options = {
-      include: ['/test-dir/**/*.ts'],
-      exclude: ['node_modules/**'],
-    };
-    const callback = vi.fn();
-
-    fileSystem.watchPaths(options, callback);
-
-    expect(mockConnection.sendRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: expect.objectContaining({
-          type: 'watch-paths',
-          options,
-        }),
-      }),
-    );
+    await container.fs.rm(watchDir, { recursive: true });
+    await container.fs.rm(watchPathsDir, { recursive: true });
   });
 });

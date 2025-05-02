@@ -17,7 +17,6 @@ export class BoltShell {
     { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
   >();
   #outputStream: ReadableStreamDefaultReader<string> | undefined;
-  #shellInputStream: WritableStreamDefaultWriter<string> | undefined;
 
   constructor() {
     this.#readyPromise = new Promise((resolve) => {
@@ -48,7 +47,6 @@ export class BoltShell {
     const shellSession = await container.spawnShell(terminal, { splitOutput: true });
     this.#process = shellSession.process;
     this.#outputStream = shellSession.internalOutput!.getReader();
-    this.#shellInputStream = shellSession.input.getWriter();
     await shellSession.ready;
     this.#initialized?.();
   }
@@ -114,7 +112,6 @@ export class BoltShell {
 
   async newBoltShellProcess(container: Container, terminal: ITerminal) {
     const shellSession = await container.spawnShell(terminal, { splitOutput: true });
-    this.#shellInputStream = shellSession.input.getWriter();
 
     return {
       process: shellSession.process,
