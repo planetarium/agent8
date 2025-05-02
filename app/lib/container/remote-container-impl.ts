@@ -169,6 +169,7 @@ class RemoteContainerConnection {
     // Handle request/response
     if (message.id && this._requestMap.has(message.id)) {
       const { resolve, reject } = this._requestMap.get(message.id)!;
+
       this._requestMap.delete(message.id);
 
       if (message.success) {

@@ -10,7 +10,7 @@ global.WebSocket = WebSocket as any;
  * 실제 서버 연결을 위한 설정
  * 테스트 실행 시 실제 서버에 연결합니다.
  */
-const TEST_SERVER_URL = 'ws://localhost:53000'; // 테스트용 서버 URL 설정
+const TEST_SERVER_URL = 'ws://fly-summer-log-9042.fly.dev'; // 테스트용 서버 URL 설정
 
 /**
  * 실제 터미널 연결을 위한 터미널 목업
@@ -255,6 +255,20 @@ describe('RemoteContainer 통합 테스트', () => {
     // 정리
     await container.fs.rm(testDir, { recursive: true });
   });
+<<<<<<< HEAD
+=======
+
+  it('preview 이벤트가 트리거 되어야함', async () => {
+    container.on('port', (port: number, type: string) => {
+      expect(port).toBe(5174);
+      expect(type).toBe('open');
+    });
+    container.on('server-ready', (port: number) => {
+      expect(port).toBe(5174);
+    });
+  });
+});
+>>>>>>> 29ba62b (Add preview test)
 
   it('watch와 watchPaths를 동시에 사용할 때 이벤트를 올바르게 구분해야 함', async () => {
     // 서로 다른 디렉토리 생성
