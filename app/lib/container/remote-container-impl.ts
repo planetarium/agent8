@@ -23,7 +23,7 @@ import type {
   ShellSession,
   ShellOptions,
   ExecutionResult,
-} from './remote-container-protocol';
+} from '~/lib/shared/agent8-container-protocol/src';
 
 /**
  * Class to manage remote WebSocket connection and communication
