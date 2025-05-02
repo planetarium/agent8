@@ -17,13 +17,13 @@ import type {
   ContainerResponse,
   EventListeners,
   EventListenerMap,
-  FileSystemEventHandler,
   ProcessResponse,
   SpawnOptions,
   ShellSession,
   ShellOptions,
   ExecutionResult,
   WatchPathsOptions,
+  WatchResponse,
 } from '~/lib/shared/agent8-container-protocol/src';
 
 /**
@@ -140,9 +140,13 @@ class RemoteContainerConnection {
         case 'preview-message':
           this._listeners['preview-message'].forEach((listener) => listener(message.data));
           break;
+
         case 'file-change':
-          this._listeners['file-change'].forEach((listener) => listener(message.data.eventType, message.data.filename));
+          this._listeners['file-change'].forEach((listener) =>
+            listener(message.data.watcherId, message.data.eventType, message.data.filename),
+          );
           break;
+
         case 'error':
           this._notifyError(new Error(message.data?.message || 'Unknown error'));
           break;
@@ -325,12 +329,13 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher {
-    const watcherId = `watch-${Date.now()}`;
+    const requestId = `watch-${Date.now()}`;
+    let watcherIdFromResponse: string | undefined = undefined;
 
     // Send request
     this._connection
-      .sendRequest({
-        id: watcherId,
+      .sendRequest<WatchResponse>({
+        id: requestId,
         operation: {
           type: 'watch',
           options: {
@@ -339,15 +344,18 @@ export class RemoteContainerFileSystem implements FileSystem {
           },
         },
       })
+      .then((response) => {
+        watcherIdFromResponse = response.data?.watcherId;
+      })
       .catch(console.error);
 
     const connection = this._connection;
     const unsubscribers: Unsubscribe[] = [];
 
     return {
-      addEventListener(event: string, listener: FileSystemEventHandler) {
-        const unsubscribe = connection.on('file-change', (eventType, filename) => {
-          if (event === eventType) {
+      addEventListener(event: string, listener) {
+        const unsubscribe = connection.on('file-change', (watcherId, eventType, filename) => {
+          if (watcherId === watcherIdFromResponse) {
             listener(eventType, filename);
           }
         });
@@ -360,20 +368,26 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void {
-    const watcherId = `watch-paths-${Date.now()}`;
+    const requestId = `watch-paths-${Date.now()}`;
+    let watcherIdFromResponse: string | undefined = undefined;
 
     this._connection
-      .sendRequest({
-        id: watcherId,
+      .sendRequest<WatchResponse>({
+        id: requestId,
         operation: {
           type: 'watch-paths',
           options,
         },
       })
+      .then((response) => {
+        watcherIdFromResponse = response.data?.watcherId;
+      })
       .catch(console.error);
 
-    this._connection.on('file-change', (eventType, filename) => {
-      callback([{ type: eventType as any, path: filename }]);
+    this._connection.on('file-change', (watcherId, eventType, filename) => {
+      if (watcherId === watcherIdFromResponse) {
+        callback([{ type: eventType as any, path: filename }]);
+      }
     });
   }
 }
@@ -529,6 +543,10 @@ export class RemoteContainer implements Container {
     }
 
     return session;
+  }
+
+  close() {
+    this._connection.close();
   }
 }
 
