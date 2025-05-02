@@ -24,7 +24,7 @@ import type {
   ShellOptions,
   ExecutionResult,
   WatchPathsOptions,
-} from '~/lib/shared/agent8-container-protocol';
+} from '~/lib/shared/agent8-container-protocol/src';
 
 /**
  * Class to manage remote WebSocket connection and communication
