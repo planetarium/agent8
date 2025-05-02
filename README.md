@@ -18,13 +18,13 @@ This repository contains shared type definitions and interfaces used for communi
 ### For client projects:
 
 ```bash
-git subtree add --prefix=path/to/client/protocol https://your-git-url/remote-container-protocol.git main --squash
+git subtree add --prefix=path/to/client/protocol git@github.com:planetarium/agent8-container-protocol.git main --squash
 ```
 
 ### For server projects:
 
 ```bash
-git subtree add --prefix=path/to/server/protocol https://your-git-url/remote-container-protocol.git main --squash
+git subtree add --prefix=path/to/server/protocol git@github.com:planetarium/agent8-container-protocol.git main --squash
 ```
 
 ## Updating
@@ -32,7 +32,7 @@ git subtree add --prefix=path/to/server/protocol https://your-git-url/remote-con
 To update the subtree in your project:
 
 ```bash
-git subtree pull --prefix=path/to/protocol https://your-git-url/remote-container-protocol.git main --squash
+git subtree pull --prefix=path/to/protocol git@github.com:planetarium/agent8-container-protocol.git main --squash
 ```
 
 ## Contributing
@@ -40,5 +40,5 @@ git subtree pull --prefix=path/to/protocol https://your-git-url/remote-container
 To contribute changes from your project back to the shared protocol:
 
 ```bash
-git subtree push --prefix=path/to/protocol https://your-git-url/remote-container-protocol.git main
+git subtree push --prefix=path/to/protocol git@github.com:planetarium/agent8-container-protocol.git main
 ``` 
