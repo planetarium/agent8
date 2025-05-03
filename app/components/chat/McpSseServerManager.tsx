@@ -18,8 +18,6 @@ const McpSseServerManager: React.FC = () => {
 
   const getServerIcon = (serverName: string) => {
     switch (serverName) {
-      case 'All-in-one':
-        return 'i-ph:globe w-4 h-4 text-blue-500';
       case '2D-Image':
         return 'i-ph:image w-4 h-4 text-green-500';
       case 'Cinematic':
@@ -46,7 +44,7 @@ const McpSseServerManager: React.FC = () => {
         name: newServer.name,
         url: newServer.url,
         enabled: true,
-        v8AuthIntegrated: false,
+        v8AuthIntegrated: true,
       };
 
       addMCPSSEServer(server);
