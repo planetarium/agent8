@@ -146,7 +146,7 @@ const McpSseServerManager: React.FC = () => {
                             <>
                               <div className="relative group cursor-help">
                                 <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-10">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-50">
                                   Default tool
                                 </div>
                               </div>
@@ -157,10 +157,10 @@ const McpSseServerManager: React.FC = () => {
                                   </span>
                                   <div
                                     className={classNames(
-                                      'absolute p-4 w-96 text-sm font-normal text-white bg-gray-950 rounded-lg hidden group-hover:block transition-all duration-100 pointer-events-none z-10 shadow-xl',
+                                      'absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-950 rounded-lg hidden group-hover:block transition-all duration-100 pointer-events-none z-50 shadow-xl',
                                       server.name === '2D-Image' || server.name === 'Cinematic'
-                                        ? 'top-full left-0 mt-1'
-                                        : 'bottom-full left-0 mb-1',
+                                        ? 'top-full -left-30 mt-1'
+                                        : 'bottom-full -left-30 mb-1',
                                     )}
                                   >
                                     <div className="mb-3 text-base font-medium">{server.name} - Usage Guide</div>
