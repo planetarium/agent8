@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Switch } from '~/components/ui/Switch';
 import { toast } from 'react-toastify';
@@ -13,6 +13,45 @@ const McpSseServerManager: React.FC = () => {
     useSettings();
 
   const defaultServerNames = ['All-in-one', '2D-Image', 'Cinematic', 'Audio', 'Skybox'];
+
+  const getServerDescription = (serverName: string): string => {
+    switch (serverName) {
+      case 'All-in-one':
+        return 'All-in-one server that integrates all MCP tools.';
+      case '2D-Image':
+        return 'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.';
+      case 'Cinematic':
+        return 'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).';
+      case 'Audio':
+        return 'Generate game background music, character/level theme music, and sound effects. Fast generation speed (30-second sample: about 2 seconds, 3-minute track: within 10 seconds). High-quality 44.1kHz stereo audio output. Maintains professional consistency without interruptions. Provides results in WAV file format.';
+      case 'Skybox':
+        return 'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.';
+      default:
+        return '';
+    }
+  };
+
+  const [pinnedTooltip, setPinnedTooltip] = useState<string | null>(null);
+  const [collapsedTips, setCollapsedTips] = useState<Record<string, boolean>>({});
+
+  const toggleUsageTips = (serverName: string) => {
+    setCollapsedTips((prev) => ({
+      ...prev,
+      [serverName]: !prev[serverName],
+    }));
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pinnedTooltip && !(event.target as Element).closest('.tooltip-container')) {
+        setPinnedTooltip(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [pinnedTooltip]);
 
   const isDefaultServer = (serverName: string) => defaultServerNames.includes(serverName);
 
@@ -146,77 +185,134 @@ const McpSseServerManager: React.FC = () => {
                             <>
                               <div className="relative group cursor-help">
                                 <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-50">
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-50 cursor-default">
                                   Default tool
                                 </div>
                               </div>
-                              {server.description && (
-                                <div className="relative group cursor-help inline-flex items-center ml-1.5">
-                                  <span className="inline-flex items-center justify-center text-purple-500 font-bold mb-0.5">
+                              {getServerDescription(server.name) && (
+                                <div className="relative group cursor-pointer inline-flex items-center ml-1.5">
+                                  <button
+                                    className="inline-flex items-center justify-center text-purple-500 font-bold mb-0.5 bg-transparent border-none p-0 cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+
+                                      const tooltipId = `${server.name}-tooltip`;
+
+                                      setPinnedTooltip(pinnedTooltip === tooltipId ? null : tooltipId);
+                                    }}
+                                  >
                                     ?
-                                  </span>
+                                  </button>
                                   <div
                                     className={classNames(
-                                      'absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-950 rounded-lg hidden group-hover:block transition-all duration-100 pointer-events-none z-50 shadow-xl',
-                                      server.name === '2D-Image' || server.name === 'Cinematic'
+                                      'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-950 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
+                                      pinnedTooltip === `${server.name}-tooltip` ? 'block' : 'hidden',
+                                      server.name === '2D-Image' ||
+                                        server.name === 'Cinematic' ||
+                                        server.name === 'Audio'
                                         ? 'top-full -left-30 mt-1'
                                         : 'bottom-full -left-30 mb-1',
                                     )}
                                   >
-                                    <div className="mb-3 text-base font-medium">{server.name} - Usage Guide</div>
-                                    <p className="mb-3 leading-relaxed text-gray-200">{server.description}</p>
-                                    <div className="mt-4 pt-3 border-t border-gray-700">
-                                      <div className="text-purple-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
-                                        USAGE TIPS
-                                      </div>
+                                    <div className="flex justify-between items-center mb-3">
+                                      <div className="text-base font-medium">{server.name} - Usage Guide</div>
+                                      <span
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPinnedTooltip(null);
+                                        }}
+                                        className="text-gray-400 hover:text-gray-200 cursor-pointer"
+                                      >
+                                        <div className="i-ph:x w-4 h-4" />
+                                      </span>
+                                    </div>
+                                    <p className="mb-3 leading-relaxed text-gray-200">
+                                      {getServerDescription(server.name)}
+                                    </p>
+
+                                    {/* Credit information / Will be revised after cost policy decision */}
+                                    <div className="mb-3 p-2 text-xs bg-gray-900 rounded-md border border-gray-700">
                                       {server.name === '2D-Image' && (
-                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                          <li>Provide specific and detailed descriptions for assets</li>
-                                          <li>Clearly specify the desired style</li>
-                                          <li>Include game type information (platformer, shooter, RPG, etc.)</li>
-                                          <li>Use additional prompts to fine-tune generation results</li>
-                                        </ul>
+                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
                                       )}
                                       {server.name === 'Cinematic' && (
-                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                          <li>
-                                            Provide specific descriptions of environment, atmosphere, characters, and
-                                            key activities
-                                          </li>
-                                          <li>Select reference images that match your game art style (max 3)</li>
-                                          <li>Clearly specify camera angles, lighting, and color palette</li>
-                                          <li>
-                                            Include sufficient references to maintain consistency with your game's
-                                            actual assets
-                                          </li>
-                                        </ul>
+                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
                                       )}
                                       {server.name === 'Audio' && (
-                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                          <li>
-                                            All prompts must be in English only (other languages not supported by API)
-                                          </li>
-                                          <li>Clearly describe music style, instruments, mood, tempo, and key</li>
-                                          <li>
-                                            Expect to wait about 10 seconds for generation to complete (use audio_wait
-                                            tool)
-                                          </li>
-                                          <li>
-                                            Use separate tools for music and sound effects (music_generate,
-                                            sfx_generate)
-                                          </li>
-                                        </ul>
+                                        <p className="text-gray-200">Cost: 1 credit per second (default: 30 seconds)</p>
                                       )}
                                       {server.name === 'Skybox' && (
-                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                          <li>Use skybox_styles tool to check available style IDs</li>
-                                          <li>
-                                            Provide detailed descriptions of environment, lighting conditions, and
-                                            atmospheric details
-                                          </li>
-                                          <li>Different character limits exist depending on style ID</li>
-                                          <li>Check skybox generation status with skybox_status tool</li>
-                                        </ul>
+                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-gray-700">
+                                      <div
+                                        className="flex justify-between items-center cursor-pointer"
+                                        onClick={() => toggleUsageTips(server.name)}
+                                      >
+                                        <div className="text-purple-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
+                                          USAGE TIPS
+                                        </div>
+                                        <div
+                                          className={`text-gray-400 transition-transform duration-200 ${collapsedTips[server.name] ? 'rotate-180' : ''}`}
+                                        >
+                                          <div className="i-ph:caret-up w-4 h-4" />
+                                        </div>
+                                      </div>
+                                      {!collapsedTips[server.name] && (
+                                        <>
+                                          {server.name === '2D-Image' && (
+                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                              <li>Provide specific and detailed descriptions for assets</li>
+                                              <li>Clearly specify the desired style</li>
+                                              <li>Include game type information (platformer, shooter, RPG, etc.)</li>
+                                              <li>Use additional prompts to fine-tune generation results</li>
+                                            </ul>
+                                          )}
+                                          {server.name === 'Cinematic' && (
+                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                              <li>
+                                                Provide specific descriptions of environment, atmosphere, characters,
+                                                and key activities
+                                              </li>
+                                              <li>Select reference images that match your game art style (max 3)</li>
+                                              <li>Clearly specify camera angles, lighting, and color palette</li>
+                                              <li>
+                                                Include sufficient references to maintain consistency with your game's
+                                                actual assets
+                                              </li>
+                                            </ul>
+                                          )}
+                                          {server.name === 'Audio' && (
+                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                              <li>
+                                                All prompts must be in English only (other languages not supported by
+                                                API)
+                                              </li>
+                                              <li>Clearly describe music style, instruments, mood, tempo, and key</li>
+                                              <li>
+                                                Expect to wait about 10 seconds for generation to complete (use
+                                                audio_wait tool)
+                                              </li>
+                                              <li>
+                                                Use separate tools for music and sound effects (music_generate,
+                                                sfx_generate)
+                                              </li>
+                                            </ul>
+                                          )}
+                                          {server.name === 'Skybox' && (
+                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                              <li>Use skybox_styles tool to check available style IDs</li>
+                                              <li>
+                                                Provide detailed descriptions of environment, lighting conditions, and
+                                                atmospheric details
+                                              </li>
+                                              <li>Different character limits exist depending on style ID</li>
+                                              <li>Check skybox generation status with skybox_status tool</li>
+                                            </ul>
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   </div>
