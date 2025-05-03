@@ -176,6 +176,8 @@ export class GitlabService {
         description: description || `${finalProjectName}`,
       });
 
+      await this.gitlab.Branches.create(project.id, 'develop', 'main');
+
       return project as unknown as GitlabProject;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -191,12 +193,7 @@ export class GitlabService {
     baseCommit?: string,
   ): Promise<GitlabCommit> {
     try {
-      let defaultBranchName = '';
-
       try {
-        const project = await this.gitlab.Projects.show(projectId);
-        defaultBranchName = (project.default_branch as string) || '';
-
         const protectedBranches = (await this.gitlab.ProtectedBranches.all(projectId)) as GitlabProtectedBranch[];
         const isProtected = protectedBranches.some((pb) => pb.name === branch);
 
@@ -220,28 +217,7 @@ export class GitlabService {
       }
 
       if (!branchExists) {
-        if (defaultBranchName) {
-          await this.gitlab.Branches.create(projectId, branch, defaultBranchName);
-          branchExists = true;
-        }
-
-        if (!branchExists) {
-          try {
-            const initialActions: CommitAction[] = [
-              {
-                action: 'create' as const,
-                filePath: 'README.md',
-                content: `# Project ${projectId}\n\nThis is a new project.`,
-              },
-            ];
-
-            await this.gitlab.Commits.create(projectId, branch, 'Initial Commit', initialActions);
-            branchExists = true;
-          } catch (initialCommitError) {
-            logger.error('Initial commit failed:', initialCommitError);
-            throw new Error(`Cannot create initial commit to branch: ${branch}`);
-          }
-        }
+        throw new Error(`Branch '${branch}' does not exist`);
       }
 
       // If baseCommit is provided, reset the branch to that commit
@@ -765,6 +741,176 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get commit diff: ${errorMessage}`);
+    }
+  }
+
+  async getTaskBranches(projectPath: string): Promise<{
+    branches: {
+      name: string;
+      commit: {
+        id: string;
+        message: string;
+        created_at: string;
+        author_name: string;
+      } | null;
+      protected: boolean;
+      merged: boolean;
+    }[];
+  }> {
+    try {
+      const response = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/branches`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            search: '^task-',
+          },
+        },
+      );
+
+      const branches = response.data.map((branch: any) => ({
+        name: branch.name,
+        commit: branch.commit
+          ? {
+              id: branch.commit.id,
+              message: branch.commit.message,
+              created_at: branch.commit.created_at,
+              author_name: branch.commit.author_name,
+            }
+          : null,
+        protected: branch.protected,
+        merged: branch.merged,
+      }));
+
+      return { branches };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to fetch task branches: ${errorMessage}`);
+    }
+  }
+
+  async mergeTaskBranch(
+    projectPath: string,
+    fromBranch: string,
+    toBranch: string = 'develop',
+  ): Promise<{
+    message: string;
+    mergedBranch: string;
+  }> {
+    try {
+      // 1. Get project
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // 2. Check if branches exist
+      try {
+        await this.gitlab.Branches.show(project.id, fromBranch);
+        await this.gitlab.Branches.show(project.id, toBranch);
+      } catch (error) {
+        throw new Error(`Branch does not exist: ${error.message}`);
+      }
+
+      // 3. Create a merge request with detailed error handling
+      let mergeRequest;
+
+      try {
+        mergeRequest = await this.gitlab.MergeRequests.create(
+          project.id,
+          fromBranch,
+          toBranch,
+          `Merge ${fromBranch} into ${toBranch}`,
+          {
+            removeSourceBranch: false,
+            squash: false,
+          },
+        );
+      } catch (error) {
+        // Check if MR already exists
+        const mrs = await this.gitlab.MergeRequests.all(project.id, {
+          sourceBranch: fromBranch,
+          targetBranch: toBranch,
+          state: 'opened',
+        });
+
+        if (mrs && mrs.length > 0) {
+          mergeRequest = mrs[0];
+          logger.info(`Using existing merge request #${mergeRequest.iid}`);
+        } else {
+          throw new Error(`Failed to create merge request: ${error.message}`);
+        }
+      }
+
+      // 4. Check if MR can be merged
+      const mrDetails = await this.gitlab.MergeRequests.show(project.id, mergeRequest.iid);
+
+      if (mrDetails.has_conflicts) {
+        throw new Error('Cannot merge automatically due to conflicts. Please resolve conflicts manually.');
+      }
+
+      if (!mrDetails.merge_status || mrDetails.merge_status === 'cannot_be_merged') {
+        throw new Error(`Branch cannot be merged automatically (status: ${mrDetails.merge_status})`);
+      }
+
+      // 5. Accept/merge the merge request with better error handling
+      try {
+        await this.gitlab.MergeRequests.accept(project.id, mergeRequest.iid, {
+          mergeWhenPipelineSucceeds: false,
+          shouldRemoveSourceBranch: true,
+        });
+      } catch (error) {
+        throw new Error(`Failed to accept merge request: ${error.message}`);
+      }
+
+      return {
+        message: `Successfully merged ${fromBranch} into ${toBranch}`,
+        mergedBranch: fromBranch,
+      };
+    } catch (error) {
+      logger.error('Failed to merge branches:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to merge task branch: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Creates a new task branch with timestamp suffix
+   */
+  async createTaskBranch(
+    projectPath: string,
+    baseBranch: string = 'develop',
+  ): Promise<{
+    branchName: string;
+    message: string;
+  }> {
+    try {
+      // 1. Get project
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // 2. Check if base branch exists
+      try {
+        await this.gitlab.Branches.show(project.id, baseBranch);
+      } catch (error) {
+        throw new Error(`Base branch '${baseBranch}' does not exist: ${error.message}`);
+      }
+
+      // 3. Generate task branch name with timestamp
+      const timestamp = Date.now();
+      const branchName = `task-${timestamp}`;
+
+      // 4. Create new branch from base branch
+      await this.gitlab.Branches.create(project.id, branchName, baseBranch);
+
+      return {
+        branchName,
+        message: `Successfully created task branch '${branchName}' from '${baseBranch}'`,
+      };
+    } catch (error) {
+      logger.error('Failed to create task branch:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to create task branch: ${errorMessage}`);
     }
   }
 }
