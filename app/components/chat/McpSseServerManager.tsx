@@ -31,9 +31,10 @@ const McpSseServerManager: React.FC = () => {
     }
   };
 
-  const [newServer, setNewServer] = useState<{ name: string; url: string }>({
+  const [newServer, setNewServer] = useState<{ name: string; url: string; description?: string }>({
     name: '',
     url: '',
+    description: '',
   });
   const [showServerManager, setShowServerManager] = useState<boolean>(false);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
@@ -45,6 +46,7 @@ const McpSseServerManager: React.FC = () => {
         url: newServer.url,
         enabled: true,
         v8AuthIntegrated: true,
+        description: newServer.description,
       };
 
       addMCPSSEServer(server);
@@ -68,7 +70,7 @@ const McpSseServerManager: React.FC = () => {
         }
       }, 100);
 
-      setNewServer({ name: '', url: '' });
+      setNewServer({ name: '', url: '', description: '' });
       setShowAddForm(false);
     }
   };
@@ -101,12 +103,14 @@ const McpSseServerManager: React.FC = () => {
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
               <h4 className="text-sm font-medium text-bolt-elements-textPrimary">Select Tools to Use</h4>
-              <button
-                onClick={() => setShowServerManager(false)}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-purple-500/10 dark:hover:bg-purple-500/20 group transition-all duration-200  mb-1.5"
-              >
-                <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowServerManager(false)}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-purple-500/10 dark:hover:bg-purple-500/20 group transition-all duration-200  mb-1.5"
+                >
+                  <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -124,7 +128,7 @@ const McpSseServerManager: React.FC = () => {
                       'border',
                       server.enabled
                         ? 'bg-bolt-elements-background-depth-1 border-l-4 border-l-purple-500 border-bolt-elements-borderColor shadow-sm'
-                        : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor opacity-75',
+                        : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor',
                       'transition-all duration-200',
                     )}
                   >
@@ -139,15 +143,92 @@ const McpSseServerManager: React.FC = () => {
                         >
                           {server.name}
                           {isDefaultServer(server.name) && (
-                            <div className="relative group cursor-help">
-                              <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-100 whitespace-nowrap pointer-events-none">
-                                Default tool
+                            <>
+                              <div className="relative group cursor-help">
+                                <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-10">
+                                  Default tool
+                                </div>
                               </div>
-                            </div>
+                              {server.description && (
+                                <div className="relative group cursor-help inline-flex items-center ml-1.5">
+                                  <span className="inline-flex items-center justify-center text-purple-500 font-bold mb-0.5">
+                                    ?
+                                  </span>
+                                  <div
+                                    className={classNames(
+                                      'absolute p-4 w-96 text-sm font-normal text-white bg-gray-950 rounded-lg hidden group-hover:block transition-all duration-100 pointer-events-none z-10 shadow-xl',
+                                      server.name === '2D-Image' || server.name === 'Cinematic'
+                                        ? 'top-full left-0 mt-1'
+                                        : 'bottom-full left-0 mb-1',
+                                    )}
+                                  >
+                                    <div className="mb-3 text-base font-medium">{server.name} - Usage Guide</div>
+                                    <p className="mb-3 leading-relaxed text-gray-200">{server.description}</p>
+                                    <div className="mt-4 pt-3 border-t border-gray-700">
+                                      <div className="text-purple-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
+                                        USAGE TIPS
+                                      </div>
+                                      {server.name === '2D-Image' && (
+                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                          <li>Provide specific and detailed descriptions for assets</li>
+                                          <li>Clearly specify the desired style</li>
+                                          <li>Include game type information (platformer, shooter, RPG, etc.)</li>
+                                          <li>Use additional prompts to fine-tune generation results</li>
+                                        </ul>
+                                      )}
+                                      {server.name === 'Cinematic' && (
+                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                          <li>
+                                            Provide specific descriptions of environment, atmosphere, characters, and
+                                            key activities
+                                          </li>
+                                          <li>Select reference images that match your game art style (max 3)</li>
+                                          <li>Clearly specify camera angles, lighting, and color palette</li>
+                                          <li>
+                                            Include sufficient references to maintain consistency with your game's
+                                            actual assets
+                                          </li>
+                                        </ul>
+                                      )}
+                                      {server.name === 'Audio' && (
+                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                          <li>
+                                            All prompts must be in English only (other languages not supported by API)
+                                          </li>
+                                          <li>Clearly describe music style, instruments, mood, tempo, and key</li>
+                                          <li>
+                                            Expect to wait about 10 seconds for generation to complete (use audio_wait
+                                            tool)
+                                          </li>
+                                          <li>
+                                            Use separate tools for music and sound effects (music_generate,
+                                            sfx_generate)
+                                          </li>
+                                        </ul>
+                                      )}
+                                      {server.name === 'Skybox' && (
+                                        <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                          <li>Use skybox_styles tool to check available style IDs</li>
+                                          <li>
+                                            Provide detailed descriptions of environment, lighting conditions, and
+                                            atmospheric details
+                                          </li>
+                                          <li>Different character limits exist depending on style ID</li>
+                                          <li>Check skybox generation status with skybox_status tool</li>
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </h4>
-                        <p className="text-xs text-bolt-elements-textSecondary">{server.url}</p>
+
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-bolt-elements-textSecondary">{server.url}</p>
+                        </div>
                       </div>
                     </div>
 
@@ -244,6 +325,7 @@ const McpSseServerManager: React.FC = () => {
                     />
                   </div>
                 </div>
+
                 <div className="flex justify-end pt-1">
                   <div className="flex gap-2">
                     <button
