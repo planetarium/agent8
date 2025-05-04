@@ -53,7 +53,7 @@ describe('RemoteContainer 통합 테스트', () => {
   });
 
   afterEach(() => {
-    container?.close();
+    // 정리 작업 (필요한 경우)
   });
 
   it('파일 시스템에서 파일을 읽고 쓸 수 있어야 함', async () => {
@@ -255,8 +255,6 @@ describe('RemoteContainer 통합 테스트', () => {
     // 정리
     await container.fs.rm(testDir, { recursive: true });
   });
-<<<<<<< HEAD
-=======
 
   it('preview 이벤트가 트리거 되어야함', async () => {
     container.on('port', (port: number, type: string) => {
@@ -271,8 +269,6 @@ describe('RemoteContainer 통합 테스트', () => {
 
     await process.exit;
   });
-});
->>>>>>> 29ba62b (Add preview test)
 
   it('watch와 watchPaths를 동시에 사용할 때 이벤트를 올바르게 구분해야 함', async () => {
     // 서로 다른 디렉토리 생성
