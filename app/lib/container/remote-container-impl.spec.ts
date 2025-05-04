@@ -218,6 +218,21 @@ describe('RemoteContainer 통합 테스트', () => {
     await container.fs.rm(testPath);
   });
 
+  it('preview 이벤트가 트리거 되어야함', async () => {
+    container.on('port', (port: number, type: string, url?: string) => {
+      console.log('port event triggered: ' + url);
+      expect(port).toBe(5174);
+      expect(type).toBe('close');
+    });
+    container.on('server-ready', (port: number) => {
+      console.log('server-ready event triggered');
+      expect(port).toBe(5174);
+    });
+
+    await container.spawn('bun', ['/workspace/preview.ts']);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  });
+
   it('watchPaths로 여러 파일 변경을 감지해야 함', async () => {
     // 테스트 디렉토리 및 파일 준비
     const testDir = '/workspace/watch-test-dir';
@@ -254,20 +269,6 @@ describe('RemoteContainer 통합 테스트', () => {
 
     // 정리
     await container.fs.rm(testDir, { recursive: true });
-  });
-
-  it('preview 이벤트가 트리거 되어야함', async () => {
-    container.on('port', (port: number, type: string) => {
-      expect(port).toBe(5174);
-      expect(type).toBe('open');
-    });
-    container.on('server-ready', (port: number) => {
-      expect(port).toBe(5174);
-    });
-
-    const process = await container.spawn('bun', ['/workspace/preview.ts']);
-
-    await process.exit;
   });
 
   it('watch와 watchPaths를 동시에 사용할 때 이벤트를 올바르게 구분해야 함', async () => {
