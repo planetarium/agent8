@@ -193,19 +193,19 @@ const McpSseServerManager: React.FC = () => {
                                 <div className="relative group cursor-pointer inline-flex items-center ml-1.5">
                                   <button
                                     className="inline-flex items-center justify-center text-purple-500 font-bold mb-0.5 bg-transparent border-none p-0 cursor-pointer"
-                                    onClick={(e) => {
+                                    onMouseEnter={(e) => {
                                       e.stopPropagation();
 
                                       const tooltipId = `${server.name}-tooltip`;
 
-                                      setPinnedTooltip(pinnedTooltip === tooltipId ? null : tooltipId);
+                                      setPinnedTooltip(tooltipId);
                                     }}
                                   >
                                     ?
                                   </button>
                                   <div
                                     className={classNames(
-                                      'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-950 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
+                                      'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-800 border border-gray-600 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
                                       pinnedTooltip === `${server.name}-tooltip` ? 'block' : 'hidden',
                                       server.name === '2D-Image' ||
                                         server.name === 'Cinematic' ||
