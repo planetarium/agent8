@@ -26,6 +26,7 @@ import type {
   WatchPathsOptions,
   WatchResponse,
 } from '~/lib/shared/agent8-container-protocol/src';
+import { v4 } from 'uuid';
 
 /**
  * Class to manage remote WebSocket connection and communication
@@ -71,7 +72,7 @@ class RemoteContainerConnection {
         // Send authentication token if available
         if (this._token) {
           this.sendRequest({
-            id: 'auth-' + Date.now(),
+            id: 'auth-' + v4(),
             operation: {
               type: 'auth',
               token: this._token,
@@ -249,7 +250,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   async readFile(path: string, encoding: BufferEncoding): Promise<string>;
   async readFile(path: string, encoding?: BufferEncoding): Promise<string | Uint8Array> {
     const response = await this._connection.sendRequest<{ content: string | Uint8Array }>({
-      id: `readFile-${Date.now()}`,
+      id: `readFile-${v4()}`,
       operation: {
         type: 'readFile',
         path,
@@ -268,7 +269,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async writeFile(path: string, content: string | Uint8Array, options?: { encoding?: BufferEncoding }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `writeFile-${Date.now()}`,
+      id: `writeFile-${v4()}`,
       operation: {
         type: 'writeFile',
         path,
@@ -284,7 +285,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `mkdir-${Date.now()}`,
+      id: `mkdir-${v4()}`,
       operation: {
         type: 'mkdir',
         path,
@@ -299,7 +300,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async readdir(path: string, options?: { withFileTypes?: boolean }): Promise<any> {
     const response = await this._connection.sendRequest<{ entries: any[] }>({
-      id: `readdir-${Date.now()}`,
+      id: `readdir-${v4()}`,
       operation: {
         type: 'readdir',
         path,
@@ -316,7 +317,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `rm-${Date.now()}`,
+      id: `rm-${v4()}`,
       operation: {
         type: 'rm',
         path,
@@ -330,7 +331,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher {
-    const requestId = `watch-${Date.now()}`;
+    const requestId = `watch-${v4()}`;
     let watcherIdFromResponse: string | undefined = undefined;
 
     // Send request
@@ -369,7 +370,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void {
-    const requestId = `watch-paths-${Date.now()}`;
+    const requestId = `watch-paths-${v4()}`;
     let watcherIdFromResponse: string | undefined = undefined;
 
     this._connection
@@ -414,7 +415,7 @@ export class RemoteContainer implements Container {
 
   async mount(data: FileSystemTree): Promise<void> {
     await this._connection.sendRequest({
-      id: `mount-${Date.now()}`,
+      id: `mount-${v4()}`,
       operation: {
         type: 'mount',
         path: '/',
@@ -425,7 +426,7 @@ export class RemoteContainer implements Container {
 
   async spawn(command: string, args: string[] = [], options?: SpawnOptions): Promise<ContainerProcess> {
     const response = await this._connection.sendRequest<ProcessResponse>({
-      id: `spawn-${Date.now()}`,
+      id: `spawn-${v4()}`,
       operation: {
         type: 'spawn',
         command,
@@ -461,7 +462,7 @@ export class RemoteContainer implements Container {
     const inputStream = new WritableStream<string>({
       write: async (chunk) => {
         await this._connection.sendRequest({
-          id: `input-${Date.now()}`,
+          id: `input-${v4()}`,
           operation: {
             type: 'input',
             pid,
@@ -477,7 +478,7 @@ export class RemoteContainer implements Container {
       exit,
       resize: async (dimensions: { cols: number; rows: number }) => {
         await this._connection.sendRequest({
-          id: `resize-${Date.now()}`,
+          id: `resize-${v4()}`,
           operation: {
             type: 'resize',
             pid,
