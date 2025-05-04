@@ -11,6 +11,7 @@ import type {
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
+import { cleanTerminalOutput } from '~/utils/shell';
 import type {
   BufferEncoding,
   ContainerRequest,
@@ -500,7 +501,80 @@ export class RemoteContainer implements Container {
     });
 
     const input = process.input;
-    const output = process.output;
+    let output: ReadableStream<string>;
+    let internalOutput: ReadableStream<string> | undefined;
+    let executeCommand: ((command: string) => Promise<ExecutionResult>) | undefined;
+
+    // Advanced feature: Wait for OSC code and command execution
+    const waitTillOscCode = async (waitCode: string) => {
+      let fullOutput = '';
+      let exitCode = 0;
+
+      if (!internalOutput) {
+        return { output: fullOutput, exitCode };
+      }
+
+      const reader = internalOutput.getReader();
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          const text = value || '';
+          fullOutput += text;
+
+          // Check for command completion signal and exit code
+          const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
+
+          if (osc === 'exit') {
+            exitCode = parseInt(code, 10);
+          }
+
+          if (osc === waitCode) {
+            break;
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      return { output: fullOutput, exitCode };
+    };
+
+    if (options.splitOutput) {
+      const streams = process.output.tee();
+
+      output = streams[0];
+      internalOutput = streams[1];
+
+      // Command execution implementation
+      executeCommand = async (command: string): Promise<ExecutionResult> => {
+        // Interrupt current execution
+        terminal.input('\x03');
+
+        // Wait for prompt
+        await waitTillOscCode('prompt');
+
+        // Execute new command
+        terminal.input(command.trim() + '\n');
+
+        // Wait for execution result
+        const { output, exitCode } = await waitTillOscCode('exit');
+
+        return {
+          output: cleanTerminalOutput(output),
+          exitCode,
+        };
+      };
+    } else {
+      output = process.output;
+      internalOutput = undefined;
+      executeCommand = undefined;
+    }
 
     // Shell ready signal
     const shellReady = withResolvers<void>();
@@ -518,7 +592,13 @@ export class RemoteContainer implements Container {
     // Handle terminal input
     terminal.onData((data) => {
       const writer = input.getWriter();
-      writer.write(data);
+
+      if (data === '\r') {
+        writer.write('\n');
+      } else {
+        writer.write(data);
+      }
+
       writer.releaseLock();
     });
 
@@ -527,20 +607,11 @@ export class RemoteContainer implements Container {
       process,
       input,
       output,
+      internalOutput,
       ready: shellReady.promise,
+      executeCommand,
+      waitTillOscCode,
     };
-
-    // Add advanced features if needed
-    if (options.splitOutput) {
-      // Command execution implementation
-      session.executeCommand = async (_command: string): Promise<ExecutionResult> => {
-        // Command execution and result logic would go here
-        return {
-          output: '',
-          exitCode: 0,
-        };
-      };
-    }
 
     return session;
   }

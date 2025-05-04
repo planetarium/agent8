@@ -138,7 +138,7 @@ describe('RemoteContainer 통합 테스트', () => {
     const terminal = new MockTerminal();
 
     // 셸 세션 생성
-    const shellSession = await container.spawnShell(terminal);
+    const shellSession = await container.spawnShell(terminal, { splitOutput: true });
 
     // 셸이 준비될 때까지 대기
     await shellSession.ready;
@@ -151,6 +151,10 @@ describe('RemoteContainer 통합 테스트', () => {
 
     // 출력 검증
     expect(terminal.outputData).toContain('Hello, World!');
+
+    const internalOutputReader = shellSession.internalOutput?.getReader();
+    const internalOutputResult = await internalOutputReader?.read();
+    expect(internalOutputResult?.value).toBe('Hello, World!\n');
 
     // 셸 세션 종료 (한 글자씩 입력)
     await simulateTyping(terminal, 'exit\n');
