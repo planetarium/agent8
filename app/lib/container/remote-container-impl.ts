@@ -47,7 +47,8 @@ class RemoteContainerConnection {
 
   constructor(
     private _serverUrl: string,
-    private _token?: string,
+    private _token: string,
+    private _machineId: string,
   ) {}
 
   async connect(): Promise<void> {
@@ -64,7 +65,7 @@ class RemoteContainerConnection {
     this._connectionPromise = promise;
 
     try {
-      this._ws = new WebSocket(this._serverUrl);
+      this._ws = new WebSocket(`${this._serverUrl}/proxy/${this._machineId}`);
 
       this._ws.onopen = () => {
         this._connected = true;
@@ -407,13 +408,17 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
+  readonly machine_id?: string;
 
   private _connection: RemoteContainerConnection;
 
-  constructor(serverUrl: string, workdir: string, token?: string) {
-    this._connection = new RemoteContainerConnection(serverUrl, token);
+  constructor(serverUrl: string, workdir: string, token: string, machineId: string) {
+    this._connection = new RemoteContainerConnection(serverUrl, token, machineId);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
+    this.machine_id = '';
+
+    // Fetch machine_id if token is provided
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
@@ -658,10 +663,27 @@ export class RemoteContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const workdir = options.workdirName || '/workspace';
-      const token = options.coep === 'credentialless' ? 'credentialless' : undefined;
+      const token = options.coep === 'credentialless' ? 'credentialless' : '';
+      let machineId = '';
+
+      if (token) {
+        const response = await fetch(`${this._serverUrl}/api/machine`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = (await response.json()) as { machine_id?: string };
+
+        if (data.machine_id) {
+          machineId = data.machine_id;
+        }
+      }
 
       // Create remote container instance
-      const container = new RemoteContainer(this._serverUrl, workdir, token);
+      const container = new RemoteContainer(this._serverUrl, workdir, token, machineId);
 
       // Initialize connection
       await (container as any)._connection.connect();
