@@ -517,6 +517,7 @@ export class RemoteContainer implements Container {
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
       let exitCode = 0;
+      let buffer = '';
 
       if (!internalOutput) {
         return { output: fullOutput, exitCode };
@@ -534,16 +535,41 @@ export class RemoteContainer implements Container {
 
           const text = value || '';
           fullOutput += text;
+          buffer += text;
 
-          // Check for command completion signal and exit code
-          const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
+          const matches = [...buffer.matchAll(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/g)];
 
-          if (osc === 'exit') {
-            exitCode = parseInt(code, 10);
+          if (matches.length === 0) {
+            if (buffer.length > 10000) {
+              buffer = buffer.slice(-5000);
+            }
+
+            continue;
           }
 
-          if (osc === waitCode) {
-            break;
+          for (const match of matches) {
+            const [fullMatch, osc, , , code] = match;
+
+            if (osc === 'exit') {
+              exitCode = parseInt(code || '0', 10);
+            }
+
+            if (osc === waitCode) {
+              const matchIndex = buffer.indexOf(fullMatch);
+
+              if (matchIndex !== -1) {
+                buffer = buffer.slice(matchIndex + fullMatch.length);
+              }
+
+              return { output: fullOutput, exitCode };
+            }
+          }
+
+          const lastMatch = matches[matches.length - 1][0];
+          const lastMatchIndex = buffer.lastIndexOf(lastMatch);
+
+          if (lastMatchIndex !== -1) {
+            buffer = buffer.slice(lastMatchIndex + lastMatch.length);
           }
         }
       } finally {
