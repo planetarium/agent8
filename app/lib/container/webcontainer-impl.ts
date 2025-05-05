@@ -77,11 +77,7 @@ export class WebContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const container = await WebContainer.boot(options);
-<<<<<<< HEAD
-      const rfactory = new RemoteContainerFactory('ws://fly-summer-log-9042.fly.dev/');
-=======
-      const rfactory = new RemoteContainerFactory('ws://localhost:3000/');
->>>>>>> 67a10c3 (Add createmachine api call)
+      const rfactory = new RemoteContainerFactory('agent8-container.fly.dev');
       const rcontainer = await rfactory.boot({ workdirName: container.workdir });
 
       // Directly implement the Container interface instead of using an adapter

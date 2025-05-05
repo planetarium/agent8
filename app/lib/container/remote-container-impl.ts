@@ -667,7 +667,7 @@ export class RemoteContainerFactory implements ContainerFactory {
       let machineId = '';
 
       if (token) {
-        const response = await fetch(`${this._serverUrl}/api/machine`, {
+        const response = await fetch(`https://${this._serverUrl}/api/machine`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -676,6 +676,7 @@ export class RemoteContainerFactory implements ContainerFactory {
         });
 
         const data = (await response.json()) as { machine_id?: string };
+        console.log('machine_id', data);
 
         if (data.machine_id) {
           machineId = data.machine_id;
@@ -683,7 +684,7 @@ export class RemoteContainerFactory implements ContainerFactory {
       }
 
       // Create remote container instance
-      const container = new RemoteContainer(this._serverUrl, workdir, token, machineId);
+      const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, token, machineId);
 
       // Initialize connection
       await (container as any)._connection.connect();
