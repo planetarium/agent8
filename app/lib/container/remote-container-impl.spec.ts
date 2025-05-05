@@ -16,17 +16,18 @@ const TEST_SERVER_URL = 'ws://localhost:53000'; // 테스트용 서버 URL 설�
  * 실제 터미널 연결을 위한 터미널 목업
  */
 class MockTerminal implements ITerminal {
+  outputData: string = '';
+
   constructor(
     public cols: number = 80,
     public rows: number = 24,
   ) {}
 
   write(data: string): void {
-    console.log('[터미널 출력]', data);
+    this.outputData += data;
   }
 
   onData(callback: (data: string) => void): void {
-    // 필요한 경우 여기서 데이터 입력을 시뮬레이션
     this._dataCallback = callback;
   }
 
@@ -41,6 +42,16 @@ class MockTerminal implements ITerminal {
   }
 
   private _dataCallback: ((data: string) => void) | null = null;
+}
+
+/**
+ * 터미널에 문자열을 한 글자씩 입력하는 시뮬레이션 함수
+ */
+async function simulateTyping(terminal: MockTerminal, text: string, delayMs = 100) {
+  for (const char of text) {
+    terminal.input(char);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
 }
 
 describe('RemoteContainer 통합 테스트', () => {
@@ -127,22 +138,26 @@ describe('RemoteContainer 통합 테스트', () => {
     const terminal = new MockTerminal();
 
     // 셸 세션 생성
-    const shellSession = await container.spawnShell(terminal);
+    const shellSession = await container.spawnShell(terminal, { splitOutput: true });
 
     // 셸이 준비될 때까지 대기
     await shellSession.ready;
 
-    // 명령어 입력을 위한 Writer 가져오기
-    const writer = shellSession.input.getWriter();
+    // 명령어를 한 글자씩 입력
+    await simulateTyping(terminal, 'echo "Hello, World!"\n');
 
-    // 간단한 명령어 실행 (echo)
-    await writer.write('echo "Shell Command Test"\n');
-    writer.releaseLock();
+    // 출력이 나타날 때까지 짧게 대기
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // 셸 세션 종료
-    const writer2 = shellSession.input.getWriter();
-    await writer2.write('exit\n');
-    writer2.releaseLock();
+    // 출력 검증
+    expect(terminal.outputData).toContain('Hello, World!');
+
+    const internalOutputReader = shellSession.internalOutput?.getReader();
+    const internalOutputResult = await internalOutputReader?.read();
+    expect(internalOutputResult?.value).toBe('Hello, World!\n');
+
+    // 셸 세션 종료 (한 글자씩 입력)
+    await simulateTyping(terminal, 'exit\n');
 
     // 정리
     await new Promise((resolve) => setTimeout(resolve, 1000)); // 셸 세션 종료 대기

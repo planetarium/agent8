@@ -11,6 +11,7 @@ import type {
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
+import { cleanTerminalOutput } from '~/utils/shell';
 import type {
   BufferEncoding,
   ContainerRequest,
@@ -25,6 +26,7 @@ import type {
   WatchPathsOptions,
   WatchResponse,
 } from '~/lib/shared/agent8-container-protocol/src';
+import { v4 } from 'uuid';
 
 /**
  * Class to manage remote WebSocket connection and communication
@@ -70,7 +72,7 @@ class RemoteContainerConnection {
         // Send authentication token if available
         if (this._token) {
           this.sendRequest({
-            id: 'auth-' + Date.now(),
+            id: 'auth-' + v4(),
             operation: {
               type: 'auth',
               token: this._token,
@@ -248,7 +250,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   async readFile(path: string, encoding: BufferEncoding): Promise<string>;
   async readFile(path: string, encoding?: BufferEncoding): Promise<string | Uint8Array> {
     const response = await this._connection.sendRequest<{ content: string | Uint8Array }>({
-      id: `readFile-${Date.now()}`,
+      id: `readFile-${v4()}`,
       operation: {
         type: 'readFile',
         path,
@@ -267,7 +269,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async writeFile(path: string, content: string | Uint8Array, options?: { encoding?: BufferEncoding }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `writeFile-${Date.now()}`,
+      id: `writeFile-${v4()}`,
       operation: {
         type: 'writeFile',
         path,
@@ -283,7 +285,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `mkdir-${Date.now()}`,
+      id: `mkdir-${v4()}`,
       operation: {
         type: 'mkdir',
         path,
@@ -298,7 +300,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async readdir(path: string, options?: { withFileTypes?: boolean }): Promise<any> {
     const response = await this._connection.sendRequest<{ entries: any[] }>({
-      id: `readdir-${Date.now()}`,
+      id: `readdir-${v4()}`,
       operation: {
         type: 'readdir',
         path,
@@ -315,7 +317,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 
   async rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void> {
     const response = await this._connection.sendRequest({
-      id: `rm-${Date.now()}`,
+      id: `rm-${v4()}`,
       operation: {
         type: 'rm',
         path,
@@ -329,7 +331,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watch(pattern: string, options?: { persistent?: boolean }): FileSystemWatcher {
-    const requestId = `watch-${Date.now()}`;
+    const requestId = `watch-${v4()}`;
     let watcherIdFromResponse: string | undefined = undefined;
 
     // Send request
@@ -368,7 +370,7 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   watchPaths(options: WatchPathsOptions, callback: (events: PathWatcherEvent[]) => void): void {
-    const requestId = `watch-paths-${Date.now()}`;
+    const requestId = `watch-paths-${v4()}`;
     let watcherIdFromResponse: string | undefined = undefined;
 
     this._connection
@@ -413,7 +415,7 @@ export class RemoteContainer implements Container {
 
   async mount(data: FileSystemTree): Promise<void> {
     await this._connection.sendRequest({
-      id: `mount-${Date.now()}`,
+      id: `mount-${v4()}`,
       operation: {
         type: 'mount',
         path: '/',
@@ -424,7 +426,7 @@ export class RemoteContainer implements Container {
 
   async spawn(command: string, args: string[] = [], options?: SpawnOptions): Promise<ContainerProcess> {
     const response = await this._connection.sendRequest<ProcessResponse>({
-      id: `spawn-${Date.now()}`,
+      id: `spawn-${v4()}`,
       operation: {
         type: 'spawn',
         command,
@@ -460,7 +462,7 @@ export class RemoteContainer implements Container {
     const inputStream = new WritableStream<string>({
       write: async (chunk) => {
         await this._connection.sendRequest({
-          id: `input-${Date.now()}`,
+          id: `input-${v4()}`,
           operation: {
             type: 'input',
             pid,
@@ -476,7 +478,7 @@ export class RemoteContainer implements Container {
       exit,
       resize: async (dimensions: { cols: number; rows: number }) => {
         await this._connection.sendRequest({
-          id: `resize-${Date.now()}`,
+          id: `resize-${v4()}`,
           operation: {
             type: 'resize',
             pid,
@@ -500,7 +502,80 @@ export class RemoteContainer implements Container {
     });
 
     const input = process.input;
-    const output = process.output;
+    let output: ReadableStream<string>;
+    let internalOutput: ReadableStream<string> | undefined;
+    let executeCommand: ((command: string) => Promise<ExecutionResult>) | undefined;
+
+    // Advanced feature: Wait for OSC code and command execution
+    const waitTillOscCode = async (waitCode: string) => {
+      let fullOutput = '';
+      let exitCode = 0;
+
+      if (!internalOutput) {
+        return { output: fullOutput, exitCode };
+      }
+
+      const reader = internalOutput.getReader();
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          const text = value || '';
+          fullOutput += text;
+
+          // Check for command completion signal and exit code
+          const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
+
+          if (osc === 'exit') {
+            exitCode = parseInt(code, 10);
+          }
+
+          if (osc === waitCode) {
+            break;
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      return { output: fullOutput, exitCode };
+    };
+
+    if (options.splitOutput) {
+      const streams = process.output.tee();
+
+      output = streams[0];
+      internalOutput = streams[1];
+
+      // Command execution implementation
+      executeCommand = async (command: string): Promise<ExecutionResult> => {
+        // Interrupt current execution
+        terminal.input('\x03');
+
+        // Wait for prompt
+        await waitTillOscCode('prompt');
+
+        // Execute new command
+        terminal.input(command.trim() + '\n');
+
+        // Wait for execution result
+        const { output, exitCode } = await waitTillOscCode('exit');
+
+        return {
+          output: cleanTerminalOutput(output),
+          exitCode,
+        };
+      };
+    } else {
+      output = process.output;
+      internalOutput = undefined;
+      executeCommand = undefined;
+    }
 
     // Shell ready signal
     const shellReady = withResolvers<void>();
@@ -518,7 +593,13 @@ export class RemoteContainer implements Container {
     // Handle terminal input
     terminal.onData((data) => {
       const writer = input.getWriter();
-      writer.write(data);
+
+      if (data === '\r') {
+        writer.write('\n');
+      } else {
+        writer.write(data);
+      }
+
       writer.releaseLock();
     });
 
@@ -527,20 +608,11 @@ export class RemoteContainer implements Container {
       process,
       input,
       output,
+      internalOutput,
       ready: shellReady.promise,
+      executeCommand,
+      waitTillOscCode,
     };
-
-    // Add advanced features if needed
-    if (options.splitOutput) {
-      // Command execution implementation
-      session.executeCommand = async (_command: string): Promise<ExecutionResult> => {
-        // Command execution and result logic would go here
-        return {
-          output: '',
-          exitCode: 0,
-        };
-      };
-    }
 
     return session;
   }
