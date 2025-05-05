@@ -126,23 +126,29 @@ class RemoteContainerConnection {
   }
 
   private _handleMessage(message: any) {
-    console.log('message', message);
+    if (message.data?.data?.type) {
+      const { data } = message.data.data;
 
-    // Handle server events
-    if (message.event) {
-      switch (message.event) {
+      switch (message.data.data.type) {
         case 'port':
-          this._listeners.port.forEach((listener) => listener(message.data.port, message.data.type, message.data.url));
+          this._listeners.port.forEach((listener) => listener(data.port, data.type, data.url));
           break;
 
         case 'server-ready':
-          this._listeners['server-ready'].forEach((listener) => listener(message.data.port, message.data.url));
+          this._listeners['server-ready'].forEach((listener) => listener(data.port, data.url));
           break;
 
         case 'preview-message':
           this._listeners['preview-message'].forEach((listener) => listener(message.data));
           break;
+      }
 
+      return;
+    }
+
+    // Handle server events
+    if (message.event) {
+      switch (message.event) {
         case 'file-change':
           this._listeners['file-change'].forEach((listener) =>
             listener(message.data.watcherId, message.data.eventType, message.data.filename),
@@ -171,6 +177,7 @@ class RemoteContainerConnection {
     // Handle request/response
     if (message.id && this._requestMap.has(message.id)) {
       const { resolve, reject } = this._requestMap.get(message.id)!;
+
       this._requestMap.delete(message.id);
 
       if (message.success) {

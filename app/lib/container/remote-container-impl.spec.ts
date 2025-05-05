@@ -64,13 +64,13 @@ describe('RemoteContainer 통합 테스트', () => {
   });
 
   afterEach(() => {
-    container?.close();
+    container.close();
   });
 
   it('파일 시스템에서 파일을 읽고 쓸 수 있어야 함', async () => {
     // 테스트 파일 생성
     const testContent = '테스트 파일 내용';
-    const testPath = '/workspace/test-file.txt';
+    const testPath = 'test-file.txt';
 
     await container.fs.writeFile(testPath, testContent);
 
@@ -86,7 +86,7 @@ describe('RemoteContainer 통합 테스트', () => {
 
   it('디렉토리를 생성하고 읽을 수 있어야 함', async () => {
     // 테스트 디렉토리 생성
-    const testDir = '/workspace/test-dir';
+    const testDir = 'test-dir';
 
     await container.fs.mkdir(testDir);
 
@@ -231,6 +231,90 @@ describe('RemoteContainer 통합 테스트', () => {
 
     // 정리
     await container.fs.rm(testPath);
+  });
+
+  it('preview 이벤트가 트리거 되어야함', async () => {
+    const serverCode = `const server = Bun.serve({
+      port: 55174,
+      fetch() {
+        return new Response("서버 실행 중");
+      },
+    });
+
+    // 특정 문자열이 입력됐을 때 서버 종료
+    process.stdin.on('data', (data) => {
+      if (data.toString().trim() === 'shutdown') {
+        console.log('서버를 종료합니다...');
+        server.stop();
+        process.exit(0);
+      }
+    });
+
+    // SIGINT, SIGTERM 핸들러 추가
+    process.on('SIGINT', () => {
+      console.log('SIGINT 신호를 받았습니다. 서버를 종료합니다...');
+      server.stop();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM 신호를 받았습니다. 서버를 종료합니다...');
+      server.stop();
+      process.exit(0);
+    });
+
+    console.log('서버가 실행 중입니다. 종료하려면 "shutdown" 입력 또는 Ctrl+C를 누르세요.');`;
+
+    await container.fs.writeFile('/serve.ts', serverCode);
+
+    const terminal = new MockTerminal();
+    const shellSession = await container.spawnShell(terminal);
+    await shellSession.ready;
+
+    const openPromise = new Promise<boolean>((resolve) => {
+      const unsubscribePort = container.on('port', (port: number, type: string, url?: string) => {
+        console.log('port event triggered: ', port, type, url);
+        expect(port).toBe(55174);
+        expect(type).toBe('open');
+        resolve(true);
+        unsubscribePort();
+      });
+
+      container.on('server-ready', (port: number) => {
+        console.log('server-ready event triggered');
+        expect(port).toBe(55174);
+        resolve(true);
+      });
+
+      setTimeout(() => resolve(false), 5000);
+
+      setTimeout(async () => {
+        terminal.input('bun /serve.ts\n');
+      }, 500);
+    });
+
+    // 이벤트가 발생했는지 확인
+    const openEventReceived = await openPromise;
+    expect(openEventReceived).toBe(true);
+
+    const closePromise = new Promise<boolean>((resolve) => {
+      const unsubscribePort = container.on('port', (port: number, type: string, url?: string) => {
+        console.log('port event triggered: ', port, type, url);
+        expect(port).toBe(55174);
+        expect(type).toBe('close');
+        resolve(true);
+        unsubscribePort();
+      });
+
+      setTimeout(() => resolve(false), 5000);
+
+      setTimeout(async () => {
+        terminal.input('shutdown\n');
+      }, 500);
+    });
+
+    const closeEventReceived = await closePromise;
+    expect(closeEventReceived).toBe(true);
   });
 
   it('watchPaths로 여러 파일 변경을 감지해야 함', async () => {
