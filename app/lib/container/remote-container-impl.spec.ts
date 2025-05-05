@@ -10,7 +10,7 @@ global.WebSocket = WebSocket as any;
  * 실제 서버 연결을 위한 설정
  * 테스트 실행 시 실제 서버에 연결합니다.
  */
-const TEST_SERVER_URL = 'ws://fly-summer-log-9042.fly.dev'; // 테스트용 서버 URL 설정
+const TEST_SERVER_URL = 'ws://localhost:53000'; // 테스트용 서버 URL 설정
 
 /**
  * 실제 터미널 연결을 위한 터미널 목업
@@ -53,7 +53,7 @@ describe('RemoteContainer 통합 테스트', () => {
   });
 
   afterEach(() => {
-    // 정리 작업 (필요한 경우)
+    container.close();
   });
 
   it('파일 시스템에서 파일을 읽고 쓸 수 있어야 함', async () => {
@@ -219,17 +219,26 @@ describe('RemoteContainer 통합 테스트', () => {
   });
 
   it('preview 이벤트가 트리거 되어야함', async () => {
+    const previewCodes = `const server = Bun.serve({
+      port: 55174,
+      fetch() {
+        return new Response("서버 실행 중");
+      },
+    });`;
+
+    await container.fs.writeFile('/workspace/preview.ts', previewCodes);
+
     const eventPromise = new Promise<boolean>((resolve) => {
       container.on('port', (port: number, type: string, url?: string) => {
-        console.log('port event triggered: ' + url);
-        expect(port).toBe(5174);
+        console.log('port event triggered: ', port, type, url);
+        expect(port).toBe(55174);
         expect(type).toBe('close');
         resolve(true);
       });
 
       container.on('server-ready', (port: number) => {
         console.log('server-ready event triggered');
-        expect(port).toBe(5174);
+        expect(port).toBe(55174);
         resolve(true);
       });
 
