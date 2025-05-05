@@ -65,7 +65,7 @@ class RemoteContainerConnection {
     this._connectionPromise = promise;
 
     try {
-      this._ws = new WebSocket(`${this._serverUrl}/proxy/${this._machineId}`);
+      this._ws = new WebSocket(`${this._serverUrl}/proxy/${this._machineId}/`);
 
       this._ws.onopen = () => {
         this._connected = true;
@@ -663,7 +663,7 @@ export class RemoteContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const workdir = options.workdirName || '/workspace';
-      const token = options.coep === 'credentialless' ? 'credentialless' : '';
+      const token = options.coep === 'credentialless' ? 'credentialless' : localStorage.getItem('v8AccessToken') || '';
       let machineId = '';
 
       if (token) {
@@ -686,10 +686,19 @@ export class RemoteContainerFactory implements ContainerFactory {
       // Create remote container instance
       const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, token, machineId);
 
-      // Initialize connection
-      await (container as any)._connection.connect();
+      // Wait for 30 seconds before attempting to connect
+      console.log('Waiting 30 seconds before connecting to remote container...');
+      await new Promise((resolve) => setTimeout(resolve, 30000));
 
-      return container;
+      // Initialize connection
+      try {
+        await (container as any)._connection.connect();
+        console.log('Successfully connected to remote container');
+
+        return container;
+      } catch (error) {
+        throw new Error(`Failed to connect to remote container: ${error}`);
+      }
     } catch (error) {
       console.error('Failed to boot remote container:', error);
       throw error;
