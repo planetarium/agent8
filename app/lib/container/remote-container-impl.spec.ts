@@ -219,18 +219,32 @@ describe('RemoteContainer 통합 테스트', () => {
   });
 
   it('preview 이벤트가 트리거 되어야함', async () => {
-    container.on('port', (port: number, type: string, url?: string) => {
-      console.log('port event triggered: ' + url);
-      expect(port).toBe(5174);
-      expect(type).toBe('close');
-    });
-    container.on('server-ready', (port: number) => {
-      console.log('server-ready event triggered');
-      expect(port).toBe(5174);
+    const eventPromise = new Promise<boolean>((resolve) => {
+      container.on('port', (port: number, type: string, url?: string) => {
+        console.log('port event triggered: ' + url);
+        expect(port).toBe(5174);
+        expect(type).toBe('close');
+        resolve(true);
+      });
+
+      container.on('server-ready', (port: number) => {
+        console.log('server-ready event triggered');
+        expect(port).toBe(5174);
+        resolve(true);
+      });
+
+      // 타임아웃 설정
+      setTimeout(() => resolve(false), 5000);
+
+      // 파일 변경
+      setTimeout(async () => {
+        await container.spawn('bun', ['/workspace/preview.ts']);
+      }, 500);
     });
 
-    await container.spawn('bun', ['/workspace/preview.ts']);
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // 이벤트가 발생했는지 확인
+    const eventReceived = await eventPromise;
+    expect(eventReceived).toBe(true);
   });
 
   it('watchPaths로 여러 파일 변경을 감지해야 함', async () => {
@@ -362,29 +376,5 @@ describe('RemoteContainer 통합 테스트', () => {
     watcher.close();
     await container.fs.rm(watchDir, { recursive: true });
     await container.fs.rm(watchPathsDir, { recursive: true });
-  });
-
-  it('preview 이벤트가 트리거 되어야함', async () => {
-    container.on('port', (port: number, type: string) => {
-      expect(port).toBe(5174);
-      expect(type).toBe('open');
-    });
-    container.on('server-ready', (port: number) => {
-      expect(port).toBe(5174);
-    });
-
-    const process = await container.spawn('bun', ['/workspace/preview.ts']);
-
-    await process.exit;
-  });
-
-  it('preview 이벤트가 트리거 되어야함', async () => {
-    container.on('port', (port: number, type: string) => {
-      expect(port).toBe(5174);
-      expect(type).toBe('open');
-    });
-    container.on('server-ready', (port: number) => {
-      expect(port).toBe(5174);
-    });
   });
 });
