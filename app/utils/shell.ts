@@ -16,7 +16,6 @@ export class BoltShell {
   executionState = atom<
     { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
   >();
-  #outputStream: ReadableStreamDefaultReader<string> | undefined;
 
   constructor() {
     this.#readyPromise = new Promise((resolve) => {
@@ -45,7 +44,6 @@ export class BoltShell {
     this.#terminal = terminal;
 
     this.#shellSession = await container.spawnShell(terminal, { splitOutput: true });
-    this.#outputStream = this.#shellSession.internalOutput!.getReader();
     await this.#shellSession.ready;
     this.#initialized?.();
   }
@@ -95,38 +93,11 @@ export class BoltShell {
   }
 
   async waitTillOscCode(waitCode: string) {
-    let fullOutput = '';
-    let exitCode: number = 0;
-
-    if (!this.#outputStream) {
-      return { output: fullOutput, exitCode };
+    if (this.#shellSession && this.#shellSession.waitTillOscCode) {
+      return await this.#shellSession.waitTillOscCode(waitCode);
+    } else {
+      throw new Error('BoltShell does not support waitTillOscCode');
     }
-
-    const tappedStream = this.#outputStream;
-
-    while (true) {
-      const { value, done } = await tappedStream.read();
-
-      if (done) {
-        break;
-      }
-
-      const text = value || '';
-      fullOutput += text;
-
-      // Check if command completion signal with exit code
-      const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
-
-      if (osc === 'exit') {
-        exitCode = parseInt(code, 10);
-      }
-
-      if (osc === waitCode) {
-        break;
-      }
-    }
-
-    return { output: fullOutput, exitCode };
   }
 }
 
