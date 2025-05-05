@@ -8,6 +8,7 @@ import type {
   Unsubscribe,
   ContainerProcess,
   PathWatcherEvent,
+  ShellSession,
 } from './interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
@@ -20,7 +21,6 @@ import type {
   EventListenerMap,
   ProcessResponse,
   SpawnOptions,
-  ShellSession,
   ShellOptions,
   ExecutionResult,
   WatchPathsOptions,
