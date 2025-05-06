@@ -59,7 +59,7 @@ describe('RemoteContainer 통합 테스트', () => {
 
   beforeEach(async () => {
     // 실제 컨테이너 팩토리 생성 및 부팅
-    const factory = new RemoteContainerFactory(TEST_SERVER_URL);
+    const factory = new RemoteContainerFactory(TEST_SERVER_URL, 'fly-summer-log-9042');
     container = (await factory.boot({ workdirName: '/workspace' })) as RemoteContainer;
   });
 

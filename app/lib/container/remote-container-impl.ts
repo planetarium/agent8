@@ -50,7 +50,6 @@ class RemoteContainerConnection {
   constructor(
     private _serverUrl: string,
     private _token: string,
-    private _machineId: string,
   ) {}
 
   private _startHeartbeat(interval: number = 10000) {
@@ -95,7 +94,7 @@ class RemoteContainerConnection {
     this._connectionPromise = promise;
 
     try {
-      this._ws = new WebSocket(`${this._serverUrl}/proxy/${this._machineId}/`);
+      this._ws = new WebSocket(this._serverUrl);
 
       this._ws.onopen = () => {
         this._connected = true;
@@ -441,15 +440,13 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
-  readonly machineId: string;
 
   private _connection: RemoteContainerConnection;
 
-  constructor(serverUrl: string, workdir: string, token: string, machineId: string) {
-    this._connection = new RemoteContainerConnection(serverUrl, token, machineId);
+  constructor(serverUrl: string, workdir: string, token: string) {
+    this._connection = new RemoteContainerConnection(serverUrl, token);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
-    this.machineId = machineId;
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
@@ -689,7 +686,10 @@ export class RemoteContainer implements Container {
  * Remote container factory
  */
 export class RemoteContainerFactory implements ContainerFactory {
-  constructor(private _serverUrl: string) {}
+  constructor(
+    private _serverUrl: string,
+    private _appName: string,
+  ) {}
 
   async boot(options: ContainerOptions): Promise<Container> {
     try {
@@ -719,7 +719,11 @@ export class RemoteContainerFactory implements ContainerFactory {
       console.log('Machine is ready');
 
       // Create remote container instance
-      const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, v8AccessToken, machineId);
+      const container = new RemoteContainer(
+        `wss://${this._appName}-${machineId}.agent8.verse8.net`,
+        workdir,
+        v8AccessToken,
+      );
 
       // Initialize connection
       try {
