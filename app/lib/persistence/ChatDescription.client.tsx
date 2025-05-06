@@ -33,7 +33,6 @@ export function ChatDescription() {
                 <button
                   type="submit"
                   className="i-ph:check-bold scale-110 hover:text-bolt-elements-item-contentAccent"
-                  onMouseDown={handleSubmit}
                 />
               </div>
             </WithTooltip>
