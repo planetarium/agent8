@@ -1,17 +1,23 @@
 .toolResult {
-  margin: 8px 0;
-  border: 1px solid #444;
+  margin: 4px 0;
+  border: 1px solid rgba(80, 80, 80, 0.4);
   border-radius: 6px;
-  background-color: #222;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  background-color: rgba(40, 40, 40, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   color: #eee;
+  overflow: hidden;
 
   &.error {
-    border-color: #a83232;
-    background-color: #3a1a1a;
+    border-color: rgba(168, 50, 50, 0.6);
+    background-color: rgba(58, 26, 26, 0.7);
 
-    .toolResultHeader h4 {
+    .resultLabel {
+      color: #aaa;
+    }
+
+    .errorLabel {
       color: #ff5252;
+      margin-left: 4px;
     }
   }
 }
@@ -20,47 +26,52 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 4px 10px;
   cursor: pointer;
   border-radius: 6px 6px 0 0;
-  background-color: #2c2c2c;
-  transition: background-color 0.2s;
+  background-color: rgba(50, 50, 50, 0.8);
+  transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: #333;
-  }
-
-  h4 {
-    margin: 0;
-    color: #5e9eff;
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  span {
-    font-size: 12px;
-    font-weight: bold;
-    color: #ccc;
+    background-color: rgba(60, 60, 60, 0.8);
   }
 }
 
+.resultInfo {
+  display: flex;
+  align-items: center;
+}
+
+.resultLabel {
+  color: #aaa;
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.expandIcon {
+  font-size: 10px;
+  color: #aaa;
+  transition: transform 0.2s ease;
+}
+
 .toolResultContent {
-  padding: 8px 12px;
-  border-top: 1px solid #444;
+  padding: 6px 10px;
+  border-top: 1px solid rgba(80, 80, 80, 0.4);
   max-height: 400px;
   overflow-y: auto;
   color: #eee;
 
   pre {
     margin: 0;
-    padding: 8px;
+    padding: 6px 8px;
     white-space: pre-wrap;
     word-break: break-word;
-    background-color: #333;
+    background-color: rgba(30, 30, 30, 0.6);
     border-radius: 4px;
     font-size: 12px;
     line-height: 1.4;
     color: #eee;
-    border: 1px solid #555;
+    border: 1px solid rgba(80, 80, 80, 0.5);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   }
 }

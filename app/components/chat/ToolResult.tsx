@@ -12,13 +12,16 @@ interface ToolResultProps {
 }
 
 export const ToolResult = ({ toolResult }: ToolResultProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   return (
     <div className={`${styles.toolResult} ${toolResult.isError ? styles.error : ''}`}>
       <div className={styles.toolResultHeader} onClick={() => setIsExpanded(!isExpanded)}>
-        <h4>Tool Result {toolResult.isError ? '(Error)' : ''}</h4>
-        <span>{isExpanded ? '▼' : '▶'}</span>
+        <div className={styles.resultInfo}>
+          <span className={styles.resultLabel}>Tool Result</span>
+          {toolResult.isError && <span className={styles.errorLabel}>(Error)</span>}
+        </div>
+        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
       </div>
       {isExpanded && (
         <div className={styles.toolResultContent}>
