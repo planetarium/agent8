@@ -77,7 +77,7 @@ export class WebContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const container = await WebContainer.boot(options);
-      const rfactory = new RemoteContainerFactory('ws://localhost:53000');
+      const rfactory = new RemoteContainerFactory('ws://fly-summer-log-9042.fly.dev/');
       const rcontainer = await rfactory.boot({ workdirName: container.workdir });
 
       // Directly implement the Container interface instead of using an adapter
@@ -98,7 +98,7 @@ export class WebContainerFactory implements ContainerFactory {
           };
         },
         on(event: 'port' | 'server-ready' | 'preview-message' | 'error', listener: any) {
-          return (container as any).on(event, listener);
+          return rcontainer.on(event as any, listener);
         },
         spawnShell: async (terminal: ITerminal, options: ShellOptions = {}): Promise<ShellSession> => {
           return rcontainer.spawnShell(terminal, options);
