@@ -535,6 +535,9 @@ export class RemoteContainer implements Container {
 
     // Use appropriate shell command
     const process = await this.spawn('/bin/zsh', ['--interactive', ...args], {
+      env: {
+        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: '.agent8.verse8.net',
+      },
       terminal: {
         cols: terminal.cols ?? 80,
         rows: terminal.rows ?? 15,
