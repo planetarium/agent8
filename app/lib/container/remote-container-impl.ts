@@ -716,12 +716,15 @@ export class RemoteContainerFactory implements ContainerFactory {
         }
       }
 
+      // Wait for machine to be ready
+      if (machineId && token !== 'credentialless') {
+        console.log('Waiting for machine to be ready...');
+        await this._waitForMachineReady(machineId, token);
+        console.log('Machine is ready');
+      }
+
       // Create remote container instance
       const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, token, machineId);
-
-      // Wait for 30 seconds before attempting to connect
-      console.log('Waiting 30 seconds before connecting to remote container...');
-      await new Promise((resolve) => setTimeout(resolve, 30000));
 
       // Initialize connection
       try {
@@ -736,5 +739,48 @@ export class RemoteContainerFactory implements ContainerFactory {
       console.error('Failed to boot remote container:', error);
       throw error;
     }
+  }
+
+  private async _waitForMachineReady(machineId: string, token: string): Promise<void> {
+    const maxRetries = 30; // Maximum 30 attempts
+    const delayMs = 2000; // Check every 2 seconds
+
+    interface MachineResponse {
+      success: boolean;
+      machine?: {
+        id: string;
+        state: string;
+        [key: string]: any;
+      };
+    }
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(`https://${this._serverUrl}/api/machine/${machineId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`API response error: ${response.status}`);
+        }
+
+        const data = (await response.json()) as MachineResponse;
+
+        if (data.success && data.machine && data.machine.state === 'started') {
+          return; // Machine is ready
+        }
+
+        console.log(`Machine state: ${data.machine?.state || 'unknown'}, retrying...`);
+      } catch (error) {
+        console.error(`Error checking machine status: ${error}`);
+      }
+
+      // Wait before next attempt
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error('Machine not ready. Maximum retry count exceeded');
   }
 }
