@@ -441,7 +441,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
-  readonly machine_id?: string;
+  readonly machineId: string;
 
   private _connection: RemoteContainerConnection;
 
@@ -449,9 +449,7 @@ export class RemoteContainer implements Container {
     this._connection = new RemoteContainerConnection(serverUrl, token, machineId);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
-    this.machine_id = '';
-
-    // Fetch machine_id if token is provided
+    this.machineId = machineId;
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
