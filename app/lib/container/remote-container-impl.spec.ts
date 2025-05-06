@@ -1,6 +1,6 @@
 import { WebSocket } from 'ws';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { RemoteContainer, RemoteContainerFactory } from '~/lib/container/remote-container-impl';
+import { RemoteContainer } from '~/lib/container/remote-container-impl';
 import type { FileSystemTree, PathWatcherEvent } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
 
@@ -10,7 +10,9 @@ global.WebSocket = WebSocket as any;
  * 실제 서버 연결을 위한 설정
  * 테스트 실행 시 실제 서버에 연결합니다.
  */
-const TEST_SERVER_URL = 'ws://agent8-container.fly.dev/'; // 테스트용 서버 URL 설정
+const TEST_SERVER_URL = 'wss://fly-summer-log-9042-08016e2f09d2d8.agent8.verse8.net/'; // 테스트용 서버 URL 설정
+const TEST_V8_ACCESS_TOKEN = '<v8-access-token>';
+const TEST_WORKDIR = '/workspace';
 
 /**
  * 실제 터미널 연결을 위한 터미널 목업
@@ -58,9 +60,7 @@ describe('RemoteContainer 통합 테스트', () => {
   let container: RemoteContainer;
 
   beforeEach(async () => {
-    // 실제 컨테이너 팩토리 생성 및 부팅
-    const factory = new RemoteContainerFactory(TEST_SERVER_URL);
-    container = (await factory.boot({ workdirName: '/workspace' })) as RemoteContainer;
+    container = new RemoteContainer(TEST_SERVER_URL, TEST_WORKDIR, TEST_V8_ACCESS_TOKEN);
   });
 
   afterEach(() => {

@@ -35,6 +35,7 @@ if (!import.meta.env.SSR) {
           coep: 'credentialless',
           workdirName: WORK_DIR_NAME,
           forwardPreviewErrors: true,
+          v8AccessToken: localStorage.getItem('v8AccessToken') || undefined,
         });
       })
       .then(async (containerInstance) => {

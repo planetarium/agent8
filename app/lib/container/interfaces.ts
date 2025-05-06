@@ -125,6 +125,7 @@ export interface ContainerOptions {
   coep?: 'credentialless';
   workdirName?: string;
   forwardPreviewErrors?: boolean;
+  v8AccessToken?: string;
 }
 
 /**

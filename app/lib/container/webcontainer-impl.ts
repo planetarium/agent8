@@ -77,8 +77,8 @@ export class WebContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const container = await WebContainer.boot(options);
-      const rfactory = new RemoteContainerFactory('agent8-container.fly.dev');
-      const rcontainer = await rfactory.boot({ workdirName: container.workdir });
+      const rfactory = new RemoteContainerFactory('fly-summer-log-9042.fly.dev', 'fly-summer-log-9042');
+      const rcontainer = await rfactory.boot({ workdirName: container.workdir, ...options });
 
       // Directly implement the Container interface instead of using an adapter
       return {

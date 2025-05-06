@@ -28,6 +28,8 @@ import type {
 } from '~/lib/shared/agent8-container-protocol/src';
 import { v4 } from 'uuid';
 
+const ROUTER_DOMAIN = 'agent8.verse8.net';
+
 /**
  * Class to manage remote WebSocket connection and communication
  */
@@ -50,7 +52,6 @@ class RemoteContainerConnection {
   constructor(
     private _serverUrl: string,
     private _token: string,
-    private _machineId: string,
   ) {}
 
   private _startHeartbeat(interval: number = 10000) {
@@ -95,7 +96,7 @@ class RemoteContainerConnection {
     this._connectionPromise = promise;
 
     try {
-      this._ws = new WebSocket(`${this._serverUrl}/proxy/${this._machineId}/`);
+      this._ws = new WebSocket(this._serverUrl);
 
       this._ws.onopen = () => {
         this._connected = true;
@@ -441,17 +442,13 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
-  readonly machine_id?: string;
 
   private _connection: RemoteContainerConnection;
 
-  constructor(serverUrl: string, workdir: string, token: string, machineId: string) {
-    this._connection = new RemoteContainerConnection(serverUrl, token, machineId);
+  constructor(serverUrl: string, workdir: string, token: string) {
+    this._connection = new RemoteContainerConnection(serverUrl, token);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
-    this.machine_id = '';
-
-    // Fetch machine_id if token is provided
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
@@ -540,6 +537,9 @@ export class RemoteContainer implements Container {
 
     // Use appropriate shell command
     const process = await this.spawn('/bin/zsh', ['--interactive', ...args], {
+      env: {
+        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `.${ROUTER_DOMAIN}`,
+      },
       terminal: {
         cols: terminal.cols ?? 80,
         rows: terminal.rows ?? 15,
@@ -691,37 +691,44 @@ export class RemoteContainer implements Container {
  * Remote container factory
  */
 export class RemoteContainerFactory implements ContainerFactory {
-  constructor(private _serverUrl: string) {}
+  constructor(
+    private _serverUrl: string,
+    private _appName: string,
+  ) {}
 
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const workdir = options.workdirName || '/workspace';
-      const token = options.coep === 'credentialless' ? 'credentialless' : localStorage.getItem('v8AccessToken') || '';
-      let machineId = '';
+      const v8AccessToken = options.v8AccessToken;
 
-      if (token) {
-        const response = await fetch(`https://${this._serverUrl}/api/machine`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const data = (await response.json()) as { machine_id?: string };
-        console.log('machine_id', data);
-
-        if (data.machine_id) {
-          machineId = data.machine_id;
-        }
+      if (!v8AccessToken) {
+        throw new Error('No V8 access token given');
       }
 
-      // Create remote container instance
-      const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, token, machineId);
+      const response = await fetch(`https://${this._serverUrl}/api/machine`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${v8AccessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      // Wait for 30 seconds before attempting to connect
-      console.log('Waiting 30 seconds before connecting to remote container...');
-      await new Promise((resolve) => setTimeout(resolve, 30000));
+      const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
+
+      if (machineId === undefined) {
+        throw new Error('No machine ID received from server');
+      }
+
+      console.log('Waiting for machine to be ready...');
+      await this._waitForMachineReady(machineId, v8AccessToken);
+      console.log('Machine is ready');
+
+      // Create remote container instance
+      const container = new RemoteContainer(
+        `wss://${this._appName}-${machineId}.${ROUTER_DOMAIN}`,
+        workdir,
+        v8AccessToken,
+      );
 
       // Initialize connection
       try {
@@ -736,5 +743,48 @@ export class RemoteContainerFactory implements ContainerFactory {
       console.error('Failed to boot remote container:', error);
       throw error;
     }
+  }
+
+  private async _waitForMachineReady(machineId: string, token: string): Promise<void> {
+    const maxRetries = 30; // Maximum 30 attempts
+    const delayMs = 2000; // Check every 2 seconds
+
+    interface MachineResponse {
+      success: boolean;
+      machine?: {
+        id: string;
+        state: string;
+        [key: string]: any;
+      };
+    }
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(`https://${this._serverUrl}/api/machine/${machineId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`API response error: ${response.status}`);
+        }
+
+        const data = (await response.json()) as MachineResponse;
+
+        if (data.success && data.machine && data.machine.state === 'started') {
+          return; // Machine is ready
+        }
+
+        console.log(`Machine state: ${data.machine?.state || 'unknown'}, retrying...`);
+      } catch (error) {
+        console.error(`Error checking machine status: ${error}`);
+      }
+
+      // Wait before next attempt
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error('Machine not ready. Maximum retry count exceeded');
   }
 }
