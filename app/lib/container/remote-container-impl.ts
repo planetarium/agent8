@@ -694,35 +694,32 @@ export class RemoteContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const workdir = options.workdirName || '/workspace';
-      const token = options.coep === 'credentialless' ? 'credentialless' : localStorage.getItem('v8AccessToken') || '';
-      let machineId = '';
+      const v8AccessToken = localStorage.getItem('v8AccessToken');
 
-      if (token) {
-        const response = await fetch(`https://${this._serverUrl}/api/machine`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const data = (await response.json()) as { machine_id?: string };
-        console.log('machine_id', data);
-
-        if (data.machine_id) {
-          machineId = data.machine_id;
-        }
+      if (v8AccessToken === null) {
+        throw new Error('No V8 access token found');
       }
 
-      // Wait for machine to be ready
-      if (machineId && token !== 'credentialless') {
-        console.log('Waiting for machine to be ready...');
-        await this._waitForMachineReady(machineId, token);
-        console.log('Machine is ready');
+      const response = await fetch(`https://${this._serverUrl}/api/machine`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${v8AccessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
+
+      if (machineId === undefined) {
+        throw new Error('No machine ID received from server');
       }
+
+      console.log('Waiting for machine to be ready...');
+      await this._waitForMachineReady(machineId, v8AccessToken);
+      console.log('Machine is ready');
 
       // Create remote container instance
-      const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, token, machineId);
+      const container = new RemoteContainer(`ws://${this._serverUrl}`, workdir, v8AccessToken, machineId);
 
       // Initialize connection
       try {
