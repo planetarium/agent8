@@ -626,13 +626,7 @@ export class RemoteContainer implements Container {
     // Handle terminal input
     terminal.onData((data) => {
       const writer = input.getWriter();
-
-      if (data === '\r') {
-        writer.write('\n');
-      } else {
-        writer.write(data);
-      }
-
+      writer.write(data);
       writer.releaseLock();
     });
 
