@@ -28,6 +28,8 @@ import type {
 } from '~/lib/shared/agent8-container-protocol/src';
 import { v4 } from 'uuid';
 
+const ROUTER_DOMAIN = 'agent8.verse8.net';
+
 /**
  * Class to manage remote WebSocket connection and communication
  */
@@ -536,7 +538,7 @@ export class RemoteContainer implements Container {
     // Use appropriate shell command
     const process = await this.spawn('/bin/zsh', ['--interactive', ...args], {
       env: {
-        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: '.agent8.verse8.net',
+        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `.${ROUTER_DOMAIN}`,
       },
       terminal: {
         cols: terminal.cols ?? 80,
@@ -723,7 +725,7 @@ export class RemoteContainerFactory implements ContainerFactory {
 
       // Create remote container instance
       const container = new RemoteContainer(
-        `wss://${this._appName}-${machineId}.agent8.verse8.net`,
+        `wss://${this._appName}-${machineId}.${ROUTER_DOMAIN}`,
         workdir,
         v8AccessToken,
       );
