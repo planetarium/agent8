@@ -159,14 +159,6 @@ export type EventListenerMap = {
   'file-change': FileSystemEventHandler;
 };
 
-// Container process interface
-export interface ContainerProcess {
-  input: WritableStream<string>;
-  output: ReadableStream<string>;
-  exit: Promise<number>;
-  resize(dimensions: { cols: number; rows: number }): void;
-}
-
 // Shell related interfaces
 export interface ShellOptions {
   args?: string[];
@@ -177,17 +169,6 @@ export interface ShellOptions {
 export interface ExecutionResult {
   output: string;
   exitCode: number;
-}
-
-export interface ShellSession {
-  process: ContainerProcess;
-  input: WritableStream<string>;
-  output: ReadableStream<string>;
-  internalOutput?: ReadableStream<string>;
-  ready: Promise<void>;
-
-  executeCommand?(command: string): Promise<ExecutionResult>;
-  waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
 }
 
 export interface FileNode {
