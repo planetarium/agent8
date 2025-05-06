@@ -10,6 +10,10 @@ export interface V8User {
   isActivated: boolean;
   email: string;
   walletAddress: string;
+  name: string;
+  profilePicture: string | null;
+  userAddress?: string;
+  role?: string;
 }
 
 export const updateV8AccessToken = (v8AccessToken: string) => {
@@ -38,9 +42,22 @@ export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: st
       isActivated: data?.isActivated || false,
       email: data?.email || '',
       walletAddress: data?.walletAddress || '',
+      name: data?.name || '',
+      profilePicture: data?.profilePicture || null,
+      userAddress: data?.userAddress || '',
+      role: data?.role || '',
     };
   } catch (error) {
     logger.error('Failed to verify V8 access token', error);
-    return { userUid: '', isActivated: false, email: '', walletAddress: '' };
+    return {
+      userUid: '',
+      isActivated: false,
+      email: '',
+      walletAddress: '',
+      name: '',
+      profilePicture: null,
+      userAddress: '',
+      role: '',
+    };
   }
 };

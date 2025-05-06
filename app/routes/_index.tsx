@@ -9,6 +9,7 @@ import BackgroundRays from '~/components/ui/BackgroundRays';
 import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { container } from '~/lib/container';
+import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -43,12 +44,15 @@ function AccessControlledChat() {
       const verifyToken = async () => {
         try {
           const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
-          const { isActivated } = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
+          const userInfo = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
 
-          setIsActivated(isActivated);
+          v8UserStore.set({ loading: false, user: userInfo });
+
+          setIsActivated(userInfo.isActivated);
         } catch (error) {
           console.error('Failed to verify token:', error);
           setIsActivated(false);
+          v8UserStore.set({ loading: false, user: null });
         } finally {
           setIsLoading(false);
         }
