@@ -205,6 +205,40 @@ export const Preview = memo(() => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'iframe-error') {
+        const { error } = event.data;
+        const { workbenchStore } = await import('~/lib/stores/workbench');
+
+        let title = 'Error in Preview';
+        const description = error.message || 'An error occurred in the preview';
+
+        if (error.type === 'unhandled-rejection') {
+          title = 'Unhandled Promise Rejection';
+        } else if (error.type === 'uncaught-exception') {
+          title = 'Uncaught Exception';
+        } else if (error.type === 'console-error') {
+          title = 'Console Error';
+        }
+
+        workbenchStore.actionAlert.set({
+          type: 'preview',
+          title,
+          description,
+          content: `Error occurred at ${error.pathname}${error.search || ''}${error.hash || ''}\nPort: ${error.port || ''}\n\nStack trace:\n${error.stack || ''}`,
+          source: 'preview',
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
   const GripIcon = () => (
     <div
       style={{
