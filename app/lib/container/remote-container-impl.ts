@@ -699,10 +699,10 @@ export class RemoteContainerFactory implements ContainerFactory {
   async boot(options: ContainerOptions): Promise<Container> {
     try {
       const workdir = options.workdirName || '/workspace';
-      const v8AccessToken = localStorage.getItem('v8AccessToken');
+      const v8AccessToken = options.v8AccessToken;
 
-      if (v8AccessToken === null) {
-        throw new Error('No V8 access token found');
+      if (!v8AccessToken) {
+        throw new Error('No V8 access token given');
       }
 
       const response = await fetch(`https://${this._serverUrl}/api/machine`, {
