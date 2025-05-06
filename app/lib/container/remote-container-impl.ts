@@ -36,6 +36,8 @@ class RemoteContainerConnection {
   private _requestMap = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void }>();
   private _connected = false;
   private _connectionPromise: Promise<void> | null = null;
+  private _lastRequestTime = Date.now();
+  private _heartbeatInterval: NodeJS.Timeout | null = null;
   private _listeners: EventListeners = {
     port: new Set(),
     'server-ready': new Set(),
@@ -50,6 +52,34 @@ class RemoteContainerConnection {
     private _token: string,
     private _machineId: string,
   ) {}
+
+  private _startHeartbeat(interval: number = 10000) {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+    }
+
+    this._heartbeatInterval = setInterval(() => {
+      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+        const timeSinceLastRequest = Date.now() - this._lastRequestTime;
+
+        if (timeSinceLastRequest >= interval) {
+          this.sendRequest({
+            id: `heartbeat-${v4()}`,
+            operation: {
+              type: 'heartbeat',
+            },
+          });
+        }
+      }
+    }, interval);
+  }
+
+  private _stopHeartbeat() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+    }
+  }
 
   async connect(): Promise<void> {
     if (this._connected) {
@@ -69,6 +99,7 @@ class RemoteContainerConnection {
 
       this._ws.onopen = () => {
         this._connected = true;
+        this._startHeartbeat();
 
         // Send authentication token if available
         if (this._token) {
@@ -102,6 +133,7 @@ class RemoteContainerConnection {
       this._ws.onclose = () => {
         this._connected = false;
         this._connectionPromise = null;
+        this._stopHeartbeat();
         console.warn('Remote container connection closed');
       };
 
@@ -123,6 +155,7 @@ class RemoteContainerConnection {
 
       this._requestMap.set(request.id, { resolve, reject });
       this._ws.send(JSON.stringify(request));
+      this._lastRequestTime = Date.now();
     });
   }
 
