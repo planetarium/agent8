@@ -53,7 +53,8 @@ export type ContainerOperation =
   | PreviewOperation
   | WatchOperation
   | WatchPathsOperation
-  | AuthOperation;
+  | AuthOperation
+  | HeartbeatOperation;
 
 export interface ContainerResponse<T = any> {
   success: boolean;
@@ -139,6 +140,10 @@ export interface WatchPathsOperation {
 export interface AuthOperation {
   type: 'auth';
   token: string;
+}
+
+export interface HeartbeatOperation {
+  type: 'heartbeat';
 }
 
 // Event listeners collection
