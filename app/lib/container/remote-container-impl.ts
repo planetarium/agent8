@@ -30,6 +30,21 @@ import { v4 } from 'uuid';
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 
+function base64ToUint8Array(base64: string) {
+  if (typeof Buffer !== 'undefined') {
+    return new Uint8Array(Buffer.from(base64, 'base64'));
+  } else {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes;
+  }
+}
+
 /**
  * Class to manage remote WebSocket connection and communication
  */
@@ -186,7 +201,7 @@ class RemoteContainerConnection {
       switch (message.event) {
         case 'file-change':
           this._listeners['file-change'].forEach((listener) =>
-            listener(message.data.watcherId, message.data.eventType, message.data.filename),
+            listener(message.data.watcherId, message.data.eventType, message.data.filename, message.data.buffer),
           );
           break;
 
@@ -398,9 +413,9 @@ export class RemoteContainerFileSystem implements FileSystem {
 
     return {
       addEventListener(event: string, listener) {
-        const unsubscribe = connection.on('file-change', (watcherId, eventType, filename) => {
+        const unsubscribe = connection.on('file-change', (watcherId, eventType, filename, buffer) => {
           if (watcherId === watcherIdFromResponse) {
-            listener(eventType, filename);
+            listener(eventType, filename, buffer ? base64ToUint8Array(buffer) : null);
           }
         });
         unsubscribers.push(unsubscribe);
@@ -428,9 +443,9 @@ export class RemoteContainerFileSystem implements FileSystem {
       })
       .catch(console.error);
 
-    this._connection.on('file-change', (watcherId, eventType, filename) => {
+    this._connection.on('file-change', (watcherId, eventType, filename, buffer) => {
       if (watcherId === watcherIdFromResponse) {
-        callback([{ type: eventType as any, path: filename }]);
+        callback([{ type: eventType as any, path: filename, buffer: buffer ? base64ToUint8Array(buffer) : undefined }]);
       }
     });
   }
