@@ -1,10 +1,11 @@
 import type { Container, ContainerOptions } from './interfaces';
+import { RemoteContainerFactory } from './remote-container-impl';
 import { WebContainerFactory } from './webcontainer-impl';
 
 /**
  * Available container types
  */
-export type ContainerType = 'webcontainer' | 'alternative';
+export type ContainerType = 'webcontainer' | 'remotecontainer';
 
 /**
  * Container factory class
@@ -12,6 +13,10 @@ export type ContainerType = 'webcontainer' | 'alternative';
  */
 export class ContainerFactory {
   private static _webContainerFactory = new WebContainerFactory();
+  private static _remoteContainerFactory = new RemoteContainerFactory(
+    'fly-summer-log-9042.fly.dev',
+    'fly-summer-log-9042',
+  );
 
   /**
    * Create a container of the specified type
@@ -24,9 +29,8 @@ export class ContainerFactory {
     switch (type) {
       case 'webcontainer':
         return this._webContainerFactory.boot(options);
-      case 'alternative':
-        // For future alternative implementations
-        throw new Error('Alternative container implementation is not yet implemented');
+      case 'remotecontainer':
+        return this._remoteContainerFactory.boot(options);
       default:
         throw new Error(`Unknown container type: ${type}`);
     }
