@@ -671,12 +671,21 @@ export class RemoteContainer implements Container {
 
     // Shell ready signal
     const shellReady = withResolvers<void>();
-    shellReady.resolve(); // Remote shell is considered ready immediately
 
-    // Connect output to terminal
+    // Detect interactive mode
+    let checkInteractive = false;
     output.pipeTo(
       new WritableStream({
         write(data) {
+          if (!checkInteractive && options.interactive !== false) {
+            const [, osc] = data.match(/\x1b\]654;([^\x07]+)\x07/) || [];
+
+            if (osc === 'interactive') {
+              checkInteractive = true;
+              shellReady.resolve();
+            }
+          }
+
           terminal.write(data);
         },
       }),
