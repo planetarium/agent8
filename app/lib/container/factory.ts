@@ -13,10 +13,7 @@ export type ContainerType = 'webcontainer' | 'remotecontainer';
  */
 export class ContainerFactory {
   private static _webContainerFactory = new WebContainerFactory();
-  private static _remoteContainerFactory = new RemoteContainerFactory(
-    'fly-summer-log-9042.fly.dev',
-    'fly-summer-log-9042',
-  );
+  private static _remoteContainerFactory = new RemoteContainerFactory('agent8-controller.fly.dev', 'agent8-container');
 
   /**
    * Create a container of the specified type
