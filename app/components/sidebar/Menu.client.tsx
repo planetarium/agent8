@@ -13,6 +13,8 @@ import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
 import { deleteProject, getProjects } from '~/lib/persistenceGitbase/api.client';
 import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
+import { chatStore } from '~/lib/stores/chat';
+import { useSearchParams } from '@remix-run/react';
 
 const menuVariants = {
   closed: {
@@ -67,6 +69,9 @@ export const Menu = () => {
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const profile = useStore(profileStore);
+  const chat = useStore(chatStore);
+  const [searchParams] = useSearchParams();
+  const isEmbedMode = searchParams.get('mode') === 'embed';
 
   const { filteredItems: filteredList, handleSearchChange } = useSearchFilter({
     items: list,
@@ -165,10 +170,11 @@ export const Menu = () => {
         variants={menuVariants}
         style={{ width: '340px' }}
         className={classNames(
-          'flex selection-accent flex-col side-menu fixed top-0 h-full',
+          'flex selection-accent flex-col side-menu fixed top-0',
           'bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800/50',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
+          isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-[2px] h-full') : 'h-full',
         )}
       >
         <div className="h-12 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50">

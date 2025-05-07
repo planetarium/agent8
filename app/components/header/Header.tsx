@@ -16,6 +16,8 @@ export function Header() {
       className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
         'border-transparent': !chat.started,
         'border-bolt-elements-borderColor': chat.started,
+        'mt-[56px]': !chat.started && isEmbedMode,
+        'mt-[2px]': chat.started && isEmbedMode,
       })}
     >
       {/* Logo and menu button - hidden in embed mode */}

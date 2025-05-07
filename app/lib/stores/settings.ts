@@ -35,6 +35,7 @@ export interface MCPSSEServer {
   url: string;
   enabled: boolean;
   v8AuthIntegrated: boolean;
+  description?: string;
 }
 
 export const URL_CONFIGURABLE_PROVIDERS = ['Ollama', 'LMStudio', 'OpenAILike'];
@@ -144,6 +145,61 @@ export const SETTINGS_KEYS = {
   MCP_SSE_SERVERS: 'mcpSseServers',
 } as const;
 
+/**
+ * Helper function to get default MCP server configuration
+ */
+const getDefaultMCPServers = (): MCPSSEServer[] => {
+  let defaultServers: MCPSSEServer[] = [];
+
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
+    defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
+  } else {
+    defaultServers = [
+      {
+        name: 'All-in-one',
+        url: 'https://mcp.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description: 'All-in-one server that integrates all MCP tools.',
+      },
+      {
+        name: '2D-Image',
+        url: 'https://mcp-image.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description:
+          'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.',
+      },
+      {
+        name: 'Cinematic',
+        url: 'https://mcp-cinematic.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description:
+          'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).',
+      },
+      {
+        name: 'Audio',
+        url: 'https://mcp-audio.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description:
+          'Generate game background music, character/level theme music, and sound effects. Fast generation speed (30-second sample: about 2 seconds, 3-minute track: within 10 seconds). High-quality 44.1kHz stereo audio output. Maintains professional consistency without interruptions. Provides results in WAV file format.',
+      },
+      {
+        name: 'Skybox',
+        url: 'https://mcp-skybox.verse8.io/sse',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description:
+          'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.',
+      },
+    ];
+  }
+
+  return defaultServers;
+};
+
 // Get initial MCP SSE server settings from localStorage
 const getInitialMCPSSEServers = (): MCPSSEServer[] => {
   if (!isBrowser) {
@@ -153,8 +209,21 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
   try {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
 
-    if (!stored) {
-      return [];
+    if (!stored || stored === '[]' || stored === '""') {
+      // Get default server configuration
+      const defaultServers = getDefaultMCPServers();
+
+      localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
+
+      if (typeof Cookies !== 'undefined') {
+        Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers), {
+          expires: 365,
+          path: '/',
+          sameSite: 'lax',
+        });
+      }
+
+      return defaultServers;
     }
 
     return JSON.parse(stored);
@@ -393,6 +462,16 @@ export const updateMCPSSEServers = (servers: MCPSSEServer[]) => {
   } catch (e) {
     console.error('Failed to set mcpSseServers cookie:', e);
   }
+};
+
+export const resetMCPSSEServers = () => {
+  // Get default server configuration
+  const defaultServers = getDefaultMCPServers();
+
+  // Update store and cookies
+  updateMCPSSEServers(defaultServers);
+
+  return defaultServers;
 };
 
 export const addMCPSSEServer = (server: MCPSSEServer) => {
