@@ -32,6 +32,7 @@ export interface WatchPathsOptions {
   include?: string[];
   exclude?: string[];
   includeContent?: boolean;
+  ignoreInitial?: boolean;
 }
 
 // Event listener type definitions

@@ -136,7 +136,12 @@ export class FilesStore {
 
     // @ts-ignore TODO: remove ts-ignore after merge watchPaths
     container.fs.watchPaths(
-      { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
+      {
+        include: [`${WORK_DIR}/**`],
+        exclude: ['**/node_modules', '.git'],
+        includeContent: true,
+        ignoreInitial: false,
+      },
       bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
     );
   }
