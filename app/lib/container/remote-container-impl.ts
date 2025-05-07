@@ -728,7 +728,8 @@ export class RemoteContainerFactory implements ContainerFactory {
 
   async boot(options: ContainerOptions): Promise<Container> {
     try {
-      const workdir = options.workdirName || '/workspace';
+      // For webcontainer compatibility
+      const workdir = `/home/${options.workdirName}`;
       const v8AccessToken = options.v8AccessToken;
 
       if (!v8AccessToken) {
