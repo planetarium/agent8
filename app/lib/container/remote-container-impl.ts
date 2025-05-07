@@ -27,8 +27,25 @@ import type {
   WatchResponse,
 } from '~/lib/shared/agent8-container-protocol/src';
 import { v4 } from 'uuid';
+import { createScopedLogger } from '~/utils/logger';
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
+const logger = createScopedLogger('remote-container');
+
+function base64ToUint8Array(base64: string) {
+  if (typeof Buffer !== 'undefined') {
+    return new Uint8Array(Buffer.from(base64, 'base64'));
+  } else {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes;
+  }
+}
 
 /**
  * Class to manage remote WebSocket connection and communication
@@ -121,7 +138,7 @@ class RemoteContainerConnection {
           const data = JSON.parse(event.data);
           this._handleMessage(data);
         } catch (err) {
-          console.error('Remote container message parsing error:', err);
+          logger.error('Remote container message parsing error:', err);
         }
       };
 
@@ -135,7 +152,7 @@ class RemoteContainerConnection {
         this._connected = false;
         this._connectionPromise = null;
         this._stopHeartbeat();
-        console.warn('Remote container connection closed');
+        logger.warn('Remote container connection closed');
       };
 
       await promise;
@@ -186,7 +203,7 @@ class RemoteContainerConnection {
       switch (message.event) {
         case 'file-change':
           this._listeners['file-change'].forEach((listener) =>
-            listener(message.data.watcherId, message.data.eventType, message.data.filename),
+            listener(message.data.watcherId, message.data.eventType, message.data.filename, message.data.buffer),
           );
           break;
 
@@ -233,7 +250,7 @@ class RemoteContainerConnection {
     }
 
     return () => {
-      console.log('unregistered event:', 'on', event, listener.toString());
+      logger.warn('unregistered event:', 'on', event, listener.toString());
     };
   }
 
@@ -391,16 +408,18 @@ export class RemoteContainerFileSystem implements FileSystem {
       .then((response) => {
         watcherIdFromResponse = response.data?.watcherId;
       })
-      .catch(console.error);
+      .catch((err) => {
+        logger.error('Failed to watch file:', err);
+      });
 
     const connection = this._connection;
     const unsubscribers: Unsubscribe[] = [];
 
     return {
       addEventListener(event: string, listener) {
-        const unsubscribe = connection.on('file-change', (watcherId, eventType, filename) => {
+        const unsubscribe = connection.on('file-change', (watcherId, eventType, filename, buffer) => {
           if (watcherId === watcherIdFromResponse) {
-            listener(eventType, filename);
+            listener(eventType, filename, buffer ? base64ToUint8Array(buffer) : null);
           }
         });
         unsubscribers.push(unsubscribe);
@@ -426,11 +445,13 @@ export class RemoteContainerFileSystem implements FileSystem {
       .then((response) => {
         watcherIdFromResponse = response.data?.watcherId;
       })
-      .catch(console.error);
+      .catch((err) => {
+        logger.error('Failed to watch paths:', err);
+      });
 
-    this._connection.on('file-change', (watcherId, eventType, filename) => {
+    this._connection.on('file-change', (watcherId, eventType, filename, buffer) => {
       if (watcherId === watcherIdFromResponse) {
-        callback([{ type: eventType as any, path: filename }]);
+        callback([{ type: eventType as any, path: filename, buffer: buffer ? base64ToUint8Array(buffer) : undefined }]);
       }
     });
   }
@@ -719,9 +740,9 @@ export class RemoteContainerFactory implements ContainerFactory {
         throw new Error('No machine ID received from server');
       }
 
-      console.log('Waiting for machine to be ready...');
+      logger.info('Waiting for machine to be ready...');
       await this._waitForMachineReady(machineId, v8AccessToken);
-      console.log('Machine is ready');
+      logger.info('Machine is ready');
 
       // Create remote container instance
       const container = new RemoteContainer(
@@ -733,14 +754,14 @@ export class RemoteContainerFactory implements ContainerFactory {
       // Initialize connection
       try {
         await (container as any)._connection.connect();
-        console.log('Successfully connected to remote container');
+        logger.info('Successfully connected to remote container');
 
         return container;
       } catch (error) {
         throw new Error(`Failed to connect to remote container: ${error}`);
       }
     } catch (error) {
-      console.error('Failed to boot remote container:', error);
+      logger.error('Failed to boot remote container:', error);
       throw error;
     }
   }
@@ -776,9 +797,9 @@ export class RemoteContainerFactory implements ContainerFactory {
           return; // Machine is ready
         }
 
-        console.log(`Machine state: ${data.machine?.state || 'unknown'}, retrying...`);
+        logger.info(`Machine state: ${data.machine?.state || 'unknown'}, retrying...`);
       } catch (error) {
-        console.error(`Error checking machine status: ${error}`);
+        logger.error(`Error checking machine status: ${error}`);
       }
 
       // Wait before next attempt

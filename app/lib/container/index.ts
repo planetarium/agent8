@@ -31,7 +31,7 @@ if (!import.meta.env.SSR) {
     Promise.resolve()
       .then(() => {
         // Currently using webcontainer, but can be replaced with another container if needed
-        return ContainerFactory.create('webcontainer', {
+        return ContainerFactory.create('remotecontainer', {
           coep: 'credentialless',
           workdirName: WORK_DIR_NAME,
           forwardPreviewErrors: true,
