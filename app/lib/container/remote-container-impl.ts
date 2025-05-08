@@ -665,6 +665,12 @@ export class RemoteContainer implements Container {
       // Check if the requested OSC code is already in the global buffer
       const bufferMatches = [..._globalOutputBuffer.matchAll(oscRegex)];
 
+      /*
+       * If not found in buffer, read from the stream
+       * Do not move this awaiting after existing buffer check, as there may be existing awaiters.
+       */
+      await waitInternalOutputLock();
+
       if (bufferMatches.length > 0) {
         // Found the OSC code in the buffer, extract output up to this code
         const match = bufferMatches[0];
@@ -684,9 +690,6 @@ export class RemoteContainer implements Container {
           return { output: fullOutput, exitCode };
         }
       }
-
-      // If not found in buffer, read from the stream
-      await waitInternalOutputLock();
 
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
