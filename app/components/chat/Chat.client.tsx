@@ -430,7 +430,6 @@ export const ChatImpl = memo(
         const boltShell = workbenchStore.boltTerminal;
         boltShell.ready.then(async () => {
           await workbenchStore.setupDeployConfig(boltShell);
-          await boltShell.executeCommand(Date.now().toString(), 'pnpm install');
         });
       }
     }, [files, installNpm]);
@@ -529,6 +528,7 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
+      workbenchStore.currentView.set('code');
 
       if (attachmentList.length > 0) {
         const imageAttachments = attachmentList.filter((item) =>
