@@ -754,17 +754,27 @@ export class RemoteContainer implements Container {
 
       // Command execution implementation
       executeCommand = async (command: string): Promise<ExecutionResult> => {
+        logger.debug('executeCommand', command);
+
         // Interrupt current execution
         terminal.input('\x03');
+
+        logger.debug('waiting for prompt', command);
 
         // Wait for prompt
         await waitTillOscCode('prompt');
 
+        logger.debug('prompt received', command);
+
         // Execute new command
         terminal.input(command.trim() + '\n');
 
+        logger.debug('command executed', command);
+
         // Wait for execution result
         const { output, exitCode } = await waitTillOscCode('exit');
+
+        logger.debug('execution ended', command, exitCode);
 
         return {
           output: cleanTerminalOutput(output),
