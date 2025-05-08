@@ -263,7 +263,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               const { toolCallId } = JSON.parse(content);
-              const divString = `<toolCall><div class="__toolCall__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolCall>`;
+              const divString = `\n<toolCall><div class="__toolCall__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
 
               transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
             }
@@ -276,7 +276,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               const { toolCallId } = JSON.parse(content);
-              const divString = `<toolResult><div class="__toolResult__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolResult>`;
+              const divString = `\n<toolResult><div class="__toolResult__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
 
               transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
             }
