@@ -492,7 +492,7 @@ const McpSseServerManager: React.FC = () => {
             'transition-colors duration-200',
           )}
         >
-          <div className="i-ph:plus-circle w-4 h-4" />
+          <div className="i-ph:plus-circle w-4 h-4 ml-4" />
           <span className="font-normal">Use Tools</span>
         </button>
       </div>
