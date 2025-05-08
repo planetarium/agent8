@@ -29,6 +29,21 @@ import type {
 import { v4 } from 'uuid';
 import { createScopedLogger } from '~/utils/logger';
 
+// Constants for OSC parsing
+const OSC_PATTERNS = {
+  createWaitCodeRegex: (waitCode: string) => new RegExp(`\\x1b\\]654;${waitCode}=?((-?\\d+):(\\d+))?\\x07`, 'g'),
+  EXIT_CODE_REGEX: /\x1b\]654;exit=?((-?\d+):(\d+))?\x07/g,
+  ALL_OSC_REGEX: /\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/g,
+};
+
+// Buffer size configuration
+const BUFFER_CONFIG = {
+  MAX_GLOBAL_SIZE: 20000,
+  TRUNCATED_GLOBAL_SIZE: 10000,
+  MAX_LOCAL_SIZE: 10000,
+  TRUNCATED_LOCAL_SIZE: 5000,
+};
+
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const logger = createScopedLogger('remote-container');
 
@@ -582,19 +597,99 @@ export class RemoteContainer implements Container {
       }
     };
 
-    // Advanced feature: Wait for OSC code and command execution
+    let _globalOutputBuffer: string = '';
+
+    // Extracts exit code from output text
+    const extractExitCode = (text: string): number => {
+      const exitMatches = [...text.matchAll(OSC_PATTERNS.EXIT_CODE_REGEX)];
+
+      if (exitMatches.length > 0) {
+        const [, , , exitCodeStr] = exitMatches[exitMatches.length - 1];
+        return parseInt(exitCodeStr || '0', 10);
+      }
+
+      return 0;
+    };
+
+    // Process OSC match and potentially return result
+    const processOscMatch = (
+      match: RegExpMatchArray,
+      osc: string,
+      waitCode: string,
+      fullOutput: string,
+      exitCode: number,
+    ): { result: { output: string; exitCode: number } | null; newExitCode: number } => {
+      const [fullMatch] = match;
+      let newExitCode = exitCode;
+
+      if (osc === 'exit') {
+        const [, , , code] = match;
+        newExitCode = parseInt(code || '0', 10);
+      }
+
+      if (osc === waitCode) {
+        const matchIndex = fullOutput.indexOf(fullMatch);
+
+        if (matchIndex !== -1) {
+          // Get output up to and including the OSC code
+          const extractedOutput = fullOutput.substring(0, matchIndex + fullMatch.length);
+
+          // Update the global buffer - remove the part we're returning
+          const globalMatchIndex = _globalOutputBuffer.indexOf(fullMatch);
+
+          if (globalMatchIndex !== -1) {
+            _globalOutputBuffer = _globalOutputBuffer.substring(globalMatchIndex + fullMatch.length);
+          }
+
+          return {
+            result: { output: extractedOutput, exitCode: newExitCode },
+            newExitCode,
+          };
+        }
+      }
+
+      return { result: null, newExitCode };
+    };
+
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
       let exitCode = 0;
-      let buffer = '';
 
       if (!internalOutput) {
-        return { output: fullOutput, exitCode };
+        throw new Error('No internal output stream');
       }
 
+      // Create regex for the requested OSC code
+      const oscRegex = OSC_PATTERNS.createWaitCodeRegex(waitCode);
+
+      // Check if the requested OSC code is already in the global buffer
+      const bufferMatches = [..._globalOutputBuffer.matchAll(oscRegex)];
+
+      if (bufferMatches.length > 0) {
+        // Found the OSC code in the buffer, extract output up to this code
+        const match = bufferMatches[0];
+        const [fullMatch] = match;
+        const matchIndex = _globalOutputBuffer.indexOf(fullMatch);
+
+        if (matchIndex !== -1) {
+          // Get output up to and including the OSC code
+          fullOutput = _globalOutputBuffer.substring(0, matchIndex + fullMatch.length);
+
+          // Trim the global buffer to remove the extracted part
+          _globalOutputBuffer = _globalOutputBuffer.substring(matchIndex + fullMatch.length);
+
+          // Look for exit code in the extracted output
+          exitCode = extractExitCode(fullOutput);
+
+          return { output: fullOutput, exitCode };
+        }
+      }
+
+      // If not found in buffer, read from the stream
       await waitInternalOutputLock();
 
       const reader = internalOutput.getReader();
+      let localBuffer = _globalOutputBuffer; // Start with existing buffer content
 
       try {
         while (true) {
@@ -606,41 +701,42 @@ export class RemoteContainer implements Container {
 
           const text = value || '';
           fullOutput += text;
-          buffer += text;
+          localBuffer += text;
+          _globalOutputBuffer += text; // Add to global buffer
 
-          const matches = [...buffer.matchAll(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/g)];
+          // Prevent buffer from growing too large
+          if (_globalOutputBuffer.length > BUFFER_CONFIG.MAX_GLOBAL_SIZE) {
+            _globalOutputBuffer = _globalOutputBuffer.slice(-BUFFER_CONFIG.TRUNCATED_GLOBAL_SIZE);
+          }
+
+          // Check for OSC codes in the updated buffer
+          const matches = [...localBuffer.matchAll(OSC_PATTERNS.ALL_OSC_REGEX)];
 
           if (matches.length === 0) {
-            if (buffer.length > 10000) {
-              buffer = buffer.slice(-5000);
+            if (localBuffer.length > BUFFER_CONFIG.MAX_LOCAL_SIZE) {
+              localBuffer = localBuffer.slice(-BUFFER_CONFIG.TRUNCATED_LOCAL_SIZE);
             }
 
             continue;
           }
 
+          // Process all matches
           for (const match of matches) {
-            const [fullMatch, osc, , , code] = match;
+            const [, osc] = match;
+            const { result, newExitCode } = processOscMatch(match, osc, waitCode, fullOutput, exitCode);
+            exitCode = newExitCode;
 
-            if (osc === 'exit') {
-              exitCode = parseInt(code || '0', 10);
-            }
-
-            if (osc === waitCode) {
-              const matchIndex = buffer.indexOf(fullMatch);
-
-              if (matchIndex !== -1) {
-                buffer = buffer.slice(matchIndex + fullMatch.length);
-              }
-
-              return { output: fullOutput, exitCode };
+            if (result) {
+              return result;
             }
           }
 
+          // Update local buffer to contain only content after the last match
           const lastMatch = matches[matches.length - 1][0];
-          const lastMatchIndex = buffer.lastIndexOf(lastMatch);
+          const lastMatchIndex = localBuffer.lastIndexOf(lastMatch);
 
           if (lastMatchIndex !== -1) {
-            buffer = buffer.slice(lastMatchIndex + lastMatch.length);
+            localBuffer = localBuffer.slice(lastMatchIndex + lastMatch.length);
           }
         }
       } finally {
