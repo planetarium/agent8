@@ -150,8 +150,27 @@ export function Chat() {
       if (chats.length > 0) {
         setInitialMessages(chats);
         container.then(async (containerInstance) => {
-          await containerInstance.fs.rm('/src', { recursive: true, force: true });
+          try {
+            await containerInstance.fs.rm('/src', { recursive: true, force: true });
+          } catch {
+            logger.warn('Failed to remove /src directory');
+          }
           containerInstance.mount(convertFileMapToFileSystemTree(files));
+
+          const previews = workbenchStore.previews.get();
+          const currentPreview = previews.find((p) => p.ready && p.port === 5173);
+
+          if (currentPreview && workbenchStore.currentView.get() === 'preview') {
+            workbenchStore.previews.set(
+              previews.map((p) => {
+                if (p.baseUrl === currentPreview.baseUrl) {
+                  return { ...p, refreshAt: Date.now() };
+                }
+
+                return p;
+              }),
+            );
+          }
         });
         workbenchStore.showWorkbench.set(true);
       }

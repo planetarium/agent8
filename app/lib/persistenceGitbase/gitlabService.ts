@@ -756,7 +756,6 @@ export class GitlabService {
   async getTaskFirstCommit(projectPath: string, taskBranch: string): Promise<GitlabCommit> {
     try {
       const sinceTimestamp = taskBranch.split('-')[1];
-      console.log(taskBranch, sinceTimestamp, new Date(parseInt(sinceTimestamp)).toISOString());
 
       const commitsResponse = await axios.get(
         `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits`,
@@ -787,7 +786,6 @@ export class GitlabService {
   async getTaskLastCommit(projectPath: string, taskBranch: string): Promise<GitlabCommit> {
     try {
       const sinceTimestamp = taskBranch.split('-')[1];
-      console.log(taskBranch, sinceTimestamp, new Date(parseInt(sinceTimestamp)).toISOString());
 
       const commitsResponse = await axios.get(
         `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits`,
