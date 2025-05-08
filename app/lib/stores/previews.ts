@@ -153,21 +153,25 @@ export class PreviewsStore {
     });
 
     try {
-      // Watch for file changes
-      const watcher = await container.fs.watch('**/*', { persistent: true });
+      container.fs.watchPaths(
+        {
+          include: ['**/*'],
+          exclude: ['**/node_modules'],
+          ignoreInitial: true,
+          includeContent: false,
+        },
+        async () => {
+          const previews = this.previews.get();
 
-      // Use the native watch events
-      watcher.addEventListener('change', async () => {
-        const previews = this.previews.get();
+          for (const preview of previews) {
+            const previewId = this.getPreviewId(preview.baseUrl);
 
-        for (const preview of previews) {
-          const previewId = this.getPreviewId(preview.baseUrl);
-
-          if (previewId) {
-            this.broadcastFileChange(previewId);
+            if (previewId) {
+              this.broadcastFileChange(previewId);
+            }
           }
-        }
-      });
+        },
+      );
 
       // Watch for DOM changes that might affect storage
       if (typeof window !== 'undefined') {

@@ -25,16 +25,18 @@ export let container: Promise<Container> = new Promise(() => {
   // noop for SSR
 });
 
+export const containerType = import.meta.env.VITE_CONTAINER_TYPE || 'remotecontainer';
+
 if (!import.meta.env.SSR) {
   container =
     import.meta.hot?.data.container ??
     Promise.resolve()
       .then(() => {
-        // Currently using webcontainer, but can be replaced with another container if needed
-        return ContainerFactory.create('webcontainer', {
+        return ContainerFactory.create(containerType, {
           coep: 'credentialless',
           workdirName: WORK_DIR_NAME,
           forwardPreviewErrors: true,
+          v8AccessToken: localStorage.getItem('v8AccessToken') || undefined,
         });
       })
       .then(async (containerInstance) => {

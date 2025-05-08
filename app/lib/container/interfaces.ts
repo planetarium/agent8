@@ -53,12 +53,10 @@ export interface FileSystem {
  * Process related interfaces
  */
 export interface ContainerProcess {
-  input: {
-    getWriter(): WritableStreamDefaultWriter<string>;
-  };
+  input: WritableStream<string>;
   output: ReadableStream<string>;
   exit: Promise<number>;
-  resize(dimensions: { cols: number; rows: number }): void;
+  resize: (dimensions: { cols: number; rows: number }) => void;
 }
 
 /**
@@ -76,7 +74,7 @@ export interface SpawnOptions {
  */
 export interface ShellSession {
   process: ContainerProcess;
-  input: WritableStreamDefaultWriter<string>;
+  input: WritableStream<string>;
   output: ReadableStream<string>;
   internalOutput?: ReadableStream<string>;
   ready: Promise<void>;
@@ -118,6 +116,7 @@ export interface WatchPathsOptions {
   include?: string[];
   exclude?: string[];
   includeContent?: boolean;
+  ignoreInitial?: boolean;
 }
 
 /**
@@ -127,6 +126,7 @@ export interface ContainerOptions {
   coep?: 'credentialless';
   workdirName?: string;
   forwardPreviewErrors?: boolean;
+  v8AccessToken?: string;
 }
 
 /**

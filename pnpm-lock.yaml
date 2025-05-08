@@ -405,6 +405,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.1
         version: 18.3.6(@types/react@18.3.20)
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.3.4(vite@5.4.17(@types/node@22.14.0)(sass-embedded@1.86.3))
@@ -474,6 +477,9 @@ importers:
       wrangler:
         specifier: ^3.91.0
         version: 3.114.4(@cloudflare/workers-types@4.20250409.0)
+      ws:
+        specifier: ^8.18.1
+        version: 8.18.1
 
 packages:
 

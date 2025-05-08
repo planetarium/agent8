@@ -8,7 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { container } from '~/lib/container';
+import { container, containerType } from '~/lib/container';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -58,11 +58,15 @@ function AccessControlledChat() {
   }, [accessToken]);
 
   useEffect(() => {
-    container.then((wc) => {
-      if (wc?.workdir) {
-        setLoadedWebcontainer(true);
-      }
-    });
+    if (containerType === 'webcontainer') {
+      container.then((wc) => {
+        if (wc?.workdir) {
+          setLoadedWebcontainer(true);
+        }
+      });
+    } else {
+      setLoadedWebcontainer(true);
+    }
   }, [container]);
 
   useEffect(() => {

@@ -312,6 +312,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   renderLogger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
+  const [terminalReady, setTerminalReady] = useState(false);
 
   // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
 
@@ -355,6 +356,19 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   useEffect(() => {
     workbenchStore.setDocuments(files);
   }, [files]);
+
+  useEffect(() => {
+    if (chatStarted) {
+      const initializeTerminal = async () => {
+        const shell = workbenchStore.boltTerminal;
+
+        await shell.ready;
+        setTerminalReady(true);
+      };
+
+      initializeTerminal();
+    }
+  }, [chatStarted]);
 
   const onRun = useCallback(async () => {
     setSelectedView('code');
@@ -403,6 +417,22 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         variants={workbenchVariants}
         className="z-workbench"
       >
+        {showWorkbench && !terminalReady && (
+          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+            <div className="absolute inset-0 px-2 lg:px-6">
+              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
+                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
+                    <div className="animate-spin w-6 h-6 mb-2 mx-auto">
+                      <div className="i-ph:spinner" />
+                    </div>
+                    <div className="text-sm text-bolt-elements-textPrimary">Preparing Workbench...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div
           className={classNames(
             'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',

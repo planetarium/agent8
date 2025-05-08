@@ -208,7 +208,7 @@ export class WebContainerFactory implements ContainerFactory {
           // Construct session object
           const session: ShellSession = {
             process,
-            input,
+            input: process.input,
             output,
             ready: jshReady.promise,
           };
