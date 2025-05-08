@@ -384,7 +384,7 @@ export const ChatImpl = memo(
     }, [model, provider, searchParams]);
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
-    const { parsedMessages, parseMessages, resetParsedMessagesFrom } = useMessageParser();
+    const { parsedMessages, parseMessages } = useMessageParser();
 
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -435,8 +435,6 @@ export const ChatImpl = memo(
 
               return m;
             });
-
-            resetParsedMessagesFrom(newMessages.length - 1);
 
             return newMessages;
           });
@@ -944,7 +942,6 @@ export const ChatImpl = memo(
           ignoreChangeEvent: true,
         });
         setMessages(newMessages);
-        resetParsedMessagesFrom(messageIndex);
         setTimeout(() => {
           reload();
         }, 1000);
