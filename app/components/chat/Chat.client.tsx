@@ -78,7 +78,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
     }
 
     const result = (await response.json()) as {
-      data: { assistantMessage: string; userMessage: string };
+      fileMap: FileMap;
       project: { id: number; name: string; path: string; description: string };
       commit: { id: number };
     };
@@ -590,6 +590,24 @@ export const ChatImpl = memo(
           const projectPath = temResp?.project?.path;
           const projectName = temResp?.project?.name;
           const templateCommitId = temResp?.commit?.id;
+          workbenchStore.showWorkbench.set(true);
+
+          if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+            throw new Error('Not Found Template Data');
+          }
+
+          const processedFileMap = Object.entries(temResp.fileMap).reduce(
+            (acc, [key, value]) => {
+              acc[WORK_DIR + '/' + key] = value;
+              return acc;
+            },
+            {} as Record<string, any>,
+          );
+          workbenchStore.files.set(processedFileMap);
+
+          await container.then(async (containerInstance) => {
+            containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+          });
 
           if (isEnabledGitbasePersistence) {
             if (!projectPath || !projectName || !templateCommitId) {
@@ -627,12 +645,6 @@ export const ChatImpl = memo(
             changeChatUrl(projectRepo, { replace: true });
           }
 
-          if (!temResp?.data) {
-            throw new Error('Not Found Template Data');
-          }
-
-          const { assistantMessage, userMessage } = temResp.data;
-
           const firstChatModel =
             model === 'auto'
               ? template.name.includes('3d')
@@ -646,17 +658,6 @@ export const ChatImpl = memo(
           setMessages([
             {
               id: `1-${new Date().getTime()}`,
-              role: 'user',
-              content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n${userMessage}`,
-              annotations: ['hidden'],
-            },
-            {
-              id: `assistant-${templateCommitId || new Date().getTime()}`,
-              role: 'assistant',
-              content: assistantMessage,
-            },
-            {
-              id: `3-${new Date().getTime()}`,
               role: 'user',
               content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
@@ -722,7 +723,6 @@ export const ChatImpl = memo(
                 id: commit.id,
                 role: 'assistant',
                 content: commit.message || 'The user changed the files.',
-                parts: [],
               },
             ]);
           }
