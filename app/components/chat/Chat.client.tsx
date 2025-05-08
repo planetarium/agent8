@@ -150,12 +150,15 @@ export function Chat() {
       if (chats.length > 0) {
         setInitialMessages(chats);
         container.then(async (containerInstance) => {
-          try {
-            await containerInstance.fs.rm('/src', { recursive: true, force: true });
-          } catch {
-            logger.warn('Failed to remove /src directory');
-          }
-          containerInstance.mount(convertFileMapToFileSystemTree(files));
+          /*
+           * try {
+           *   await containerInstance.fs.rm('/src', { recursive: true, force: true });
+           * } catch {
+           *   logger.warn('Failed to remove /src directory');
+           * }
+           */
+
+          await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
           const previews = workbenchStore.previews.get();
           const currentPreview = previews.find((p) => p.ready && p.port === 5173);
