@@ -572,6 +572,16 @@ export class RemoteContainer implements Container {
     let internalOutput: ReadableStream<string> | undefined;
     let executeCommand: ((command: string) => Promise<ExecutionResult>) | undefined;
 
+    const waitInternalOutputLock = async () => {
+      if (!internalOutput) {
+        return;
+      }
+
+      while (internalOutput.locked) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+
     // Advanced feature: Wait for OSC code and command execution
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
@@ -581,6 +591,8 @@ export class RemoteContainer implements Container {
       if (!internalOutput) {
         return { output: fullOutput, exitCode };
       }
+
+      await waitInternalOutputLock();
 
       const reader = internalOutput.getReader();
 
