@@ -49,7 +49,7 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
     action: string;
     from?: string;
     to?: string;
-    baseBranch?: string;
+    baseRef?: string;
   };
 
   const { projectPath, action } = requestData;
@@ -75,9 +75,22 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
         data: result,
       });
     } else if (action === 'create') {
-      const { baseBranch = 'develop' } = requestData;
+      const { baseRef = 'develop' } = requestData;
 
-      const result = await gitlabService.createTaskBranch(projectPath, baseBranch);
+      const result = await gitlabService.createTaskBranch(projectPath, baseRef);
+
+      return json({
+        success: true,
+        data: result,
+      });
+    } else if (action === 'remove') {
+      const { from } = requestData;
+
+      if (!from) {
+        return json({ success: false, message: 'Branch name is required' }, { status: 400 });
+      }
+
+      const result = await gitlabService.removeTaskBranch(projectPath, from);
 
       return json({
         success: true,
