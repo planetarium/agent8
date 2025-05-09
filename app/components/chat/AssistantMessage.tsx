@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Markdown } from './Markdown';
 import type { JSONValue } from 'ai';
 import Popover from '~/components/ui/Popover';
@@ -9,6 +9,7 @@ import React from 'react';
 interface AssistantMessageProps {
   content: string;
   annotations?: JSONValue[];
+  forceExpanded?: boolean;
 }
 
 function openArtifactInWorkbench(filePath: string) {
@@ -35,7 +36,13 @@ function normalizedFilePath(path: string) {
   return normalizedPath;
 }
 
-export const AssistantMessage = memo(({ content, annotations }: AssistantMessageProps) => {
+export const AssistantMessage = memo(({ content, annotations, forceExpanded }: AssistantMessageProps) => {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setExpanded(forceExpanded || false);
+  }, [forceExpanded]);
+
   const filteredAnnotations = (annotations?.filter(
     (annotation: JSONValue) => annotation && typeof annotation === 'object' && Object.keys(annotation).includes('type'),
   ) || []) as { type: string; value: any } & { [key: string]: any }[];
@@ -58,10 +65,14 @@ export const AssistantMessage = memo(({ content, annotations }: AssistantMessage
     totalTokens: number;
   } = filteredAnnotations.find((annotation) => annotation.type === 'usage')?.value;
 
+  const toggleExpanded = () => {
+    setExpanded(!expanded);
+  };
+
   return (
     <div className="overflow-hidden w-full">
       <>
-        <div className=" flex gap-2 items-center text-sm text-bolt-elements-textSecondary mb-2">
+        <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary mb-2">
           {(codeContext || chatSummary) && (
             <Popover side="right" align="start" trigger={<div className="i-ph:info" />}>
               {chatSummary && (
@@ -109,7 +120,44 @@ export const AssistantMessage = memo(({ content, annotations }: AssistantMessage
         </div>
       </>
 
-      <Markdown html>{content}</Markdown>
+      <div className="markdown-container">
+        <div
+          className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
+          style={
+            !expanded
+              ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: 1,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  position: 'relative',
+                }
+              : {}
+          }
+        >
+          <Markdown html>{content}</Markdown>
+        </div>
+        {!forceExpanded && (
+          <>
+            {!expanded ? (
+              <button
+                onClick={toggleExpanded}
+                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
+              >
+                Read more
+              </button>
+            ) : (
+              <button
+                onClick={toggleExpanded}
+                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
+              >
+                Collapse
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 });

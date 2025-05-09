@@ -163,7 +163,7 @@ const getDefaultMCPServers = (): MCPSSEServer[] => {
         description: 'All-in-one server that integrates all MCP tools.',
       },
       {
-        name: '2D-Image',
+        name: 'Image',
         url: 'https://mcp-image.verse8.io/sse',
         enabled: false,
         v8AuthIntegrated: false,
@@ -208,11 +208,10 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
 
   try {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
+    const defaultServers = getDefaultMCPServers();
 
     if (!stored || stored === '[]' || stored === '""') {
-      // Get default server configuration
-      const defaultServers = getDefaultMCPServers();
-
+      // No stored servers, use defaults
       localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
 
       if (typeof Cookies !== 'undefined') {
@@ -226,10 +225,47 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
       return defaultServers;
     }
 
-    return JSON.parse(stored);
+    // Parse stored servers
+    const storedServers = JSON.parse(stored);
+
+    // Combine default servers with stored servers, using URL as unique identifier
+    const storedServerUrls = storedServers.map((server: MCPSSEServer) => server.url);
+    const resultServers = [...defaultServers];
+
+    // Add stored servers that aren't in default list
+    storedServers.forEach((storedServer: MCPSSEServer) => {
+      const existingIndex = resultServers.findIndex((server) => server.url === storedServer.url);
+
+      if (existingIndex >= 0) {
+        // Replace default with stored version if URL already exists
+        resultServers[existingIndex] = storedServer;
+      } else {
+        // Add stored server if it's not in default list
+        resultServers.push(storedServer);
+      }
+    });
+
+    // Check if result is different from stored servers
+    const resultJson = JSON.stringify(resultServers);
+    const storedJson = JSON.stringify(storedServers);
+
+    if (resultJson !== storedJson) {
+      // Update localStorage and cookies with combined result
+      localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, resultJson);
+
+      if (typeof Cookies !== 'undefined') {
+        Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, resultJson, {
+          expires: 365,
+          path: '/',
+          sameSite: 'lax',
+        });
+      }
+    }
+
+    return resultServers;
   } catch (error) {
     console.error('Failed to parse MCP SSE server settings:', error);
-    return [];
+    return getDefaultMCPServers(); // Return defaults on error
   }
 };
 

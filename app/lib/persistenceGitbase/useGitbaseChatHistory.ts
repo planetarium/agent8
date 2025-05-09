@@ -2,18 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
-import { getProjectCommits, fetchProjectFiles } from '~/lib/persistenceGitbase/api.client';
-import { useSearchParams } from '@remix-run/react';
+import { getProjectCommits, fetchProjectFiles, getTaskBranches } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
-
-interface RepoChatsOptions {
-  branch?: string;
-  untilCommit?: string;
-  perPage?: number;
-}
 
 interface Commit {
   id: string;
@@ -48,8 +41,8 @@ interface CommitResponse {
   error?: string;
 }
 
-export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
-  const repoId = repoStore.get().path;
+export function useGitbaseChatHistory() {
+  const projectPath = repoStore.get().path;
   const [project, setProject] = useState<{
     id: string;
     name: string;
@@ -60,7 +53,10 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
     description: '',
   });
   const [chats, setChats] = useState<Message[]>([]);
+  const [enabledTaskMode, setEnabledTaskMode] = useState(true);
+  const [taskBranch, setTaskBranch] = useState<string | null>(null);
   const [files, setFiles] = useState<FileMap>({});
+  const [taskBranches, setTaskBranches] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
@@ -70,130 +66,55 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   const [error, setError] = useState<string | null>(null);
   const [untilCommit, setUntilCommit] = useState<string | null>(null);
 
-  const [searchParams] = useSearchParams();
-
   // 이전 요청 매개변수를 추적하기 위한 ref
   const prevRequestParams = useRef<string | null>(null);
 
-  // 옵션 객체를 ref로 저장하여 불필요한 리렌더링 방지
-  const optionsRef = useRef(options);
+  const getRevertTo = () => {
+    const url = new URL(window.location.href);
+    const revertTo = url.searchParams.get('revertTo');
+
+    return revertTo && isCommitHash(revertTo) ? revertTo : null;
+  };
 
   useEffect(() => {
-    const revertTo = ((r: string | null) => {
-      if (r && isCommitHash(r)) {
-        return r;
-      }
-
-      return null;
-    })(searchParams.get('revertTo'));
-
-    setUntilCommit(revertTo);
-  }, [searchParams]);
-
-  // 옵션이 변경되면 ref를 업데이트
-  useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
-
-  // Parse commit messages to extract user and assistant messages
-  const parseCommitMessages = useCallback((commits: Commit[]): Message[] => {
-    const messages: Message[] = [];
-
-    commits.forEach((commit) => {
-      // Use regex to extract assistant message
-      const assistantMessageMatch = commit.message.match(/<V8AssistantMessage>([\s\S]*?)<\/V8AssistantMessage>/);
-      const assistantMatched = assistantMessageMatch && assistantMessageMatch[1];
-
-      if (assistantMatched) {
-        const assistantContent = assistantMessageMatch[1].trim();
-
-        if (assistantContent) {
-          messages.push({
-            id: `${commit.id}`,
-            role: 'assistant',
-            content: assistantContent,
-            parts: [
-              {
-                type: 'text',
-                text: assistantContent,
-              },
-            ],
-            createdAt: new Date(commit.created_at),
-          });
-        }
-      }
-
-      const userMessageMatch = commit.message.match(/<V8UserMessage>([\s\S]*?)<\/V8UserMessage>/);
-      const userMatched = userMessageMatch && userMessageMatch[1];
-
-      if (userMatched) {
-        const userContent = userMessageMatch[1].trim();
-
-        if (userContent) {
-          messages.push({
-            id: `user-${commit.id}`,
-            role: 'user',
-            content: userContent,
-            parts: [
-              {
-                type: 'text',
-                text: userContent,
-              },
-            ],
-            createdAt: new Date(commit.created_at),
-          });
-        }
-      }
-
-      const isInitialCommit = (message: string) => {
-        return message.toLowerCase().trim() === 'initial commit' || message.toLowerCase().trim() === 'add readme.md';
-      };
-
-      if (!assistantMatched && !userMatched) {
-        messages.push({
-          id: `commit-${commit.id}`,
-          role: 'assistant',
-          content: commit.message,
-          parts: [
-            {
-              type: 'text',
-              text: commit.message,
-            },
-          ],
-          createdAt: new Date(commit.created_at),
-          annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
-        });
-      }
+    const unsubscribe = repoStore.subscribe((state) => {
+      setTaskBranch(state.taskBranch);
     });
-
-    return messages;
+    return () => unsubscribe();
   }, []);
 
-  const loadFiles = useCallback(async () => {
-    if (!repoId) {
-      return;
-    }
+  const loadTaskBranches = useCallback(async (projectPath: string) => {
+    const { data } = await getTaskBranches(projectPath);
+    setTaskBranches(data);
+  }, []);
 
-    try {
-      setFilesLoaded(false);
+  const loadFiles = useCallback(
+    async (projectPath: string) => {
+      if (!projectPath) {
+        return;
+      }
 
-      setLoadingFiles(true);
+      try {
+        setFilesLoaded(false);
 
-      const fileMap = await fetchProjectFiles(repoId, untilCommit || undefined);
+        setLoadingFiles(true);
 
-      setFiles(fileMap);
-      setFilesLoaded(true);
-    } catch (fileError) {
-      logger.error('Error fetching project files:', fileError);
-    } finally {
-      setLoadingFiles(false);
-    }
-  }, [repoId, fetchProjectFiles, untilCommit]);
+        const fileMap = await fetchProjectFiles(projectPath, getRevertTo() || taskBranch || undefined);
 
-  // Fetch commits from the API
-  const fetchCommits = useCallback(
+        setFiles(fileMap);
+        setFilesLoaded(true);
+      } catch (fileError) {
+        logger.error('Error fetching project files:', fileError);
+      } finally {
+        setLoadingFiles(false);
+      }
+    },
+    [fetchProjectFiles, taskBranch],
+  );
+
+  const load = useCallback(
     async (page: number = 1, append: boolean = false) => {
-      if (!repoId) {
+      if (!projectPath) {
         setLoaded(true);
         return;
       }
@@ -208,16 +129,16 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
       setError(null);
 
       try {
-        const currentOptions = optionsRef.current;
-
         const queryParams = new URLSearchParams({
-          projectPath: repoId,
+          projectPath,
           page: page.toString(),
         });
 
-        if (currentOptions.branch) {
-          queryParams.append('branch', currentOptions.branch);
+        if (taskBranch) {
+          queryParams.append('branch', taskBranch);
         }
+
+        const untilCommit = getRevertTo();
 
         if (untilCommit) {
           queryParams.append('untilCommit', untilCommit);
@@ -233,15 +154,16 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
           return;
         }
 
+        if (page === 1) {
+          loadFiles(projectPath);
+          loadTaskBranches(projectPath);
+        }
+
         // 현재 요청 파라미터 저장
         prevRequestParams.current = requestParamsString;
 
-        if (page === 1) {
-          loadFiles();
-        }
-
-        const data = (await getProjectCommits(repoId, {
-          branch: currentOptions.branch,
+        const data = (await getProjectCommits(projectPath, {
+          branch: taskBranch || undefined,
           untilCommit: untilCommit || undefined,
           page,
         })) as CommitResponse;
@@ -271,7 +193,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
         setLoading(false);
       }
     },
-    [repoId, loading, parseCommitMessages, fetchProjectFiles, untilCommit],
+    [projectPath, loading, fetchProjectFiles, taskBranch],
   );
 
   // Load more commits
@@ -280,18 +202,17 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
       return;
     }
 
-    await fetchCommits(currentPage + 1, true);
-  }, [loading, hasMore, currentPage, fetchCommits, untilCommit]);
+    await load(currentPage + 1, true);
+  }, [loading, hasMore, currentPage, load, taskBranch]);
 
   // popstate 이벤트 리스너 추가 (브라우저 뒤로가기/앞으로가기 시 처리)
   useEffect(() => {
     const handleChangeState = () => {
-      const url = new URL(window.location.href);
-      const urlRevertTo = url.searchParams.get('revertTo');
+      const revertTo = getRevertTo();
 
       // 현재 URL의 revertTo 값이 상태의 값과 다르면 데이터 다시 로드
-      if (urlRevertTo && isCommitHash(urlRevertTo) && urlRevertTo !== untilCommit) {
-        setUntilCommit(urlRevertTo);
+      if (revertTo !== untilCommit) {
+        setUntilCommit(revertTo);
       } else {
         setUntilCommit(null);
       }
@@ -309,7 +230,7 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
   // Initial load - useEffect 최적화
   useEffect(() => {
     // repo가 없으면 초기화만 하고 API 호출 안함
-    if (!repoId) {
+    if (!projectPath) {
       setLoaded(true);
       setFilesLoaded(true);
       setChats([]);
@@ -318,23 +239,100 @@ export function useGitbaseChatHistory(options: RepoChatsOptions = {}) {
       return () => 0;
     }
 
-    const timeoutId = setTimeout(() => {
-      fetchCommits(1, false);
+    const timeoutId = setTimeout(async () => {
+      load(1, false);
     }, 0);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [repoId, fetchCommits, loadFiles, untilCommit]);
+  }, [projectPath, load, loadFiles, loadTaskBranches, untilCommit, taskBranch]);
 
   return {
     loaded: loaded && filesLoaded,
     chats,
     project,
     files,
+    taskBranches,
+    reloadTaskBranches: loadTaskBranches,
+    enabledTaskMode,
+    setEnabledTaskMode,
     loading: loading || loadingFiles,
     error,
     hasMore,
     loadBefore,
   };
 }
+
+const parseCommitMessages = (commits: Commit[]): Message[] => {
+  const messages: Message[] = [];
+
+  commits.forEach((commit) => {
+    // Use regex to extract assistant message
+    const assistantMessageMatch = commit.message.match(/<V8AssistantMessage>([\s\S]*?)<\/V8AssistantMessage>/);
+    const assistantMatched = assistantMessageMatch && assistantMessageMatch[1];
+
+    if (assistantMatched) {
+      const assistantContent = assistantMessageMatch[1].trim();
+
+      if (assistantContent) {
+        messages.push({
+          id: `${commit.id}`,
+          role: 'assistant',
+          content: assistantContent,
+          parts: [
+            {
+              type: 'text',
+              text: assistantContent,
+            },
+          ],
+          createdAt: new Date(commit.created_at),
+        });
+      }
+    }
+
+    const userMessageMatch = commit.message.match(/<V8UserMessage>([\s\S]*?)<\/V8UserMessage>/);
+    const userMatched = userMessageMatch && userMessageMatch[1];
+
+    if (userMatched) {
+      const userContent = userMessageMatch[1].trim();
+
+      if (userContent) {
+        messages.push({
+          id: `user-${commit.id}`,
+          role: 'user',
+          content: userContent,
+          parts: [
+            {
+              type: 'text',
+              text: userContent,
+            },
+          ],
+          createdAt: new Date(commit.created_at),
+        });
+      }
+    }
+
+    const isInitialCommit = (message: string) => {
+      return message.toLowerCase().trim() === 'initial commit' || message.toLowerCase().trim() === 'add readme.md';
+    };
+
+    if (!assistantMatched && !userMatched) {
+      messages.push({
+        id: `commit-${commit.id}`,
+        role: 'assistant',
+        content: commit.message,
+        parts: [
+          {
+            type: 'text',
+            text: commit.message,
+          },
+        ],
+        createdAt: new Date(commit.created_at),
+        annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
+      });
+    }
+  });
+
+  return messages;
+};

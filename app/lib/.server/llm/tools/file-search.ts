@@ -78,13 +78,9 @@ export const createFilesReadTool = (fileMap: FileMap) => {
         }
       });
 
-      return {
-        message: `Read (${pathList.join(', ')}) files, Do not read the same file again.`,
-        pathList,
-        files,
-        totalFiles: pathList.length,
-        successCount: pathList.length,
-      };
+      return Object.keys(files)
+        .map((name) => `<file name="${name}">\n${files[name].content}\n</file>`)
+        .join('\n');
     },
   });
 };

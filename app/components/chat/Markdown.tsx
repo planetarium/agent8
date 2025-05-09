@@ -42,7 +42,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
         if (className?.includes('__toolCall__')) {
           try {
             const content = (children as React.ReactElement<any, 'code'>).props.children;
-            return <ToolCall toolCall={JSON.parse(content)} />;
+            return <ToolCall toolCall={JSON.parse(content)} id={props.id!} />;
           } catch {
             return <pre>{children}</pre>;
           }
@@ -51,7 +51,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
         if (className?.includes('__toolResult__')) {
           try {
             const content = (children as React.ReactElement<any, 'code'>).props.children;
-            return <ToolResult toolResult={JSON.parse(content)} />;
+            return <ToolResult toolResult={JSON.parse(content)} id={props.id!} />;
           } catch {
             return <pre>{children}</pre>;
           }

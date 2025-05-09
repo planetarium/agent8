@@ -40,7 +40,7 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
   {
     label: 'Gemini 2.5 Pro Preview',
     providerName: 'OpenRouter',
-    modelName: 'google/gemini-2.5-pro-preview-03-25',
+    modelName: 'google/gemini-2.5-pro-preview',
   },
   {
     label: 'Gemini 2.0 Flash',

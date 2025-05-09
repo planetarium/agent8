@@ -5,6 +5,7 @@ import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { parseCookies } from '~/lib/api/cookies';
+import type { FileMap } from '~/lib/stores/files';
 
 const logger = createScopedLogger('api.select-template');
 
@@ -16,7 +17,7 @@ const templateCache: Record<
   string,
   {
     data: any;
-    files: any;
+    fileMap: FileMap;
     timestamp: number;
     expiresAt: number;
   }
@@ -60,6 +61,19 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
 
       const { fileMap, messages } = await getTemplates(repo, path, title, env);
 
+      // Store in cache
+      templateCache[cacheKey] = {
+        data: messages,
+        fileMap,
+        timestamp: now,
+        expiresAt: now + CACHE_TTL,
+      };
+    }
+
+    const gitlabService = new GitlabService(env, temporaryMode);
+    const fileMap = templateCache[cacheKey].fileMap;
+
+    if (gitlabService.enabled) {
       const files = [];
 
       for (const key in fileMap) {
@@ -71,24 +85,13 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
         }
       }
 
-      // Store in cache
-      templateCache[cacheKey] = {
-        data: messages,
-        files,
-        timestamp: now,
-        expiresAt: now + CACHE_TTL,
-      };
-    }
-
-    const gitlabService = new GitlabService(env, temporaryMode);
-
-    if (gitlabService.enabled) {
       const gitlabUser = await gitlabService.getOrCreateUser(email as string);
       const project = await gitlabService.createProject(gitlabUser, projectRepo, title);
-      const commit = await gitlabService.commitFiles(project.id, templateCache[cacheKey].files, 'Initial commit');
+      const commit = await gitlabService.commitFiles(project.id, files, 'Initial commit');
 
       return json({
         data: templateCache[cacheKey].data,
+        fileMap,
         project: {
           id: project.id,
           name: project.name,
@@ -102,6 +105,7 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
 
     return json({
       data: templateCache[cacheKey].data,
+      fileMap,
       cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
     });
   } catch (error) {

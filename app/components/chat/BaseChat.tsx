@@ -30,6 +30,11 @@ import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { ImportProjectZip } from './ImportProjectZip';
 import McpSseServerManager from '~/components/chat/McpSseServerManager';
+import { FaCheckSquare, FaSquare } from 'react-icons/fa';
+import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { useStore } from '@nanostores/react';
+import { TaskMessages } from './TaskMessages.client';
+import { TaskBranches } from './TaskBranches.client';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 
@@ -60,6 +65,12 @@ interface BaseChatProps {
   provider?: ProviderInfo;
   setProvider?: (provider: ProviderInfo) => void;
   providerList?: ProviderInfo[];
+  enabledTaskMode?: boolean;
+  setEnabledTaskMode?: (enabled: boolean) => void;
+  taskBranches?: any[];
+  reloadTaskBranches?: (projectPath: string) => void;
+  currentTaskBranch?: any;
+  setCurrentTaskBranch?: (branch: any) => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -93,11 +104,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setProvider,
       providerList,
       input = '',
-      enhancingPrompt,
+      enabledTaskMode,
+      setEnabledTaskMode,
+      taskBranches,
+      reloadTaskBranches,
       handleInputChange,
 
-      // promptEnhanced,
-      enhancePrompt,
       sendMessage,
       handleStop,
       attachmentList = [],
@@ -122,6 +134,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(1);
+    const repo = useStore(repoStore);
 
     useEffect(() => {
       if (data) {
@@ -446,31 +459,57 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </div>
             )}
             <div
-              className={classNames('pt-6 px-2 sm:px-6', {
+              className={classNames('pt-6 px-2 sm:px-6 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
               <ClientOnly>
                 {() => {
+                  const currentTaskBranch = repo.taskBranch;
+
                   return chatStarted ? (
-                    <Messages
-                      ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      onRetry={handleRetry}
-                      onFork={handleFork}
-                      onRevert={handleRevert}
-                      onViewDiff={onViewDiff}
-                    />
+                    <>
+                      {currentTaskBranch !== DEFAULT_TASK_BRANCH ? (
+                        <TaskMessages
+                          ref={messageRef}
+                          taskBranches={taskBranches}
+                          currentTaskBranch={currentTaskBranch}
+                          reloadTaskBranches={reloadTaskBranches}
+                          className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                          messages={messages}
+                          isStreaming={isStreaming}
+                          onRetry={handleRetry}
+                          onFork={handleFork}
+                          onRevert={handleRevert}
+                          onViewDiff={onViewDiff}
+                        />
+                      ) : (
+                        <Messages
+                          ref={messageRef}
+                          className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                          messages={messages}
+                          isStreaming={isStreaming}
+                          onRetry={handleRetry}
+                          onFork={handleFork}
+                          onRevert={handleRevert}
+                          onViewDiff={onViewDiff}
+                        />
+                      )}
+                      {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
+                        <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
+                      )}
+                    </>
                   ) : null;
                 }}
               </ClientOnly>
 
               <div
-                className={classNames('flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt mb-6', {
-                  'sticky bottom-2': chatStarted,
-                })}
+                className={classNames(
+                  'flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt z-1000 bg-bolt-elements-background-depth-2',
+                  {
+                    'sticky bottom-8': chatStarted,
+                  },
+                )}
               >
                 <div className="bg-bolt-elements-background-depth-2">
                   {!isStreaming && actionAlert && (
@@ -635,21 +674,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         <IconButton title="Upload file" className="transition-all" onClick={() => handleFileUpload()}>
                           <div className="i-ph:paperclip text-xl"></div>
                         </IconButton>
-                        <IconButton
-                          title="Enhance prompt"
-                          disabled={input.length === 0 || enhancingPrompt}
-                          className={classNames('transition-all', enhancingPrompt ? 'opacity-100' : '')}
-                          onClick={() => {
-                            enhancePrompt?.();
-                            toast.success('Prompt enhanced!');
-                          }}
-                        >
-                          {enhancingPrompt ? (
-                            <div className="i-svg-spinners:90-ring-with-bg text-bolt-elements-loader-progress text-xl animate-spin"></div>
-                          ) : (
-                            <div className="i-bolt:stars text-xl"></div>
-                          )}
-                        </IconButton>
 
                         {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
 
@@ -677,7 +701,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           a new line
                         </div>
                       ) : (
-                        !chatStarted && <ImportProjectZip onImport={onProjectZipImport} />
+                        <div className="flex items-center gap-1">
+                          <div
+                            className="text-xs text-bolt-elements-textSecondary flex items-center gap-1 pointer hover:text-bolt-elements-textPrimary cursor-pointer"
+                            onClick={() => setEnabledTaskMode?.(!enabledTaskMode)}
+                          >
+                            {enabledTaskMode ? <FaCheckSquare /> : <FaSquare />}
+                            Task Mode
+                          </div>
+                          {!chatStarted && <ImportProjectZip onImport={onProjectZipImport} />}
+                        </div>
                       )}
                     </div>
                   </div>
