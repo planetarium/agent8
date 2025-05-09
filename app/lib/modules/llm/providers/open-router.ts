@@ -115,7 +115,6 @@ export default class OpenRouterProvider extends BaseProvider {
             };
 
             options.body = JSON.stringify(body);
-            console.log('options', options.body);
           }
         } catch {
           logger.error('Error parsing OpenRouter request body', { url, options });
