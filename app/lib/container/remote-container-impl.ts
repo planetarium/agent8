@@ -665,6 +665,12 @@ export class RemoteContainer implements Container {
       // Check if the requested OSC code is already in the global buffer
       const bufferMatches = [..._globalOutputBuffer.matchAll(oscRegex)];
 
+      /*
+       * If not found in buffer, read from the stream
+       * Do not move this awaiting after existing buffer check, as there may be existing awaiters.
+       */
+      await waitInternalOutputLock();
+
       if (bufferMatches.length > 0) {
         // Found the OSC code in the buffer, extract output up to this code
         const match = bufferMatches[0];
@@ -684,9 +690,6 @@ export class RemoteContainer implements Container {
           return { output: fullOutput, exitCode };
         }
       }
-
-      // If not found in buffer, read from the stream
-      await waitInternalOutputLock();
 
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
@@ -754,17 +757,27 @@ export class RemoteContainer implements Container {
 
       // Command execution implementation
       executeCommand = async (command: string): Promise<ExecutionResult> => {
+        logger.debug('executeCommand', command);
+
         // Interrupt current execution
         terminal.input('\x03');
+
+        logger.debug('waiting for prompt', command);
 
         // Wait for prompt
         await waitTillOscCode('prompt');
 
+        logger.debug('prompt received', command);
+
         // Execute new command
         terminal.input(command.trim() + '\n');
 
+        logger.debug('command executed', command);
+
         // Wait for execution result
         const { output, exitCode } = await waitTillOscCode('exit');
+
+        logger.debug('execution ended', command, exitCode);
 
         return {
           output: cleanTerminalOutput(output),
