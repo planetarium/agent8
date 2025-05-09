@@ -48,12 +48,11 @@ export default class OpenRouterProvider extends BaseProvider {
       return data.data
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((m) => {
-          const maxTokenAllowed = m.name.includes('Claude 3.7 Sonnet') ? 64000 : 8000;
           return {
             name: m.id,
             label: `${m.name} - in:$${(m.pricing.prompt * 1_000_000).toFixed(2)} out:$${(m.pricing.completion * 1_000_000).toFixed(2)} - context ${Math.floor(m.context_length / 1000)}k`,
             provider: this.name,
-            maxTokenAllowed,
+            maxTokenAllowed: 64000,
           };
         });
     } catch (error) {
@@ -93,7 +92,7 @@ export default class OpenRouterProvider extends BaseProvider {
            * See: https://openrouter.ai/docs/features/prompt-caching#anthropic-claude
            */
 
-          if (body.model?.startsWith('anthropic') && body.messages?.length > 0) {
+          if (body.messages?.length > 0) {
             body.messages = body.messages.map((message: any) => {
               if (message.cache_control) {
                 return {
@@ -116,6 +115,7 @@ export default class OpenRouterProvider extends BaseProvider {
             };
 
             options.body = JSON.stringify(body);
+            console.log('options', options.body);
           }
         } catch {
           logger.error('Error parsing OpenRouter request body', { url, options });

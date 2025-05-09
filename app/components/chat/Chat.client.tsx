@@ -275,12 +275,9 @@ async function runAndPreview(message: Message) {
     await workbenchStore.setupDeployConfig(shell);
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
     } else {
-      await shell.executeCommand(
-        Date.now().toString(),
-        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
-      );
+      shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev');
     }
 
     break;
@@ -386,7 +383,9 @@ export const ChatImpl = memo(
           });
         }
 
-        await Promise.all([runAndPreview(message), handleCommit(message).then(() => setFakeLoading(false))]);
+        await runAndPreview(message);
+        await handleCommit(message);
+        setFakeLoading(false);
         logger.debug('Finished streaming');
       },
       initialMessages,

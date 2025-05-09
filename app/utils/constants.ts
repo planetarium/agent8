@@ -30,12 +30,12 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
   },
   FIRST_3D_CHAT: {
-    model: 'claude-3-7-sonnet-20250219',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+    model: 'google/gemini-2.5-pro-preview',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
   DEFAULT_MODEL: {
-    model: 'claude-3-7-sonnet-20250219',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+    model: 'google/gemini-2.5-pro-preview',
+    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
   },
   IMAGE_DESCRIPTION: {
     model: 'google/gemini-2.0-flash-001',
