@@ -45,6 +45,7 @@ const BUFFER_CONFIG = {
 };
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
+const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const logger = createScopedLogger('remote-container');
 
 function base64ToUint8Array(base64: string) {
@@ -128,7 +129,7 @@ class RemoteContainerConnection {
     this._connectionPromise = promise;
 
     try {
-      this._ws = new WebSocket(this._serverUrl);
+      this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
 
       this._ws.onopen = () => {
         this._connected = true;
