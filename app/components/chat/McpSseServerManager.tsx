@@ -12,13 +12,13 @@ const McpSseServerManager: React.FC = () => {
   const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer, toggleMCPSSEServerV8Auth } =
     useSettings();
 
-  const defaultServerNames = ['All-in-one', '2D-Image', 'Cinematic', 'Audio', 'Skybox'];
+  const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox'];
 
   const getServerDescription = (serverName: string): string => {
     switch (serverName) {
       case 'All-in-one':
         return 'All-in-one server that integrates all MCP tools.';
-      case '2D-Image':
+      case 'Image':
         return 'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.';
       case 'Cinematic':
         return 'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).';
@@ -57,7 +57,7 @@ const McpSseServerManager: React.FC = () => {
 
   const getServerIcon = (serverName: string) => {
     switch (serverName) {
-      case '2D-Image':
+      case 'Image':
         return 'i-ph:image w-4 h-4 text-green-500';
       case 'Cinematic':
         return 'i-ph:film-strip w-4 h-4 text-purple-500';
@@ -207,9 +207,7 @@ const McpSseServerManager: React.FC = () => {
                                     className={classNames(
                                       'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-800 border border-gray-600 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
                                       pinnedTooltip === `${server.name}-tooltip` ? 'block' : 'hidden',
-                                      server.name === '2D-Image' ||
-                                        server.name === 'Cinematic' ||
-                                        server.name === 'Audio'
+                                      server.name === 'Image' || server.name === 'Cinematic' || server.name === 'Audio'
                                         ? 'top-full -left-30 mt-1'
                                         : 'bottom-full -left-30 mb-1',
                                     )}
@@ -232,7 +230,7 @@ const McpSseServerManager: React.FC = () => {
 
                                     {/* Credit information / Will be revised after cost policy decision */}
                                     <div className="mb-3 p-2 text-xs bg-gray-900 rounded-md border border-gray-700">
-                                      {server.name === '2D-Image' && (
+                                      {server.name === 'Image' && (
                                         <p className="text-gray-200">Cost: 1 credit (fixed)</p>
                                       )}
                                       {server.name === 'Cinematic' && (
@@ -262,7 +260,7 @@ const McpSseServerManager: React.FC = () => {
                                       </div>
                                       {!collapsedTips[server.name] && (
                                         <>
-                                          {server.name === '2D-Image' && (
+                                          {server.name === 'Image' && (
                                             <ul className="text-gray-300 list-disc pl-5 space-y-2">
                                               <li>Provide specific and detailed descriptions for assets</li>
                                               <li>Clearly specify the desired style</li>
