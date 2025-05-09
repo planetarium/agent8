@@ -29,7 +29,7 @@ import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import { ImportProjectZip } from './ImportProjectZip';
-import McpSseServerManager from '~/components/chat/McpSseServerManager';
+import McpServerManager from '~/components/chat/McpServerManager';
 import { FaCheckSquare, FaSquare } from 'react-icons/fa';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
@@ -534,7 +534,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
-                <McpSseServerManager />
+                <McpServerManager />
 
                 <div
                   className={classNames(
