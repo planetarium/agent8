@@ -7,9 +7,11 @@ import { type JSONSchema7 } from '@ai-sdk/provider';
 import { jsonSchema } from '@ai-sdk/ui-utils';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createScopedLogger } from '~/utils/logger';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { MCPConfig } from './config';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 const logger = createScopedLogger('MCPToolset');
 
@@ -121,19 +123,29 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
         return;
       }
 
-      // Create SSE transport layer - direct initialization
       const url = new URL(serverConfig.url);
       const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
-      const transport = new SSEClientTransport(url, {
-        eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
-        requestInit: v8AuthIntegrated
-          ? {
-              headers: {
-                Authorization: `Bearer ${v8AuthToken}`,
-              },
-            }
-          : undefined,
-      });
+      let transport: Transport;
+
+      const requestInit = v8AuthIntegrated
+        ? {
+            headers: {
+              Authorization: `Bearer ${v8AuthToken}`,
+            },
+          }
+        : undefined;
+
+      if (url.pathname.endsWith('/sse')) {
+        // Create SSE transport layer - direct initialization
+        transport = new SSEClientTransport(url, {
+          eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
+          requestInit,
+        });
+      } else {
+        transport = new StreamableHTTPClientTransport(url, {
+          requestInit,
+        });
+      }
 
       // Create MCP client
       const client = new Client({

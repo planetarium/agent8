@@ -3,14 +3,13 @@ import { motion } from 'framer-motion';
 import { Switch } from '~/components/ui/Switch';
 import { toast } from 'react-toastify';
 import { useSettings } from '~/lib/hooks/useSettings';
-import type { MCPSSEServer } from '~/lib/stores/settings';
+import type { MCPServer } from '~/lib/stores/settings';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { classNames } from '~/utils/classNames';
 
-// MCP SSE Server Manager Component
-const McpSseServerManager: React.FC = () => {
-  const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer, toggleMCPSSEServerV8Auth } =
-    useSettings();
+// MCP Server Manager Component
+const McpServerManager: React.FC = () => {
+  const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
 
   const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox'];
 
@@ -80,7 +79,7 @@ const McpSseServerManager: React.FC = () => {
 
   const handleAddServer = () => {
     if (newServer.name && newServer.url) {
-      const server: MCPSSEServer = {
+      const server: MCPServer = {
         name: newServer.name,
         url: newServer.url,
         enabled: true,
@@ -88,7 +87,7 @@ const McpSseServerManager: React.FC = () => {
         description: newServer.description,
       };
 
-      addMCPSSEServer(server);
+      addMCPServer(server);
       toast.success(`${newServer.name} tool added`, { autoClose: 1500 });
 
       // 쿠키가 설정되었는지 확인
@@ -103,7 +102,7 @@ const McpSseServerManager: React.FC = () => {
           );
 
           console.log('Current cookies:', cookies);
-          console.log(`MCP settings cookie present:`, cookies[SETTINGS_KEYS.MCP_SSE_SERVERS] !== undefined);
+          console.log(`MCP settings cookie present:`, cookies[SETTINGS_KEYS.MCP_SERVERS] !== undefined);
         } catch (error) {
           console.error('Error checking cookies:', error);
         }
@@ -115,18 +114,18 @@ const McpSseServerManager: React.FC = () => {
   };
 
   const handleRemoveServer = (index: number) => {
-    removeMCPSSEServer(index);
+    removeMCPServer(index);
 
     toast.success('tool removed', { autoClose: 1500 });
   };
 
   const handleToggleServer = (index: number, enabled: boolean) => {
-    toggleMCPSSEServer(index, enabled);
+    toggleMCPServer(index, enabled);
 
     if (enabled) {
-      toggleMCPSSEServerV8Auth(index, true);
+      toggleMCPServerV8Auth(index, true);
     } else {
-      toggleMCPSSEServerV8Auth(index, false);
+      toggleMCPServerV8Auth(index, false);
     }
   };
 
@@ -153,9 +152,9 @@ const McpSseServerManager: React.FC = () => {
             </div>
           </div>
 
-          {mcpSseServers.length > 0 ? (
+          {mcpServers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2">
-              {mcpSseServers
+              {mcpServers
                 .map((server, index) => ({ server, index }))
                 .filter((item) => item.server.name !== 'All-in-one')
                 .map(({ server, index }) => (
@@ -347,7 +346,7 @@ const McpSseServerManager: React.FC = () => {
             </div>
           ) : (
             <div className="text-center p-4 text-bolt-elements-textSecondary text-sm">
-              No MCP SSE servers registered. Add a new server to get started.
+              No MCP servers registered. Add a new server to get started.
             </div>
           )}
 
@@ -466,7 +465,7 @@ const McpSseServerManager: React.FC = () => {
         </motion.div>
       )}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
-        {mcpSseServers
+        {mcpServers
           .map((server, index) => ({ server, index }))
           .filter((item) => item.server.enabled && item.server.name !== 'All-in-one')
           .map(({ server, index }) => (
@@ -498,4 +497,4 @@ const McpSseServerManager: React.FC = () => {
   );
 };
 
-export default McpSseServerManager;
+export default McpServerManager;

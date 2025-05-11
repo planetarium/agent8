@@ -37,6 +37,8 @@ export function getProviderSettingsFromCookie(cookieHeader: string | null): Reco
 
 export function getMCPConfigFromCookie(cookieHeader: string | null): MCPConfig {
   const cookies = parseCookies(cookieHeader);
+
+  // for backward compatibility, use cookies.mcpSseServers.
   const servers: MCPServerConfig[] = cookies.mcpSseServers
     ? JSON.parse(cookies.mcpSseServers).map((server: MCPServerConfig) => ({
         ...server,
