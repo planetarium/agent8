@@ -35,12 +35,13 @@ import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import {
   commitChanges,
+  createTaskBranch,
   fetchProjectFiles,
   forkProject,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
 import { container } from '~/lib/container';
-import { repoStore } from '~/lib/stores/repo';
+import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
@@ -77,7 +78,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
     }
 
     const result = (await response.json()) as {
-      data: { assistantMessage: string; userMessage: string };
+      fileMap: FileMap;
       project: { id: number; name: string; path: string; description: string };
       commit: { id: number };
     };
@@ -110,7 +111,18 @@ function sendEventToParent(type: string, payload: any) {
 export function Chat() {
   renderLogger.trace('Chat');
 
-  const { loaded, chats, files, project } = useGitbaseChatHistory();
+  const {
+    loaded,
+    loading,
+    chats,
+    files,
+    project,
+    taskBranches,
+    enabledTaskMode,
+    setEnabledTaskMode,
+    reloadTaskBranches,
+  } = useGitbaseChatHistory();
+
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
@@ -138,7 +150,30 @@ export function Chat() {
       if (chats.length > 0) {
         setInitialMessages(chats);
         container.then(async (containerInstance) => {
-          containerInstance.mount(convertFileMapToFileSystemTree(files));
+          /*
+           * try {
+           *   await containerInstance.fs.rm('/src', { recursive: true, force: true });
+           * } catch {
+           *   logger.warn('Failed to remove /src directory');
+           * }
+           */
+
+          await containerInstance.mount(convertFileMapToFileSystemTree(files));
+
+          const previews = workbenchStore.previews.get();
+          const currentPreview = previews.find((p) => p.ready && p.port === 5173);
+
+          if (currentPreview && workbenchStore.currentView.get() === 'preview') {
+            workbenchStore.previews.set(
+              previews.map((p) => {
+                if (p.baseUrl === currentPreview.baseUrl) {
+                  return { ...p, refreshAt: Date.now() };
+                }
+
+                return p;
+              }),
+            );
+          }
         });
         workbenchStore.showWorkbench.set(true);
       }
@@ -157,7 +192,16 @@ export function Chat() {
   return (
     <>
       {ready && (
-        <ChatImpl description={title} initialMessages={initialMessages} setInitialMessages={setInitialMessages} />
+        <ChatImpl
+          loading={loading}
+          description={title}
+          initialMessages={initialMessages}
+          setInitialMessages={setInitialMessages}
+          enabledTaskMode={enabledTaskMode}
+          setEnabledTaskMode={setEnabledTaskMode}
+          taskBranches={taskBranches}
+          reloadTaskBranches={reloadTaskBranches}
+        />
       )}
       <ToastContainer
         closeButton={({ closeToast }) => {
@@ -231,12 +275,9 @@ async function runAndPreview(message: Message) {
     await workbenchStore.setupDeployConfig(shell);
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
     } else {
-      await shell.executeCommand(
-        Date.now().toString(),
-        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
-      );
+      shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev');
     }
 
     break;
@@ -244,734 +285,781 @@ async function runAndPreview(message: Message) {
 }
 
 interface ChatProps {
+  loading: boolean;
   initialMessages: Message[];
   setInitialMessages: (messages: Message[]) => void;
   description?: string;
+  taskBranches: any[];
+  enabledTaskMode: boolean;
+  setEnabledTaskMode: (enabled: boolean) => void;
+  reloadTaskBranches: (projectPath: string) => Promise<void>;
 }
 
-export const ChatImpl = memo(({ description, initialMessages, setInitialMessages }: ChatProps) => {
-  useShortcuts();
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-  const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [fakeLoading, setFakeLoading] = useState(false);
-  const [installNpm, setInstallNpm] = useState(false);
-  const files = useStore(workbenchStore.files);
-  const actionAlert = useStore(workbenchStore.alert);
-  const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
-
-  const [model, setModel] = useState(() => {
-    const savedModel = Cookies.get('SelectedModel');
-    return savedModel || DEFAULT_MODEL;
-  });
-  const [provider, setProvider] = useState(() => {
-    const savedProvider = Cookies.get('SelectedProvider');
-    return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
-  });
-
-  const { showChat } = useStore(chatStore);
-
-  const [animationScope, animate] = useAnimate();
-
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-
-  const {
-    messages,
-    isLoading,
-    input,
-    handleInputChange,
-    setInput,
-    stop,
-    append,
-    setMessages,
-    reload,
-    error,
-    data: chatData,
-    setData,
-  } = useChat({
-    api: '/api/chat',
-    body: {
-      apiKeys,
-      files,
-      promptId,
-      contextOptimization: contextOptimizationEnabled,
-    },
-    sendExtraMessageFields: true,
-    onError: (e) => {
-      logger.error('Request failed\n\n', e, error);
-      logStore.logError('Chat request failed', e, {
-        component: 'Chat',
-        action: 'request',
-        error: e.message,
-      });
-      toast.error(
-        'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-      );
-      setFakeLoading(false);
-    },
-    onFinish: async (message, response) => {
-      const usage = response.usage;
-      setData(undefined);
-
-      if (usage) {
-        logStore.logProvider('Chat response completed', {
-          component: 'Chat',
-          action: 'response',
-          model,
-          provider: provider.name,
-          usage,
-          messageLength: message.content.length,
-        });
-      }
-
-      setFakeLoading(false);
-      await Promise.all([runAndPreview(message), handleCommit(message)]);
-
-      logger.debug('Finished streaming');
-    },
+export const ChatImpl = memo(
+  ({
+    loading,
+    description,
     initialMessages,
-    initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
-  });
-  useEffect(() => {
-    const prompt = searchParams.get('prompt');
+    setInitialMessages,
+    taskBranches,
+    enabledTaskMode,
+    setEnabledTaskMode,
+    reloadTaskBranches,
+  }: ChatProps) => {
+    useShortcuts();
 
-    if (prompt) {
-      setSearchParams({});
-      runAnimation();
-      append({
-        role: 'user',
-        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
-      });
-    }
-  }, [model, provider, searchParams]);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
-  const { parsedMessages, parseMessages, resetParsedMessagesFrom } = useMessageParser();
+    const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
+    const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [fakeLoading, setFakeLoading] = useState(false);
+    const [installNpm, setInstallNpm] = useState(false);
+    const files = useStore(workbenchStore.files);
+    const actionAlert = useStore(workbenchStore.alert);
+    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
-  const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const [model, setModel] = useState(() => {
+      const savedModel = Cookies.get('SelectedModel');
+      return savedModel || DEFAULT_MODEL;
+    });
+    const [provider, setProvider] = useState(() => {
+      const savedProvider = Cookies.get('SelectedProvider');
+      return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
+    });
 
-  useEffect(() => {
-    chatStore.setKey('started', initialMessages.length > 0);
-  }, []);
+    const { showChat } = useStore(chatStore);
 
-  useEffect(() => {
-    setMessages(initialMessages);
-  }, [initialMessages]);
+    const [animationScope, animate] = useAnimate();
 
-  useEffect(() => {
-    processSampledMessages({
+    const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+
+    const {
       messages,
       isLoading,
-      parseMessages,
-    });
-  }, [messages, isLoading, parseMessages]);
-
-  useEffect(() => {
-    if (Object.keys(files).length > 0 && !installNpm) {
-      setInstallNpm(true);
-
-      const boltShell = workbenchStore.boltTerminal;
-      boltShell.ready.then(async () => {
-        await workbenchStore.setupDeployConfig(boltShell);
-        await boltShell.executeCommand(Date.now().toString(), 'pnpm install');
-      });
-    }
-  }, [files, installNpm]);
-
-  const handleCommit = async (message: Message) => {
-    if (!isEnabledGitbasePersistence) {
-      return;
-    }
-
-    try {
-      await commitChanges(message, (commitHash) => {
-        workbenchStore.setReloadedMessages([...messages.map((m) => m.id), commitHash]);
-
-        setMessages((prev: Message[]) => {
-          const newMessages = prev.map((m: Message) => {
-            if (m.id === message.id) {
-              return {
-                ...m,
-                id: commitHash,
-              };
-            }
-
-            return m;
-          });
-
-          resetParsedMessagesFrom(newMessages.length - 1);
-
-          return newMessages;
+      input,
+      handleInputChange,
+      setInput,
+      stop,
+      append,
+      setMessages,
+      reload,
+      error,
+      data: chatData,
+      setData,
+    } = useChat({
+      api: '/api/chat',
+      body: {
+        apiKeys,
+        files,
+        promptId,
+        contextOptimization: contextOptimizationEnabled,
+      },
+      sendExtraMessageFields: true,
+      onError: (e) => {
+        logger.error('Request failed\n\n', e, error);
+        logStore.logError('Chat request failed', e, {
+          component: 'Chat',
+          action: 'request',
+          error: e.message,
         });
-      });
-    } catch (e) {
-      toast.error('The code commit has failed. You can download the code and restore it.');
-      console.log(e);
-    }
-  };
+        toast.error(
+          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+        );
+        setFakeLoading(false);
+      },
+      onFinish: async (message, response) => {
+        const usage = response.usage;
+        setData(undefined);
 
-  const scrollTextArea = () => {
-    const textarea = textareaRef.current;
-
-    if (textarea) {
-      textarea.scrollTop = textarea.scrollHeight;
-    }
-  };
-
-  const abort = () => {
-    stop();
-    setFakeLoading(false);
-    chatStore.setKey('aborted', true);
-    workbenchStore.abortAllActions();
-
-    logStore.logProvider('Chat response aborted', {
-      component: 'Chat',
-      action: 'abort',
-      model,
-      provider: provider.name,
-    });
-  };
-
-  useEffect(() => {
-    const textarea = textareaRef.current;
-
-    if (textarea) {
-      textarea.style.height = 'auto';
-
-      const scrollHeight = textarea.scrollHeight;
-
-      textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
-      textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-    }
-  }, [input, textareaRef]);
-
-  const runAnimation = async () => {
-    if (chatStarted) {
-      return;
-    }
-
-    await Promise.all([
-      animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
-      animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
-    ]);
-
-    chatStore.setKey('started', true);
-
-    setChatStarted(true);
-  };
-
-  const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
-    const messageContent = messageInput || input;
-
-    if (!messageContent?.trim()) {
-      return;
-    }
-
-    if (isLoading) {
-      abort();
-      return;
-    }
-
-    setFakeLoading(true);
-    runAnimation();
-
-    if (attachmentList.length > 0) {
-      const imageAttachments = attachmentList.filter((item) =>
-        ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
-      );
-
-      if (imageAttachments.length > 0) {
-        setFakeLoading(true);
-
-        const urls = imageAttachments.map((item) => item.url);
-
-        try {
-          const descriptionResponse = await fetch('/api/image-description', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: messageContent,
-              imageUrls: urls,
-            }),
+        if (usage) {
+          logStore.logProvider('Chat response completed', {
+            component: 'Chat',
+            action: 'response',
+            model,
+            provider: provider.name,
+            usage,
+            messageLength: message.content.length,
           });
+        }
 
-          if (descriptionResponse.ok) {
-            const descriptions = await descriptionResponse.json();
+        await runAndPreview(message);
+        await handleCommit(message);
+        setFakeLoading(false);
+        logger.debug('Finished streaming');
+      },
+      initialMessages,
+      initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
+    });
+    useEffect(() => {
+      const prompt = searchParams.get('prompt');
 
-            if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
-              for (let i = 0; i < imageAttachments.length; i++) {
-                imageAttachments[i].features = descriptions[i].features;
-                imageAttachments[i].details = descriptions[i].details;
+      if (prompt) {
+        setSearchParams({});
+        runAnimation();
+        append({
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
+        });
+      }
+    }, [model, provider, searchParams]);
+
+    const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
+    const { parsedMessages, parseMessages } = useMessageParser();
+
+    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+
+    useEffect(() => {
+      chatStore.setKey('started', initialMessages.length > 0);
+    }, []);
+
+    useEffect(() => {
+      setMessages(initialMessages);
+    }, [initialMessages]);
+
+    useEffect(() => {
+      processSampledMessages({
+        messages,
+        isLoading,
+        parseMessages,
+      });
+    }, [messages, isLoading, parseMessages]);
+
+    useEffect(() => {
+      if (Object.keys(files).length > 0 && !installNpm) {
+        setInstallNpm(true);
+
+        const boltShell = workbenchStore.boltTerminal;
+        boltShell.ready.then(async () => {
+          await workbenchStore.setupDeployConfig(boltShell);
+        });
+      }
+    }, [files, installNpm]);
+
+    const handleCommit = async (message: Message) => {
+      if (!isEnabledGitbasePersistence) {
+        return;
+      }
+
+      try {
+        await commitChanges(message, (commitHash) => {
+          workbenchStore.setReloadedMessages([...messages.map((m) => m.id), commitHash]);
+          setMessages((prev: Message[]) => {
+            const newMessages = prev.map((m: Message) => {
+              if (m.id === message.id) {
+                return {
+                  ...m,
+                  id: commitHash,
+                };
+              }
+
+              return m;
+            });
+
+            return newMessages;
+          });
+          reloadTaskBranches(repoStore.get().path);
+        });
+      } catch (e) {
+        toast.error('The code commit has failed. You can download the code and restore it.');
+        console.log(e);
+      }
+    };
+
+    const scrollTextArea = () => {
+      const textarea = textareaRef.current;
+
+      if (textarea) {
+        textarea.scrollTop = textarea.scrollHeight;
+      }
+    };
+
+    const abort = () => {
+      stop();
+      setFakeLoading(false);
+      chatStore.setKey('aborted', true);
+      workbenchStore.abortAllActions();
+
+      logStore.logProvider('Chat response aborted', {
+        component: 'Chat',
+        action: 'abort',
+        model,
+        provider: provider.name,
+      });
+    };
+
+    useEffect(() => {
+      const textarea = textareaRef.current;
+
+      if (textarea) {
+        textarea.style.height = 'auto';
+
+        const scrollHeight = textarea.scrollHeight;
+
+        textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
+        textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+      }
+    }, [input, textareaRef]);
+
+    const runAnimation = async () => {
+      if (chatStarted) {
+        return;
+      }
+
+      await Promise.all([
+        animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
+        animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
+      ]);
+
+      chatStore.setKey('started', true);
+
+      setChatStarted(true);
+    };
+
+    const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      const messageContent = messageInput || input;
+
+      if (!messageContent?.trim()) {
+        return;
+      }
+
+      if (isLoading) {
+        abort();
+        return;
+      }
+
+      setFakeLoading(true);
+      runAnimation();
+      workbenchStore.currentView.set('code');
+
+      if (attachmentList.length > 0) {
+        const imageAttachments = attachmentList.filter((item) =>
+          ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
+        );
+
+        if (imageAttachments.length > 0) {
+          setFakeLoading(true);
+
+          const urls = imageAttachments.map((item) => item.url);
+
+          try {
+            const descriptionResponse = await fetch('/api/image-description', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: messageContent,
+                imageUrls: urls,
+              }),
+            });
+
+            if (descriptionResponse.ok) {
+              const descriptions = await descriptionResponse.json();
+
+              if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+                for (let i = 0; i < imageAttachments.length; i++) {
+                  imageAttachments[i].features = descriptions[i].features;
+                  imageAttachments[i].details = descriptions[i].details;
+                }
               }
             }
+          } catch (descError) {
+            logger.error('Error generating image description:', descError);
+            toast.warning('Could not generate image description, using default');
           }
-        } catch (descError) {
-          logger.error('Error generating image description:', descError);
-          toast.warning('Could not generate image description, using default');
         }
       }
-    }
 
-    if (!chatStarted) {
-      try {
-        const { template, title, projectRepo, nextActionSuggestion } = await selectStarterTemplate({
-          message: messageContent,
-        });
+      if (!chatStarted) {
+        try {
+          const { template, title, projectRepo, nextActionSuggestion } = await selectStarterTemplate({
+            message: messageContent,
+          });
 
-        if (!template) {
-          throw new Error('Not Found Template');
-        }
+          if (!template) {
+            throw new Error('Not Found Template');
+          }
 
-        const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
-          if (e.message.includes('rate limit')) {
-            toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+          const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
+            if (e.message.includes('rate limit')) {
+              toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+            } else {
+              toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            }
+          });
+
+          const projectPath = temResp?.project?.path;
+          const projectName = temResp?.project?.name;
+          const templateCommitId = temResp?.commit?.id;
+          workbenchStore.showWorkbench.set(true);
+
+          if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+            throw new Error('Not Found Template Data');
+          }
+
+          const processedFileMap = Object.entries(temResp.fileMap).reduce(
+            (acc, [key, value]) => {
+              acc[WORK_DIR + '/' + key] = value;
+              return acc;
+            },
+            {} as Record<string, any>,
+          );
+          workbenchStore.files.set(processedFileMap);
+
+          await container.then(async (containerInstance) => {
+            containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+          });
+
+          if (isEnabledGitbasePersistence) {
+            if (!projectPath || !projectName || !templateCommitId) {
+              throw new Error('Cannot create project');
+            }
+
+            let branchName = 'develop';
+
+            if (enabledTaskMode) {
+              const { success, message, data } = await createTaskBranch(projectPath);
+
+              if (!success) {
+                toast.error(message);
+                return;
+              }
+
+              branchName = data.branchName;
+            }
+
+            repoStore.set({
+              name: projectName,
+              path: projectPath,
+              title,
+              taskBranch: branchName,
+            });
+
+            changeChatUrl(projectPath, { replace: true });
           } else {
-            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            repoStore.set({
+              name: projectRepo,
+              path: projectRepo,
+              title,
+              taskBranch: 'develop',
+            });
+            changeChatUrl(projectRepo, { replace: true });
           }
+
+          const firstChatModel =
+            model === 'auto'
+              ? template.name.includes('3d')
+                ? FIXED_MODELS.FIRST_3D_CHAT
+                : FIXED_MODELS.FIRST_2D_CHAT
+              : {
+                  model,
+                  provider,
+                };
+
+          setMessages([
+            {
+              id: `1-${new Date().getTime()}`,
+              role: 'user',
+              content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                attachmentList,
+              )}]\n\n${messageContent}${nextActionSuggestion && `\n\n<think>Proceed with the following task first.\n${nextActionSuggestion}</think>`}`,
+            },
+          ]);
+          reload();
+
+          setInput('');
+          Cookies.remove(PROMPT_COOKIE_KEY);
+
+          sendEventToParent('EVENT', { name: 'START_EDITING' });
+
+          setAttachmentList([]);
+
+          resetEnhancer();
+
+          textareaRef.current?.blur();
+          setFakeLoading(false);
+
+          return;
+        } catch (error) {
+          toast.warning(
+            `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
+          );
+          setChatStarted(false);
+          setFakeLoading(false);
+
+          return;
+        }
+      }
+
+      try {
+        if (error != null) {
+          setMessages(messages.slice(0, -1));
+        }
+
+        chatStore.setKey('aborted', false);
+
+        if (repoStore.get().path) {
+          if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
+            const { success, message, data } = await createTaskBranch(repoStore.get().path);
+
+            if (!success) {
+              toast.error(message);
+              return;
+            }
+
+            repoStore.set({
+              ...repoStore.get(),
+              taskBranch: data.branchName,
+            });
+
+            setMessages(() => []);
+          }
+
+          const commit = await workbenchStore.commitModifiedFiles();
+
+          if (commit) {
+            setMessages((prev: Message[]) => [
+              ...prev,
+              {
+                id: commit.id,
+                role: 'assistant',
+                content: commit.message || 'The user changed the files.',
+              },
+            ]);
+          }
+        }
+
+        append({
+          role: 'user',
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            attachmentList,
+          )}]\n\n${messageContent}`,
         });
 
-        const projectPath = temResp?.project?.path;
-        const projectName = temResp?.project?.name;
-        const templateCommitId = temResp?.commit?.id;
-
-        if (isEnabledGitbasePersistence) {
-          if (!projectPath || !projectName || !templateCommitId) {
-            throw new Error('Cannot create project');
-          }
-
-          repoStore.set({
-            name: projectName,
-            path: projectPath,
-            title,
-          });
-
-          changeChatUrl(projectPath, { replace: true });
-        } else {
-          repoStore.set({
-            name: projectRepo,
-            path: projectRepo,
-            title,
-          });
-          changeChatUrl(projectRepo, { replace: true });
-        }
-
-        if (!temResp?.data) {
-          throw new Error('Not Found Template Data');
-        }
-
-        const { assistantMessage, userMessage } = temResp.data;
-
-        const firstChatModel =
-          model === 'auto'
-            ? template.name.includes('3d')
-              ? FIXED_MODELS.FIRST_3D_CHAT
-              : FIXED_MODELS.FIRST_2D_CHAT
-            : {
-                model,
-                provider,
-              };
-
-        setMessages([
-          {
-            id: `1-${new Date().getTime()}`,
-            role: 'user',
-            content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n${userMessage}`,
-            annotations: ['hidden'],
-          },
-          {
-            id: `assistant-${templateCommitId || new Date().getTime()}`,
-            role: 'assistant',
-            content: assistantMessage,
-          },
-          {
-            id: `3-${new Date().getTime()}`,
-            role: 'user',
-            content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-              attachmentList,
-            )}]\n\n${messageContent}${nextActionSuggestion && `\n\n<think>Proceed with the following task first.\n${nextActionSuggestion}</think>`}`,
-          },
-        ]);
-
-        setTimeout(() => {
-          // wait for the files to be loaded
-          reload();
-        }, 1000);
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
-
-        sendEventToParent('EVENT', { name: 'START_EDITING' });
 
         setAttachmentList([]);
 
         resetEnhancer();
 
         textareaRef.current?.blur();
-        setFakeLoading(false);
-
-        return;
       } catch (error) {
-        toast.warning(
-          `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
+        logger.error('Error sending message:', error);
+
+        if (error instanceof Error) {
+          toast.error('Error:' + error?.message);
+        }
+      }
+    };
+
+    /**
+     * Handles the change event for the textarea and updates the input state.
+     * @param event - The change event from the textarea.
+     */
+    const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      handleInputChange(event);
+    };
+
+    /**
+     * Debounced function to cache the prompt in cookies.
+     * Caches the trimmed value of the textarea input after a delay to optimize performance.
+     */
+    const debouncedCachePrompt = useCallback(
+      debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const trimmedValue = event.target.value.trim();
+        Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+      }, 1000),
+      [],
+    );
+
+    const [messageRef, scrollRef] = useSnapScroll();
+
+    useEffect(() => {
+      const storedApiKeys = Cookies.get('apiKeys');
+
+      if (storedApiKeys) {
+        setApiKeys(JSON.parse(storedApiKeys));
+      }
+    }, []);
+
+    const handleModelChange = (newModel: string) => {
+      setModel(newModel);
+      Cookies.set('SelectedModel', newModel, { expires: 1 });
+    };
+
+    const handleProviderChange = (newProvider: ProviderInfo) => {
+      setProvider(newProvider);
+      Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
+    };
+
+    const handleTemplateImport = async (
+      source: { type: 'github' | 'zip'; title: string },
+      files: FileMap,
+      templateData: { assistantMessage: string; userMessage: string },
+    ) => {
+      try {
+        setFakeLoading(true);
+
+        const toastId = toast.loading(
+          `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
         );
-        setChatStarted(false);
-        setFakeLoading(false);
 
-        return;
-      }
-    }
+        // 템플릿 데이터 가져오기
+        const { assistantMessage, userMessage } = templateData;
+        toast.done(toastId);
 
-    try {
-      if (error != null) {
-        setMessages(messages.slice(0, -1));
-      }
+        const messages = [
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+              attachmentList,
+            )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+          },
+          {
+            id: `2-${new Date().getTime()}`,
+            role: 'assistant',
+            content: assistantMessage,
+          },
+          {
+            id: `3-${new Date().getTime()}`,
+            role: 'user',
+            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
+            annotations: ['hidden'],
+          },
+        ] as Message[];
 
-      chatStore.setKey('aborted', false);
-
-      if (repoStore.get().path) {
-        const commit = await workbenchStore.commitModifiedFiles();
-
-        if (commit) {
-          setMessages((prev: Message[]) => [
-            ...prev,
-            {
-              id: commit.id,
-              role: 'assistant',
-              content: commit.message || 'The user changed the files.',
-              parts: [],
-            },
-          ]);
-        }
-      }
-
-      append({
-        role: 'user',
-        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-          attachmentList,
-        )}]\n\n${messageContent}`,
-      });
-
-      setInput('');
-      Cookies.remove(PROMPT_COOKIE_KEY);
-
-      setAttachmentList([]);
-
-      resetEnhancer();
-
-      textareaRef.current?.blur();
-    } catch (error) {
-      logger.error('Error sending message:', error);
-
-      if (error instanceof Error) {
-        toast.error('Error:' + error?.message);
-      }
-    }
-  };
-
-  /**
-   * Handles the change event for the textarea and updates the input state.
-   * @param event - The change event from the textarea.
-   */
-  const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    handleInputChange(event);
-  };
-
-  /**
-   * Debounced function to cache the prompt in cookies.
-   * Caches the trimmed value of the textarea input after a delay to optimize performance.
-   */
-  const debouncedCachePrompt = useCallback(
-    debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const trimmedValue = event.target.value.trim();
-      Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
-    }, 1000),
-    [],
-  );
-
-  const [messageRef, scrollRef] = useSnapScroll();
-
-  useEffect(() => {
-    const storedApiKeys = Cookies.get('apiKeys');
-
-    if (storedApiKeys) {
-      setApiKeys(JSON.parse(storedApiKeys));
-    }
-  }, []);
-
-  const handleModelChange = (newModel: string) => {
-    setModel(newModel);
-    Cookies.set('SelectedModel', newModel, { expires: 1 });
-  };
-
-  const handleProviderChange = (newProvider: ProviderInfo) => {
-    setProvider(newProvider);
-    Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
-  };
-
-  const handleTemplateImport = async (
-    source: { type: 'github' | 'zip'; title: string },
-    files: FileMap,
-    templateData: { assistantMessage: string; userMessage: string },
-  ) => {
-    try {
-      setFakeLoading(true);
-
-      const toastId = toast.loading(
-        `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
-      );
-
-      // 템플릿 데이터 가져오기
-      const { assistantMessage, userMessage } = templateData;
-      toast.done(toastId);
-
-      const messages = [
-        {
-          id: `1-${new Date().getTime()}`,
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
-        },
-        {
-          id: `2-${new Date().getTime()}`,
-          role: 'assistant',
-          content: assistantMessage,
-        },
-        {
-          id: `3-${new Date().getTime()}`,
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-          annotations: ['hidden'],
-        },
-      ] as Message[];
-
-      setInitialMessages(messages);
-      container.then(async (containerInstance) => {
-        containerInstance.mount(convertFileMapToFileSystemTree(files));
-      });
-      setChatStarted(true);
-      workbenchStore.showWorkbench.set(true);
-      reload();
-      sendEventToParent('EVENT', { name: 'START_EDITING' });
-
-      toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
-    } catch (error) {
-      logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-      toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
-    } finally {
-      setFakeLoading(false);
-    }
-  };
-
-  const handleProjectZipImport = async (title: string, zipFile: File) => {
-    const { fileMap, messages } = await getZipTemplates(zipFile, title);
-    await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
-  };
-
-  const handleFork = async (message: Message) => {
-    workbenchStore.currentView.set('code');
-    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-    const commitHash = message.id.split('-').pop();
-
-    if (!commitHash || !isCommitHash(commitHash)) {
-      toast.error('No commit hash found');
-      return;
-    }
-
-    const nameWords = repoStore.get().name.split('-');
-
-    let newRepoName = '';
-
-    if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
-      newRepoName = nameWords.slice(0, -1).join('-');
-    } else {
-      newRepoName = nameWords.join('-');
-    }
-
-    // Show loading toast while forking
-    const toastId = toast.loading('Forking project...');
-
-    try {
-      const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
-
-      // Dismiss the loading toast
-      toast.dismiss(toastId);
-
-      if (forkedProject && forkedProject.success) {
-        toast.success('Forked project successfully');
-        window.location.href = '/chat/' + forkedProject.project.path;
-      } else {
-        toast.error('Failed to fork project');
-      }
-    } catch (error) {
-      // Dismiss the loading toast and show error
-      toast.dismiss(toastId);
-      toast.error('Failed to fork project');
-      logger.error('Error forking project:', error);
-    }
-  };
-
-  const handleRevert = async (message: Message) => {
-    workbenchStore.currentView.set('code');
-    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-    const projectPath = repoStore.get().path;
-    const commitHash = message.id.split('-').pop();
-
-    if (!commitHash || !isCommitHash(commitHash)) {
-      toast.error('No commit hash found');
-      return;
-    }
-
-    changeChatUrl(projectPath, { replace: false, searchParams: { revertTo: commitHash } });
-  };
-
-  const handleRetry = async (message: Message) => {
-    workbenchStore.currentView.set('code');
-    await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-    const messageIndex = messages.findIndex((m) => m.id === message.id);
-
-    if (messageIndex <= 0) {
-      toast.error('Retry failed');
-      return;
-    }
-
-    const prevMessage = messages[messageIndex - 1];
-    const commitHash = prevMessage.id.split('-').pop();
-
-    if (!commitHash || !isCommitHash(commitHash)) {
-      toast.error('No commit hash found');
-      return;
-    }
-
-    // Show loading toast while retrying
-    const toastId = toast.loading('Loading previous version...');
-
-    try {
-      const wc = await container;
-
-      const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
-      const deleteFiles = [];
-
-      for (const name of Object.keys(files)) {
-        const path = name.replace(WORK_DIR + '/', '');
-
-        if (!retryFiles[path]) {
-          deleteFiles.push(path);
-        }
-      }
-
-      for (const name of deleteFiles) {
-        await wc.fs.rm(name, { recursive: true, force: true });
-      }
-
-      await wc.mount(convertFileMapToFileSystemTree(retryFiles));
-      message.id = `retry-${new Date().getTime()}`;
-
-      const newMessages = [...messages.slice(0, messageIndex), message];
-      changeChatUrl(repoStore.get().path, {
-        replace: true,
-        searchParams: { revertTo: commitHash },
-        ignoreChangeEvent: true,
-      });
-      setMessages(newMessages);
-      resetParsedMessagesFrom(messageIndex);
-      setTimeout(() => {
+        setInitialMessages(messages);
+        container.then(async (containerInstance) => {
+          containerInstance.mount(convertFileMapToFileSystemTree(files));
+        });
+        setChatStarted(true);
+        workbenchStore.showWorkbench.set(true);
         reload();
-      }, 1000);
+        sendEventToParent('EVENT', { name: 'START_EDITING' });
 
-      toast.dismiss(toastId);
-    } catch (error) {
-      toast.dismiss(toastId);
-      toast.error('Failed to load previous version');
-      logger.error('Error loading previous version:', error);
-    }
-  };
+        toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
+      } catch (error) {
+        logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
+        toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
+      } finally {
+        setFakeLoading(false);
+      }
+    };
 
-  const handleViewDiff = async (message: Message) => {
-    try {
-      const commitHash = message.id?.split('-').pop();
+    const handleProjectZipImport = async (title: string, zipFile: File) => {
+      const { fileMap, messages } = await getZipTemplates(zipFile, title);
+      await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
+    };
+
+    const handleFork = async (message: Message) => {
+      workbenchStore.currentView.set('code');
+      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+      const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        toast.error('Invalid commit information');
+        toast.error('No commit hash found');
         return;
       }
 
-      workbenchStore.currentView.set('diff');
-      workbenchStore.showWorkbench.set(true);
-      workbenchStore.diffEnabled.set(true);
-      workbenchStore.diffCommitHash.set(commitHash);
-    } catch (error) {
-      console.error('Diff view error:', error);
-      toast.error('Error displaying diff view');
-    }
-  };
+      const nameWords = repoStore.get().name.split('-');
 
-  return (
-    <BaseChat
-      ref={animationScope}
-      textareaRef={textareaRef}
-      input={input}
-      showChat={showChat}
-      chatStarted={chatStarted}
-      isStreaming={isLoading || fakeLoading}
-      onStreamingChange={(streaming) => {
-        streamingState.set(streaming);
-      }}
-      enhancingPrompt={enhancingPrompt}
-      promptEnhanced={promptEnhanced}
-      sendMessage={sendMessage}
-      model={model}
-      setModel={handleModelChange}
-      provider={provider}
-      setProvider={handleProviderChange}
-      providerList={activeProviders}
-      messageRef={messageRef}
-      scrollRef={scrollRef}
-      handleInputChange={(e) => {
-        onTextareaChange(e);
-        debouncedCachePrompt(e);
-      }}
-      handleStop={abort}
-      handleRetry={handleRetry}
-      handleFork={handleFork}
-      handleRevert={handleRevert}
-      onViewDiff={handleViewDiff}
-      description={description}
-      messages={messages.map((message, i) => {
-        if (message.role === 'user') {
-          return message;
+      let newRepoName = '';
+
+      if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
+        newRepoName = nameWords.slice(0, -1).join('-');
+      } else {
+        newRepoName = nameWords.join('-');
+      }
+
+      // Show loading toast while forking
+      const toastId = toast.loading('Forking project...');
+
+      try {
+        const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+
+        // Dismiss the loading toast
+        toast.dismiss(toastId);
+
+        if (forkedProject && forkedProject.success) {
+          toast.success('Forked project successfully');
+          window.location.href = '/chat/' + forkedProject.project.path;
+        } else {
+          toast.error('Failed to fork project');
+        }
+      } catch (error) {
+        // Dismiss the loading toast and show error
+        toast.dismiss(toastId);
+        toast.error('Failed to fork project');
+        logger.error('Error forking project:', error);
+      }
+    };
+
+    const handleRevert = async (message: Message) => {
+      workbenchStore.currentView.set('code');
+      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+      const projectPath = repoStore.get().path;
+      const commitHash = message.id.split('-').pop();
+
+      if (!commitHash || !isCommitHash(commitHash)) {
+        toast.error('No commit hash found');
+        return;
+      }
+
+      changeChatUrl(projectPath, { replace: false, searchParams: { revertTo: commitHash } });
+    };
+
+    const handleRetry = async (message: Message) => {
+      workbenchStore.currentView.set('code');
+      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
+
+      const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+      if (messageIndex <= 0) {
+        toast.error('Retry failed');
+        return;
+      }
+
+      const prevMessage = messages[messageIndex - 1];
+      const commitHash = prevMessage.id.split('-').pop();
+
+      if (!commitHash || !isCommitHash(commitHash)) {
+        toast.error('No commit hash found');
+        return;
+      }
+
+      // Show loading toast while retrying
+      const toastId = toast.loading('Loading previous version...');
+
+      try {
+        const wc = await container;
+
+        const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
+        const deleteFiles = [];
+
+        for (const name of Object.keys(files)) {
+          const path = name.replace(WORK_DIR + '/', '');
+
+          if (!retryFiles[path]) {
+            deleteFiles.push(path);
+          }
         }
 
-        return {
-          ...message,
-          content: parsedMessages[i] || '',
-        };
-      })}
-      enhancePrompt={() => {
-        enhancePrompt(
-          input,
-          (input) => {
-            setInput(input);
-            scrollTextArea();
-          },
-          model,
-          provider,
-          apiKeys,
-        );
-      }}
-      attachmentList={attachmentList}
-      setAttachmentList={setAttachmentList}
-      actionAlert={actionAlert}
-      clearAlert={() => workbenchStore.clearAlert()}
-      data={chatData}
-      onProjectZipImport={handleProjectZipImport}
-    />
-  );
-});
+        for (const name of deleteFiles) {
+          await wc.fs.rm(name, { recursive: true, force: true });
+        }
+
+        await wc.mount(convertFileMapToFileSystemTree(retryFiles));
+        message.id = `retry-${new Date().getTime()}`;
+
+        const newMessages = [...messages.slice(0, messageIndex), message];
+        changeChatUrl(repoStore.get().path, {
+          replace: true,
+          searchParams: { revertTo: commitHash },
+          ignoreChangeEvent: true,
+        });
+        setMessages(newMessages);
+        setTimeout(() => {
+          reload();
+        }, 1000);
+
+        toast.dismiss(toastId);
+      } catch (error) {
+        toast.dismiss(toastId);
+        toast.error('Failed to load previous version');
+        logger.error('Error loading previous version:', error);
+      }
+    };
+
+    const handleViewDiff = async (message: Message) => {
+      try {
+        const commitHash = message.id?.split('-').pop();
+
+        if (!commitHash || !isCommitHash(commitHash)) {
+          toast.error('Invalid commit information');
+          return;
+        }
+
+        workbenchStore.currentView.set('diff');
+        workbenchStore.showWorkbench.set(true);
+        workbenchStore.diffEnabled.set(true);
+        workbenchStore.diffCommitHash.set(commitHash);
+      } catch (error) {
+        console.error('Diff view error:', error);
+        toast.error('Error displaying diff view');
+      }
+    };
+
+    const isStreaming = isLoading || fakeLoading || loading;
+
+    return (
+      <BaseChat
+        ref={animationScope}
+        textareaRef={textareaRef}
+        input={input}
+        showChat={showChat}
+        chatStarted={chatStarted}
+        isStreaming={isStreaming}
+        onStreamingChange={(streaming) => {
+          streamingState.set(streaming);
+        }}
+        enhancingPrompt={enhancingPrompt}
+        promptEnhanced={promptEnhanced}
+        enabledTaskMode={enabledTaskMode}
+        setEnabledTaskMode={setEnabledTaskMode}
+        taskBranches={taskBranches}
+        reloadTaskBranches={reloadTaskBranches}
+        sendMessage={sendMessage}
+        model={model}
+        setModel={handleModelChange}
+        provider={provider}
+        setProvider={handleProviderChange}
+        providerList={activeProviders}
+        messageRef={messageRef}
+        scrollRef={scrollRef}
+        handleInputChange={(e) => {
+          onTextareaChange(e);
+          debouncedCachePrompt(e);
+        }}
+        handleStop={abort}
+        handleRetry={handleRetry}
+        handleFork={handleFork}
+        handleRevert={handleRevert}
+        onViewDiff={handleViewDiff}
+        description={description}
+        messages={messages.map((message, i) => {
+          if (message.role === 'user') {
+            return message;
+          }
+
+          return {
+            ...message,
+            content: parsedMessages[i] || '',
+          };
+        })}
+        enhancePrompt={() => {
+          enhancePrompt(
+            input,
+            (input) => {
+              setInput(input);
+              scrollTextArea();
+            },
+            model,
+            provider,
+            apiKeys,
+          );
+        }}
+        attachmentList={attachmentList}
+        setAttachmentList={setAttachmentList}
+        actionAlert={actionAlert}
+        clearAlert={() => workbenchStore.clearAlert()}
+        data={chatData}
+        onProjectZipImport={handleProjectZipImport}
+      />
+    );
+  },
+);

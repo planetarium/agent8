@@ -105,8 +105,8 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1
       '@modelcontextprotocol/sdk':
-        specifier: ^1.9.0
-        version: 1.9.0
+        specifier: ^1.11.1
+        version: 1.11.1
       '@nanostores/react':
         specifier: ^0.7.3
         version: 0.7.3(nanostores@0.10.3)(react@18.3.1)
@@ -405,6 +405,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.1
         version: 18.3.6(@types/react@18.3.20)
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.3.4(vite@5.4.17(@types/node@22.14.0)(sass-embedded@1.86.3))
@@ -474,6 +477,9 @@ importers:
       wrangler:
         specifier: ^3.91.0
         version: 3.114.4(@cloudflare/workers-types@4.20250409.0)
+      ws:
+        specifier: ^8.18.1
+        version: 8.18.1
 
 packages:
 
@@ -2097,8 +2103,8 @@ packages:
   '@mdx-js/mdx@2.3.0':
     resolution: {integrity: sha512-jLuwRlz8DQfQNiUCJR50Y09CGPq3fLtmtUQfVrj79E0JWu3dvsVcxVIcfhR5h0iXu+/z++zDrYeiJqifRynJkA==}
 
-  '@modelcontextprotocol/sdk@1.9.0':
-    resolution: {integrity: sha512-Jq2EUCQpe0iyO5FGpzVYDNFR6oR53AIrwph9yWl7uSc7IWUMsrmpmSaTGra5hQNunXpM+9oit85p924jWuHzUA==}
+  '@modelcontextprotocol/sdk@1.11.1':
+    resolution: {integrity: sha512-9LfmxKTb1v+vUS1/emSk1f5ePmTLkb9Le9AxOB5T0XM59EUumwcS45z05h7aiZx3GI0Bl7mjb3FMEglYj+acuQ==}
     engines: {node: '>=18'}
 
   '@monogrid/gainmap-js@3.1.0':
@@ -11682,7 +11688,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.9.0':
+  '@modelcontextprotocol/sdk@1.11.1':
     dependencies:
       content-type: 1.0.5
       cors: 2.8.5

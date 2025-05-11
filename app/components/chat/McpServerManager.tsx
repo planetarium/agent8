@@ -3,22 +3,21 @@ import { motion } from 'framer-motion';
 import { Switch } from '~/components/ui/Switch';
 import { toast } from 'react-toastify';
 import { useSettings } from '~/lib/hooks/useSettings';
-import type { MCPSSEServer } from '~/lib/stores/settings';
+import type { MCPServer } from '~/lib/stores/settings';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { classNames } from '~/utils/classNames';
 
-// MCP SSE Server Manager Component
-const McpSseServerManager: React.FC = () => {
-  const { mcpSseServers, addMCPSSEServer, removeMCPSSEServer, toggleMCPSSEServer, toggleMCPSSEServerV8Auth } =
-    useSettings();
+// MCP Server Manager Component
+const McpServerManager: React.FC = () => {
+  const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
 
-  const defaultServerNames = ['All-in-one', '2D-Image', 'Cinematic', 'Audio', 'Skybox'];
+  const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox'];
 
   const getServerDescription = (serverName: string): string => {
     switch (serverName) {
       case 'All-in-one':
         return 'All-in-one server that integrates all MCP tools.';
-      case '2D-Image':
+      case 'Image':
         return 'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.';
       case 'Cinematic':
         return 'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).';
@@ -57,7 +56,7 @@ const McpSseServerManager: React.FC = () => {
 
   const getServerIcon = (serverName: string) => {
     switch (serverName) {
-      case '2D-Image':
+      case 'Image':
         return 'i-ph:image w-4 h-4 text-green-500';
       case 'Cinematic':
         return 'i-ph:film-strip w-4 h-4 text-purple-500';
@@ -80,7 +79,7 @@ const McpSseServerManager: React.FC = () => {
 
   const handleAddServer = () => {
     if (newServer.name && newServer.url) {
-      const server: MCPSSEServer = {
+      const server: MCPServer = {
         name: newServer.name,
         url: newServer.url,
         enabled: true,
@@ -88,7 +87,7 @@ const McpSseServerManager: React.FC = () => {
         description: newServer.description,
       };
 
-      addMCPSSEServer(server);
+      addMCPServer(server);
       toast.success(`${newServer.name} tool added`, { autoClose: 1500 });
 
       // 쿠키가 설정되었는지 확인
@@ -103,7 +102,7 @@ const McpSseServerManager: React.FC = () => {
           );
 
           console.log('Current cookies:', cookies);
-          console.log(`MCP settings cookie present:`, cookies[SETTINGS_KEYS.MCP_SSE_SERVERS] !== undefined);
+          console.log(`MCP settings cookie present:`, cookies[SETTINGS_KEYS.MCP_SERVERS] !== undefined);
         } catch (error) {
           console.error('Error checking cookies:', error);
         }
@@ -115,18 +114,18 @@ const McpSseServerManager: React.FC = () => {
   };
 
   const handleRemoveServer = (index: number) => {
-    removeMCPSSEServer(index);
+    removeMCPServer(index);
 
     toast.success('tool removed', { autoClose: 1500 });
   };
 
   const handleToggleServer = (index: number, enabled: boolean) => {
-    toggleMCPSSEServer(index, enabled);
+    toggleMCPServer(index, enabled);
 
     if (enabled) {
-      toggleMCPSSEServerV8Auth(index, true);
+      toggleMCPServerV8Auth(index, true);
     } else {
-      toggleMCPSSEServerV8Auth(index, false);
+      toggleMCPServerV8Auth(index, false);
     }
   };
 
@@ -153,9 +152,9 @@ const McpSseServerManager: React.FC = () => {
             </div>
           </div>
 
-          {mcpSseServers.length > 0 ? (
+          {mcpServers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2">
-              {mcpSseServers
+              {mcpServers
                 .map((server, index) => ({ server, index }))
                 .filter((item) => item.server.name !== 'All-in-one')
                 .map(({ server, index }) => (
@@ -207,9 +206,7 @@ const McpSseServerManager: React.FC = () => {
                                     className={classNames(
                                       'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-800 border border-gray-600 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
                                       pinnedTooltip === `${server.name}-tooltip` ? 'block' : 'hidden',
-                                      server.name === '2D-Image' ||
-                                        server.name === 'Cinematic' ||
-                                        server.name === 'Audio'
+                                      server.name === 'Image' || server.name === 'Cinematic' || server.name === 'Audio'
                                         ? 'top-full -left-30 mt-1'
                                         : 'bottom-full -left-30 mb-1',
                                     )}
@@ -232,7 +229,7 @@ const McpSseServerManager: React.FC = () => {
 
                                     {/* Credit information / Will be revised after cost policy decision */}
                                     <div className="mb-3 p-2 text-xs bg-gray-900 rounded-md border border-gray-700">
-                                      {server.name === '2D-Image' && (
+                                      {server.name === 'Image' && (
                                         <p className="text-gray-200">Cost: 1 credit (fixed)</p>
                                       )}
                                       {server.name === 'Cinematic' && (
@@ -262,7 +259,7 @@ const McpSseServerManager: React.FC = () => {
                                       </div>
                                       {!collapsedTips[server.name] && (
                                         <>
-                                          {server.name === '2D-Image' && (
+                                          {server.name === 'Image' && (
                                             <ul className="text-gray-300 list-disc pl-5 space-y-2">
                                               <li>Provide specific and detailed descriptions for assets</li>
                                               <li>Clearly specify the desired style</li>
@@ -349,7 +346,7 @@ const McpSseServerManager: React.FC = () => {
             </div>
           ) : (
             <div className="text-center p-4 text-bolt-elements-textSecondary text-sm">
-              No MCP SSE servers registered. Add a new server to get started.
+              No MCP servers registered. Add a new server to get started.
             </div>
           )}
 
@@ -468,7 +465,7 @@ const McpSseServerManager: React.FC = () => {
         </motion.div>
       )}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
-        {mcpSseServers
+        {mcpServers
           .map((server, index) => ({ server, index }))
           .filter((item) => item.server.enabled && item.server.name !== 'All-in-one')
           .map(({ server, index }) => (
@@ -492,7 +489,7 @@ const McpSseServerManager: React.FC = () => {
             'transition-colors duration-200',
           )}
         >
-          <div className="i-ph:plus-circle w-4 h-4" />
+          <div className="i-ph:plus-circle w-4 h-4 ml-4" />
           <span className="font-normal">Use Tools</span>
         </button>
       </div>
@@ -500,4 +497,4 @@ const McpSseServerManager: React.FC = () => {
   );
 };
 
-export default McpSseServerManager;
+export default McpServerManager;

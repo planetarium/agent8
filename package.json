@@ -79,7 +79,7 @@
     "@headlessui/react": "^2.2.0",
     "@iconify-json/svg-spinners": "^1.2.1",
     "@lezer/highlight": "^1.2.1",
-    "@modelcontextprotocol/sdk": "^1.9.0",
+    "@modelcontextprotocol/sdk": "^1.11.1",
     "@nanostores/react": "^0.7.3",
     "@octokit/rest": "^21.0.2",
     "@octokit/types": "^13.6.2",
@@ -181,6 +181,7 @@
     "@types/path-browserify": "^1.0.3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
@@ -203,7 +204,8 @@
     "vite-plugin-optimize-css-modules": "^1.1.0",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^2.1.7",
-    "wrangler": "^3.91.0"
+    "wrangler": "^3.91.0",
+    "ws": "^8.18.1"
   },
   "resolutions": {
     "@typescript-eslint/utils": "^8.0.0-alpha.30"

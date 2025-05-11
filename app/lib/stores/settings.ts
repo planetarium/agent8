@@ -29,8 +29,8 @@ export interface Shortcuts {
   toggleTerminal: Shortcut;
 }
 
-// MCP SSE server settings interface
-export interface MCPSSEServer {
+// MCP server settings interface
+export interface MCPServer {
   name: string;
   url: string;
   enabled: boolean;
@@ -142,14 +142,14 @@ export const SETTINGS_KEYS = {
   EVENT_LOGS: 'isEventLogsEnabled',
   PROMPT_ID: 'promptId',
   DEVELOPER_MODE: 'isDeveloperMode',
-  MCP_SSE_SERVERS: 'mcpSseServers',
+  MCP_SERVERS: 'mcpSseServers', // for backward compatibility
 } as const;
 
 /**
  * Helper function to get default MCP server configuration
  */
-const getDefaultMCPServers = (): MCPSSEServer[] => {
-  let defaultServers: MCPSSEServer[] = [];
+const getDefaultMCPServers = (): MCPServer[] => {
+  let defaultServers: MCPServer[] = [];
 
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MCP_SERVER_CONFIG) {
     defaultServers = JSON.parse(import.meta.env.VITE_MCP_SERVER_CONFIG);
@@ -163,7 +163,7 @@ const getDefaultMCPServers = (): MCPSSEServer[] => {
         description: 'All-in-one server that integrates all MCP tools.',
       },
       {
-        name: '2D-Image',
+        name: 'Image',
         url: 'https://mcp-image.verse8.io/sse',
         enabled: false,
         v8AuthIntegrated: false,
@@ -200,23 +200,22 @@ const getDefaultMCPServers = (): MCPSSEServer[] => {
   return defaultServers;
 };
 
-// Get initial MCP SSE server settings from localStorage
-const getInitialMCPSSEServers = (): MCPSSEServer[] => {
+// Get initial MCP server settings from localStorage
+const getInitialMCPServers = (): MCPServer[] => {
   if (!isBrowser) {
     return [];
   }
 
   try {
-    const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SSE_SERVERS);
+    const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SERVERS);
+    const defaultServers = getDefaultMCPServers();
 
     if (!stored || stored === '[]' || stored === '""') {
-      // Get default server configuration
-      const defaultServers = getDefaultMCPServers();
-
-      localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers));
+      // No stored servers, use defaults
+      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers));
 
       if (typeof Cookies !== 'undefined') {
-        Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(defaultServers), {
+        Cookies.set(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers), {
           expires: 365,
           path: '/',
           sameSite: 'lax',
@@ -226,10 +225,46 @@ const getInitialMCPSSEServers = (): MCPSSEServer[] => {
       return defaultServers;
     }
 
-    return JSON.parse(stored);
+    // Parse stored servers
+    const storedServers = JSON.parse(stored);
+
+    // Combine default servers with stored servers, using URL as unique identifier
+    const resultServers = [...defaultServers];
+
+    // Add stored servers that aren't in default list
+    storedServers.forEach((storedServer: MCPServer) => {
+      const existingIndex = resultServers.findIndex((server) => server.url === storedServer.url);
+
+      if (existingIndex >= 0) {
+        // Replace default with stored version if URL already exists
+        resultServers[existingIndex] = storedServer;
+      } else {
+        // Add stored server if it's not in default list
+        resultServers.push(storedServer);
+      }
+    });
+
+    // Check if result is different from stored servers
+    const resultJson = JSON.stringify(resultServers);
+    const storedJson = JSON.stringify(storedServers);
+
+    if (resultJson !== storedJson) {
+      // Update localStorage and cookies with combined result
+      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, resultJson);
+
+      if (typeof Cookies !== 'undefined') {
+        Cookies.set(SETTINGS_KEYS.MCP_SERVERS, resultJson, {
+          expires: 365,
+          path: '/',
+          sameSite: 'lax',
+        });
+      }
+    }
+
+    return resultServers;
   } catch (error) {
-    console.error('Failed to parse MCP SSE server settings:', error);
-    return [];
+    console.error('Failed to parse MCP server settings:', error);
+    return getDefaultMCPServers(); // Return defaults on error
   }
 };
 
@@ -275,7 +310,7 @@ export const temporaryModeStore = atom<boolean>(initialSettings.temporaryMode);
 export const agent8DeployStore = atom<boolean>(initialSettings.agent8Deploy);
 export const isEventLogsEnabled = atom<boolean>(initialSettings.eventLogs);
 export const promptStore = atom<string>(initialSettings.promptId);
-export const mcpSseServersStore = atom<MCPSSEServer[]>(getInitialMCPSSEServers());
+export const mcpServersStore = atom<MCPServer[]>(getInitialMCPServers());
 
 // Helper functions to update settings with persistence
 export const updateLatestBranch = (enabled: boolean) => {
@@ -445,64 +480,64 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   },
 }));
 
-// MCP SSE Servers management functions
-export const updateMCPSSEServers = (servers: MCPSSEServer[]) => {
-  mcpSseServersStore.set(servers);
-  localStorage.setItem(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(servers));
+// MCP Servers management functions
+export const updateMCPServers = (servers: MCPServer[]) => {
+  mcpServersStore.set(servers);
+  localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(servers));
 
   // Also save to cookie for API routes
   try {
     // Use the same key name as localStorage for consistency
-    Cookies.set(SETTINGS_KEYS.MCP_SSE_SERVERS, JSON.stringify(servers), {
+    Cookies.set(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(servers), {
       expires: 365, // 1년간 유효
       path: '/',
       sameSite: 'lax',
     });
-    console.log('MCP SSE servers saved to cookies:', servers);
+    console.log('MCP servers saved to cookies:', servers);
   } catch (e) {
-    console.error('Failed to set mcpSseServers cookie:', e);
+    console.error('Failed to set mcpServers cookie:', e);
   }
 };
 
-export const resetMCPSSEServers = () => {
+export const resetMCPServers = () => {
   // Get default server configuration
   const defaultServers = getDefaultMCPServers();
 
   // Update store and cookies
-  updateMCPSSEServers(defaultServers);
+  updateMCPServers(defaultServers);
 
   return defaultServers;
 };
 
-export const addMCPSSEServer = (server: MCPSSEServer) => {
-  const servers = mcpSseServersStore.get();
+export const addMCPServer = (server: MCPServer) => {
+  const servers = mcpServersStore.get();
   const updatedServers = [...servers, server];
-  updateMCPSSEServers(updatedServers);
+  updateMCPServers(updatedServers);
 };
 
-export const updateMCPSSEServer = (index: number, server: MCPSSEServer) => {
-  const servers = mcpSseServersStore.get();
+export const updateMCPServer = (index: number, server: MCPServer) => {
+  const servers = mcpServersStore.get();
   const updatedServers = [...servers];
   updatedServers[index] = server;
-  updateMCPSSEServers(updatedServers);
+  updateMCPServers(updatedServers);
 };
 
-export const removeMCPSSEServer = (index: number) => {
-  const servers = mcpSseServersStore.get();
+export const removeMCPServer = (index: number) => {
+  const servers = mcpServersStore.get();
   const updatedServers = servers.filter((_, i) => i !== index);
-  updateMCPSSEServers(updatedServers);
+  updateMCPServers(updatedServers);
 };
 
-export const toggleMCPSSEServer = (index: number, enabled: boolean) => {
-  const servers = mcpSseServersStore.get();
+export const toggleMCPServer = (index: number, enabled: boolean) => {
+  const servers = mcpServersStore.get();
   const updatedServers = [...servers];
   updatedServers[index] = { ...updatedServers[index], enabled };
-  updateMCPSSEServers(updatedServers);
+  updateMCPServers(updatedServers);
 };
 
-export const toggleMCPSSEServerV8Auth = (index: number, v8AuthIntegrated: boolean) => {
-  const servers = mcpSseServersStore.get();
+export const toggleMCPServerV8Auth = (index: number, v8AuthIntegrated: boolean) => {
+  const servers = mcpServersStore.get();
   const updatedServers = [...servers];
   updatedServers[index] = { ...updatedServers[index], v8AuthIntegrated };
-  updateMCPSSEServers(updatedServers);
+  updateMCPServers(updatedServers);
 };

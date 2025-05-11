@@ -111,22 +111,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       const assetFile = files[assetsPath];
 
       if (!assetFile || assetFile.type !== 'file') {
-        // assets.json 파일이 없는 경우 기본 카테고리로 초기화
-        const defaultCategories = {
-          images: {},
-          models: {},
-          audio: {},
-        };
-
-        setCategories(defaultCategories);
-        categoriesRef.current = defaultCategories; // 명시적으로 ref도 함께 업데이트
-        setSelectedCategory('images'); // 기본 카테고리 선택
-
-        // assets.json 파일 생성
-        await createAssetsJsonFile(defaultCategories);
-
-        setIsLoading(false);
-
         return;
       }
 
@@ -141,39 +125,12 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       } catch (error) {
         console.error('Failed to parse assets.json:', error);
         toast.error('Failed to parse assets.json file');
-
-        // 파싱 실패 시 기본 카테고리로 초기화하고 파일 재생성
-        const defaultCategories = {
-          images: {},
-          models: {},
-          audio: {},
-        };
-
-        setCategories(defaultCategories);
-        categoriesRef.current = defaultCategories; // 명시적으로 ref도 함께 업데이트
-        setSelectedCategory('images');
-
-        // 손상된 assets.json 파일 재생성
-        await createAssetsJsonFile(defaultCategories);
       }
     } catch (error) {
       console.error('Error loading assets:', error);
       toast.error('Error loading assets');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // assets.json 파일 생성 함수
-  const createAssetsJsonFile = async (initialCategories: Categories) => {
-    try {
-      const content = JSON.stringify(initialCategories, null, 2);
-
-      workbenchStore.setSelectedFile(assetsPath);
-      workbenchStore.setCurrentDocumentContent(content);
-      await workbenchStore.saveCurrentDocument();
-    } catch (error) {
-      console.error('Error creating assets.json file:', error);
     }
   };
 

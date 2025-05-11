@@ -6,9 +6,9 @@ import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
-import { repoStore } from '~/lib/stores/repo';
+import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { container } from '~/lib/container';
+import { container, containerType } from '~/lib/container';
 import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
@@ -62,11 +62,15 @@ function AccessControlledChat() {
   }, [accessToken]);
 
   useEffect(() => {
-    container.then((wc) => {
-      if (wc?.workdir) {
-        setLoadedWebcontainer(true);
-      }
-    });
+    if (containerType === 'webcontainer') {
+      container.then((wc) => {
+        if (wc?.workdir) {
+          setLoadedWebcontainer(true);
+        }
+      });
+    } else {
+      setLoadedWebcontainer(true);
+    }
   }, [container]);
 
   useEffect(() => {
@@ -196,6 +200,7 @@ export default function Index() {
         name: repoName,
         path: repoPath,
         title: repoName,
+        taskBranch: DEFAULT_TASK_BRANCH,
       });
     }
   }, [repoPath, repoName]);

@@ -16,15 +16,15 @@ import {
   updateContextOptimization,
   updateEventLogs,
   updatePromptId,
-  mcpSseServersStore,
-  updateMCPSSEServers,
-  addMCPSSEServer,
-  updateMCPSSEServer,
-  removeMCPSSEServer,
-  toggleMCPSSEServer,
-  toggleMCPSSEServerV8Auth,
-  resetMCPSSEServers,
-  type MCPSSEServer,
+  mcpServersStore,
+  updateMCPServers,
+  addMCPServer,
+  updateMCPServer,
+  removeMCPServer,
+  toggleMCPServer,
+  toggleMCPServerV8Auth,
+  resetMCPServers,
+  type MCPServer,
   temporaryModeStore,
   updateTemporaryMode,
   updateAgent8Deploy,
@@ -82,15 +82,15 @@ export interface UseSettingsReturn {
   updateTabConfiguration: (config: TabVisibilityConfig) => void;
   resetTabConfiguration: () => void;
 
-  // MCP SSE server settings
-  mcpSseServers: MCPSSEServer[];
-  updateMCPSSEServers: (servers: MCPSSEServer[]) => void;
-  addMCPSSEServer: (server: MCPSSEServer) => void;
-  updateMCPSSEServer: (index: number, server: MCPSSEServer) => void;
-  removeMCPSSEServer: (index: number) => void;
-  toggleMCPSSEServer: (index: number, enabled: boolean) => void;
-  toggleMCPSSEServerV8Auth: (index: number, v8AuthIntegrated: boolean) => void;
-  resetMCPSSEServers: () => MCPSSEServer[];
+  // MCP server settings
+  mcpServers: MCPServer[];
+  updateMCPServers: (servers: MCPServer[]) => void;
+  addMCPServer: (server: MCPServer) => void;
+  updateMCPServer: (index: number, server: MCPServer) => void;
+  removeMCPServer: (index: number) => void;
+  toggleMCPServer: (index: number, enabled: boolean) => void;
+  toggleMCPServerV8Auth: (index: number, v8AuthIntegrated: boolean) => void;
+  resetMCPServers: () => MCPServer[];
 }
 
 // Add interface to match ProviderSetting type
@@ -108,7 +108,7 @@ export function useSettings(): UseSettingsReturn {
   const [activeProviders, setActiveProviders] = useState<ProviderInfo[]>([]);
   const contextOptimizationEnabled = useStore(enableContextOptimizationStore);
   const tabConfiguration = useStore(tabConfigurationStore);
-  const mcpSseServers = useStore(mcpSseServersStore);
+  const mcpServers = useStore(mcpServersStore);
   const temporaryMode = useStore(temporaryModeStore);
   const agent8Deploy = useStore(agent8DeployStore);
   const [settings, setSettings] = useState<Settings>(() => {
@@ -251,13 +251,13 @@ export function useSettings(): UseSettingsReturn {
     tabConfiguration,
     updateTabConfiguration: updateTabConfig,
     resetTabConfiguration: resetTabConfig,
-    mcpSseServers,
-    updateMCPSSEServers,
-    addMCPSSEServer,
-    updateMCPSSEServer,
-    removeMCPSSEServer,
-    toggleMCPSSEServer,
-    toggleMCPSSEServerV8Auth,
-    resetMCPSSEServers,
+    mcpServers,
+    updateMCPServers,
+    addMCPServer,
+    updateMCPServer,
+    removeMCPServer,
+    toggleMCPServer,
+    toggleMCPServerV8Auth,
+    resetMCPServers,
   };
 }

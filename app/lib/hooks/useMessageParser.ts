@@ -47,73 +47,16 @@ const messageParser = new StreamingMessageParser({
 export function useMessageParser() {
   const [parsedMessages, setParsedMessages] = useState<{ [key: number]: string }>({});
 
-  const resetParsedMessagesFrom = useCallback((fromIndex: number) => {
-    setParsedMessages((prevParsed: { [key: number]: string }) => {
-      const newParsedMessages = { ...prevParsed };
-
-      Object.keys(prevParsed).forEach((key: string) => {
-        if (Number(key) >= fromIndex) {
-          delete newParsedMessages[Number(key)];
-        }
-      });
-
-      return newParsedMessages;
-    });
-  }, []);
-
-  const parseMessages = useCallback((messages: Message[], isLoading: boolean) => {
-    let reset = false;
-
-    if (import.meta.env.DEV && !isLoading) {
-      reset = true;
-      messageParser.reset();
-    }
+  const parseMessages = useCallback((messages: Message[]) => {
+    messageParser.reset();
 
     for (const [index, message] of messages.entries()) {
       if (message.role === 'assistant' || message.role === 'user') {
         const newParsedContent = messageParser.parse(message.id, extractTextContent(message));
-
-        /**
-         * KNOWN ISSUE: When a new part is added to a message, the message ID can change
-         * (see: https://github.com/vercel/ai/issues/5318)
-         *
-         * This causes messageParser.parse() to produce duplicate content. The logic below
-         * handles this by checking for overlapping content between the existing parsed content
-         * and the new content being added. This is a workaround until the underlying issue
-         * with message IDs changing is fixed in the AI library.
-         */
-        const updateParsedMessages = function (prevParsed: { [key: number]: string }) {
-          const updatedMessages = { ...prevParsed };
-          const existingContent = prevParsed[index] || '';
-
-          if (!reset) {
-            let finalContent = existingContent + newParsedContent;
-
-            if (existingContent.length > 0 && newParsedContent.length > 0) {
-              const maxCheckLength = Math.min(existingContent.length, newParsedContent.length);
-
-              for (let i = 1; i <= maxCheckLength; i++) {
-                const tailOfExisting = existingContent.slice(-i);
-                const headOfNew = newParsedContent.slice(0, i);
-
-                if (tailOfExisting === headOfNew) {
-                  finalContent = existingContent + newParsedContent.slice(i);
-                }
-              }
-            }
-
-            updatedMessages[index] = finalContent;
-          } else {
-            updatedMessages[index] = newParsedContent;
-          }
-
-          return updatedMessages;
-        };
-
-        setParsedMessages(updateParsedMessages);
+        setParsedMessages((prev) => ({ ...prev, [index]: newParsedContent }));
       }
     }
   }, []);
 
-  return { parsedMessages, parseMessages, resetParsedMessagesFrom };
+  return { parsedMessages, parseMessages };
 }

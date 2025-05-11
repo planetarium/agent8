@@ -124,7 +124,7 @@ export const Menu = () => {
   }, [open]);
 
   useEffect(() => {
-    const enterThreshold = 40;
+    const enterThreshold = 10;
     const exitThreshold = 40;
 
     function onMouseMove(event: MouseEvent) {

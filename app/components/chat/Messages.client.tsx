@@ -33,11 +33,11 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
           ? messages.map((message, index) => {
               const { role, id: messageId, annotations } = message;
               const isUserMessage = role === 'user';
-              const isFirst = index === 0;
               const isLast = index === messages.length - 1;
               const isHidden = annotations?.includes('hidden');
+              const isMergeMessage = message.content.includes('Merge task');
 
-              if (isHidden) {
+              if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
               }
 
@@ -45,14 +45,14 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 <div
                   key={index}
                   className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                    'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
+                    'border border-gray-700 bg-bolt-elements-messages-background mt-4 py-4': isUserMessage,
+                    'bg-gray-800 bg-opacity-70 mt-4': !isStreaming && !isUserMessage,
                     'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
                       isStreaming && isLast,
-                    'mt-4': !isFirst,
                   })}
                 >
                   {isUserMessage && (
-                    <div className="flex items-center justify-center w-[40px] h-[40px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0 self-start">
+                    <div className="flex items-center justify-center w-[40px] h-[40px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0 self-start -mt-0.5">
                       {profile?.avatar ? (
                         <img
                           src={profile.avatar}
@@ -70,7 +70,11 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     {isUserMessage ? (
                       <UserMessage content={message.content} />
                     ) : (
-                      <AssistantMessage content={message.content} annotations={message.annotations} />
+                      <AssistantMessage
+                        content={message.content}
+                        annotations={message.annotations}
+                        forceExpanded={isLast}
+                      />
                     )}
                   </div>
                   {isEnabledGitbasePersistence && (

@@ -1,4 +1,4 @@
-import type { Container, ContainerProcess, ExecutionResult } from '~/lib/container/interfaces';
+import type { Container, ExecutionResult, ShellSession } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 
@@ -12,12 +12,10 @@ export class BoltShell {
   #readyPromise: Promise<void>;
   #container: Container | undefined;
   #terminal: ITerminal | undefined;
-  #process: ContainerProcess | undefined;
+  #shellSession: ShellSession | undefined;
   executionState = atom<
     { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
   >();
-  #outputStream: ReadableStreamDefaultReader<string> | undefined;
-  #shellInputStream: WritableStreamDefaultWriter<string> | undefined;
 
   constructor() {
     this.#readyPromise = new Promise((resolve) => {
@@ -34,7 +32,7 @@ export class BoltShell {
   }
 
   get process() {
-    return this.#process;
+    return this.#shellSession?.process;
   }
 
   get terminal() {
@@ -45,11 +43,8 @@ export class BoltShell {
     this.#container = container;
     this.#terminal = terminal;
 
-    const shellSession = await container.spawnShell(terminal, { splitOutput: true });
-    this.#process = shellSession.process;
-    this.#outputStream = shellSession.internalOutput!.getReader();
-    this.#shellInputStream = shellSession.input;
-    await shellSession.ready;
+    this.#shellSession = await container.spawnShell(terminal, { splitOutput: true });
+    await this.#shellSession.ready;
     this.#initialized?.();
   }
 
@@ -66,55 +61,25 @@ export class BoltShell {
 
     // Utilize advanced features from container API
     if (this.#container && this.#terminal) {
-      const shellSession = await this.#container.spawnShell(this.#terminal, {
-        splitOutput: true,
-        interactive: false,
-      });
-
-      if (shellSession.executeCommand) {
+      if (this.#shellSession?.executeCommand) {
         // Use the pre-implemented executeCommand function
-        const executionPromise = shellSession.executeCommand(command);
+        const executionPromise = this.#shellSession.executeCommand(command);
         this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
 
         const resp = await executionPromise;
         this.executionState.set({ sessionId, active: false });
 
         return resp;
+      } else {
+        throw new Error('BoltShell does not support executeCommand');
       }
+    } else {
+      throw new Error('BoltShell is not initialized');
     }
-
-    // Fallback to existing code if needed
-    this.terminal.input('\x03');
-    await this.waitTillOscCode('prompt');
-
-    if (state && state.executionPrms) {
-      await state.executionPrms;
-    }
-
-    // Start a new execution
-    this.terminal.input(command.trim() + '\n');
-
-    // Wait for the execution to finish
-    const executionPromise = this.getCurrentExecutionResult();
-    this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
-
-    const resp = await executionPromise;
-    this.executionState.set({ sessionId, active: false });
-
-    if (resp) {
-      try {
-        resp.output = cleanTerminalOutput(resp.output);
-      } catch (error) {
-        console.log('failed to format terminal output', error);
-      }
-    }
-
-    return resp;
   }
 
   async newBoltShellProcess(container: Container, terminal: ITerminal) {
     const shellSession = await container.spawnShell(terminal, { splitOutput: true });
-    this.#shellInputStream = shellSession.input;
 
     return {
       process: shellSession.process,
@@ -128,38 +93,11 @@ export class BoltShell {
   }
 
   async waitTillOscCode(waitCode: string) {
-    let fullOutput = '';
-    let exitCode: number = 0;
-
-    if (!this.#outputStream) {
-      return { output: fullOutput, exitCode };
+    if (this.#shellSession && this.#shellSession.waitTillOscCode) {
+      return await this.#shellSession.waitTillOscCode(waitCode);
+    } else {
+      throw new Error('BoltShell does not support waitTillOscCode');
     }
-
-    const tappedStream = this.#outputStream;
-
-    while (true) {
-      const { value, done } = await tappedStream.read();
-
-      if (done) {
-        break;
-      }
-
-      const text = value || '';
-      fullOutput += text;
-
-      // Check if command completion signal with exit code
-      const [, osc, , , code] = text.match(/\x1b\]654;([^\x07=]+)=?((-?\d+):(\d+))?\x07/) || [];
-
-      if (osc === 'exit') {
-        exitCode = parseInt(code, 10);
-      }
-
-      if (osc === waitCode) {
-        break;
-      }
-    }
-
-    return { output: fullOutput, exitCode };
   }
 }
 

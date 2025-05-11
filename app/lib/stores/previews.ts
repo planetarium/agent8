@@ -1,13 +1,6 @@
 import type { Container } from '~/lib/container/interfaces';
 import { atom } from 'nanostores';
 
-// Extend Window interface to include our custom property
-declare global {
-  interface Window {
-    _tabId?: string;
-  }
-}
-
 export interface PreviewInfo {
   port: number;
   ready: boolean;
@@ -22,17 +15,14 @@ export class PreviewsStore {
   #container: Promise<Container>;
   #broadcastChannel: BroadcastChannel;
   #lastUpdate = new Map<string, number>();
-  #watchedFiles = new Set<string>();
   #refreshTimeouts = new Map<string, NodeJS.Timeout>();
   #REFRESH_DELAY = 300;
-  #storageChannel: BroadcastChannel;
 
   previews = atom<PreviewInfo[]>([]);
 
   constructor(containerPromise: Promise<Container>) {
     this.#container = containerPromise;
     this.#broadcastChannel = new BroadcastChannel(PREVIEW_CHANNEL);
-    this.#storageChannel = new BroadcastChannel('storage-sync-channel');
 
     // Listen for preview updates from other tabs
     this.#broadcastChannel.onmessage = (event) => {
@@ -49,95 +39,7 @@ export class PreviewsStore {
       }
     };
 
-    // Listen for storage sync messages
-    this.#storageChannel.onmessage = (event) => {
-      const { storage, source } = event.data;
-      console.log('[Preview] Storage sync message received:', storage, source);
-
-      if (storage && source !== this._getTabId()) {
-        this._syncStorage(storage);
-      }
-    };
-
-    // Override localStorage setItem to catch all changes
-    if (typeof window !== 'undefined') {
-      const originalSetItem = localStorage.setItem;
-
-      localStorage.setItem = (...args) => {
-        originalSetItem.apply(localStorage, args);
-        this._broadcastStorageSync();
-      };
-    }
-
     this.#init();
-  }
-
-  // Generate a unique ID for this tab
-  private _getTabId(): string {
-    if (typeof window !== 'undefined') {
-      if (!window._tabId) {
-        window._tabId = Math.random().toString(36).substring(2, 15);
-      }
-
-      return window._tabId;
-    }
-
-    return '';
-  }
-
-  // Sync storage data between tabs
-  private _syncStorage(storage: Record<string, string>) {
-    if (typeof window !== 'undefined') {
-      Object.entries(storage).forEach(([key, value]) => {
-        try {
-          const originalSetItem = Object.getPrototypeOf(localStorage).setItem;
-          originalSetItem.call(localStorage, key, value);
-        } catch (error) {
-          console.error('[Preview] Error syncing storage:', error);
-        }
-      });
-
-      // Force a refresh after syncing storage
-      const previews = this.previews.get();
-      previews.forEach((preview) => {
-        const previewId = this.getPreviewId(preview.baseUrl);
-
-        if (previewId) {
-          this.refreshPreview(previewId);
-        }
-      });
-
-      // Reload the page content
-      if (typeof window !== 'undefined' && window.location) {
-        const iframe = document.querySelector('iframe');
-
-        if (iframe) {
-          iframe.src = iframe.src;
-        }
-      }
-    }
-  }
-
-  // Broadcast storage state to other tabs
-  private _broadcastStorageSync() {
-    if (typeof window !== 'undefined') {
-      const storage: Record<string, string> = {};
-
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-
-        if (key) {
-          storage[key] = localStorage.getItem(key) || '';
-        }
-      }
-
-      this.#storageChannel.postMessage({
-        type: 'storage-sync',
-        storage,
-        source: this._getTabId(),
-        timestamp: Date.now(),
-      });
-    }
   }
 
   async #init() {
@@ -147,42 +49,28 @@ export class PreviewsStore {
     container.on('server-ready', (port, url) => {
       console.log('[Preview] Server ready on port:', port, url);
       this.broadcastUpdate(url);
-
-      // Initial storage sync when preview is ready
-      this._broadcastStorageSync();
     });
 
     try {
-      // Watch for file changes
-      const watcher = await container.fs.watch('**/*', { persistent: true });
+      container.fs.watchPaths(
+        {
+          include: ['**/*'],
+          exclude: ['**/node_modules'],
+          ignoreInitial: true,
+          includeContent: false,
+        },
+        async () => {
+          const previews = this.previews.get();
 
-      // Use the native watch events
-      watcher.addEventListener('change', async () => {
-        const previews = this.previews.get();
+          for (const preview of previews) {
+            const previewId = this.getPreviewId(preview.baseUrl);
 
-        for (const preview of previews) {
-          const previewId = this.getPreviewId(preview.baseUrl);
-
-          if (previewId) {
-            this.broadcastFileChange(previewId);
+            if (previewId) {
+              this.broadcastFileChange(previewId);
+            }
           }
-        }
-      });
-
-      // Watch for DOM changes that might affect storage
-      if (typeof window !== 'undefined') {
-        const observer = new MutationObserver((_mutations) => {
-          // Broadcast storage changes when DOM changes
-          this._broadcastStorageSync();
-        });
-
-        observer.observe(document.body, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-          attributes: true,
-        });
-      }
+        },
+      );
     } catch (error) {
       console.error('[Preview] Error setting up watchers:', error);
     }
