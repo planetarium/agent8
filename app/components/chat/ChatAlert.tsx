@@ -95,7 +95,7 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
                   )}
                 >
                   <div className="i-ph:chat-circle-duotone"></div>
-                  Ask Bolt
+                  Ask Agent8
                 </button>
                 <button
                   onClick={clearAlert}

@@ -37,6 +37,7 @@ import { TaskMessages } from './TaskMessages.client';
 import { TaskBranches } from './TaskBranches.client';
 
 const TEXTAREA_MIN_HEIGHT = 76;
+const MAX_ATTACHMENTS = 10;
 
 export interface ChatAttachment {
   filename: string;
@@ -265,6 +266,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     const uploadFileAndAddToAttachmentList = async (file: File) => {
       try {
+        if (attachmentList?.length >= MAX_ATTACHMENTS) {
+          toast.error(`Attachments are limited to ${MAX_ATTACHMENTS} files.`);
+          return;
+        }
+
         const fileName = file.name;
         const fileExt = `.${fileName.split('.').pop()?.toLowerCase()}`;
 
@@ -610,6 +616,34 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
 
                         const files = Array.from(e.dataTransfer.files);
+
+                        if (attachmentList.length + files.length > MAX_ATTACHMENTS) {
+                          toast.info(
+                            <div>
+                              <p>
+                                <strong>Attachments are limited to {MAX_ATTACHMENTS} files in chat.</strong>
+                              </p>
+                              <p className="mt-1">
+                                You can upload additional assets to the{' '}
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent relative">
+                                  <span className="relative z-10">Resources</span>
+                                </span>{' '}
+                                panel in the workbench.
+                              </p>
+                            </div>,
+                            {
+                              position: 'bottom-center',
+                              autoClose: 5000,
+                              hideProgressBar: false,
+                              closeOnClick: true,
+                              pauseOnHover: true,
+                              draggable: true,
+                              icon: () => <div className="i-ph:arrow-fat-lines-right text-xl" />,
+                            },
+                          );
+
+                          return;
+                        }
 
                         await Promise.all(
                           files.map(async (file) => {

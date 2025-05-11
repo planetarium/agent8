@@ -10,7 +10,7 @@ import { binDates } from './date-binning';
 import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
-import { profileStore } from '~/lib/stores/profile';
+import { v8UserStore } from '~/lib/stores/v8User';
 import { deleteProject, getProjects } from '~/lib/persistenceGitbase/api.client';
 import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 import { chatStore } from '~/lib/stores/chat';
@@ -64,11 +64,12 @@ function CurrentDateTime() {
 export const Menu = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<RepositoryItem[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [dialogContent, setDialogContent] = useState<DialogContent>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const profile = useStore(profileStore);
+  const [open, setOpen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [dialogContent, setDialogContent] = useState<DialogContent | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  const v8Auth = useStore(v8UserStore);
   const chat = useStore(chatStore);
   const [searchParams] = useSearchParams();
   const isEmbedMode = searchParams.get('mode') === 'embed';
@@ -177,25 +178,15 @@ export const Menu = () => {
           isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-[2px] h-full') : 'h-full',
         )}
       >
-        <div className="h-12 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50">
+        <div className="h-13.5 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50">
           <div className="text-gray-900 dark:text-white font-medium"></div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
             <span className="font-medium text-sm text-gray-900 dark:text-white truncate">
-              {profile?.username || 'Guest User'}
+              {v8Auth.loading ? 'Loading...' : v8Auth.user?.name || 'Guest User'}
             </span>
-            <div className="flex items-center justify-center w-[32px] h-[32px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0">
-              {profile?.avatar ? (
-                <img
-                  src={profile.avatar}
-                  alt={profile?.username || 'User'}
-                  className="w-full h-full object-cover"
-                  loading="eager"
-                  decoding="sync"
-                />
-              ) : (
-                <div className="i-ph:user-fill text-lg" />
-              )}
-            </div>
+            {v8Auth.user?.email && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{v8Auth.user.email}</span>
+            )}
           </div>
         </div>
         <CurrentDateTime />

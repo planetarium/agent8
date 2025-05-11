@@ -44,8 +44,6 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     const matches = [...content.matchAll(regex)];
     const filePaths = [...matches.map((match) => match[1]), '.env', 'package.json'];
 
-    console.log(workbenchStore.files.get(), filePaths);
-
     files = filePaths.map((filePath) => ({
       path: filePath,
       content: (workbenchStore.files.get()[`${WORK_DIR}/${filePath}`] as any)?.content || '',
