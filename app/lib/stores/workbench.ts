@@ -22,6 +22,7 @@ import type { BoltShell } from '~/utils/shell';
 import { logger } from '~/utils/logger';
 import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
+import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 
 const { saveAs } = fileSaver;
 
@@ -44,8 +45,6 @@ export class WorkbenchStore {
   #filesStore = new FilesStore(container);
   #editorStore = new EditorStore(this.#filesStore);
   #terminalStore = new TerminalStore(container);
-
-  #reloadedMessages = new Set<string>();
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -258,10 +257,6 @@ export class WorkbenchStore {
     // TODO: what do we wanna do and how do we wanna recover from this?
   }
 
-  setReloadedMessages(messages: string[]) {
-    this.#reloadedMessages = new Set(messages);
-  }
-
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
     const artifact = this.#getArtifact(messageId);
 
@@ -282,7 +277,7 @@ export class WorkbenchStore {
         container,
         () => this.boltTerminal,
         (alert) => {
-          if (this.#reloadedMessages.has(messageId)) {
+          if (isCommitedMessage(messageId)) {
             return;
           }
 
@@ -341,7 +336,7 @@ export class WorkbenchStore {
     }
 
     // Don't run the action if it's a reload
-    if (this.#reloadedMessages.has(messageId)) {
+    if (isCommitedMessage(messageId)) {
       artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
       return;
     }
@@ -473,7 +468,6 @@ export class WorkbenchStore {
       if (isEnabledGitbasePersistence) {
         const { data: commit } = await commitUserChanged();
         const id = 'assistant-' + commit.commitHash;
-        this.setReloadedMessages([...this.#reloadedMessages, id]);
 
         result = { id, message: commit.message };
       }

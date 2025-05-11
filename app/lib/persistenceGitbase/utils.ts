@@ -1,8 +1,12 @@
 import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
 
-export function isCommitHash(id: string) {
-  return id.length === 40 && /^[0-9a-fA-F]+$/.test(id);
+export function isCommitHash(id: string | undefined) {
+  return id?.length === 40 && /^[0-9a-fA-F]+$/.test(id);
+}
+
+export function isCommitedMessage(id: string | undefined) {
+  return isCommitHash(id?.split('-').pop());
 }
 
 export async function unzipCode(zipBlob: Buffer) {
