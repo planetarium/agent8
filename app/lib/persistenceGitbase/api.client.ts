@@ -109,6 +109,7 @@ export const commitUserChanged = async () => {
   const modifiedFiles = workbenchStore.getModifiedFiles();
   const projectName = repoStore.get().name;
   const title = repoStore.get().title;
+  const taskBranch = repoStore.get().taskBranch || 'develop';
 
   const url = new URL(window.location.href);
   const revertToParam = url.searchParams.get('revertTo');
@@ -132,6 +133,7 @@ export const commitUserChanged = async () => {
     files,
     commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
     baseCommit: revertTo,
+    branch: taskBranch,
   });
 
   const result = response.data;
