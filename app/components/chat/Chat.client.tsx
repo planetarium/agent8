@@ -136,10 +136,6 @@ export function Chat() {
   }, []);
 
   useEffect(() => {
-    if (initialMessages.length > 0) {
-      workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
-    }
-
     if (loaded) {
       setReady(true);
     }
@@ -443,7 +439,6 @@ export const ChatImpl = memo(
 
       try {
         await commitChanges(message, (commitHash) => {
-          workbenchStore.setReloadedMessages([...messages.map((m) => m.id), commitHash]);
           setMessages((prev: Message[]) => {
             const newMessages = prev.map((m: Message) => {
               if (m.id === message.id) {
