@@ -178,7 +178,7 @@ export const Menu = () => {
           'bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800/50',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
-          isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-[2px] h-full') : 'h-full',
+          isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-2 h-full') : 'h-full',
         )}
       >
         <div className="h-13.5 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50">

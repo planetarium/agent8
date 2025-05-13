@@ -21,7 +21,7 @@ export function Header() {
         'border-transparent': !chat.started,
         'border-bolt-elements-borderColor': chat.started,
         'mt-[56px]': !chat.started && isEmbedMode,
-        'mt-[2px]': chat.started && isEmbedMode,
+        'mt-2': chat.started && isEmbedMode,
       })}
     >
       {/* Logo and menu button - hidden in embed mode */}
