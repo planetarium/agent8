@@ -14,7 +14,9 @@ import { v8UserStore } from '~/lib/stores/v8User';
 import { deleteProject, getProjects } from '~/lib/persistenceGitbase/api.client';
 import type { RepositoryItem } from '~/lib/persistenceGitbase/types';
 import { chatStore } from '~/lib/stores/chat';
+import { menuStore, closeMenu } from '~/lib/stores/menu';
 import { useSearchParams } from '@remix-run/react';
+import { IconButton } from '~/components/ui/IconButton';
 
 const menuVariants = {
   closed: {
@@ -64,10 +66,11 @@ function CurrentDateTime() {
 export const Menu = () => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<RepositoryItem[]>([]);
-  const [open, setOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [dialogContent, setDialogContent] = useState<DialogContent | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  const open = useStore(menuStore);
 
   const v8Auth = useStore(v8UserStore);
   const chat = useStore(chatStore);
@@ -124,29 +127,29 @@ export const Menu = () => {
   }, [open]);
 
   useEffect(() => {
-    const enterThreshold = 10;
-    const exitThreshold = 40;
-
-    function onMouseMove(event: MouseEvent) {
-      if (isSettingsOpen) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isSettingsOpen || !open) {
         return;
       }
 
-      if (event.pageX < enterThreshold) {
-        setOpen(true);
-      }
+      const menuToggleButton = document.querySelector('.i-ph\\:sidebar-simple-duotone');
 
-      if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
-        setOpen(false);
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        menuToggleButton !== event.target &&
+        !menuToggleButton?.contains(event.target as Node)
+      ) {
+        closeMenu();
       }
-    }
+    };
 
-    window.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, open]);
 
   const handleDeleteClick = (event: React.UIEvent, item: RepositoryItem) => {
     event.preventDefault();
@@ -155,7 +158,7 @@ export const Menu = () => {
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
-    setOpen(false);
+    menuStore.set(false);
   };
 
   const handleSettingsClose = () => {
@@ -175,7 +178,7 @@ export const Menu = () => {
           'bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800/50',
           'shadow-sm text-sm',
           isSettingsOpen ? 'z-40' : 'z-sidebar',
-          isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-[2px] h-full') : 'h-full',
+          isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-2 h-full') : 'h-full',
         )}
       >
         <div className="h-13.5 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50">
@@ -273,6 +276,13 @@ export const Menu = () => {
           <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3">
             <SettingsButton onClick={handleSettingsClick} />
             <ThemeSwitch />
+            <IconButton
+              onClick={() => menuStore.set(false)}
+              icon="i-ph:x-circle"
+              size="xl"
+              title="Close"
+              className="text-[#666] dark:text-gray-400 hover:text-bolt-elements-textPrimary dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/30 transition-colors"
+            />
           </div>
         </div>
       </motion.div>
