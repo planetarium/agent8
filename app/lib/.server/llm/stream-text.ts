@@ -47,8 +47,8 @@ export async function streamText(props: {
         if (part.type === 'text') {
           part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
           part.text = part.text.replace(/<think>.*?<\/think>/s, '');
-          part.text = part.text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3');
-          part.text = part.text.replace(/(<toolResult[^>]*>)([\s\S]*?)(<\/toolResult>)/gs, '$1(truncated)$3');
+          part.text = part.text.replace(/<(boltAction[^>]*)>([\s\S]*?)(<\/boltAction>)/gs, '');
+          part.text = part.text.replace(/<(toolResult[^>]*)>([\s\S]*?)(<\/toolResult>)/gs, '');
         }
       }
 
