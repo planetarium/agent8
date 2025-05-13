@@ -8,7 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { container, containerType } from '~/lib/container';
+import { container, containerType, initializeContainer } from '~/lib/container';
 import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
@@ -21,6 +21,11 @@ export const loader = () => json({});
  * 접근 제어 없이 바로 채팅 UI를 렌더링하는 단순 컴포넌트
  */
 function DirectChatAccess() {
+  useEffect(() => {
+    // we don't await here because we want to wait in the workbench
+    initializeContainer(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
+  }, []);
+
   return (
     <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
       <BackgroundRays />
@@ -49,6 +54,9 @@ function AccessControlledChat() {
           v8UserStore.set({ loading: false, user: userInfo });
 
           setIsActivated(userInfo.isActivated);
+
+          // we don't await here because we want to wait in the workbench
+          initializeContainer(accessToken);
         } catch (error) {
           console.error('Failed to verify token:', error);
           setIsActivated(false);
