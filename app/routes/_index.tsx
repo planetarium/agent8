@@ -89,6 +89,13 @@ function AccessControlledChat() {
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
+
+          // Reinitialize container with the new token to recover from potential failures
+          try {
+            await initializeContainer(token, true);
+          } catch (error) {
+            console.error('Failed to reinitialize container:', error);
+          }
         }
       }
     };

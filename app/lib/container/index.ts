@@ -33,13 +33,18 @@ export const containerType = import.meta.env.VITE_CONTAINER_TYPE || 'remoteconta
  * This allows delayed initialization after authentication
  *
  * @param accessToken V8 access token for authentication
+ * @param forceReinitialization If true, forces creation of a new container even if one exists
  * @returns Promise resolving to the container instance
  */
-export function initializeContainer(accessToken?: string | null): Promise<Container | null> {
+export function initializeContainer(
+  accessToken?: string | null,
+  forceReinitialization = false,
+): Promise<Container | null> {
   logger.info('Initializing container...', {
     containerType,
     hasToken: !!accessToken,
     isSSR: import.meta.env.SSR,
+    forceReinitialization,
   });
 
   if (import.meta.env.SSR) {
@@ -49,9 +54,15 @@ export function initializeContainer(accessToken?: string | null): Promise<Contai
     });
   }
 
-  if (import.meta.hot?.data.container) {
+  // Skip HMR data check if forced reinitialization
+  if (!forceReinitialization && import.meta.hot?.data.container) {
     container = import.meta.hot.data.container;
     return container;
+  }
+
+  // Reset HMR data if forcing reinitialization
+  if (forceReinitialization && import.meta.hot) {
+    import.meta.hot.data.container = null;
   }
 
   const containerPromise = Promise.resolve()
@@ -90,12 +101,13 @@ export function initializeContainer(accessToken?: string | null): Promise<Contai
       return containerInstance;
     })
     .catch(async (error) => {
-      logger.error('Container initialization failed:', error);
+      const errorMsg = forceReinitialization ? 'Container reinitialization failed' : 'Container initialization failed';
+      logger.error(`${errorMsg}:`, error);
 
       try {
         // Use toast notification for immediate visual feedback
         const { toast } = await import('react-toastify');
-        toast.error('Container initialization failed: ' + (error instanceof Error ? error.message : String(error)), {
+        toast.error(`${errorMsg}: ` + (error instanceof Error ? error.message : String(error)), {
           position: 'top-center',
           autoClose: 8000,
           hideProgressBar: false,
@@ -106,13 +118,13 @@ export function initializeContainer(accessToken?: string | null): Promise<Contai
 
         // Log to central error store for persistence
         const { logStore } = await import('~/lib/stores/logs');
-        logStore.logError('Container initialization failed', error, {
+        logStore.logError(errorMsg, error, {
           componentType: containerType,
           hasAccessToken: !!accessToken,
         });
       } catch (logError) {
         // Fallback logging if imports fail
-        console.error('Failed to show container error notification:', logError);
+        console.error(`Failed to show container error notification:`, logError);
       }
 
       return null;
