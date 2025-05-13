@@ -89,8 +89,32 @@ export function initializeContainer(accessToken?: string | null): Promise<Contai
 
       return containerInstance;
     })
-    .catch((error) => {
+    .catch(async (error) => {
       logger.error('Container initialization failed:', error);
+
+      try {
+        // Use toast notification for immediate visual feedback
+        const { toast } = await import('react-toastify');
+        toast.error('Container initialization failed: ' + (error instanceof Error ? error.message : String(error)), {
+          position: 'top-center',
+          autoClose: 8000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        // Log to central error store for persistence
+        const { logStore } = await import('~/lib/stores/logs');
+        logStore.logError('Container initialization failed', error, {
+          componentType: containerType,
+          hasAccessToken: !!accessToken,
+        });
+      } catch (logError) {
+        // Fallback logging if imports fail
+        console.error('Failed to show container error notification:', logError);
+      }
+
       return null;
     });
 
