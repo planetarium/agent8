@@ -5,6 +5,7 @@ import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react'
 import type { Theme } from '~/lib/stores/theme';
 import { createScopedLogger } from '~/utils/logger';
 import { getTerminalTheme } from './theme';
+import { debounce } from '~/utils/debounce';
 
 const logger = createScopedLogger('Terminal');
 
@@ -43,7 +44,10 @@ export const Terminal = memo(
           fontFamily: 'Menlo, courier-new, courier, monospace',
         });
 
-        const onWriteParsedDisposable = terminal.onWriteParsed(async () => {
+        // Debounced error detection function to prevent frequent calls
+        const checkForViteErrors = debounce(async () => {
+          const { workbenchStore } = await import('~/lib/stores/workbench');
+
           // Detect Vite errors with specific patterns
           const viteErrorPatterns = [
             /\[vite\].*error:/i,
@@ -54,10 +58,8 @@ export const Terminal = memo(
             /failed to resolve import/i,
           ];
 
-          // Get recent changes from terminal viewport
+          // Get the entire terminal buffer
           const activeBuffer = terminal.buffer.active;
-          const viewportY = activeBuffer.viewportY;
-          const viewportHeight = terminal.rows;
           const recentOutput = [];
 
           // Check if terminal was cleared (buffer length dramatically decreased)
@@ -66,12 +68,8 @@ export const Terminal = memo(
             lastCheckedLineRef.current = 0;
           }
 
-          /*
-           * Only check new lines that haven't been checked before
-           * Start from the last checked line (or viewport start, whichever is later)
-           */
-          const startLine = Math.max(lastCheckedLineRef.current, viewportY - 10);
-          const endLine = Math.min(activeBuffer.length, viewportY + viewportHeight + 5);
+          const startLine = lastCheckedLineRef.current;
+          const endLine = activeBuffer.length;
 
           // Skip if there are no new lines to check
           if (startLine >= endLine) {
@@ -91,8 +89,12 @@ export const Terminal = memo(
 
           const recentText = recentOutput.join('\n');
 
+          logger.debug(`Check from ${startLine} to ${endLine}`);
+          logger.debug(recentOutput.join('\n'));
+
           if (viteErrorPatterns.some((pattern) => pattern.test(recentText))) {
-            const { workbenchStore } = await import('~/lib/stores/workbench');
+            logger.debug('Vite error detected');
+
             workbenchStore.actionAlert.set({
               type: 'vite',
               title: 'Vite Error',
@@ -100,7 +102,13 @@ export const Terminal = memo(
               content: recentText,
               source: 'terminal',
             });
+          } else {
+            logger.debug('No Vite error detected');
           }
+        }, 1_000);
+
+        const onWriteParsedDisposable = terminal.onWriteParsed(() => {
+          checkForViteErrors();
         });
 
         terminalRef.current = terminal;
