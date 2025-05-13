@@ -157,7 +157,7 @@ export function Chat() {
           await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
           const previews = workbenchStore.previews.get();
-          const currentPreview = previews.find((p) => p.ready && p.port === 5173);
+          const currentPreview = previews.find((p) => p.ready);
 
           if (currentPreview && workbenchStore.currentView.get() === 'preview') {
             workbenchStore.previews.set(
@@ -252,7 +252,7 @@ async function runAndPreview(message: Message) {
 
   const previews = workbenchStore.previews.get();
 
-  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready && p.port === 5173)) {
+  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready)) {
     workbenchStore.currentView.set('preview');
     return;
   }
