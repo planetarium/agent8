@@ -5,11 +5,15 @@ import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { useSearchParams } from '@remix-run/react';
 import { HeaderDeployButton } from './HeaderDeployButton.client';
+import { toggleMenu, menuStore } from '~/lib/stores/menu';
+import WithTooltip from '~/components/ui/Tooltip';
+import { TooltipProvider } from '@radix-ui/react-tooltip';
 
 export function Header() {
   const chat = useStore(chatStore);
   const [searchParams] = useSearchParams();
   const isEmbedMode = searchParams.get('mode') === 'embed';
+  const isMenuOpen = useStore(menuStore);
 
   return (
     <header
@@ -17,14 +21,24 @@ export function Header() {
         'border-transparent': !chat.started,
         'border-bolt-elements-borderColor': chat.started,
         'mt-[56px]': !chat.started && isEmbedMode,
-        'mt-[2px]': chat.started && isEmbedMode,
+        'mt-2': chat.started && isEmbedMode,
       })}
     >
       {/* Logo and menu button - hidden in embed mode */}
-      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary cursor-pointer">
-        <div className="i-ph:sidebar-simple-duotone text-xl" />
+      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
+        <TooltipProvider>
+          <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMenu();
+              }}
+              className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
+            />
+          </WithTooltip>
+        </TooltipProvider>
         {!isEmbedMode && (
-          <a href="/" className="text-xl font-semibold text-accent flex items-center">
+          <a href="/" className="text-xl font-semibold text-accent flex items-center ml-3">
             AGENT8
           </a>
         )}
