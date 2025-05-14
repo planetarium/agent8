@@ -48,6 +48,7 @@ import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { getStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -568,7 +569,7 @@ export const ChatImpl = memo(
 
       if (!chatStarted) {
         try {
-          const { template, title, projectRepo, nextActionSuggestion } = await selectStarterTemplate({
+          const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
 
@@ -658,7 +659,7 @@ export const ChatImpl = memo(
               role: 'user',
               content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
-              )}]\n\n${messageContent}${nextActionSuggestion && `\n\n<think>Proceed with the following task first.\n${nextActionSuggestion}</think>`}`,
+              )}]\n\n${messageContent}\n<think>${getStarterPrompt()}</think>`,
             },
           ]);
           reload();
