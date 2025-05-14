@@ -11,7 +11,7 @@ import { classNames } from '~/utils/classNames';
 const McpServerManager: React.FC = () => {
   const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
 
-  const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox'];
+  const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
 
   const getServerDescription = (serverName: string): string => {
     switch (serverName) {
@@ -25,6 +25,8 @@ const McpServerManager: React.FC = () => {
         return 'Generate game background music, character/level theme music, and sound effects. Fast generation speed (30-second sample: about 2 seconds, 3-minute track: within 10 seconds). High-quality 44.1kHz stereo audio output. Maintains professional consistency without interruptions. Provides results in WAV file format.';
       case 'Skybox':
         return 'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.';
+      case 'UI':
+        return 'Create CSS styles for UI elements, used for web development or game development.';
       default:
         return '';
     }
@@ -64,6 +66,8 @@ const McpServerManager: React.FC = () => {
         return 'i-ph:speaker-high w-4 h-4 text-red-500';
       case 'Skybox':
         return 'i-ph:cloud w-4 h-4 text-cyan-500';
+      case 'UI':
+        return 'i-ph:palette w-4 h-4 text-pink-500';
       default:
         return 'i-ph:cube w-4 h-4 text-bolt-elements-textSecondary';
     }
@@ -241,6 +245,7 @@ const McpServerManager: React.FC = () => {
                                       {server.name === 'Skybox' && (
                                         <p className="text-gray-200">Cost: 1 credit (fixed)</p>
                                       )}
+                                      {server.name === 'UI' && <p className="text-gray-200">Cost: 1 credit (fixed)</p>}
                                     </div>
 
                                     <div className="mt-4 pt-3 border-t border-gray-700">
@@ -307,6 +312,14 @@ const McpServerManager: React.FC = () => {
                                               </li>
                                               <li>Different character limits exist depending on style ID</li>
                                               <li>Check skybox generation status with skybox_status tool</li>
+                                            </ul>
+                                          )}
+                                          {server.name === 'UI' && (
+                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
+                                              <li>Provide specific CSS styles for UI elements</li>
+                                              <li>
+                                                Use the ui_themes tool to check available themes and CSS ui_styles
+                                              </li>
                                             </ul>
                                           )}
                                         </>
