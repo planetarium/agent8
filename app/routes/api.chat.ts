@@ -8,7 +8,7 @@ import { createScopedLogger } from '~/utils/logger';
 import type { ProgressAnnotation } from '~/types/context';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
-import { cleanupToolSet, createToolSet } from '~/lib/modules/mcp/toolset';
+import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { withV8AuthUser, type ContextConsumeUserCredit, type ContextUser } from '~/lib/verse8/middleware';
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -285,9 +285,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // Convert the string stream to a byte stream
           const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
           controller.enqueue(encoder.encode(str));
-        },
-        async flush() {
-          await cleanupToolSet(mcpToolset);
         },
       }),
     );
