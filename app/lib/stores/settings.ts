@@ -194,6 +194,13 @@ const getDefaultMCPServers = (): MCPServer[] => {
         description:
           'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.',
       },
+      {
+        name: 'UI',
+        url: 'https://mcp-ui.verse8.io/mcp',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description: 'Create CSS styles for UI elements, used for web development or game development.',
+      },
     ];
   }
 
