@@ -142,7 +142,7 @@ export const SETTINGS_KEYS = {
   EVENT_LOGS: 'isEventLogsEnabled',
   PROMPT_ID: 'promptId',
   DEVELOPER_MODE: 'isDeveloperMode',
-  MCP_SERVERS: 'mcpSseServers', // for backward compatibility
+  MCP_SERVERS: 'mcpServers',
 } as const;
 
 /**
@@ -157,14 +157,14 @@ const getDefaultMCPServers = (): MCPServer[] => {
     defaultServers = [
       {
         name: 'All-in-one',
-        url: 'https://mcp.verse8.io/sse',
+        url: 'https://mcp.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
         description: 'All-in-one server that integrates all MCP tools.',
       },
       {
         name: 'Image',
-        url: 'https://mcp-image.verse8.io/sse',
+        url: 'https://mcp-image.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
         description:
@@ -172,7 +172,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Cinematic',
-        url: 'https://mcp-cinematic.verse8.io/sse',
+        url: 'https://mcp-cinematic.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
         description:
@@ -180,7 +180,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Audio',
-        url: 'https://mcp-audio.verse8.io/sse',
+        url: 'https://mcp-audio.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
         description:
@@ -188,11 +188,18 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Skybox',
-        url: 'https://mcp-skybox.verse8.io/sse',
+        url: 'https://mcp-skybox.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
         description:
           'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.',
+      },
+      {
+        name: 'UI',
+        url: 'https://mcp-ui.verse8.io/mcp',
+        enabled: false,
+        v8AuthIntegrated: false,
+        description: 'Create CSS styles for UI elements, used for web development or game development.',
       },
     ];
   }
