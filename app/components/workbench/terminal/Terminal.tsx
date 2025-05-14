@@ -5,6 +5,7 @@ import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react'
 import type { Theme } from '~/lib/stores/theme';
 import { createScopedLogger } from '~/utils/logger';
 import { getTerminalTheme } from './theme';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { debounce } from '~/utils/debounce';
 
 const logger = createScopedLogger('Terminal');
@@ -44,10 +45,7 @@ export const Terminal = memo(
           fontFamily: 'Menlo, courier-new, courier, monospace',
         });
 
-        // Debounced error detection function to prevent frequent calls
-        const checkForViteErrors = debounce(async () => {
-          const { workbenchStore } = await import('~/lib/stores/workbench');
-
+        const checkForViteErrors = debounce(() => {
           // Detect Vite errors with specific patterns
           const viteErrorPatterns = [
             /\[vite\].*error:/i,
@@ -68,13 +66,9 @@ export const Terminal = memo(
             lastCheckedLineRef.current = 0;
           }
 
-          const startLine = lastCheckedLineRef.current;
+          // Overwrapped check to avoid missing lines
+          const startLine = lastCheckedLineRef.current - 1;
           const endLine = activeBuffer.length;
-
-          // Skip if there are no new lines to check
-          if (startLine >= endLine) {
-            return;
-          }
 
           for (let i = startLine; i < endLine; i++) {
             const line = activeBuffer.getLine(i);
