@@ -91,7 +91,6 @@ interface ProgressAwareTool extends Omit<Tool, 'execute'> {
 
 export interface ToolSet {
   tools: Record<string, ProgressAwareTool>;
-  clients: Record<string, Client>;
 }
 
 /**
@@ -102,7 +101,6 @@ export interface ToolSet {
 export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Promise<ToolSet> {
   const toolset: ToolSet = {
     tools: {},
-    clients: {},
   };
 
   if (!v8AuthToken) {
@@ -125,8 +123,6 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
 
       const url = new URL(serverConfig.url);
       const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
-      let transport: Transport;
-
       const requestInit = v8AuthIntegrated
         ? {
             headers: {
@@ -135,37 +131,36 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
           }
         : undefined;
 
-      if (url.pathname.endsWith('/sse')) {
-        // Create SSE transport layer - direct initialization
-        transport = new SSEClientTransport(url, {
-          eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
-          requestInit,
-        });
-      } else {
-        transport = new StreamableHTTPClientTransport(url, {
-          requestInit,
-        });
-      }
+      const createClient = async () => {
+        let transport: Transport;
 
-      // Create MCP client
-      const client = new Client({
-        name: `${serverName}-client`,
-        version: '1.0.0',
-      });
+        if (url.pathname.endsWith('/sse')) {
+          // Create SSE transport layer - direct initialization
+          transport = new SSEClientTransport(url, {
+            eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
+            requestInit,
+          });
+        } else {
+          transport = new StreamableHTTPClientTransport(url, {
+            requestInit,
+          });
+        }
 
-      client.onerror = (error) => {
-        logger.error(`MCP client error: ${error}`);
+        const client = new Client({
+          name: `${serverName}-client`,
+          version: '1.0.0',
+        });
+
+        await client.connect(transport);
+
+        return client;
       };
 
-      client.onclose = () => {
-        logger.info(`MCP client ${serverName} closed`);
-      };
-
-      toolset.clients[serverName] = client;
+      let client: Client | null = null;
 
       try {
-        // Connect client
-        await client.connect(transport);
+        // Create MCP client
+        client = await createClient();
 
         // Get list of tools
         const toolList = await client.listTools();
@@ -195,42 +190,55 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
             parameters,
             progressEmitter,
             execute: async (args) => {
-              // Emit start event
-              progressEmitter.emit('start', { status: 'started' });
+              /*
+               * We don't keep clients due to CloudFlare worker's connection limit.
+               * Instead, we create a new client for each tool call.
+               */
+              let client: Client | null = null;
 
-              const result = await client.callTool(
-                {
-                  name: tool.name,
-                  arguments: args,
-                },
-                CallToolResultSchema,
-                {
-                  onprogress: (progress) => {
-                    logger.info(`Progress: ${JSON.stringify(progress)}`);
+              try {
+                // Emit start event
+                progressEmitter.emit('start', { status: 'started' });
 
-                    // Emit progress event
-                    progressEmitter.emit('progress', progress);
+                client = await createClient();
+
+                const result = await client.callTool(
+                  {
+                    name: tool.name,
+                    arguments: args,
                   },
-                  resetTimeoutOnProgress: true,
-                },
-              );
+                  CallToolResultSchema,
+                  {
+                    onprogress: (progress) => {
+                      logger.info(`Progress: ${JSON.stringify(progress)}`);
 
-              // Emit complete event
-              progressEmitter.emit('complete', { status: 'completed' });
+                      // Emit progress event
+                      progressEmitter.emit('progress', progress);
+                    },
+                    resetTimeoutOnProgress: true,
+                  },
+                );
 
-              return result;
+                // Emit complete event
+                progressEmitter.emit('complete', { status: 'completed' });
+
+                return result;
+              } catch (error) {
+                logger.error(`MCP client[${serverName}] error: ${error}`);
+                throw error;
+              } finally {
+                await client?.close();
+              }
             },
           } as ProgressAwareTool;
         }
       } catch (error) {
-        logger.error(`Failed to connect to MCP server ${serverName}:`, error);
+        logger.error(`MCP client[${serverName}] error:`, error);
+      } finally {
+        await client?.close();
       }
     }),
   );
 
   return toolset;
-}
-
-export async function cleanupToolSet(toolset: ToolSet) {
-  await Promise.all(Object.values(toolset.clients).map((client) => client.close()));
 }
