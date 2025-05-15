@@ -893,45 +893,45 @@ export class RemoteContainerFactory implements ContainerFactory {
    * @returns The machine ID
    */
   private async _requestMachineId(token: string): Promise<string> {
-    const maxRetries = 3;
-    const retryDelay = 1000;
+    try {
+      const response = await fetch(`https://${this._serverUrl}/api/machine`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    let retryCount = 0;
-    let lastError;
-
-    while (retryCount <= maxRetries) {
-      try {
-        const response = await fetch(`https://${this._serverUrl}/api/machine`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`API response error: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          logger.error('Unauthorized access, reloading page...');
+          window.parent.postMessage(
+            {
+              type: 'AUTH_REFRESH_REQUIRED',
+              payload: {
+                message: 'Authentication failed after multiple attempts. Please refresh the page.',
+                errorCode: 401,
+                source: 'remote-container',
+              },
+            },
+            '*',
+          );
+          throw new Error('Unauthorized access, reloading page');
         }
 
-        const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
-
-        if (machineId === undefined) {
-          throw new Error('No machine ID received from server');
-        }
-
-        return machineId;
-      } catch (error) {
-        lastError = error;
-        retryCount++;
-
-        if (retryCount <= maxRetries) {
-          logger.warn(`Machine API request failed, retrying ${retryCount}/${maxRetries}...`);
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        }
+        throw new Error(`API response error: ${response.status}`);
       }
-    }
 
-    throw new Error(`Machine API request failed after ${maxRetries} retries: ${lastError}`);
+      const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
+
+      if (machineId === undefined) {
+        throw new Error('No machine ID received from server');
+      }
+
+      return machineId;
+    } catch (error) {
+      throw new Error(`Machine API request failed: ${error}`);
+    }
   }
 
   private async _waitForMachineReady(machineId: string, token: string): Promise<void> {
