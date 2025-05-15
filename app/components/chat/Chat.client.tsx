@@ -519,6 +519,11 @@ export const ChatImpl = memo(
         return;
       }
 
+      if (chatStarted && Object.keys(files).length === 0) {
+        toast.error('Files are not loaded. Please try again later.');
+        return;
+      }
+
       if (isLoading) {
         abort();
         return;
