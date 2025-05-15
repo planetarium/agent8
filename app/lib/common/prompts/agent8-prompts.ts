@@ -252,7 +252,7 @@ ULTRA IMPORTANT: Do NOT be verbose and DO NOT explain anything unless the user i
   return systemPrompt;
 };
 
-export function getStarterPrompt() {
+function getCommonStarterPrompt() {
   return `
 This message marks the user's first interaction when starting a new project.
 Please consider the following instructions:
@@ -261,38 +261,30 @@ Please consider the following instructions:
 
 1. Check if the template matches the user's requirements
 
-A template is likely provided.
+A template is provided.
 Your first task is to verify whether the template aligns with what the user wants.
 You can confirm the content by reviewing the provided PROJECT.md file.
 
+`;
+}
+
+export function get2DStarterPrompt() {
+  return `
+${getCommonStarterPrompt()}
 ⸻
 
 2. If the template does not match the user's goals, focus on delivering the correct first result
 
 Identify the core gameplay elements based on the user's request:
-	•	For a car-related game, the first priority is to place a car on the map and make it move.
-	•	For a 3D object-based game, start by placing 3D models in a 3D space and enabling basic interactions.
+•	Reflect graphical elements as much as possible through code, like CSS or canvas components.
+•	Think about what the core logic is and implement it.
 
 ⸻
 
 3. If the template already includes basic matching elements, great. Now it's time to impress the user
 	•	For a 2D web-based game, create a visually appealing screen by generating images or using CSS.
-	•	If the game logic is simple, implement it fully in one go.
+	•	If the game logic is simple, implement it fully in one go (This means that if you can modify and implement these under three files, it is okay to implement them all at once).
 	•	If the game logic is too complex to complete in one step, break it down into stages. Focus on visuals first, and clearly communicate to the user how much has been implemented.
-
-⸻
-
-4. For a 3D-based game, start by changing the map immediately
-
-For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment)
-For Other games, search for or generate a suitable texture and apply it.
-  And then use tool \`search_resources_vectordb_items\` to find and place suitable 3D objects that match the game's theme.
-However, if you need to place trees, use the easytree asset. 
-Documentation on easytree is available via the tools or vector DB. (use tool \`search_codebase_vectordb_items\`)
-Please remember. VectorDB query should be performed only once! It is not allowed to continue calling it.
-
-These two tasks must be completed in your first response:
-	1.	Place relevant 3D objects
 
 ⸻
 
@@ -302,6 +294,36 @@ Do not alter any part of the code unrelated to your current task.
 Be careful and deliberate when making modifications.
 `;
 }
+
+export function get3DStarterPrompt() {
+  return `
+  ${getCommonStarterPrompt()}
+⸻
+
+2. If the template does not match the user's request, focus on delivering the correct first result
+
+3. If the template already includes basic matching elements, great. Now it's time to impress the user
+
+The 3D template basically provides player, camera, keyboard and mouse settings. Do not modify this.
+
+In the given template, your task is to decorate the map.
+
+For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment)
+For Other games, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment\`
+Apply the following three: 
+a) Map texture and terrain (use Procedural Mesh Generation Terrain System in open world genre) 
+b) 3D object placement 
+you can choose after reading the documents from read_vibe_starter_3d_environment
+
+⸻
+
+However, ensuring the project runs correctly is the top priority.
+Take your time to read through all necessary files and understand the full context before making changes.
+Do not alter any part of the code unrelated to your current task.
+Be careful and deliberate when making modifications.
+`;
+}
+
 export function getProjectFilesPrompt(files: any) {
   const filePaths = Object.keys(files)
     .filter((x) => files[x]?.type == 'file')
