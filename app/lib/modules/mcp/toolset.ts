@@ -114,131 +114,160 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
     return fetch(url.toString(), { ...options, headers });
   };
 
-  await Promise.all(
-    Object.entries(config.servers).map(async ([serverName, serverConfig]) => {
-      if (!serverConfig.enabled) {
-        logger.info(`MCP server ${serverName} is disabled`);
-        return;
+  // Convert server config to array for parallel processing
+  const serverEntries = Object.entries(config.servers);
+
+  // Function to process a single server
+  const processServer = async ([serverName, serverConfig]: [string, any]) => {
+    if (!serverConfig.enabled) {
+      logger.info(`MCP server ${serverName} is disabled`);
+      return;
+    }
+
+    const url = new URL(serverConfig.url);
+    const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
+    const requestInit = v8AuthIntegrated
+      ? {
+          headers: {
+            Authorization: `Bearer ${v8AuthToken}`,
+          },
+        }
+      : undefined;
+
+    const createClient = async () => {
+      let transport: Transport;
+
+      if (url.pathname.endsWith('/sse')) {
+        // Create SSE transport layer - direct initialization
+        transport = new SSEClientTransport(url, {
+          eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
+          requestInit,
+        });
+      } else {
+        transport = new StreamableHTTPClientTransport(url, {
+          requestInit,
+        });
       }
 
-      const url = new URL(serverConfig.url);
-      const v8AuthIntegrated = v8AuthToken && serverConfig.v8AuthIntegrated;
-      const requestInit = v8AuthIntegrated
-        ? {
-            headers: {
-              Authorization: `Bearer ${v8AuthToken}`,
-            },
-          }
-        : undefined;
+      const client = new Client({
+        name: `${serverName}-client`,
+        version: '1.0.0',
+      });
 
-      const createClient = async () => {
-        let transport: Transport;
-
-        if (url.pathname.endsWith('/sse')) {
-          // Create SSE transport layer - direct initialization
-          transport = new SSEClientTransport(url, {
-            eventSourceInit: v8AuthIntegrated ? { fetch: fetchWithV8Auth } : undefined,
-            requestInit,
-          });
-        } else {
-          transport = new StreamableHTTPClientTransport(url, {
-            requestInit,
-          });
-        }
-
-        const client = new Client({
-          name: `${serverName}-client`,
-          version: '1.0.0',
-        });
-
-        await client.connect(transport);
-
-        return client;
-      };
-
-      let client: Client | null = null;
+      logger.info(`[${serverName}] Attempting to connect client...`);
 
       try {
-        // Create MCP client
-        client = await createClient();
-
-        // Get list of tools
-        const toolList = await client.listTools();
-
-        // Convert each tool to AI SDK tool
-        for (const tool of toolList.tools) {
-          let toolName = tool.name;
-
-          if (toolName !== serverName) {
-            toolName = `${serverName}_${toolName}`;
-          }
-
-          // Replace spaces with dashes due to AI SDK tool name restrictions
-          toolName = toolName.replaceAll(' ', '-');
-
-          const parameters = jsonSchema({
-            ...tool.inputSchema,
-            properties: tool.inputSchema.properties ?? {},
-            additionalProperties: false,
-          } as JSONSchema7);
-
-          // Create a progress emitter for this tool
-          const progressEmitter = new ProgressEmitter(toolName);
-
-          toolset.tools[toolName] = {
-            description: tool.description || '',
-            parameters,
-            progressEmitter,
-            execute: async (args) => {
-              /*
-               * We don't keep clients due to CloudFlare worker's connection limit.
-               * Instead, we create a new client for each tool call.
-               */
-              let client: Client | null = null;
-
-              try {
-                // Emit start event
-                progressEmitter.emit('start', { status: 'started' });
-
-                client = await createClient();
-
-                const result = await client.callTool(
-                  {
-                    name: tool.name,
-                    arguments: args,
-                  },
-                  CallToolResultSchema,
-                  {
-                    onprogress: (progress) => {
-                      logger.info(`Progress: ${JSON.stringify(progress)}`);
-
-                      // Emit progress event
-                      progressEmitter.emit('progress', progress);
-                    },
-                    resetTimeoutOnProgress: true,
-                  },
-                );
-
-                // Emit complete event
-                progressEmitter.emit('complete', { status: 'completed' });
-
-                return result;
-              } catch (error) {
-                logger.error(`MCP client[${serverName}] error: ${error}`);
-                throw error;
-              } finally {
-                await client?.close();
-              }
-            },
-          } as ProgressAwareTool;
-        }
+        await client.connect(transport);
+        logger.info(`[${serverName}] Client connection successful`);
       } catch (error) {
-        logger.error(`MCP client[${serverName}] error:`, error);
-      } finally {
-        await client?.close();
+        logger.error(`[${serverName}] Client connection failed: ${error}`);
+        throw error;
       }
-    }),
-  );
+
+      return client;
+    };
+
+    let client: Client | null = null;
+
+    try {
+      // Create MCP client
+      client = await createClient();
+
+      // Get list of tools
+      const toolList = await client.listTools();
+
+      // Convert each tool to AI SDK tool
+      for (const tool of toolList.tools) {
+        let toolName = tool.name;
+
+        if (toolName !== serverName) {
+          toolName = `${serverName}_${toolName}`;
+        }
+
+        // Replace spaces with dashes due to AI SDK tool name restrictions
+        toolName = toolName.replaceAll(' ', '-');
+
+        const parameters = jsonSchema({
+          ...tool.inputSchema,
+          properties: tool.inputSchema.properties ?? {},
+          additionalProperties: false,
+        } as JSONSchema7);
+
+        // Create a progress emitter for this tool
+        const progressEmitter = new ProgressEmitter(toolName);
+
+        toolset.tools[toolName] = {
+          description: tool.description || '',
+          parameters,
+          progressEmitter,
+          execute: async (args) => {
+            /*
+             * We don't keep clients due to CloudFlare worker's connection limit.
+             * Instead, we create a new client for each tool call.
+             */
+            let client: Client | null = null;
+
+            try {
+              // Emit start event
+              progressEmitter.emit('start', { status: 'started' });
+
+              client = await createClient();
+
+              const result = await client.callTool(
+                {
+                  name: tool.name,
+                  arguments: args,
+                },
+                CallToolResultSchema,
+                {
+                  onprogress: (progress) => {
+                    logger.info(`Progress: ${JSON.stringify(progress)}`);
+
+                    // Emit progress event
+                    progressEmitter.emit('progress', progress);
+                  },
+                  resetTimeoutOnProgress: true,
+                },
+              );
+
+              // Emit complete event
+              progressEmitter.emit('complete', { status: 'completed' });
+
+              return result;
+            } catch (error) {
+              logger.error(`MCP client[${serverName}] error: ${error}`);
+              throw error;
+            } finally {
+              if (client) {
+                logger.info(`[${serverName}] Closing tool execution client connection`);
+                await client.close();
+                logger.info(`[${serverName}] Tool execution client connection closed`);
+              }
+            }
+          },
+        } as ProgressAwareTool;
+      }
+    } catch (error) {
+      logger.error(`MCP client[${serverName}] error:`, error);
+    } finally {
+      if (client) {
+        logger.info(`[${serverName}] Closing client connection`);
+        await client.close();
+        logger.info(`[${serverName}] Client connection closed`);
+      }
+    }
+  };
+
+  /*
+   * Process servers in parallel batches of maximum 2 at a time
+   * due to CloudFlare's limit on the number of simultaneous connections.
+   */
+  const concurrencyLimit = 2;
+
+  for (let i = 0; i < serverEntries.length; i += concurrencyLimit) {
+    const batch = serverEntries.slice(i, i + concurrencyLimit);
+    await Promise.all(batch.map(processServer));
+  }
 
   return toolset;
 }
