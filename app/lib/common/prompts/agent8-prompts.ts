@@ -283,7 +283,7 @@ Identify the core gameplay elements based on the user's request:
 
 3. If the template already includes basic matching elements, great. Now it's time to impress the user
 	•	For a 2D web-based game, create a visually appealing screen by generating images or using CSS.
-	•	If the game logic is simple, implement it fully in one go.
+	•	If the game logic is simple, implement it fully in one go (This means that if you can modify and implement these under three files, it is okay to implement them all at once).
 	•	If the game logic is too complex to complete in one step, break it down into stages. Focus on visuals first, and clearly communicate to the user how much has been implemented.
 
 ⸻
@@ -304,14 +304,15 @@ export function get3DStarterPrompt() {
 
 3. If the template already includes basic matching elements, great. Now it's time to impress the user
 
+The 3D template basically provides player, camera, keyboard and mouse settings. Do not modify this.
+
 In the given template, your task is to decorate the map.
 
 For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment)
 For Other games, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment\`
 Apply the following three: 
-a) Map texture and terrain (procedural Mesh Generation Terrain System) 
+a) Map texture and terrain (use Procedural Mesh Generation Terrain System in open world genre) 
 b) 3D object placement 
-c) Background image or skybox
 you can choose after reading the documents from read_vibe_starter_3d_environment
 
 ⸻
