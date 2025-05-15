@@ -220,13 +220,15 @@ export const Preview = memo(() => {
           title = 'Console Error';
         }
 
-        workbenchStore.actionAlert.set({
-          type: 'preview',
-          title,
-          description,
-          content: `Error occurred at ${error.pathname}${error.search || ''}${error.hash || ''}\nPort: ${error.port || ''}\n\nStack trace:\n${error.stack || ''}`,
-          source: 'preview',
-        });
+        if (error.stack) {
+          workbenchStore.actionAlert.set({
+            type: 'preview',
+            title,
+            description,
+            content: `Error occurred at ${error.pathname}${error.search || ''}${error.hash || ''}\nPort: ${error.port || ''}\n\nStack trace:\n${error.stack || ''}`,
+            source: 'preview',
+          });
+        }
       }
     };
 

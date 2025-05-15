@@ -48,6 +48,7 @@ import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { getStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -157,7 +158,7 @@ export function Chat() {
           await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
           const previews = workbenchStore.previews.get();
-          const currentPreview = previews.find((p) => p.ready && p.port === 5173);
+          const currentPreview = previews.find((p) => p.ready);
 
           if (currentPreview && workbenchStore.currentView.get() === 'preview') {
             workbenchStore.previews.set(
@@ -252,7 +253,7 @@ async function runAndPreview(message: Message) {
 
   const previews = workbenchStore.previews.get();
 
-  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready && p.port === 5173)) {
+  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready)) {
     workbenchStore.currentView.set('preview');
     return;
   }
@@ -568,7 +569,7 @@ export const ChatImpl = memo(
 
       if (!chatStarted) {
         try {
-          const { template, title, projectRepo, nextActionSuggestion } = await selectStarterTemplate({
+          const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
 
@@ -658,7 +659,7 @@ export const ChatImpl = memo(
               role: 'user',
               content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
-              )}]\n\n${messageContent}${nextActionSuggestion && `\n\n<think>Proceed with the following task first.\n${nextActionSuggestion}</think>`}`,
+              )}]\n\n${messageContent}\n<think>${getStarterPrompt()}</think>`,
             },
           ]);
           reload();

@@ -18,28 +18,28 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'claude-3-7-sonnet-20250219',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+    model: 'gemini-2.5-pro-preview-05-06',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'claude-3-7-sonnet-20250219',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+    model: 'gemini-2.5-pro-preview-05-06',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   FIRST_2D_CHAT: {
-    model: 'claude-3-7-sonnet-20250219',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Anthropic')!,
+    model: 'gemini-2.5-pro-preview-05-06',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   FIRST_3D_CHAT: {
-    model: 'google/gemini-2.5-pro-preview',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'gemini-2.5-pro-preview-05-06',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   DEFAULT_MODEL: {
-    model: 'google/gemini-2.5-pro-preview',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'gemini-2.5-pro-preview-05-06',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'google/gemini-2.0-flash-001',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    model: 'models/gemini-2.5-flash-preview-04-17',
+    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
 };
 
