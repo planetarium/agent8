@@ -128,53 +128,107 @@ class RemoteContainerConnection {
     const { promise, resolve, reject } = withResolvers<void>();
     this._connectionPromise = promise;
 
-    try {
-      this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
+    const maxRetries = 3;
+    const retryDelay = 1_000;
 
-      this._ws.onopen = () => {
-        this._connected = true;
-        this._startHeartbeat();
+    let lastError: Error | null = null;
 
-        // Send authentication token if available
-        if (this._token) {
-          this.sendRequest({
-            id: 'auth-' + v4(),
-            operation: {
-              type: 'auth',
-              token: this._token,
-            },
-          });
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          logger.info(`WebSocket connection retry (${attempt}/${maxRetries - 1})...`);
+
+          // Delay before retry
+          await new Promise((r) => setTimeout(r, retryDelay));
         }
 
-        resolve();
-      };
+        this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
 
-      this._ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this._handleMessage(data);
-        } catch (err) {
-          logger.error('Remote container message parsing error:', err);
+        this._ws.onopen = () => {
+          this._connected = true;
+          this._startHeartbeat();
+
+          // Send authentication token if available
+          if (this._token) {
+            this.sendRequest({
+              id: 'auth-' + v4(),
+              operation: {
+                type: 'auth',
+                token: this._token,
+              },
+            });
+          }
+
+          resolve();
+        };
+
+        this._ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this._handleMessage(data);
+          } catch (err) {
+            logger.error('Remote container message parsing error:', err);
+          }
+        };
+
+        this._ws.onerror = (error) => {
+          const err = new Error(`WebSocket connection error: ${error}`);
+          lastError = err;
+
+          // Don't reject from event handler unless it's the last attempt
+          if (attempt === maxRetries - 1) {
+            this._notifyError(err);
+            reject(err);
+          } else {
+            logger.warn(`WebSocket connection failed (${attempt + 1}/${maxRetries}), will retry...`);
+          }
+        };
+
+        this._ws.onclose = () => {
+          this._connected = false;
+          this._connectionPromise = null;
+          this._stopHeartbeat();
+          logger.warn('Remote container connection closed');
+        };
+
+        /*
+         * Wait for successful connection
+         * Set timeout for each attempt
+         */
+        const connectionTimeout = 10_000; // 10 seconds timeout
+        const timeoutPromise = new Promise<void>((_, timeoutReject) => {
+          const timer = setTimeout(() => {
+            if (!this._connected && attempt < maxRetries - 1) {
+              this._ws?.close();
+              timeoutReject(new Error('Connection timeout'));
+            }
+          }, connectionTimeout);
+
+          // Cancel timer if promise resolves
+          promise.then(() => clearTimeout(timer));
+        });
+
+        await Promise.race([promise, timeoutPromise]);
+
+        // Break loop on successful connection
+        if (this._connected) {
+          break;
         }
-      };
+      } catch (error) {
+        lastError = error as Error;
 
-      this._ws.onerror = (error) => {
-        const err = new Error(`WebSocket connection error: ${error}`);
-        this._notifyError(err);
-        reject(err);
-      };
+        // Continue unless it's the last attempt
+        if (attempt === maxRetries - 1) {
+          this._connectionPromise = null;
+          reject(error);
+        }
+      }
+    }
 
-      this._ws.onclose = () => {
-        this._connected = false;
-        this._connectionPromise = null;
-        this._stopHeartbeat();
-        logger.warn('Remote container connection closed');
-      };
-
-      await promise;
-    } catch (error) {
+    // Handle failure after all attempts
+    if (!this._connected && lastError) {
       this._connectionPromise = null;
-      throw error;
+      throw lastError;
     }
   }
 
