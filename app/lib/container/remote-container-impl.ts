@@ -128,53 +128,107 @@ class RemoteContainerConnection {
     const { promise, resolve, reject } = withResolvers<void>();
     this._connectionPromise = promise;
 
-    try {
-      this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
+    const maxRetries = 3;
+    const retryDelay = 1_000;
 
-      this._ws.onopen = () => {
-        this._connected = true;
-        this._startHeartbeat();
+    let lastError: Error | null = null;
 
-        // Send authentication token if available
-        if (this._token) {
-          this.sendRequest({
-            id: 'auth-' + v4(),
-            operation: {
-              type: 'auth',
-              token: this._token,
-            },
-          });
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          logger.info(`WebSocket connection retry (${attempt}/${maxRetries - 1})...`);
+
+          // Delay before retry
+          await new Promise((r) => setTimeout(r, retryDelay));
         }
 
-        resolve();
-      };
+        this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
 
-      this._ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this._handleMessage(data);
-        } catch (err) {
-          logger.error('Remote container message parsing error:', err);
+        this._ws.onopen = () => {
+          this._connected = true;
+          this._startHeartbeat();
+
+          // Send authentication token if available
+          if (this._token) {
+            this.sendRequest({
+              id: 'auth-' + v4(),
+              operation: {
+                type: 'auth',
+                token: this._token,
+              },
+            });
+          }
+
+          resolve();
+        };
+
+        this._ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this._handleMessage(data);
+          } catch (err) {
+            logger.error('Remote container message parsing error:', err);
+          }
+        };
+
+        this._ws.onerror = (error) => {
+          const err = new Error(`WebSocket connection error: ${error}`);
+          lastError = err;
+
+          // Don't reject from event handler unless it's the last attempt
+          if (attempt === maxRetries - 1) {
+            this._notifyError(err);
+            reject(err);
+          } else {
+            logger.warn(`WebSocket connection failed (${attempt + 1}/${maxRetries}), will retry...`);
+          }
+        };
+
+        this._ws.onclose = () => {
+          this._connected = false;
+          this._connectionPromise = null;
+          this._stopHeartbeat();
+          logger.warn('Remote container connection closed');
+        };
+
+        /*
+         * Wait for successful connection
+         * Set timeout for each attempt
+         */
+        const connectionTimeout = 10_000; // 10 seconds timeout
+        const timeoutPromise = new Promise<void>((_, timeoutReject) => {
+          const timer = setTimeout(() => {
+            if (!this._connected && attempt < maxRetries - 1) {
+              this._ws?.close();
+              timeoutReject(new Error('Connection timeout'));
+            }
+          }, connectionTimeout);
+
+          // Cancel timer if promise resolves
+          promise.then(() => clearTimeout(timer));
+        });
+
+        await Promise.race([promise, timeoutPromise]);
+
+        // Break loop on successful connection
+        if (this._connected) {
+          break;
         }
-      };
+      } catch (error) {
+        lastError = error as Error;
 
-      this._ws.onerror = (error) => {
-        const err = new Error(`WebSocket connection error: ${error}`);
-        this._notifyError(err);
-        reject(err);
-      };
+        // Continue unless it's the last attempt
+        if (attempt === maxRetries - 1) {
+          this._connectionPromise = null;
+          reject(error);
+        }
+      }
+    }
 
-      this._ws.onclose = () => {
-        this._connected = false;
-        this._connectionPromise = null;
-        this._stopHeartbeat();
-        logger.warn('Remote container connection closed');
-      };
-
-      await promise;
-    } catch (error) {
+    // Handle failure after all attempts
+    if (!this._connected && lastError) {
       this._connectionPromise = null;
-      throw error;
+      throw lastError;
     }
   }
 
@@ -893,45 +947,45 @@ export class RemoteContainerFactory implements ContainerFactory {
    * @returns The machine ID
    */
   private async _requestMachineId(token: string): Promise<string> {
-    const maxRetries = 3;
-    const retryDelay = 1000;
+    try {
+      const response = await fetch(`https://${this._serverUrl}/api/machine`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    let retryCount = 0;
-    let lastError;
-
-    while (retryCount <= maxRetries) {
-      try {
-        const response = await fetch(`https://${this._serverUrl}/api/machine`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`API response error: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          logger.error('Unauthorized access, reloading page...');
+          window.parent.postMessage(
+            {
+              type: 'AUTH_REFRESH_REQUIRED',
+              payload: {
+                message: 'Authentication failed after multiple attempts. Please refresh the page.',
+                errorCode: 401,
+                source: 'remote-container',
+              },
+            },
+            '*',
+          );
+          throw new Error('Unauthorized access, reloading page');
         }
 
-        const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
-
-        if (machineId === undefined) {
-          throw new Error('No machine ID received from server');
-        }
-
-        return machineId;
-      } catch (error) {
-        lastError = error;
-        retryCount++;
-
-        if (retryCount <= maxRetries) {
-          logger.warn(`Machine API request failed, retrying ${retryCount}/${maxRetries}...`);
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        }
+        throw new Error(`API response error: ${response.status}`);
       }
-    }
 
-    throw new Error(`Machine API request failed after ${maxRetries} retries: ${lastError}`);
+      const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
+
+      if (machineId === undefined) {
+        throw new Error('No machine ID received from server');
+      }
+
+      return machineId;
+    } catch (error) {
+      throw new Error(`Machine API request failed: ${error}`);
+    }
   }
 
   private async _waitForMachineReady(machineId: string, token: string): Promise<void> {

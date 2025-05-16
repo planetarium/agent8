@@ -54,9 +54,6 @@ function AccessControlledChat() {
           v8UserStore.set({ loading: false, user: userInfo });
 
           setIsActivated(userInfo.isActivated);
-
-          // we don't await here because we want to wait in the workbench
-          initializeContainer(accessToken);
         } catch (error) {
           console.error('Failed to verify token:', error);
           setIsActivated(false);
