@@ -45,6 +45,7 @@ export class WorkbenchStore {
   #filesStore = new FilesStore(container);
   #editorStore = new EditorStore(this.#filesStore);
   #terminalStore = new TerminalStore(container);
+  #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -161,7 +162,7 @@ export class WorkbenchStore {
     if (currentDocument) {
       const previousUnsavedFiles = this.unsavedFiles.get();
 
-      if (unsavedChanges && previousUnsavedFiles.has(currentDocument.filePath)) {
+      if (unsavedChanges && previousUnsavedFiles?.has(currentDocument.filePath)) {
         return;
       }
 
@@ -285,6 +286,40 @@ export class WorkbenchStore {
         },
       ),
     });
+  }
+
+  offArtifactClose(messageId: string) {
+    this.#artifactCloseCallbacks.delete(messageId);
+  }
+
+  onArtifactClose(messageId: string, callback: () => Promise<void>) {
+    if (!this.#artifactCloseCallbacks.has(messageId)) {
+      this.#artifactCloseCallbacks.set(messageId, []);
+    }
+
+    this.#artifactCloseCallbacks.get(messageId)?.push(callback);
+  }
+
+  async closeArtifact(data: ArtifactCallbackData) {
+    const artifact = this.#getArtifact(data.messageId);
+
+    if (artifact?.runner.isRunning()) {
+      artifact.runner.onComplete = () => {
+        this.closeArtifact(data);
+      };
+      return;
+    }
+
+    this.updateArtifact(data, { closed: true });
+
+    const { messageId } = data;
+
+    // Trigger registered callbacks for this messageId
+    const callbacks = this.#artifactCloseCallbacks.get(messageId);
+
+    if (callbacks && callbacks.length > 0) {
+      await Promise.all(callbacks.map((callback) => callback()));
+    }
   }
 
   updateArtifact({ messageId }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
