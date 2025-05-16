@@ -35,6 +35,7 @@ import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
 import { TaskMessages } from './TaskMessages.client';
 import { TaskBranches } from './TaskBranches.client';
+import { lastActionStore } from '~/lib/stores/lastAction';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 const MAX_ATTACHMENTS = 10;
@@ -204,6 +205,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
       if (sendMessage) {
+        lastActionStore.set({ action: 'SEND_MESSAGE' });
         sendMessage(event, messageInput);
 
         setAutoFixChance(1);
@@ -525,6 +527,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       clearAlert={() => clearAlert?.()}
                       postMessage={(message, isAutoFix = false) => {
                         if (isStreaming) {
+                          return;
+                        }
+
+                        if (isAutoFix && lastActionStore.get().action !== 'SEND_MESSAGE') {
                           return;
                         }
 

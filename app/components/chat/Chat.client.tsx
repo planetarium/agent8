@@ -149,9 +149,9 @@ export function Chat() {
         container.then(async (containerInstance) => {
           /*
            * try {
-           *   await containerInstance.fs.rm('/src', { recursive: true, force: true });
-           * } catch {
-           *   logger.warn('Failed to remove /src directory');
+           *                 await containerInstance.fs.rm('/src', { recursive: true, force: true });
+           *           } catch {
+           *               logger.warn('Failed to remove /src directory');
            * }
            */
 
@@ -439,6 +439,7 @@ export const ChatImpl = memo(
       }
 
       try {
+        await workbenchStore.saveAllFiles();
         await commitChanges(message, (commitHash) => {
           setMessages((prev: Message[]) => {
             const newMessages = prev.map((m: Message) => {
