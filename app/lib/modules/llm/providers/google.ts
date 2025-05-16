@@ -59,7 +59,7 @@ export default class GoogleProvider extends BaseProvider {
       name: m.name.replace('models/', ''),
       label: `${m.displayName} - context ${Math.floor((m.inputTokenLimit + m.outputTokenLimit) / 1000) + 'k'}`,
       provider: this.name,
-      maxTokenAllowed: m.inputTokenLimit + m.outputTokenLimit || 8000,
+      maxTokenAllowed: m.inputTokenLimit + m.outputTokenLimit || 64000,
     }));
   }
 

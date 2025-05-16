@@ -5,6 +5,7 @@ import { repoStore } from '~/lib/stores/repo';
 import { getProjectCommits, fetchProjectFiles, getTaskBranches } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from './utils';
 import { createScopedLogger } from '~/utils/logger';
+import { lastActionStore } from '~/lib/stores/lastAction';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
 
@@ -155,8 +156,8 @@ export function useGitbaseChatHistory() {
         }
 
         if (page === 1) {
-          loadFiles(projectPath);
-          loadTaskBranches(projectPath);
+          lastActionStore.set({ action: 'LOAD' });
+          await Promise.all([loadFiles(projectPath), loadTaskBranches(projectPath)]);
         }
 
         // 현재 요청 파라미터 저장

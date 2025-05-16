@@ -52,7 +52,7 @@ interface MessageState {
   actionId: number;
 }
 
-function cleanoutFileContent(content: string, filePath: string): string {
+export function cleanoutFileContent(content: string, filePath: string): string {
   let processedContent = content.trim();
 
   // Remove markdown code block syntax if present and file is not markdown

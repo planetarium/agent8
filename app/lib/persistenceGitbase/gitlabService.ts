@@ -836,6 +836,7 @@ export class GitlabService {
         },
         params: {
           search: '^task-',
+          per_page: 100,
         },
       });
       const branches = response.data;
@@ -846,6 +847,9 @@ export class GitlabService {
         {
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            per_page: 100,
           },
         },
       );
@@ -861,21 +865,18 @@ export class GitlabService {
                 'PRIVATE-TOKEN': this.gitlabToken,
               },
             });
-
-            // Get updated status
-            const updatedMR = await axios.get(
-              `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mr.iid}`,
-              {
-                headers: {
-                  'PRIVATE-TOKEN': this.gitlabToken,
-                },
-              },
-            );
-            mr.merge_status = updatedMR.data.merge_status;
           } catch (refreshError: any) {
             const errorMessage = refreshError instanceof Error ? refreshError.message : 'Unknown error';
             logger.warn(`Failed to refresh merge status for MR #${mr.iid}: ${errorMessage}`);
           }
+
+          // Get updated status
+          const updatedMR = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mr.iid}`, {
+            headers: {
+              'PRIVATE-TOKEN': this.gitlabToken,
+            },
+          });
+          mr.merge_status = updatedMR.data.merge_status;
         }
       }
 
