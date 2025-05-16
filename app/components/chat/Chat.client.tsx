@@ -48,7 +48,7 @@ import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
-import { getStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
+import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -519,6 +519,11 @@ export const ChatImpl = memo(
         return;
       }
 
+      if (chatStarted && Object.keys(files).length === 0) {
+        toast.error('Files are not loaded. Please try again later.');
+        return;
+      }
+
       if (isLoading) {
         abort();
         return;
@@ -653,13 +658,15 @@ export const ChatImpl = memo(
                   provider,
                 };
 
+          const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
+
           setMessages([
             {
               id: `1-${new Date().getTime()}`,
               role: 'user',
               content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
-              )}]\n\n${messageContent}\n<think>${getStarterPrompt()}</think>`,
+              )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
             },
           ]);
           reload();
