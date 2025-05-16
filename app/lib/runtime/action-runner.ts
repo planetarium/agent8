@@ -177,9 +177,7 @@ export class ActionRunner {
 
       switch (action.type) {
         case 'shell': {
-          console.log('Running shell action');
           await this.#runShellAction(action);
-          console.log('Shell action completed');
           break;
         }
         case 'file': {
