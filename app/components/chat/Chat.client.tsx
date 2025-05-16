@@ -380,8 +380,12 @@ export const ChatImpl = memo(
           });
         }
 
-        await runAndPreview(message);
-        await handleCommit(message);
+        workbenchStore.onArtifactClose(message.id, async () => {
+          await runAndPreview(message);
+          await handleCommit(message);
+          workbenchStore.offArtifactClose(message.id);
+        });
+
         setFakeLoading(false);
         logger.debug('Finished streaming');
       },
@@ -439,7 +443,6 @@ export const ChatImpl = memo(
       }
 
       try {
-        await workbenchStore.saveAllFiles();
         await commitChanges(message, (commitHash) => {
           setMessages((prev: Message[]) => {
             const newMessages = prev.map((m: Message) => {

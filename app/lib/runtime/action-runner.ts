@@ -71,17 +71,26 @@ export class ActionRunner {
   runnerId = atom<string>(`${Date.now()}`);
   actions: ActionsMap = map({});
   onAlert?: (alert: ActionAlert) => void;
+  onComplete?: () => void;
+  #pendingActionsCount = 0;
   #envFileCreated = false;
   buildOutput?: { path: string; exitCode: number; output: string };
+  #completeCalled = false;
 
   constructor(
     containerPromise: Promise<Container>,
     getShellTerminal: () => BoltShell,
     onAlert?: (alert: ActionAlert) => void,
+    onComplete?: () => void,
   ) {
     this.#container = containerPromise;
     this.#shellTerminal = getShellTerminal;
     this.onAlert = onAlert;
+    this.onComplete = onComplete;
+  }
+
+  isRunning() {
+    return this.#pendingActionsCount > 0;
   }
 
   addAction(data: ActionCallbackData) {
@@ -94,6 +103,9 @@ export class ActionRunner {
       // action already added
       return;
     }
+
+    this.#pendingActionsCount++;
+    this.#completeCalled = false;
 
     const abortController = new AbortController();
 
@@ -137,6 +149,9 @@ export class ActionRunner {
       })
       .catch((error) => {
         console.error('Action failed:', error);
+      })
+      .finally(() => {
+        this.#checkAllActionsCompleted();
       });
 
     await this.#currentExecutionPromise;
@@ -180,7 +195,10 @@ export class ActionRunner {
           // making the start app non blocking
 
           this.#runStartAction(action)
-            .then(() => this.#updateAction(actionId, { status: 'complete' }))
+            .then(() => {
+              this.#updateAction(actionId, { status: 'complete' });
+              this.#decrementPendingActionsCount();
+            })
             .catch((err: Error) => {
               if (action.abortSignal.aborted) {
                 return;
@@ -199,6 +217,8 @@ export class ActionRunner {
                 description: err.header,
                 content: err.output,
               });
+
+              this.#decrementPendingActionsCount();
             });
 
           /*
@@ -214,6 +234,10 @@ export class ActionRunner {
       this.#updateAction(actionId, {
         status: isStreaming ? 'running' : action.abortSignal.aborted ? 'aborted' : 'complete',
       });
+
+      if (!isStreaming) {
+        this.#decrementPendingActionsCount();
+      }
     } catch (error) {
       if (action.abortSignal.aborted) {
         return;
@@ -233,8 +257,24 @@ export class ActionRunner {
         content: error.output,
       });
 
+      this.#decrementPendingActionsCount();
+
       // re-throw the error to be caught in the promise chain
       throw error;
+    }
+  }
+
+  #decrementPendingActionsCount() {
+    this.#pendingActionsCount = Math.max(0, this.#pendingActionsCount - 1);
+    this.#checkAllActionsCompleted();
+  }
+
+  #checkAllActionsCompleted() {
+    if (this.#pendingActionsCount === 0 && this.onComplete && !this.#completeCalled) {
+      this.#completeCalled = true;
+
+      // All actions have completed
+      this.onComplete();
     }
   }
 

@@ -12,6 +12,7 @@ import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
+import { container as containerPromise } from '~/lib/container';
 
 const logger = createScopedLogger('persistenceGitbase');
 
@@ -46,50 +47,45 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     // If not, commit the files in the message
     const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/boltAction>/g;
     const matches = [...content.matchAll(regex)];
+    const container = await containerPromise;
 
-    files = matches
-      .map((match) => {
-        const filePath = match[1];
-        const contentFromMatch = match[2];
-        const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
+    const envFile = await container.fs.readFile(`.env`, 'utf-8');
 
-        try {
-          // Get content from workbench store
-          const fullPath = `${WORK_DIR}/${filePath}`;
-          const workbenchFile = workbenchStore.files.get()[fullPath];
-          const workbenchContent = workbenchFile && 'content' in workbenchFile ? workbenchFile.content : '';
+    if (envFile) {
+      files.push({ path: '.env', content: envFile });
+    }
 
-          // Compare contents and log if different
-          if (cleanedContent !== workbenchContent) {
+    const packageJsonFile = await container.fs.readFile(`package.json`, 'utf-8');
+
+    if (packageJsonFile) {
+      files.push({ path: 'package.json', content: packageJsonFile });
+    }
+
+    files = [
+      ...files,
+      ...(await Promise.all(
+        matches.map(async (match) => {
+          const filePath = match[1];
+          const contentFromMatch = match[2];
+          const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
+          const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+
+          // The workbench file sync is delayed. So I use the remote container file.
+
+          if (cleanedContent !== remoteContainerFile) {
             logger.error(
               `Content mismatch for ${filePath}:`,
               JSON.stringify({
                 fromMatch: cleanedContent,
-                fromWorkbench: workbenchContent,
+                fromRemoteContainer: remoteContainerFile,
               }),
             );
           }
 
-          return { path: filePath, content: cleanedContent || workbenchContent };
-        } catch {
-          logger.error(`Error comparing file contents for ${filePath}:`);
-        }
-
-        return null;
-      })
-      .filter(Boolean);
-
-    const envFile = workbenchStore.files.get()[`${WORK_DIR}/.env`];
-
-    if (envFile && 'content' in envFile) {
-      files.push({ path: '.env', content: envFile.content });
-    }
-
-    const packageJsonFile = workbenchStore.files.get()[`${WORK_DIR}/package.json`];
-
-    if (packageJsonFile && 'content' in packageJsonFile) {
-      files.push({ path: 'package.json', content: packageJsonFile.content });
-    }
+          return { path: filePath, content: remoteContainerFile || cleanedContent };
+        }),
+      )),
+    ];
 
     if (files.length === 0) {
       // If no files are found, create a temporary file
