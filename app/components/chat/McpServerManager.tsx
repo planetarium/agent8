@@ -11,7 +11,9 @@ import { classNames } from '~/utils/classNames';
 const McpServerManager: React.FC = () => {
   const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
 
-  const defaultServerNames = ['All-in-one', 'Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
+  const defaultServerNames = ['All-in-one'];
+  const disabledServerNames = ['Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
+  const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
 
   const getServerDescription = (serverName: string): string => {
     switch (serverName) {
@@ -160,7 +162,7 @@ const McpServerManager: React.FC = () => {
             <div className="grid grid-cols-1 gap-2">
               {mcpServers
                 .map((server, index) => ({ server, index }))
-                .filter((item) => item.server.name !== 'All-in-one')
+                .filter((item) => !isDisabledServer(item.server.name))
                 .map(({ server, index }) => (
                   <div
                     key={index}
@@ -480,7 +482,7 @@ const McpServerManager: React.FC = () => {
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         {mcpServers
           .map((server, index) => ({ server, index }))
-          .filter((item) => item.server.enabled && item.server.name !== 'All-in-one')
+          .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
           .map(({ server, index }) => (
             <div
               key={index}
