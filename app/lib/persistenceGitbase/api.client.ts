@@ -10,6 +10,10 @@ import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { cleanoutFileContent } from '~/lib/runtime/message-parser';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('persistenceGitbase');
 
 export const isEnabledGitbasePersistence =
   import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
@@ -40,14 +44,52 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
       }));
   } else {
     // If not, commit the files in the message
-    const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>/g;
+    const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/boltAction>/g;
     const matches = [...content.matchAll(regex)];
-    const filePaths = [...matches.map((match) => match[1]), '.env', 'package.json'];
 
-    files = filePaths.map((filePath) => ({
-      path: filePath,
-      content: (workbenchStore.files.get()[`${WORK_DIR}/${filePath}`] as any)?.content || '',
-    }));
+    files = matches
+      .map((match) => {
+        const filePath = match[1];
+        const contentFromMatch = match[2];
+        const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
+
+        try {
+          // Get content from workbench store
+          const fullPath = `${WORK_DIR}/${filePath}`;
+          const workbenchFile = workbenchStore.files.get()[fullPath];
+          const workbenchContent = workbenchFile && 'content' in workbenchFile ? workbenchFile.content : '';
+
+          // Compare contents and log if different
+          if (cleanedContent !== workbenchContent) {
+            logger.error(
+              `Content mismatch for ${filePath}:`,
+              JSON.stringify({
+                fromMatch: cleanedContent,
+                fromWorkbench: workbenchContent,
+              }),
+            );
+          }
+
+          return { path: filePath, content: cleanedContent || workbenchContent };
+        } catch {
+          logger.error(`Error comparing file contents for ${filePath}:`);
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+
+    const envFile = workbenchStore.files.get()[`${WORK_DIR}/.env`];
+
+    if (envFile && 'content' in envFile) {
+      files.push({ path: '.env', content: envFile.content });
+    }
+
+    const packageJsonFile = workbenchStore.files.get()[`${WORK_DIR}/package.json`];
+
+    if (packageJsonFile && 'content' in packageJsonFile) {
+      files.push({ path: 'package.json', content: packageJsonFile.content });
+    }
 
     if (files.length === 0) {
       // If no files are found, create a temporary file
