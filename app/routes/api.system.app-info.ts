@@ -45,7 +45,7 @@ const getAppResponse = () => {
   const gitInfo = getGitInfo();
 
   return {
-    name: __PKG_NAME || 'bolt.diy',
+    name: __PKG_NAME || 'agent8',
     version: __APP_VERSION || '0.1.0',
     description: __PKG_DESCRIPTION || 'A DIY LLM interface',
     license: __PKG_LICENSE || 'MIT',
@@ -71,7 +71,7 @@ export const loader: LoaderFunction = async ({ request: _request }) => {
     console.error('Failed to get webapp info:', error);
     return json(
       {
-        name: 'bolt.diy',
+        name: 'agent8',
         version: '0.0.0',
         description: 'Error fetching app info',
         license: 'MIT',
@@ -106,7 +106,7 @@ export const action = async ({ request: _request }: ActionFunctionArgs) => {
     console.error('Failed to get webapp info:', error);
     return json(
       {
-        name: 'bolt.diy',
+        name: 'agent8',
         version: '0.0.0',
         description: 'Error fetching app info',
         license: 'MIT',
