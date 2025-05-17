@@ -45,7 +45,8 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
       }));
   } else {
     // If not, commit the files in the message
-    const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/boltAction>/g;
+    const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/bolt/g; // Sometimes, file tags do not close.
+
     const matches = [...content.matchAll(regex)];
     const container = await containerPromise;
 

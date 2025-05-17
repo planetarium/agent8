@@ -298,10 +298,20 @@ export class WorkbenchStore {
     }
 
     this.#artifactCloseCallbacks.get(messageId)?.push(callback);
+
+    const artifact = this.#getArtifact(messageId);
+
+    if (artifact?.closed) {
+      callback();
+    }
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
     const artifact = this.#getArtifact(data.messageId);
+
+    if (artifact?.closed) {
+      return;
+    }
 
     if (artifact?.runner.isRunning()) {
       artifact.runner.onComplete = () => {

@@ -520,7 +520,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 )}
               >
                 <div className="bg-bolt-elements-background-depth-2">
-                  {!isStreaming && actionAlert && (
+                  {!isStreaming && actionAlert && actionAlert.content && actionAlert.content.trim() !== 'undefined' && (
                     <ChatAlert
                       autoFixChance={autoFixChance}
                       alert={actionAlert}
