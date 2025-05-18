@@ -118,9 +118,14 @@ export class StreamingMessageParser {
         if (state.insideAction) {
           const closeIndex = input.indexOf(ARTIFACT_ACTION_TAG_CLOSE, i);
           const newActionOpenIndex = input.indexOf(ARTIFACT_ACTION_TAG_OPEN, i);
+          const artifactCloseIndex = input.indexOf(ARTIFACT_TAG_CLOSE, i);
           const currentAction = state.currentAction;
 
-          if (closeIndex !== -1 && (newActionOpenIndex === -1 || closeIndex < newActionOpenIndex)) {
+          if (
+            closeIndex !== -1 &&
+            (newActionOpenIndex === -1 || closeIndex < newActionOpenIndex) &&
+            (artifactCloseIndex === -1 || closeIndex < artifactCloseIndex)
+          ) {
             currentAction.content += input.slice(i, closeIndex);
 
             let content = currentAction.content.trim();
@@ -134,14 +139,7 @@ export class StreamingMessageParser {
             this._options.callbacks?.onActionClose?.({
               artifactId: currentArtifact.id,
               messageId,
-
-              /**
-               * We decrement the id because it's been incremented already
-               * when `onActionOpen` was emitted to make sure the ids are
-               * the same.
-               */
               actionId: String(state.actionId - 1),
-
               action: currentAction as BoltAction,
             });
 
@@ -149,14 +147,17 @@ export class StreamingMessageParser {
             state.currentAction = { content: '' };
 
             i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
-          } else if (newActionOpenIndex !== -1 && (closeIndex === -1 || newActionOpenIndex < closeIndex)) {
+          } else if (
+            newActionOpenIndex !== -1 &&
+            (closeIndex === -1 || newActionOpenIndex < closeIndex) &&
+            (artifactCloseIndex === -1 || newActionOpenIndex < artifactCloseIndex)
+          ) {
             const newActionEndIndex = input.indexOf('>', newActionOpenIndex);
 
             if (newActionEndIndex !== -1) {
               const previousAction = state.currentAction;
               state.currentAction = this.#parseActionTag(input, newActionOpenIndex, newActionEndIndex);
 
-              // it will be replaced.
               previousAction.content = '';
 
               this._options.callbacks?.onActionClose?.({
@@ -177,6 +178,36 @@ export class StreamingMessageParser {
             } else {
               break;
             }
+          } else if (
+            artifactCloseIndex !== -1 &&
+            (closeIndex === -1 || artifactCloseIndex < closeIndex) &&
+            (newActionOpenIndex === -1 || artifactCloseIndex < newActionOpenIndex)
+          ) {
+            currentAction.content += input.slice(i, artifactCloseIndex);
+
+            let content = currentAction.content.trim();
+
+            if ('type' in currentAction && currentAction.type === 'file') {
+              content = cleanoutFileContent(content, currentAction.filePath);
+            }
+
+            currentAction.content = content;
+
+            this._options.callbacks?.onActionClose?.({
+              artifactId: currentArtifact.id,
+              messageId,
+              actionId: String(state.actionId - 1),
+              action: currentAction as BoltAction,
+            });
+
+            this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
+
+            state.insideAction = false;
+            state.currentAction = { content: '' };
+            state.insideArtifact = false;
+            state.currentArtifact = undefined;
+
+            i = artifactCloseIndex + ARTIFACT_TAG_CLOSE.length;
           } else {
             if ('type' in currentAction && currentAction.type === 'file') {
               const content = cleanoutFileContent(input.slice(i), currentAction.filePath);
