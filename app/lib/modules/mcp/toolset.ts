@@ -236,7 +236,14 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
               return result;
             } catch (error) {
               logger.error(`MCP client[${serverName}] error: ${error}`);
-              throw error;
+              progressEmitter.emit('complete', {
+                status: 'failed',
+              });
+
+              return {
+                error: (error as Error).message || String(error),
+                success: false,
+              };
             } finally {
               if (client) {
                 logger.info(`[${serverName}] Closing tool execution client connection`);

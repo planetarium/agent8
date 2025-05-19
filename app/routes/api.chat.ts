@@ -99,9 +99,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 } else if (type === 'complete') {
                   dataStream.writeData({
                     type: 'progress',
-                    status: 'complete',
+                    status: data.status === 'failed' ? 'failed' : 'complete',
                     order: progressCounter++,
-                    message: `Tool '${toolName}' execution completed`,
+                    message:
+                      data.status === 'failed'
+                        ? `Tool '${toolName}' execution failed}`
+                        : `Tool '${toolName}' execution completed`,
                   } as any);
 
                   // Automatically unsubscribe after complete
