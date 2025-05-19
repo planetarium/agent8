@@ -363,7 +363,11 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
 
     // 3D 모델 확인
-    if (asset.url.toLowerCase().endsWith('.glb') || asset.url.toLowerCase().endsWith('.gltf')) {
+    if (
+      asset.url.toLowerCase().endsWith('.glb') ||
+      asset.url.toLowerCase().endsWith('.gltf') ||
+      asset.url.toLowerCase().endsWith('.vrm')
+    ) {
       return '3d';
     }
 
@@ -1150,7 +1154,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
               ) : assetType === '3d' ? (
                 <div className="text-center">
                   <div className="i-ph:cube-duotone text-4xl opacity-70 mx-auto mb-1 text-bolt-elements-textHighlight" />
-                  <div className="text-xs text-bolt-elements-textSecondary">3D Model</div>
+                  <div className="text-xs text-bolt-elements-textSecondary">3D Model (.glb/.gltf/.vrm)</div>
                 </div>
               ) : assetType === 'audio' ? (
                 <div className="text-center">
@@ -1628,7 +1632,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                   ) : getAssetType(editedAsset) === '3d' ? (
                     <div className="text-center">
                       <div className="i-ph:cube-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
-                      <div className="text-sm text-bolt-elements-textSecondary">3D Model (.glb)</div>
+                      <div className="text-sm text-bolt-elements-textSecondary">3D Model (.glb/.gltf/.vrm)</div>
                     </div>
                   ) : getAssetType(editedAsset) === 'audio' ? (
                     <div className="text-center">
