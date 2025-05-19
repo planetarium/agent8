@@ -486,7 +486,7 @@ const McpServerManager: React.FC = () => {
           .map(({ server, index }) => (
             <div
               key={index}
-              className="flex items-center gap-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200"
+              className="flex items-center ml-3 gap-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200"
               title={server.url}
             >
               <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
