@@ -207,6 +207,7 @@ export const Preview = memo(() => {
     const handleMessage = async (event: MessageEvent) => {
       if (event.data?.type === 'iframe-error') {
         const { error } = event.data;
+
         const { workbenchStore } = await import('~/lib/stores/workbench');
 
         let title = 'Error in Preview';
