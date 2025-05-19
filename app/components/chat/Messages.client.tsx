@@ -28,7 +28,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     const profile = useStore(profileStore);
 
     return (
-      <div id={id} className={props.className} ref={ref}>
+      <div id={id} className={classNames(props.className, 'pr-1')} ref={ref}>
         {messages.length > 0
           ? messages.map((message, index) => {
               const { role, id: messageId, annotations } = message;
