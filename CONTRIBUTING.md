@@ -49,7 +49,7 @@ Interested in maintaining and growing the project? Fill out our [Contributor App
 
 ### PR Checklist
 
-- Branch from the **main** branch.
+- Branch from the **develop** branch.
 - Update documentation, if needed.
 - Test all functionality manually.
 - Focus on one feature/bug per PR.

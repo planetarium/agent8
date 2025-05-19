@@ -56,7 +56,7 @@ project, please check the [project management guide](./PROJECT.md) to get starte
 - ✅ xAI Grok Beta Integration (@milutinke)
 - ✅ LM Studio Integration (@karrot0)
 - ✅ HuggingFace Integration (@ahsan3219)
-- ✅ Bolt terminal to see the output of LLM run commands (@thecodacus)
+- ✅ Agent8 terminal to see the output of LLM run commands (@thecodacus)
 - ✅ Streaming of code output (@thecodacus)
 - ✅ Ability to revert code to earlier version (@wonderwhy-er)
 - ✅ Chat history backup and restore functionality (@sidbetatester)
