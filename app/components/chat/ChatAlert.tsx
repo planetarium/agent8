@@ -16,8 +16,8 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
   const isPreview = source === 'preview';
   const title = isPreview ? 'Preview Error' : 'Terminal Error';
   const message = isPreview
-    ? 'We encountered an error while running the preview. Would you like Bolt to analyze and help resolve this issue?'
-    : 'We encountered an error while running terminal commands. Would you like Bolt to analyze and help resolve this issue?';
+    ? 'We encountered an error while running the preview. Would you like Agent8 to analyze and help resolve this issue?'
+    : 'We encountered an error while running terminal commands. Would you like Agent8 to analyze and help resolve this issue?';
 
   const handleAskBolt = (isAutoFix = false) => {
     postMessage(

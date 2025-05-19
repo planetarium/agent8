@@ -63,7 +63,7 @@ const McpServerManager: React.FC = () => {
       case 'Image':
         return 'i-ph:image w-4 h-4 text-green-500';
       case 'Cinematic':
-        return 'i-ph:film-strip w-4 h-4 text-purple-500';
+        return 'i-ph:film-strip w-4 h-4 text-cyan-500';
       case 'Audio':
         return 'i-ph:speaker-high w-4 h-4 text-red-500';
       case 'Skybox':
@@ -136,10 +136,10 @@ const McpServerManager: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="w-full max-w-chat mx-auto py-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor">
       {showServerManager && (
         <motion.div
-          className="flex flex-col gap-4 bg-bolt-elements-background-depth-2 p-4 rounded-lg mb-4"
+          className="flex flex-col gap-4 bg-bolt-elements-background-depth-2 px-4 rounded-lg mb-4"
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
@@ -150,9 +150,9 @@ const McpServerManager: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowServerManager(false)}
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-purple-500/10 dark:hover:bg-purple-500/20 group transition-all duration-200  mb-1.5"
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20 group transition-all duration-200  mb-1.5"
                 >
-                  <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
+                  <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-cyan-500 transition-colors" />
                 </button>
               </div>
             </div>
@@ -171,7 +171,7 @@ const McpServerManager: React.FC = () => {
                       'p-3 rounded-lg',
                       'border',
                       server.enabled
-                        ? 'bg-bolt-elements-background-depth-1 border-l-4 border-l-purple-500 border-bolt-elements-borderColor shadow-sm'
+                        ? 'bg-bolt-elements-background-depth-1 border-l-4 border-l-cyan-500 border-bolt-elements-borderColor shadow-sm'
                         : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor',
                       'transition-all duration-200',
                     )}
@@ -197,7 +197,7 @@ const McpServerManager: React.FC = () => {
                               {getServerDescription(server.name) && (
                                 <div className="relative group cursor-pointer inline-flex items-center ml-1.5">
                                   <button
-                                    className="inline-flex items-center justify-center text-purple-500 font-bold mb-0.5 bg-transparent border-none p-0 cursor-pointer"
+                                    className="inline-flex items-center justify-center text-cyan-500 font-bold mb-0.5 bg-transparent border-none p-0 cursor-pointer"
                                     onMouseEnter={(e) => {
                                       e.stopPropagation();
 
@@ -255,7 +255,7 @@ const McpServerManager: React.FC = () => {
                                         className="flex justify-between items-center cursor-pointer"
                                         onClick={() => toggleUsageTips(server.name)}
                                       >
-                                        <div className="text-purple-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
+                                        <div className="text-cyan-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
                                           USAGE TIPS
                                         </div>
                                         <div
@@ -375,8 +375,8 @@ const McpServerManager: React.FC = () => {
               <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-800 pb-3">
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
-                    <span className="bg-purple-100 dark:bg-purple-900/30 p-1.5 rounded-md mr-2">
-                      <div className="i-ph:plus-circle-fill w-4 h-4 text-purple-700 dark:text-purple-400" />
+                    <span className="bg-cyan-100 dark:bg-cyan-900/30 p-1.5 rounded-md mr-2">
+                      <div className="i-ph:plus-circle-fill w-4 h-4 text-cyan-700 dark:text-cyan-400" />
                     </span>
                     Add Custom MCP Tool
                   </h4>
@@ -405,7 +405,7 @@ const McpServerManager: React.FC = () => {
                         'w-full p-2.5 rounded-lg text-sm',
                         'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
                         'text-gray-900 dark:text-gray-100',
-                        'focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500',
+                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
                         'transition-all duration-200',
                       )}
                     />
@@ -427,7 +427,7 @@ const McpServerManager: React.FC = () => {
                         'w-full p-2.5 rounded-lg text-sm',
                         'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
                         'text-gray-900 dark:text-gray-100',
-                        'focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500',
+                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
                         'transition-all duration-200',
                       )}
                     />
@@ -457,7 +457,7 @@ const McpServerManager: React.FC = () => {
                         'disabled:cursor-not-allowed',
                         !newServer.name || !newServer.url
                           ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700'
-                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-600 dark:hover:text-white hover:border-purple-400 dark:hover:border-purple-500',
+                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 dark:hover:text-white hover:border-cyan-400 dark:hover:border-cyan-500',
                       )}
                       disabled={!newServer.name || !newServer.url}
                     >
@@ -472,14 +472,14 @@ const McpServerManager: React.FC = () => {
           <div className="flex justify-end mr-2">
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className={classNames('bg-transparent text-gray-500 hover:underline text-sm font-medium')}
+              className={classNames('bg-transparent text-cyan-500 hover:underline text-sm font-medium')}
             >
               Add Custom MCP Tool
             </button>
           </div>
         </motion.div>
       )}
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
+      <div className="flex items-center gap-2 mb-0 flex-wrap">
         {mcpServers
           .map((server, index) => ({ server, index }))
           .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
@@ -500,7 +500,7 @@ const McpServerManager: React.FC = () => {
             'flex items-center gap-1.5',
             'text-sm font-medium',
             'bg-transparent',
-            'text-bolt-elements-textSecondary hover:text-gray-500',
+            'text-gray-300 hover:text-gray-500',
             'transition-colors duration-200',
           )}
         >
