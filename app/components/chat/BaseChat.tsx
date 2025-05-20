@@ -228,7 +228,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const handleFileUpload = async () => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*, video/*, audio/*, .glb, .gltf, .json, .ttf, .zip';
+      input.accept = 'image/*, video/*, audio/*, .glb, .gltf, .vrm, .json, .ttf, .zip';
 
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
@@ -287,7 +287,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
 
         const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
-        const modelExtensions = ['.glb', '.gltf'];
+        const modelExtensions = ['.glb', '.gltf', '.vrm'];
         const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
         const videoExtensions = ['.mp4', '.webm', '.mov'];
 

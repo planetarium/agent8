@@ -54,7 +54,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ attachmentUrlList, attachment
     }
 
     // 3D 모델 확인
-    if (lowerUrl.endsWith('.glb') || lowerUrl.endsWith('.gltf')) {
+    if (lowerUrl.endsWith('.glb') || lowerUrl.endsWith('.gltf') || lowerUrl.endsWith('.vrm')) {
       return '3d';
     }
 

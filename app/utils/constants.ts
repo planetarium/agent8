@@ -93,6 +93,7 @@ export const ATTACHMENT_EXTS = [
   // 3D 모델
   '.glb',
   '.gltf',
+  '.vrm',
 
   // 오디오
   '.mp3',
