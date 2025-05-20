@@ -156,7 +156,10 @@ export function useGitbaseChatHistory() {
         }
 
         if (page === 1) {
-          lastActionStore.set({ action: 'LOAD' });
+          if (Object.keys(files).length > 0) {
+            lastActionStore.set({ action: 'LOAD' });
+          }
+
           await Promise.all([loadFiles(projectPath), loadTaskBranches(projectPath)]);
         }
 
