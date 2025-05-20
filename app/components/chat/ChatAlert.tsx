@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect } from 'react';
+import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import type { ActionAlert } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 
@@ -14,6 +15,17 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
   const { description, content, source } = alert;
 
   const isPreview = source === 'preview';
+  const ignore = isPreview && shouldIgnorePreviewError(description);
+
+  useEffect(() => {
+    if (ignore) {
+      clearAlert();
+    }
+  }, [ignore, clearAlert]);
+
+  if (ignore) {
+    return null;
+  }
   const title = isPreview ? 'Preview Error' : 'Terminal Error';
   const message = isPreview
     ? 'We encountered an error while running the preview. Would you like Agent8 to analyze and help resolve this issue?'
