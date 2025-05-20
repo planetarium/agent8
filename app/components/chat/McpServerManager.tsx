@@ -11,8 +11,12 @@ import { classNames } from '~/utils/classNames';
 const McpServerManager: React.FC = () => {
   const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
 
-  const defaultServerNames = ['All-in-one'];
-  const disabledServerNames = ['Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
+  const defaultServerNames = import.meta.env?.VITE_DEFAULT_SERVER_NAMES
+    ? JSON.parse(import.meta.env.VITE_DEFAULT_SERVER_NAMES)
+    : ['Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
+  const disabledServerNames = import.meta.env?.VITE_DISABLED_SERVER_NAMES
+    ? JSON.parse(import.meta.env.VITE_DISABLED_SERVER_NAMES)
+    : ['All-in-one'];
   const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
 
   const getServerDescription = (serverName: string): string => {
