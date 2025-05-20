@@ -1048,7 +1048,7 @@ const TaskManagerTab: React.FC = () => {
                 {Math.round(metrics.cpu.usage)}%
               </span>
             </div>
-            {renderUsageGraph(metricsHistory.cpu, 'CPU', '#9333ea')}
+            {renderUsageGraph(metricsHistory.cpu, 'CPU', '#00ffff')}
             {metrics.cpu.temperature && (
               <div className="text-xs text-bolt-elements-textSecondary mt-2">
                 Temperature: {metrics.cpu.temperature}°C
