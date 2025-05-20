@@ -72,7 +72,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
       <div
         className={classNames(
           'relative flex flex-col w-full',
-          'bg-gradient-to-b from-purple-50/5 to-transparent',
+          'bg-gradient-to-b from-cyan-50/5 to-transparent',
           className,
         )}
       >
@@ -80,13 +80,13 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
         <div className="sticky top-0 z-10 bg-black">
           <div
             className={classNames(
-              'flex w-full flex-1 max-w-chat mx-auto max-h-22 rounded-lg border p-4 shadow-md backdrop-blur-sm transition-all hover:border-purple-300 hover:shadow-lg',
-              'border-purple-400 bg-gradient-to-r from-purple-900/90 to-indigo-900/90',
+              'flex w-full flex-1 max-w-chat mx-auto max-h-22 rounded-lg border p-4 shadow-md backdrop-blur-sm transition-all hover:border-cyan-300 hover:shadow-lg',
+              'border-cyan-400 bg-gradient-to-r from-cyan-900/90 to-blue-900/90',
             )}
           >
             <div className="flex items-center mr-3">
               <button
-                className="flex items-center justify-center p-1.5 rounded-full bg-purple-700 hover:bg-purple-600 transition-colors"
+                className="flex items-center justify-center p-1.5 rounded-full bg-cyan-700 hover:bg-cyan-600 transition-colors"
                 onClick={() => {
                   repoStore.set({
                     ...repoStore.get(),
@@ -136,21 +136,21 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             </div>
             <div className="flex flex-col flex-grow overflow-hidden">
               <div className="flex items-center mb-1 w-full">
-                <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-purple-600 rounded-full mr-2 flex-shrink-0">
+                <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
                   Task
                 </span>
                 <h3 className="font-medium text-white truncate max-w-full">
                   {branch?.firstCommit?.title || 'New Task'}
                 </h3>
               </div>
-              <p className="text-purple-200 text-xs truncate opacity-80 w-full">
+              <p className="text-cyan-200 text-xs truncate opacity-80 w-full">
                 {branch?.lastCommit?.message ? `Last commit: ${branch?.lastCommit.message.split('\n')[0]}` : ''}
               </p>
             </div>
             {mergeStatus && (
               <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
                 {/* <button
-                  className="px-4 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-500 active:bg-purple-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-1.5 bg-cyan-600 text-white rounded-md hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
                     alert('WIP');
                   }}
@@ -160,7 +160,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                 </button> */}
                 {(mergeStatus === 'can_be_merged' && (
                   <button
-                    className="px-4 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-500 active:bg-purple-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-1.5 bg-cyan-600 text-white rounded-md hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={async () => {
                       setIsConfirming(true);
                       setIsLoading(true);
@@ -210,7 +210,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                   </button>
                 )) || (
                   <button
-                    className="flex items-center justify-center px-4 py-1.5 bg-purple-600 text-white rounded-md opacity-50 cursor-not-allowed transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50"
+                    className="flex items-center justify-center px-4 py-1.5 bg-cyan-600 text-white rounded-md opacity-50 cursor-not-allowed transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50"
                     disabled={true}
                   >
                     {reloadCount < 2 ? 'Confirm' : mergeStatus}
@@ -222,7 +222,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
         </div>
 
         <div className="px-1 pb-4 -mt-4">
-          <div className="relative z-1 pl-2 border-l border-purple-400/70 ml-1 pt-4">
+          <div className="relative z-1 pl-2 border-l border-cyan-400/70 ml-1 pt-4">
             <Messages {...otherProps} ref={ref} />
           </div>
         </div>

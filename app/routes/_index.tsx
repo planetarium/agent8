@@ -123,9 +123,9 @@ function AccessControlledChat() {
   // 접근 제한 화면 컴포넌트
   const AccessRestricted = () => (
     <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
-      <div className="bg-gradient-to-br from-purple-900 to-indigo-950 p-8 rounded-lg border border-purple-500 max-w-md shadow-lg shadow-purple-900/30">
-        <h2 className="text-2xl font-bold text-purple-200 mb-3">Access Restricted</h2>
-        <p className="text-purple-300 mb-4">Currently, Agent8 is only available to invited users.</p>
+      <div className="bg-gradient-to-br from-cyan-700 to-sky-900 p-8 rounded-lg border border-cyan-500 max-w-md shadow-lg shadow-cyan-700/30">
+        <h2 className="text-2xl font-bold text-cyan-200 mb-3">Access Restricted</h2>
+        <p className="text-cyan-300 mb-4">Currently, Agent8 is only available to invited users.</p>
       </div>
     </div>
   );
@@ -175,8 +175,8 @@ function AccessControlledChat() {
 
     return (
       <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
-        <div className="bg-gradient-to-br from-gray-900 to-purple-950 p-8 rounded-lg border border-purple-800 max-w-md shadow-lg shadow-purple-900/50 min-w-[500px]">
-          <h2 className="text-2xl font-bold text-purple-300 mb-3">The service is temporarily busy.</h2>
+        <div className="bg-gradient-to-br from-gray-900 to-cyan-950 p-8 rounded-lg border border-cyan-700 max-w-md shadow-lg shadow-cyan-800/50 min-w-[500px]">
+          <h2 className="text-2xl font-bold text-cyan-300 mb-3">The service is temporarily busy.</h2>
           <p className="text-gray-400 mb-4">
             Please wait a moment.
             <br /> We will reload the page in {countdown} seconds.

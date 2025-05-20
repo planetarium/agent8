@@ -18,6 +18,7 @@ import { toast } from 'react-toastify';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
+import { GlowingEffect } from '~/components/ui/glowing-effect';
 
 import FilePreview from './FilePreview';
 import { ModelSelector } from '~/components/chat/ModelSelector';
@@ -454,8 +455,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div ref={scrollRef} className="flex flex-col lg:flex-row overflow-y-auto w-full h-full">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full')}>
+        <div ref={scrollRef} className="flex flex-col lg:flex-row w-full h-full">
+          <div
+            className={classNames(
+              styles.Chat,
+              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-y-auto chat-container',
+            )}
+          >
             {!chatStarted && (
               <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
@@ -512,12 +518,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </ClientOnly>
 
               <div
-                className={classNames(
-                  'flex flex-col gap-4 w-full max-w-chat mx-auto z-prompt z-1000 bg-bolt-elements-background-depth-2',
-                  {
-                    'sticky bottom-8': chatStarted,
-                  },
-                )}
+                className={classNames('flex flex-col gap-2 w-full max-w-chat mx-auto z-prompt', {
+                  'sticky bottom-8': chatStarted,
+                })}
               >
                 <div className="bg-bolt-elements-background-depth-2">
                   {!isStreaming && actionAlert && actionAlert.content && actionAlert.content.trim() !== 'undefined' && (
@@ -544,6 +547,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     />
                   )}
                 </div>
+
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
                 <McpServerManager />
@@ -551,14 +555,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <div
                   className={classNames(
                     'bg-bolt-elements-background-depth-2 p-3 rounded-lg border border-bolt-elements-borderColor relative w-full max-w-chat mx-auto z-prompt',
-
-                    /*
-                     * {
-                     *   'sticky bottom-2': chatStarted,
-                     * },
-                     */
                   )}
                 >
+                  <GlowingEffect
+                    spread={40}
+                    glow={true}
+                    disabled={false}
+                    proximity={64}
+                    inactiveZone={0.01}
+                    borderWidth={3}
+                    movementDuration={0.3}
+                  />
                   <svg className={classNames(styles.PromptEffectContainer)}>
                     <defs>
                       <linearGradient
@@ -570,10 +577,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         gradientUnits="userSpaceOnUse"
                         gradientTransform="rotate(-45)"
                       >
-                        <stop offset="0%" stopColor="#b44aff" stopOpacity="0%"></stop>
-                        <stop offset="40%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="50%" stopColor="#b44aff" stopOpacity="80%"></stop>
-                        <stop offset="100%" stopColor="#b44aff" stopOpacity="0%"></stop>
+                        <stop offset="0%" stopColor="#30d7ff" stopOpacity="0%"></stop>
+                        <stop offset="40%" stopColor="#30d7ff" stopOpacity="80%"></stop>
+                        <stop offset="50%" stopColor="#30d7ff" stopOpacity="80%"></stop>
+                        <stop offset="100%" stopColor="#30d7ff" stopOpacity="0%"></stop>
                       </linearGradient>
                       <linearGradient id="shine-gradient">
                         <stop offset="0%" stopColor="white" stopOpacity="0%"></stop>

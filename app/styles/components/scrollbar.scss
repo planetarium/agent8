@@ -17,6 +17,30 @@
   background: #999;
 }
 
+.chat-container {
+  padding-right: 8px;
+}
+
+.chat-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
+  margin: 4px;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 /* 다크 테마 스크롤바 스타일 */
 html[data-theme='dark'] {
   ::-webkit-scrollbar-thumb {
@@ -25,5 +49,18 @@ html[data-theme='dark'] {
 
   ::-webkit-scrollbar-thumb:hover {
     background: #555;
+  }
+
+  .chat-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .chat-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(30, 30, 30, 0.8);
+  }
+
+  .chat-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 }
