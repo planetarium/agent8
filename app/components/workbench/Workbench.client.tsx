@@ -381,7 +381,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
       if (shell.isInit) {
         try {
           console.log('shell is init, testing connection...');
-          await shell.executeCommand(Date.now().toString(), 'echo "测试连接"');
+          await shell.executeCommand(Date.now().toString(), 'echo "test connection"');
         } catch (error) {
           console.error('testing connection error:', error);
           needReconnect = true;
