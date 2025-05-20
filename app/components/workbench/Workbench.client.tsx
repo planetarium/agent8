@@ -19,7 +19,7 @@ import { Slider } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
-import { renderLogger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
@@ -35,6 +35,8 @@ interface WorkspaceProps {
   };
   updateChatMestaData?: (metadata: any) => void;
 }
+
+const logger = createScopedLogger('Workbench');
 
 const viewTransition = { ease: cubicEasingFn };
 
@@ -309,7 +311,7 @@ const DiffViewWithCommitHash = memo(
 );
 
 export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: WorkspaceProps) => {
-  renderLogger.trace('Workbench');
+  logger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);
@@ -376,37 +378,37 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     const shell = workbenchStore.boltTerminal;
 
     try {
-      let needReconnect = false;
+      let shellNeedAttach = false;
 
       if (shell.isInit) {
         try {
-          console.log('shell is init, testing connection...');
-          await shell.executeCommand(Date.now().toString(), 'echo "test connection"');
+          logger.debug('shell is init, testing if shell is responsive...');
+          await shell.executeCommand(Date.now().toString(), 'echo "ping"');
         } catch (error) {
-          console.error('testing connection error:', error);
-          needReconnect = true;
+          logger.error('shell is not responsive:', error);
+          shellNeedAttach = true;
         }
       } else {
-        console.log('shell is not init');
-        needReconnect = true;
+        logger.debug('shell is not responsive');
+        shellNeedAttach = true;
       }
 
-      if (needReconnect) {
-        console.log('need reconnect...init terminal');
+      if (shellNeedAttach) {
+        logger.info('shell is not responsive...init terminal');
 
         const terminal = shell.terminal;
 
         if (!terminal) {
-          console.log('terminal is not found');
+          logger.warn('terminal is not found');
           return;
         }
 
         await workbenchStore.attachBoltTerminal(terminal);
-        console.log('terminal init success');
+        logger.info('terminal init success');
       }
 
       await shell.ready;
-      console.log('execute preview command...');
+      logger.debug('execute preview command...');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
@@ -417,7 +419,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         );
       }
     } catch (error) {
-      console.error('execute command error:', error);
+      logger.error('execute command error:', error);
     }
   }, []);
 
