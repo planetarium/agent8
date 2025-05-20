@@ -86,8 +86,8 @@ const TAB_DESCRIPTIONS: Record<TabType, string> = {
 const BETA_TABS = new Set<TabType>(['task-manager', 'service-status', 'update', 'local-providers']);
 
 const BetaLabel = () => (
-  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-purple-500/10 dark:bg-purple-500/20">
-    <span className="text-[10px] font-medium text-purple-600 dark:text-purple-400">BETA</span>
+  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-accent-500/10 dark:bg-accent-500/20">
+    <span className="text-[10px] font-medium text-accent-600 dark:text-accent-400">BETA</span>
   </div>
 );
 
@@ -102,8 +102,8 @@ const AnimatedSwitch = ({ checked, onCheckedChange, id, label }: AnimatedSwitchP
           'relative inline-flex h-6 w-11 items-center rounded-full',
           'transition-all duration-300 ease-[cubic-bezier(0.87,_0,_0.13,_1)]',
           'bg-gray-200 dark:bg-gray-700',
-          'data-[state=checked]:bg-purple-500',
-          'focus:outline-none focus:ring-2 focus:ring-purple-500/20',
+          'data-[state=checked]:bg-accent-500',
+          'focus:outline-none focus:ring-2 focus:ring-accent-500/20',
           'cursor-pointer',
           'group',
         )}
@@ -451,9 +451,9 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
                     {(activeTab || showTabManagement) && (
                       <button
                         onClick={handleBack}
-                        className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-purple-500/10 dark:hover:bg-purple-500/20 group transition-all duration-200"
+                        className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-accent-500/10 dark:hover:bg-accent-500/20 group transition-all duration-200"
                       >
-                        <div className="i-ph:arrow-left w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
+                        <div className="i-ph:arrow-left w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-accent-500 transition-colors" />
                       </button>
                     )}
                     <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -480,9 +480,9 @@ export const ControlPanel = ({ open, onClose }: ControlPanelProps) => {
                     {/* Close Button */}
                     <button
                       onClick={handleClose}
-                      className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-purple-500/10 dark:hover:bg-purple-500/20 group transition-all duration-200"
+                      className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-accent-500/10 dark:hover:bg-accent-500/20 group transition-all duration-200"
                     >
-                      <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-purple-500 transition-colors" />
+                      <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-accent-500 transition-colors" />
                     </button>
                   </div>
                 </div>

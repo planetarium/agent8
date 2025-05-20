@@ -57,15 +57,15 @@ function StatsDialog({ isOpen, onClose, onConfirm, stats, isLargeRepo }: StatsDi
                     <p className="text-sm text-[#666666] dark:text-[#999999]">Repository Statistics:</p>
                     <div className="space-y-2 text-sm text-[#111111] dark:text-white">
                       <div className="flex items-center gap-2">
-                        <span className="i-ph:files text-purple-500 w-4 h-4" />
+                        <span className="i-ph:files text-accent-500 w-4 h-4" />
                         <span>Total Files: {stats.totalFiles}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="i-ph:database text-purple-500 w-4 h-4" />
+                        <span className="i-ph:database text-accent-500 w-4 h-4" />
                         <span>Total Size: {formatSize(stats.totalSize)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="i-ph:code text-purple-500 w-4 h-4" />
+                        <span className="i-ph:code text-accent-500 w-4 h-4" />
                         <span>
                           Languages:{' '}
                           {Object.entries(stats.languages)
@@ -77,13 +77,13 @@ function StatsDialog({ isOpen, onClose, onConfirm, stats, isLargeRepo }: StatsDi
                       </div>
                       {stats.hasPackageJson && (
                         <div className="flex items-center gap-2">
-                          <span className="i-ph:package text-purple-500 w-4 h-4" />
+                          <span className="i-ph:package text-accent-500 w-4 h-4" />
                           <span>Has package.json</span>
                         </div>
                       )}
                       {stats.hasDependencies && (
                         <div className="flex items-center gap-2">
-                          <span className="i-ph:tree-structure text-purple-500 w-4 h-4" />
+                          <span className="i-ph:tree-structure text-accent-500 w-4 h-4" />
                           <span>Has dependencies</span>
                         </div>
                       )}
@@ -109,7 +109,7 @@ function StatsDialog({ isOpen, onClose, onConfirm, stats, isLargeRepo }: StatsDi
                 </button>
                 <button
                   onClick={onConfirm}
-                  className="px-4 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-accent-500 text-white hover:bg-accent-600 transition-colors"
                 >
                   OK
                 </button>
@@ -500,7 +500,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
                 <button
                   onClick={handleImport}
                   disabled={!customUrl}
-                  className="w-full h-10 px-4 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 justify-center"
+                  className="w-full h-10 px-4 py-2 rounded-lg bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 justify-center"
                 >
                   Import Repository
                 </button>
@@ -587,7 +587,7 @@ export function RepositorySelectionDialog({ isOpen, onClose, onSelect }: Reposit
                         </select>
                         <button
                           onClick={handleImport}
-                          className="w-full h-10 px-4 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 flex items-center gap-2 justify-center"
+                          className="w-full h-10 px-4 py-2 rounded-lg bg-accent-500 text-white hover:bg-accent-600 transition-all duration-200 flex items-center gap-2 justify-center"
                         >
                           Import Selected Branch
                         </button>
@@ -627,7 +627,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       className={classNames(
         'px-4 py-2 h-10 rounded-lg transition-all duration-200 flex items-center gap-2 min-w-[120px] justify-center',
         active
-          ? 'bg-purple-500 text-white hover:bg-purple-600'
+          ? 'bg-accent-500 text-white hover:bg-accent-600'
           : 'bg-[#F5F5F5] dark:bg-[#252525] text-bolt-elements-textPrimary dark:text-white hover:bg-[#E5E5E5] dark:hover:bg-[#333333] border border-[#E5E5E5] dark:border-[#333333]',
       )}
     >
@@ -670,7 +670,7 @@ function RepositoryList({
 
 function RepositoryCard({ repo, onSelect }: { repo: GitHubRepoInfo; onSelect: () => void }) {
   return (
-    <div className="p-4 rounded-lg bg-[#F5F5F5] dark:bg-[#252525] border border-[#E5E5E5] dark:border-[#333333] hover:border-purple-500/50 transition-colors">
+    <div className="p-4 rounded-lg bg-[#F5F5F5] dark:bg-[#252525] border border-[#E5E5E5] dark:border-[#333333] hover:border-accent-500/50 transition-colors">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="i-ph:git-repository text-bolt-elements-textTertiary" />
@@ -678,7 +678,7 @@ function RepositoryCard({ repo, onSelect }: { repo: GitHubRepoInfo; onSelect: ()
         </div>
         <button
           onClick={onSelect}
-          className="px-4 py-2 h-10 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+          className="px-4 py-2 h-10 rounded-lg bg-accent-500 text-white hover:bg-accent-600 transition-all duration-200 flex items-center gap-2 min-w-[120px] justify-center"
         >
           <span className="i-ph:download-simple w-4 h-4" />
           Import
