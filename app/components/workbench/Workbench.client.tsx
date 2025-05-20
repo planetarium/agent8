@@ -375,15 +375,49 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     const shell = workbenchStore.boltTerminal;
 
-    await shell.ready;
+    try {
+      let needReconnect = false;
 
-    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
-    } else {
-      await shell.executeCommand(
-        Date.now().toString(),
-        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
-      );
+      if (shell.isInit) {
+        try {
+          console.log('shell is init, testing connection...');
+          await shell.executeCommand(Date.now().toString(), 'echo "测试连接"');
+        } catch (error) {
+          console.error('testing connection error:', error);
+          needReconnect = true;
+        }
+      } else {
+        console.log('shell is not init');
+        needReconnect = true;
+      }
+
+      if (needReconnect) {
+        console.log('need reconnect...init terminal');
+
+        const terminal = shell.terminal;
+
+        if (!terminal) {
+          console.log('terminal is not found');
+          return;
+        }
+
+        await workbenchStore.attachBoltTerminal(terminal);
+        console.log('terminal init success');
+      }
+
+      await shell.ready;
+      console.log('execute preview command...');
+
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+        await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      } else {
+        await shell.executeCommand(
+          Date.now().toString(),
+          'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
+        );
+      }
+    } catch (error) {
+      console.error('execute command error:', error);
     }
   }, []);
 
