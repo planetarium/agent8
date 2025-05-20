@@ -155,21 +155,25 @@ export function Chat() {
            * }
            */
 
-          await containerInstance.mount(convertFileMapToFileSystemTree(files));
+          try {
+            await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
-          const previews = workbenchStore.previews.get();
-          const currentPreview = previews.find((p) => p.ready);
+            const previews = workbenchStore.previews.get();
+            const currentPreview = previews.find((p) => p.ready);
 
-          if (currentPreview && workbenchStore.currentView.get() === 'preview') {
-            workbenchStore.previews.set(
-              previews.map((p) => {
-                if (p.baseUrl === currentPreview.baseUrl) {
-                  return { ...p, refreshAt: Date.now() };
-                }
+            if (currentPreview && workbenchStore.currentView.get() === 'preview') {
+              workbenchStore.previews.set(
+                previews.map((p) => {
+                  if (p.baseUrl === currentPreview.baseUrl) {
+                    return { ...p, refreshAt: Date.now() };
+                  }
 
-                return p;
-              }),
-            );
+                  return p;
+                }),
+              );
+            }
+          } catch (error) {
+            logger.error('Error mounting container:', error);
           }
         });
         workbenchStore.showWorkbench.set(true);
@@ -612,9 +616,8 @@ export const ChatImpl = memo(
           );
           workbenchStore.files.set(processedFileMap);
 
-          await container.then(async (containerInstance) => {
-            containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-          });
+          const containerInstance = await container;
+          await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
 
           if (isEnabledGitbasePersistence) {
             if (!projectPath || !projectName || !templateCommitId) {
@@ -839,9 +842,10 @@ export const ChatImpl = memo(
         ] as Message[];
 
         setInitialMessages(messages);
-        container.then(async (containerInstance) => {
-          containerInstance.mount(convertFileMapToFileSystemTree(files));
-        });
+
+        const containerInstance = await container;
+        await containerInstance.mount(convertFileMapToFileSystemTree(files));
+
         setChatStarted(true);
         workbenchStore.showWorkbench.set(true);
         reload();
