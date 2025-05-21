@@ -922,7 +922,7 @@ const TaskManagerTab: React.FC = () => {
                 id="autoEnergySaver"
                 checked={autoEnergySaver}
                 onChange={(e) => handleAutoEnergySaverChange(e.target.checked)}
-                className="form-checkbox h-4 w-4 text-purple-600 rounded border-gray-300 dark:border-gray-700"
+                className="form-checkbox h-4 w-4 text-accent-600 rounded border-gray-300 dark:border-gray-700"
               />
               <div className="i-ph:gauge-duotone w-4 h-4 text-bolt-elements-textSecondary" />
               <label htmlFor="autoEnergySaver" className="text-sm text-bolt-elements-textSecondary">
@@ -936,7 +936,7 @@ const TaskManagerTab: React.FC = () => {
                 checked={energySaverMode}
                 onChange={(e) => !autoEnergySaver && handleEnergySaverChange(e.target.checked)}
                 disabled={autoEnergySaver}
-                className="form-checkbox h-4 w-4 text-purple-600 rounded border-gray-300 dark:border-gray-700 disabled:opacity-50"
+                className="form-checkbox h-4 w-4 text-accent-600 rounded border-gray-300 dark:border-gray-700 disabled:opacity-50"
               />
               <div className="i-ph:leaf-duotone w-4 h-4 text-bolt-elements-textSecondary" />
               <label
@@ -1025,7 +1025,7 @@ const TaskManagerTab: React.FC = () => {
                 <ul className="text-sm text-bolt-elements-textSecondary space-y-1">
                   {metrics.health.suggestions.map((suggestion, index) => (
                     <li key={index} className="flex items-center gap-2">
-                      <div className="i-ph:lightbulb-fill text-purple-500 w-4 h-4" />
+                      <div className="i-ph:lightbulb-fill text-accent-500 w-4 h-4" />
                       {suggestion}
                     </li>
                   ))}
@@ -1048,7 +1048,7 @@ const TaskManagerTab: React.FC = () => {
                 {Math.round(metrics.cpu.usage)}%
               </span>
             </div>
-            {renderUsageGraph(metricsHistory.cpu, 'CPU', '#9333ea')}
+            {renderUsageGraph(metricsHistory.cpu, 'CPU', '#00ffff')}
             {metrics.cpu.temperature && (
               <div className="text-xs text-bolt-elements-textSecondary mt-2">
                 Temperature: {metrics.cpu.temperature}°C

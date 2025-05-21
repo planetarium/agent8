@@ -62,7 +62,7 @@ export function ConnectionForm({ authState, setAuthState, onSave, onDisconnect }
                 'w-full px-4 py-2.5 bg-[#F5F5F5] dark:bg-[#1A1A1A] border rounded-lg',
                 'text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary text-base',
                 'border-[#E5E5E5] dark:border-[#1A1A1A]',
-                'focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500',
+                'focus:ring-2 focus:ring-accent-500/50 focus:border-accent-500',
                 'transition-all duration-200',
               )}
               placeholder="e.g., octocat"
@@ -80,7 +80,7 @@ export function ConnectionForm({ authState, setAuthState, onSave, onDisconnect }
                 rel="noopener noreferrer"
                 className={classNames(
                   'inline-flex items-center gap-1.5 text-xs',
-                  'text-purple-500 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300',
+                  'text-accent-500 hover:text-accent-600 dark:text-accent-400 dark:hover:text-accent-300',
                   'transition-colors duration-200',
                 )}
               >
@@ -113,7 +113,7 @@ export function ConnectionForm({ authState, setAuthState, onSave, onDisconnect }
                 'w-full px-4 py-2.5 bg-[#F5F5F5] dark:bg-[#1A1A1A] border rounded-lg',
                 'text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary text-base',
                 'border-[#E5E5E5] dark:border-[#1A1A1A]',
-                'focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500',
+                'focus:ring-2 focus:ring-accent-500/50 focus:border-accent-500',
                 'transition-all duration-200',
               )}
               placeholder="ghp_xxxxxxxxxxxx"
@@ -128,7 +128,7 @@ export function ConnectionForm({ authState, setAuthState, onSave, onDisconnect }
                   disabled={authState.isVerifying || !authState.username || !authState.tokenInfo?.token}
                   className={classNames(
                     'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                    'bg-purple-500 hover:bg-purple-600',
+                    'bg-accent-500 hover:bg-accent-600',
                     'text-white',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                   )}
