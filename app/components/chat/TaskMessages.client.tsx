@@ -135,7 +135,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               </button>
             </div>
             <div className="flex flex-col flex-grow overflow-hidden">
-              <div className="flex items-center mb-1 w-full">
+              <div className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-1')}>
                 <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
                   Task
                 </span>
@@ -143,9 +143,11 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                   {branch?.firstCommit?.title || 'New Task'}
                 </h3>
               </div>
-              <p className="text-cyan-200 text-xs truncate opacity-80 w-full">
-                {branch?.lastCommit?.message ? `Last commit: ${branch?.lastCommit.message.split('\n')[0]}` : ''}
-              </p>
+              {branch?.lastCommit?.message && (
+                <p className="text-cyan-200 text-xs truncate opacity-80 w-full">
+                  `Last commit: ${branch?.lastCommit.message.split('\n')[0]}`
+                </p>
+              )}
             </div>
             {mergeStatus && (
               <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">

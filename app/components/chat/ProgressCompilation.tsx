@@ -94,17 +94,17 @@ const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
     >
-      <div className="flex items-center gap-1.5 ">
+      <div className="flex items-center gap-1.5">
         <div>
           {progress.status === 'in-progress' ? (
-            <div className="i-svg-spinners:90-ring-with-bg"></div>
+            <div className="i-svg-spinners:90-ring-with-bg ml-[10px] mt-1"></div>
           ) : progress.status === 'complete' ? (
-            <div className="i-ph:check"></div>
+            <div className="i-ph:check ml-[10px] mt-1"></div>
           ) : null}
         </div>
         {/* {x.label} */}
       </div>
-      {progress.message}
+      <div className="mt-[2px]">{progress.message}</div>
     </motion.div>
   );
 };

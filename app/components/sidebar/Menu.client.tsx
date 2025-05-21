@@ -273,7 +273,12 @@ export const Menu = () => {
               </Dialog>
             </DialogRoot>
           </div>
-          <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+          <div
+            className={classNames(
+              'flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3',
+              isEmbedMode && chat.started ? 'mb-2' : '',
+            )}
+          >
             <SettingsButton onClick={handleSettingsClick} />
             <ThemeSwitch />
             <IconButton
