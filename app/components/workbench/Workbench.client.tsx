@@ -19,7 +19,7 @@ import { Slider } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
-import { renderLogger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
@@ -35,6 +35,8 @@ interface WorkspaceProps {
   };
   updateChatMestaData?: (metadata: any) => void;
 }
+
+const logger = createScopedLogger('Workbench');
 
 const viewTransition = { ease: cubicEasingFn };
 
@@ -309,7 +311,7 @@ const DiffViewWithCommitHash = memo(
 );
 
 export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: WorkspaceProps) => {
-  renderLogger.trace('Workbench');
+  logger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);
@@ -375,15 +377,49 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     const shell = workbenchStore.boltTerminal;
 
-    await shell.ready;
+    try {
+      let shellNeedAttach = false;
 
-    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
-    } else {
-      await shell.executeCommand(
-        Date.now().toString(),
-        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
-      );
+      if (shell.isInit) {
+        try {
+          logger.debug('shell is init, testing if shell is responsive...');
+          await shell.executeCommand(Date.now().toString(), 'echo "ping"');
+        } catch (error) {
+          logger.error('shell is not responsive:', error);
+          shellNeedAttach = true;
+        }
+      } else {
+        logger.debug('shell is not responsive');
+        shellNeedAttach = true;
+      }
+
+      if (shellNeedAttach) {
+        logger.info('shell is not responsive...init terminal');
+
+        const terminal = shell.terminal;
+
+        if (!terminal) {
+          logger.warn('terminal is not found');
+          return;
+        }
+
+        await workbenchStore.attachBoltTerminal(terminal);
+        logger.info('terminal init success');
+      }
+
+      await shell.ready;
+      logger.debug('execute preview command...');
+
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+        await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      } else {
+        await shell.executeCommand(
+          Date.now().toString(),
+          'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
+        );
+      }
+    } catch (error) {
+      logger.error('execute command error:', error);
     }
   }, []);
 
