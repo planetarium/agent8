@@ -18,6 +18,11 @@ export interface WhitelistItem {
  */
 export const MODEL_WHITELIST: WhitelistItem[] = [
   {
+    label: 'Claude 4 Sonnet',
+    providerName: 'Anthropic',
+    modelName: 'claude-sonnet-4-20250514',
+  },
+  {
     label: 'Claude 3.7 Sonnet (OpenRouter)',
     providerName: 'OpenRouter',
     modelName: 'anthropic/claude-3.7-sonnet',
