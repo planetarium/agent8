@@ -825,7 +825,7 @@ export class RemoteContainer implements Container {
         logger.debug('prompt received', command);
 
         // Execute new command
-        terminal.input('\x3A\x0A');
+        terminal.input(':' + '\n');
         await waitTillOscCode('exit');
         logger.debug('terminal is responsive');
 
