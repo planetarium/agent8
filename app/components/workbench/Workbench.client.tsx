@@ -377,49 +377,15 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     const shell = workbenchStore.boltTerminal;
 
-    try {
-      let shellNeedAttach = false;
+    await shell.ready;
 
-      if (shell.isInit) {
-        try {
-          logger.debug('shell is init, testing if shell is responsive...');
-          await shell.executeCommand(Date.now().toString(), 'echo "ping"');
-        } catch (error) {
-          logger.error('shell is not responsive:', error);
-          shellNeedAttach = true;
-        }
-      } else {
-        logger.debug('shell is not responsive');
-        shellNeedAttach = true;
-      }
-
-      if (shellNeedAttach) {
-        logger.info('shell is not responsive...init terminal');
-
-        const terminal = shell.terminal;
-
-        if (!terminal) {
-          logger.warn('terminal is not found');
-          return;
-        }
-
-        await workbenchStore.attachBoltTerminal(terminal);
-        logger.info('terminal init success');
-      }
-
-      await shell.ready;
-      logger.debug('execute preview command...');
-
-      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
-      } else {
-        await shell.executeCommand(
-          Date.now().toString(),
-          'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
-        );
-      }
-    } catch (error) {
-      logger.error('execute command error:', error);
+    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+      await shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+    } else {
+      await shell.executeCommand(
+        Date.now().toString(),
+        'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev',
+      );
     }
   }, []);
 
