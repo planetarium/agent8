@@ -36,8 +36,8 @@ import type { Template } from '~/types/template';
 import {
   commitChanges,
   createTaskBranch,
-  fetchProjectFiles,
   forkProject,
+  getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
 import { container } from '~/lib/container';
@@ -49,6 +49,7 @@ import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
+import { stripMetadata } from './UserMessage';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -146,6 +147,9 @@ export function Chat() {
     if (loaded) {
       if (chats.length > 0) {
         setInitialMessages(chats);
+      }
+
+      if (Object.keys(files).length > 0) {
         container.then(async (containerInstance) => {
           /*
            * try {
@@ -801,21 +805,17 @@ export const ChatImpl = memo(
       Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
     };
 
-    const handleTemplateImport = async (
-      source: { type: 'github' | 'zip'; title: string },
-      files: FileMap,
-      templateData: { assistantMessage: string; userMessage: string },
-    ) => {
+    const handleTemplateImport = async (source: { type: 'github' | 'zip'; title: string }, files: FileMap) => {
       try {
         setFakeLoading(true);
+        runAnimation();
 
-        const toastId = toast.loading(
-          `Importing ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}...`,
-        );
-
-        // 템플릿 데이터 가져오기
-        const { assistantMessage, userMessage } = templateData;
-        toast.done(toastId);
+        repoStore.set({
+          name: source.title,
+          path: '',
+          title: source.title,
+          taskBranch: DEFAULT_TASK_BRANCH,
+        });
 
         const messages = [
           {
@@ -824,17 +824,6 @@ export const ChatImpl = memo(
             content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
               attachmentList,
             )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
-          },
-          {
-            id: `2-${new Date().getTime()}`,
-            role: 'assistant',
-            content: assistantMessage,
-          },
-          {
-            id: `3-${new Date().getTime()}`,
-            role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${userMessage}`,
-            annotations: ['hidden'],
           },
         ] as Message[];
 
@@ -857,8 +846,8 @@ export const ChatImpl = memo(
     };
 
     const handleProjectZipImport = async (title: string, zipFile: File) => {
-      const { fileMap, messages } = await getZipTemplates(zipFile, title);
-      await handleTemplateImport({ type: 'zip', title }, fileMap, messages);
+      const { fileMap } = await getZipTemplates(zipFile, title);
+      await handleTemplateImport({ type: 'zip', title }, fileMap);
     };
 
     const handleFork = async (message: Message) => {
@@ -922,63 +911,24 @@ export const ChatImpl = memo(
 
     const handleRetry = async (message: Message) => {
       workbenchStore.currentView.set('code');
-      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const messageIndex = messages.findIndex((m) => m.id === message.id);
 
-      if (messageIndex <= 0) {
-        toast.error('Retry failed');
-        return;
-      }
-
-      const prevMessage = messages[messageIndex - 1];
-      const commitHash = prevMessage.id.split('-').pop();
+      const commitHash = messages[messageIndex + 1].id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
         toast.error('No commit hash found');
         return;
       }
 
-      // Show loading toast while retrying
-      const toastId = toast.loading('Loading previous version...');
+      const { data } = await getCommit(repoStore.get().path, commitHash);
 
-      try {
-        const wc = await container;
-
-        const retryFiles = await fetchProjectFiles(repoStore.get().path, commitHash);
-        const deleteFiles = [];
-
-        for (const name of Object.keys(files)) {
-          const path = name.replace(WORK_DIR + '/', '');
-
-          if (!retryFiles[path]) {
-            deleteFiles.push(path);
-          }
-        }
-
-        for (const name of deleteFiles) {
-          await wc.fs.rm(name, { recursive: true, force: true });
-        }
-
-        await wc.mount(convertFileMapToFileSystemTree(retryFiles));
-        message.id = `retry-${new Date().getTime()}`;
-
-        const newMessages = [...messages.slice(0, messageIndex), message];
-        changeChatUrl(repoStore.get().path, {
-          replace: true,
-          searchParams: { revertTo: commitHash },
-          ignoreChangeEvent: true,
-        });
-        setMessages(newMessages);
-        setTimeout(() => {
-          reload();
-        }, 1000);
-
-        toast.dismiss(toastId);
-      } catch (error) {
-        toast.dismiss(toastId);
-        toast.error('Failed to load previous version');
-        logger.error('Error loading previous version:', error);
+      if (data.commit.parent_ids.length > 0) {
+        const parentCommitHash = data.commit.parent_ids[0];
+        changeChatUrl(repoStore.get().path, { replace: false, searchParams: { revertTo: parentCommitHash } });
+        setInput(stripMetadata(extractTextContent(message)));
+      } else {
+        toast.error('No parent commit hash found');
       }
     };
 

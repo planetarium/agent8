@@ -33,6 +33,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
           ? messages.map((message, index) => {
               const { role, id: messageId, annotations } = message;
               const isUserMessage = role === 'user';
+              const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
               const isHidden = annotations?.includes('hidden');
               const isMergeMessage = message.content.includes('Merge task');
@@ -106,18 +107,20 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           </Dropdown>
                         </div>
                       ) : (
-                        <div className="flex items-start mt-2.5">
-                          <Dropdown
-                            trigger={
-                              <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                            }
-                          >
-                            <DropdownItem onSelect={() => onRetry?.(message)}>
-                              <span className="i-ph:arrow-clockwise text-xl" />
-                              Retry chat
-                            </DropdownItem>
-                          </Dropdown>
-                        </div>
+                        !isFirstMessage && (
+                          <div className="flex items-start mt-2.5">
+                            <Dropdown
+                              trigger={
+                                <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
+                              }
+                            >
+                              <DropdownItem onSelect={() => onRetry?.(message)}>
+                                <span className="i-ph:arrow-clockwise text-xl" />
+                                Retry chat
+                              </DropdownItem>
+                            </Dropdown>
+                          </div>
+                        )
                       )}
                     </>
                   )}

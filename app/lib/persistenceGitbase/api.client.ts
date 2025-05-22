@@ -20,6 +20,16 @@ export const isEnabledGitbasePersistence =
   import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
   localStorage.getItem(SETTINGS_KEYS.TEMPORARY_MODE) !== 'true';
 
+export const getCommit = async (projectPath: string, commitHash: string) => {
+  const response = await axios.get(`/api/gitlab/commits/${commitHash}`, {
+    params: {
+      projectPath,
+    },
+  });
+
+  return response.data;
+};
+
 export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
