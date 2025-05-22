@@ -54,6 +54,9 @@ export const Terminal = memo(
             /failed to load module/i,
             /error resolving import/i,
             /failed to resolve import/i,
+            /\[ERROR\]/i,
+            /Build failed with \d+ errors/i,
+            /ELIFECYCLE.*Command failed with exit code/i,
           ];
 
           // Get the entire terminal buffer
