@@ -5,7 +5,7 @@ export function shouldIgnorePreviewError(message?: string): boolean {
     return true;
   }
 
-  if (message.trim() === 'undefined') {
+  if (message.trim() === 'undefined' || message.trim().length < 16) {
     return true;
   }
 

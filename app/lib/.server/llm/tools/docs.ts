@@ -17,12 +17,14 @@ interface DocTool {
  * @returns An object with dynamically created tools
  */
 export async function createDocTools(env: Env): Promise<Record<string, any>> {
+  const isProduction = env.USE_PRODUCTION_VECTOR_DB === 'true';
+
   try {
     // Create Supabase client
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
     // Fetch all documentation tools from the table
-    const { data, error } = await supabase.from('docs').select('*');
+    const { data, error } = await supabase.from(isProduction ? 'docs_prod' : 'docs').select('*');
 
     if (error) {
       logger.error('Error fetching documentation tools:', error);
