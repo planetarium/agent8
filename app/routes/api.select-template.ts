@@ -23,13 +23,11 @@ const templateCache: Record<
   }
 > = {};
 
-// Cache expiration time (24 hours in milliseconds)
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-
 export const loader = withV8AuthUser(selectTemplateAction, { checkCredit: true });
 
 async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
+  const CACHE_TTL = env.USE_PRODUCTION_TEMPLATE ? 24 * 60 * 60 * 1000 : 60 * 1000;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
   const title = url.searchParams.get('title') || '';

@@ -292,6 +292,7 @@ However, ensuring the project runs correctly is the top priority.
 Take your time to read through all necessary files and understand the full context before making changes.
 Do not alter any part of the code unrelated to your current task.
 Be careful and deliberate when making modifications.
+Especially, when using resources, be sure to refer to the resource context. Do not speculate to create resource URLs.
 `;
 }
 
@@ -309,10 +310,12 @@ The 3D template basically provides player, camera, keyboard and mouse settings. 
 In the given template, your task is to decorate the map.
 
 For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment)
-For Other games, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment\`
+For Flight games, set the skybox to be diverse and place tree-like objects on the ground. if you want to use terrain system, make terrain width and height 10 times bigger
+For Top-down view, top view, or MOBA like games, decorate the map first using stage (see \`read_vibe_starter_3d_environment_stage\`), and choose objects theme and place objects after searching resources from vectordb (see \`search_resources_vectordb_items\`), (Please set the objects well so that the map does not look too empty. <Stage cellSize={5} ...>, and maintain an appropriate density.)
+For Other 3D games with map, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment\`
 Apply the following three: 
 a) Map texture and terrain (use Procedural Mesh Generation Terrain System in open world genre) 
-b) 3D object placement 
+b) place 3D objects on the map
 you can choose after reading the documents from read_vibe_starter_3d_environment
 
 ⸻
@@ -321,6 +324,7 @@ However, ensuring the project runs correctly is the top priority.
 Take your time to read through all necessary files and understand the full context before making changes.
 Do not alter any part of the code unrelated to your current task.
 Be careful and deliberate when making modifications.
+Especially, when using resources, be sure to refer to the resource context. Do not speculate to create resource URLs.
 `;
 }
 
@@ -420,7 +424,7 @@ CRITICAL: Follow these strict resource management rules to prevent application e
   
 1. If appropriate resources are not available in assets.json:
    - Never create images directly using base64 or similar methods. even in assets.json's url part.
-   - Never create URLs that are not provided.
+   - Never create URLs that are not provided in this chat and chat history.
    - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
    - For 3D games: Use Three.js to generate geometric shapes and programmatic textures
    - Use code-based solutions like CSS animations, canvas drawing, or procedural generation
