@@ -115,7 +115,7 @@ ${userMessage}
 <V8AssistantMessage>
 ${content
   .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
-  .replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
+  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋
