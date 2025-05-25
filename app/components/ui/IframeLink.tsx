@@ -16,12 +16,28 @@ const isInIframe = () => {
 };
 
 const getParentOrigin = () => {
-  console.log('IframeLink: Detecting parent origin:', {
-    referrer: document.referrer,
-    currentOrigin: window.location.origin,
-  });
+  const stored = sessionStorage.getItem('iframe_parent_origin');
+
+  if (stored) {
+    return stored;
+  }
+
+  if (document.referrer) {
+    try {
+      const referrerUrl = new URL(document.referrer);
+
+      if (referrerUrl.origin !== window.location.origin) {
+        sessionStorage.setItem('iframe_parent_origin', referrerUrl.origin);
+        console.log('IframeLink: Got parent origin from referrer:', referrerUrl.origin);
+
+        return referrerUrl.origin;
+      }
+    } catch {}
+  }
 
   const url = import.meta.env.VITE_VIBE_AGENT8_URL || 'https://vibe.verse8.io';
+  sessionStorage.setItem('iframe_parent_origin', url);
+  console.log('IframeLink: Using fallback URL:', url);
 
   return url;
 };
@@ -33,25 +49,14 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
     useEffect(() => {
       const isIframe = isInIframe();
       setInIframe(isIframe);
-      console.log('IframeLink: Initialization:', {
-        inIframe: isIframe,
-        referrer: document.referrer,
-        currentOrigin: window.location.origin,
-      });
+
+      if (isIframe) {
+        getParentOrigin();
+      }
     }, []);
 
     const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-      console.log('IframeLink: Click event:', {
-        to,
-        inIframe,
-        shiftKey: event.shiftKey,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        button: event.button,
-      });
-
       if (inIframe) {
-        console.log('IframeLink: Intercepting click in iframe');
         event.preventDefault();
 
         let path = to;
@@ -65,12 +70,6 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
         const parentOrigin = getParentOrigin();
         const isNewWindow = event.shiftKey || event.ctrlKey || event.metaKey || event.button === 1;
 
-        console.log('IframeLink: Navigation details:', {
-          parentOrigin,
-          path,
-          isNewWindow,
-        });
-
         if (isNewWindow) {
           const parentUrl = `${parentOrigin}/games/editor?chat=${encodeURIComponent(path)}`;
           console.log('IframeLink: Opening new window:', parentUrl);
@@ -81,11 +80,9 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
             console.error('IframeLink: Failed to open new window:', error);
           }
         } else {
-          console.log('IframeLink: Normal navigation in iframe to:', to);
+          console.log('IframeLink: Navigation in iframe to:', to);
           window.location.href = to;
         }
-      } else {
-        console.log('IframeLink: Normal navigation outside iframe');
       }
 
       if (onClick) {
@@ -95,7 +92,6 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
 
     const handleAuxClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (inIframe && event.button === 1) {
-        console.log('IframeLink: Middle click intercepted');
         event.preventDefault();
 
         let path = to;
@@ -126,7 +122,6 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
         onClick={handleClick}
         onContextMenu={(e) => {
           if (inIframe) {
-            console.log('IframeLink: Context menu disabled in iframe');
             e.preventDefault();
           }
         }}
