@@ -3,7 +3,6 @@ import type { Message } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
 import { getProjectCommits, fetchProjectFiles, getTaskBranches } from '~/lib/persistenceGitbase/api.client';
-import { isCommitHash } from './utils';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
 
@@ -55,7 +54,6 @@ export function useGitbaseChatHistory() {
   });
   const [chats, setChats] = useState<Message[]>([]);
   const [enabledTaskMode, setEnabledTaskMode] = useState(true);
-  const [taskBranch, setTaskBranch] = useState<string | null>(null);
   const [files, setFiles] = useState<FileMap>({});
   const [taskBranches, setTaskBranches] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -65,21 +63,16 @@ export function useGitbaseChatHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [untilCommit, setUntilCommit] = useState<string | null>(null);
-
-  // 이전 요청 매개변수를 추적하기 위한 ref
-  const prevRequestParams = useRef<string | null>(null);
-
-  const getRevertTo = () => {
-    const url = new URL(window.location.href);
-    const revertTo = url.searchParams.get('revertTo');
-
-    return revertTo && isCommitHash(revertTo) ? revertTo : null;
-  };
+  const prevRequestParams = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
     const unsubscribe = repoStore.subscribe((state) => {
-      setTaskBranch(state.taskBranch);
+      if (
+        projectPath !== prevRequestParams.current.projectPath ||
+        state.taskBranch !== prevRequestParams.current.taskBranch
+      ) {
+        load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -90,7 +83,7 @@ export function useGitbaseChatHistory() {
   }, []);
 
   const loadFiles = useCallback(
-    async (projectPath: string) => {
+    async (projectPath: string, commitSha?: string) => {
       if (!projectPath) {
         return;
       }
@@ -100,7 +93,7 @@ export function useGitbaseChatHistory() {
 
         setLoadingFiles(true);
 
-        const fileMap = await fetchProjectFiles(projectPath, getRevertTo() || taskBranch || undefined);
+        const fileMap = await fetchProjectFiles(projectPath, commitSha);
 
         setFiles(fileMap);
         setFilesLoaded(true);
@@ -110,18 +103,33 @@ export function useGitbaseChatHistory() {
         setLoadingFiles(false);
       }
     },
-    [fetchProjectFiles, taskBranch],
+    [fetchProjectFiles],
   );
 
   const load = useCallback(
-    async (page: number = 1, append: boolean = false) => {
+    async ({ page = 1, taskBranch, untilCommit }: { page?: number; taskBranch?: string; untilCommit?: string }) => {
       if (!projectPath) {
         setLoaded(true);
+        setFilesLoaded(true);
+        setChats([]);
+        setFiles({});
+
         return;
       }
 
+     logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
+
       // 이미 로딩 중이면 종료
       if (loading) {
+        return;
+      }
+
+      if (
+        projectPath === prevRequestParams.current.projectPath &&
+        page === prevRequestParams.current.page &&
+        taskBranch === prevRequestParams.current.taskBranch &&
+        untilCommit === prevRequestParams.current.untilCommit
+      ) {
         return;
       }
 
@@ -139,36 +147,31 @@ export function useGitbaseChatHistory() {
           queryParams.append('branch', taskBranch);
         }
 
-        const untilCommit = getRevertTo();
-
         if (untilCommit) {
           queryParams.append('untilCommit', untilCommit);
         }
 
-        const requestParamsString = queryParams.toString();
-
-        // 동일한 요청 파라미터로 이미 요청한 경우 (페이지가 다른 경우 제외)
-        if (!append && prevRequestParams.current === requestParamsString) {
-          setLoaded(true);
-          setLoading(false);
-
-          return;
-        }
+        prevRequestParams.current = {
+          projectPath,
+          page,
+          taskBranch,
+          untilCommit,
+        };
 
         if (page === 1) {
           if (Object.keys(files).length > 0) {
             lastActionStore.set({ action: 'LOAD' });
           }
 
-          await Promise.all([loadFiles(projectPath), loadTaskBranches(projectPath)]);
+          await Promise.all([
+            loadFiles(projectPath, untilCommit || taskBranch || undefined),
+            loadTaskBranches(projectPath),
+          ]);
         }
 
-        // 현재 요청 파라미터 저장
-        prevRequestParams.current = requestParamsString;
-
         const data = (await getProjectCommits(projectPath, {
-          branch: taskBranch || undefined,
-          untilCommit: untilCommit || undefined,
+          branch: taskBranch,
+          untilCommit,
           page,
         })) as CommitResponse;
 
@@ -180,7 +183,7 @@ export function useGitbaseChatHistory() {
 
         const newMessages = parseCommitMessages(data.data.commits);
 
-        if (append) {
+        if (page > 1) {
           setChats((prevChats) => [...prevChats, ...newMessages.reverse()]);
         } else {
           setChats(newMessages.reverse());
@@ -197,7 +200,7 @@ export function useGitbaseChatHistory() {
         setLoading(false);
       }
     },
-    [projectPath, loading, fetchProjectFiles, taskBranch],
+    [projectPath, loading, fetchProjectFiles],
   );
 
   // Load more commits
@@ -206,55 +209,19 @@ export function useGitbaseChatHistory() {
       return;
     }
 
-    await load(currentPage + 1, true);
-  }, [loading, hasMore, currentPage, load, taskBranch]);
-
-  // popstate 이벤트 리스너 추가 (브라우저 뒤로가기/앞으로가기 시 처리)
-  useEffect(() => {
-    const handleChangeState = () => {
-      const revertTo = getRevertTo();
-
-      // 현재 URL의 revertTo 값이 상태의 값과 다르면 데이터 다시 로드
-      if (revertTo !== untilCommit) {
-        setUntilCommit(revertTo);
-      } else {
-        setUntilCommit(null);
-      }
-    };
-
-    window.addEventListener('popstate', handleChangeState);
-    window.addEventListener('urlchange', handleChangeState);
-
-    return () => {
-      window.removeEventListener('popstate', handleChangeState);
-      window.removeEventListener('urlchange', handleChangeState);
-    };
-  }, [untilCommit]);
-
-  // Initial load - useEffect 최적화
-  useEffect(() => {
-    // repo가 없으면 초기화만 하고 API 호출 안함
-    if (!projectPath) {
-      setLoaded(true);
-      setFilesLoaded(true);
-      setChats([]);
-      setFiles({});
-
-      return () => 0;
-    }
-
-    const timeoutId = setTimeout(async () => {
-      load(1, false);
-    }, 0);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [projectPath, load, loadFiles, loadTaskBranches, untilCommit, taskBranch]);
+    await load({
+      page: currentPage + 1,
+      taskBranch: prevRequestParams.current.taskBranch,
+      untilCommit: prevRequestParams.current.untilCommit,
+    });
+  }, [loading, hasMore, currentPage, load]);
 
   return {
     loaded: loaded && filesLoaded,
     chats,
+    revertTo: (hash: string) => {
+      load({ page: 1, taskBranch: prevRequestParams.current.taskBranch, untilCommit: hash });
+    },
     project,
     files,
     taskBranches,

@@ -102,11 +102,11 @@ export const Preview = memo(() => {
     }
   }, [previews, findMinPortIndex]);
 
-  const reloadPreview = () => {
+  const reloadPreview = useCallback(() => {
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src;
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (selectedView === 'preview') {

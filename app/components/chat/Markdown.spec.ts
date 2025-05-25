@@ -14,6 +14,12 @@ describe('stripCodeFenceFromArtifact', () => {
     expect(stripCodeFenceFromArtifact(input)).toBe(expected);
   });
 
+  it('should handle code fences with CDATA', () => {
+    const input = "<![CDATA[\n<div class='__boltArtifact__'></div>\n]]>";
+    const expected = "\n<div class='__boltArtifact__'></div>\n";
+    expect(stripCodeFenceFromArtifact(input)).toBe(expected);
+  });
+
   it('should not modify content without artifacts', () => {
     const input = '```\nregular code block\n```';
     expect(stripCodeFenceFromArtifact(input)).toBe(input);
