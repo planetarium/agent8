@@ -123,6 +123,7 @@ export function Chat() {
     enabledTaskMode,
     setEnabledTaskMode,
     reloadTaskBranches,
+    revertTo,
   } = useGitbaseChatHistory();
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
@@ -206,6 +207,7 @@ export function Chat() {
           setEnabledTaskMode={setEnabledTaskMode}
           taskBranches={taskBranches}
           reloadTaskBranches={reloadTaskBranches}
+          revertTo={revertTo}
         />
       )}
       <ToastContainer
@@ -298,6 +300,7 @@ interface ChatProps {
   enabledTaskMode: boolean;
   setEnabledTaskMode: (enabled: boolean) => void;
   reloadTaskBranches: (projectPath: string) => Promise<void>;
+  revertTo: (hash: string) => void;
 }
 
 export const ChatImpl = memo(
@@ -310,6 +313,7 @@ export const ChatImpl = memo(
     enabledTaskMode,
     setEnabledTaskMode,
     reloadTaskBranches,
+    revertTo,
   }: ChatProps) => {
     useShortcuts();
 
@@ -902,7 +906,6 @@ export const ChatImpl = memo(
       workbenchStore.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
-      const projectPath = repoStore.get().path;
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
@@ -910,7 +913,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      changeChatUrl(projectPath, { replace: false, searchParams: { revertTo: commitHash } });
+      revertTo(commitHash);
     };
 
     const handleRetry = async (message: Message) => {
@@ -929,7 +932,7 @@ export const ChatImpl = memo(
 
       if (data.commit.parent_ids.length > 0) {
         const parentCommitHash = data.commit.parent_ids[0];
-        changeChatUrl(repoStore.get().path, { replace: false, searchParams: { revertTo: parentCommitHash } });
+        revertTo(parentCommitHash);
         setInput(stripMetadata(extractTextContent(message)));
       } else {
         toast.error('No parent commit hash found');
