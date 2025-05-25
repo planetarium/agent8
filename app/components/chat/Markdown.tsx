@@ -139,5 +139,13 @@ export const stripCodeFenceFromArtifact = (content: string) => {
     lines[artifactLineIndex + 1] = '';
   }
 
+  if (artifactLineIndex > 0 && lines[artifactLineIndex - 1]?.trim().match(/^<!\[CDATA\[/)) {
+    lines[artifactLineIndex - 1] = '';
+  }
+
+  if (artifactLineIndex < lines.length - 1 && lines[artifactLineIndex + 1]?.trim().match(/^\]\]>$/)) {
+    lines[artifactLineIndex + 1] = '';
+  }
+
   return lines.join('\n');
 };
