@@ -16,32 +16,100 @@
 
 .Chat {
   opacity: 1;
+  margin-right: 10px;
+  padding-right: 0px;
+  box-sizing: border-box;
 }
 
 .PromptEffectContainer {
-  --prompt-container-offset: 50px;
-  --prompt-line-stroke-width: 1px;
   position: absolute;
   pointer-events: none;
-  inset: calc(var(--prompt-container-offset) / -2);
-  width: calc(100% + var(--prompt-container-offset));
-  height: calc(100% + var(--prompt-container-offset));
+  inset: 0;
+  border-radius: 24px;
+  overflow: visible;
+  z-index: -1;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+    background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
+    animation: rotate 4s linear infinite;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+    background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
+    animation: rotate 4s linear infinite;
+    filter: blur(32px);
+    opacity: 0.75;
+  }
 }
 
-.PromptEffectLine {
-  width: calc(100% - var(--prompt-container-offset) + var(--prompt-line-stroke-width));
-  height: calc(100% - var(--prompt-container-offset) + var(--prompt-line-stroke-width));
-  x: calc(var(--prompt-container-offset) / 2 - var(--prompt-line-stroke-width) / 2);
-  y: calc(var(--prompt-container-offset) / 2 - var(--prompt-line-stroke-width) / 2);
-  rx: calc(8px - var(--prompt-line-stroke-width));
-  fill: transparent;
-  stroke-width: var(--prompt-line-stroke-width);
-  stroke: url(#line-gradient);
-  stroke-dasharray: 35px 65px;
-  stroke-dashoffset: 10;
+.PromptEffectInner {
+  position: absolute;
+  inset: 2px;
+  background: var(--color-bg-primary, #111315);
+  border-radius: 22px;
+  z-index: 1;
 }
 
-.PromptShine {
-  fill: url(#shine-gradient);
-  mix-blend-mode: overlay;
+@property --angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes rotate {
+  0% {
+    --angle: 0deg;
+  }
+  100% {
+    --angle: 360deg;
+  }
+}
+
+.promptInputActive {
+  border-radius: var(--border-radius-24, 24px);
+  border: 1px solid #3fd2e8;
+  background: var(--color-bg-primary, #111315);
+  /* Elevation/Light/3 */
+  box-shadow:
+    0px 1.6px 6.4px 1.6px rgba(26, 220, 217, 0.12),
+    0px 9.6px 64px 12.8px rgba(148, 250, 239, 0.2);
+}
+
+/* 순환하는 placeholder 애니메이션 스타일 */
+.placeholderAnimationIn {
+  animation: slideInUp 0.5s forwards;
+}
+
+.placeholderAnimationOut {
+  animation: slideOutUp 0.5s forwards;
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
 }

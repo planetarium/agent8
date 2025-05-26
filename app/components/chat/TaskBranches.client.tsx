@@ -32,21 +32,21 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
   };
 
   return (
-    <div className="flex w-full flex-1 max-w-chat mx-auto max-h-22 mb-3 rounded-lg border border-cyan-400 bg-gradient-to-r from-cyan-900/90 to-blue-900/90 p-4 shadow-md backdrop-blur-sm transition-all hover:border-cyan-300 hover:shadow-lg">
+    <div className="flex w-full flex-1 max-w-chat mx-auto max-h-22 mb-6 rounded-lg border border-[#3FD2E8] bg-[var(--color-bg-primary,#111315)] p-4 transition-all hover:border-[#3FD2E8] hover:shadow-lg">
       <div className="flex flex-col flex-grow overflow-hidden">
         <div className="flex items-center mb-1 w-full">
-          <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
+          <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-[rgba(63,210,232,0.5)] rounded-full mr-2 flex-shrink-0">
             Task
           </span>
           <h3 className="font-medium text-white truncate max-w-full">{branch?.firstCommit?.title || 'New Task'}</h3>
         </div>
-        <p className="text-cyan-200 text-xs truncate opacity-80 w-full">
+        <p className="text-[rgba(63,210,232,0.8)] text-xs truncate opacity-80 w-full">
           {branch?.lastCommit?.message ? `Last commit: ${branch?.lastCommit.message.split('\n')[0]}` : ''}
         </p>
       </div>
       <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
         <button
-          className="px-4 py-1.5 bg-transparent text-cyan-100 rounded-md hover:bg-cyan-100 hover:bg-opacity-20 transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-1.5 bg-transparent text-[rgba(63,210,232,0.9)] rounded-md hover:bg-[rgba(63,210,232,0.15)] transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleClose}
           disabled={isLoading}
         >
@@ -72,7 +72,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
           )}
         </button>
         <button
-          className="px-4 py-1.5 bg-cyan-600 text-white rounded-md hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-1.5 bg-[rgba(63,210,232,0.8)] text-white rounded-md hover:bg-[rgba(63,210,232,0.9)] active:bg-[rgba(63,210,232,1)] transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(63,210,232,0.5)] focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleContinue}
           disabled={isLoading}
         >

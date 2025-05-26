@@ -39,79 +39,56 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className={`rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-4 mb-2`}
+        className="flex p-[var(--spacing-16,16px)] items-start gap-5 rounded-[var(--border-radius-8,8px)] bg-[rgba(253,176,34,0.10)] mx-auto"
       >
-        <div className="flex items-start">
-          {/* Icon */}
-          <motion.div
-            className="flex-shrink-0"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <div className={`i-ph:warning-duotone text-xl text-bolt-elements-button-danger-text`}></div>
+        <div className="flex-shrink-0">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
+            <img src="/icons/Warning.svg" alt="Warning" />
           </motion.div>
-          {/* Content */}
-          <div className="ml-3 flex-1">
-            <motion.h3
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className={`text-sm font-medium text-bolt-elements-textPrimary`}
-            >
-              {title}
-            </motion.h3>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className={`mt-2 text-sm text-bolt-elements-textSecondary`}
-            >
-              <p>{message}</p>
-              {description && (
-                <div className="text-xs text-bolt-elements-textSecondary p-2 bg-bolt-elements-background-depth-3 rounded mt-4 mb-4">
-                  Error: {description}
-                </div>
-              )}
-            </motion.div>
+        </div>
+        {/* Content */}
+        <div className="flex-1 gap-4">
+          <motion.h3
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-[var(--color-text-primary,#FFF)] font-feature-stylistic font-primary text-md font-semibold leading-[140%]"
+          >
+            {title} {description && `(${description})`}
+          </motion.h3>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className={`mt-2`}>
+            <p className="text-[var(--color-text-tertiary,#99A2B0)] font-primary text-sm font-medium leading-[150%]">
+              {message}
+            </p>
+          </motion.div>
 
-            {/* Actions */}
-            <motion.div
-              className="mt-4"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <div className={classNames(' flex gap-2')}>
-                <button
-                  onClick={() => handleAskBolt(false)}
-                  className={classNames(
-                    `px-2 py-1.5 rounded-md text-sm font-medium`,
-                    'bg-bolt-elements-button-primary-background',
-                    'hover:bg-bolt-elements-button-primary-backgroundHover',
-                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bolt-elements-button-danger-background',
-                    'text-bolt-elements-button-primary-text',
-                    'flex items-center gap-1.5',
-                  )}
-                >
-                  <div className="i-ph:chat-circle-duotone"></div>
-                  Ask Agent8
-                </button>
-                <button
-                  onClick={clearAlert}
-                  className={classNames(
-                    `px-2 py-1.5 rounded-md text-sm font-medium`,
-                    'bg-bolt-elements-button-secondary-background',
-                    'hover:bg-bolt-elements-button-secondary-backgroundHover',
-                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bolt-elements-button-secondary-background',
-                    'text-bolt-elements-button-secondary-text',
-                  )}
-                >
+          {/* Actions */}
+          <motion.div
+            className="mt-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className={classNames('flex justify-end gap-2')}>
+              <button
+                onClick={clearAlert}
+                className="flex min-h-[40px] max-h-[40px] px-[var(--spacing-14,14px)] py-[var(--spacing-10,10px)] justify-center items-center gap-[var(--spacing-6,6px)] rounded-[var(--border-radius-4,4px)] border border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-neutral,#222428)]"
+              >
+                <span className="text-[var(--color-text-interactive-neutral,#F3F5F8)] font-feature-stylistic font-primary text-[14px] font-semibold leading-[142.9%]">
                   Dismiss
-                </button>
-              </div>
-            </motion.div>
-          </div>
+                </span>
+              </button>
+              <button
+                onClick={() => handleAskBolt(false)}
+                className="flex min-h-[40px] max-h-[40px] px-[var(--spacing-14,14px)] py-[var(--spacing-10,10px)] justify-center items-center gap-[var(--spacing-6,6px)] rounded-[var(--border-radius-4,4px)] border border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-primary,#1A92A4)]"
+              >
+                <img src="/icons/Wrench.svg" alt="Fix" width="16" height="16" />
+                <span className="text-[var(--color-text-interactive-on-primary,#F3F5F8)] font-feature-stylistic font-primary text-[14px] font-semibold leading-[142.9%]">
+                  Fix Error
+                </span>
+              </button>
+            </div>
+          </motion.div>
         </div>
       </motion.div>
     </AnimatePresence>

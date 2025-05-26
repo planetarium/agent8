@@ -1,133 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Switch } from '~/components/ui/Switch';
-import { toast } from 'react-toastify';
 import { useSettings } from '~/lib/hooks/useSettings';
-import type { MCPServer } from '~/lib/stores/settings';
-import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { classNames } from '~/utils/classNames';
+import * as Tooltip from '@radix-ui/react-tooltip';
 
 // MCP Server Manager Component
-const McpServerManager: React.FC = () => {
-  const { mcpServers, addMCPServer, removeMCPServer, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
+const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = false }) => {
+  const { mcpServers, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hoveredServerIndex, setHoveredServerIndex] = useState<number | null>(null);
 
-  const defaultServerNames = import.meta.env?.VITE_DEFAULT_SERVER_NAMES
-    ? JSON.parse(import.meta.env.VITE_DEFAULT_SERVER_NAMES)
-    : ['Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
   const disabledServerNames = import.meta.env?.VITE_DISABLED_SERVER_NAMES
     ? JSON.parse(import.meta.env.VITE_DISABLED_SERVER_NAMES)
     : ['All-in-one'];
   const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
 
-  const getServerDescription = (serverName: string): string => {
-    switch (serverName) {
-      case 'All-in-one':
-        return 'All-in-one server that integrates all MCP tools.';
-      case 'Image':
-        return 'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.';
-      case 'Cinematic':
-        return 'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).';
-      case 'Audio':
-        return 'Generate game background music, character/level theme music, and sound effects. Fast generation speed (30-second sample: about 2 seconds, 3-minute track: within 10 seconds). High-quality 44.1kHz stereo audio output. Maintains professional consistency without interruptions. Provides results in WAV file format.';
-      case 'Skybox':
-        return 'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.';
-      case 'UI':
-        return 'Create CSS styles for UI elements, used for web development or game development.';
-      default:
-        return '';
-    }
-  };
-
-  const [pinnedTooltip, setPinnedTooltip] = useState<string | null>(null);
-  const [collapsedTips, setCollapsedTips] = useState<Record<string, boolean>>({});
-
-  const toggleUsageTips = (serverName: string) => {
-    setCollapsedTips((prev) => ({
-      ...prev,
-      [serverName]: !prev[serverName],
-    }));
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (pinnedTooltip && !(event.target as Element).closest('.tooltip-container')) {
-        setPinnedTooltip(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [pinnedTooltip]);
-
-  const isDefaultServer = (serverName: string) => defaultServerNames.includes(serverName);
+  const hasActiveTools = mcpServers.some((server) => server.enabled && !isDisabledServer(server.name));
 
   const getServerIcon = (serverName: string) => {
     switch (serverName) {
       case 'Image':
-        return 'i-ph:image w-4 h-4 text-green-500';
+        return '/icons/Image.svg';
       case 'Cinematic':
-        return 'i-ph:film-strip w-4 h-4 text-cyan-500';
+        return '/icons/Cinematic.svg';
       case 'Audio':
-        return 'i-ph:speaker-high w-4 h-4 text-red-500';
+        return '/icons/Audio.svg';
       case 'Skybox':
-        return 'i-ph:cloud w-4 h-4 text-cyan-500';
+        return '/icons/Skybox.svg';
       case 'UI':
-        return 'i-ph:palette w-4 h-4 text-pink-500';
+        return '/icons/UI.svg';
       default:
         return 'i-ph:cube w-4 h-4 text-bolt-elements-textSecondary';
     }
   };
 
-  const [newServer, setNewServer] = useState<{ name: string; url: string; description?: string }>({
-    name: '',
-    url: '',
-    description: '',
-  });
   const [showServerManager, setShowServerManager] = useState<boolean>(false);
-  const [showAddForm, setShowAddForm] = useState<boolean>(false);
 
-  const handleAddServer = () => {
-    if (newServer.name && newServer.url) {
-      const server: MCPServer = {
-        name: newServer.name,
-        url: newServer.url,
-        enabled: true,
-        v8AuthIntegrated: true,
-        description: newServer.description,
-      };
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showServerManager &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
+        setShowServerManager(false);
+      }
+    };
 
-      addMCPServer(server);
-      toast.success(`${newServer.name} tool added`, { autoClose: 1500 });
+    document.addEventListener('mousedown', handleClickOutside);
 
-      // 쿠키가 설정되었는지 확인
-      setTimeout(() => {
-        try {
-          const cookies = document.cookie.split(';').reduce(
-            (acc, item) => {
-              const [key, value] = item.trim().split('=');
-              return { ...acc, [key]: value };
-            },
-            {} as Record<string, string>,
-          );
-
-          console.log('Current cookies:', cookies);
-          console.log(`MCP settings cookie present:`, cookies[SETTINGS_KEYS.MCP_SERVERS] !== undefined);
-        } catch (error) {
-          console.error('Error checking cookies:', error);
-        }
-      }, 100);
-
-      setNewServer({ name: '', url: '', description: '' });
-      setShowAddForm(false);
-    }
-  };
-
-  const handleRemoveServer = (index: number) => {
-    removeMCPServer(index);
-
-    toast.success('tool removed', { autoClose: 1500 });
-  };
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showServerManager]);
 
   const handleToggleServer = (index: number, enabled: boolean) => {
     toggleMCPServer(index, enabled);
@@ -140,377 +68,172 @@ const McpServerManager: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-chat mx-auto py-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor">
-      {showServerManager && (
-        <motion.div
-          className="flex flex-col gap-4 bg-bolt-elements-background-depth-2 px-4 rounded-lg mb-4"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <h4 className="text-sm font-medium text-bolt-elements-textPrimary">Select Tools to Use</h4>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowServerManager(false)}
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20 group transition-all duration-200  mb-1.5"
-                >
-                  <div className="i-ph:x w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:text-cyan-500 transition-colors" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {mcpServers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2">
-              {mcpServers
-                .map((server, index) => ({ server, index }))
-                .filter((item) => !isDisabledServer(item.server.name))
-                .map(({ server, index }) => (
-                  <div
-                    key={index}
-                    className={classNames(
-                      'flex items-center justify-between',
-                      'p-3 rounded-lg',
-                      'border',
-                      server.enabled
-                        ? 'bg-bolt-elements-background-depth-1 border-l-4 border-l-cyan-500 border-bolt-elements-borderColor shadow-sm'
-                        : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor',
-                      'transition-all duration-200',
-                    )}
-                  >
-                    <div className="flex items-center gap-3 ml-2">
-                      <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
-                      <div>
-                        <h4
-                          className={classNames(
-                            'font-medium flex items-center gap-1',
-                            server.enabled ? 'text-bolt-elements-textPrimary' : 'text-bolt-elements-textSecondary',
-                          )}
-                        >
-                          {server.name}
-                          {isDefaultServer(server.name) && (
-                            <>
-                              <div className="relative group cursor-help">
-                                <div className="i-ph:star-fill w-3.5 h-3.5 text-yellow-500" />
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs font-normal text-white bg-gray-800 rounded hidden group-hover:block transition-all duration-100 whitespace-nowrap pointer-events-none z-50 cursor-default">
-                                  Default tool
-                                </div>
-                              </div>
-                              {getServerDescription(server.name) && (
-                                <div className="relative group cursor-pointer inline-flex items-center ml-1.5">
-                                  <button
-                                    className="inline-flex items-center justify-center text-cyan-500 font-bold mb-0.5 bg-transparent border-none p-0 cursor-pointer"
-                                    onMouseEnter={(e) => {
-                                      e.stopPropagation();
-
-                                      const tooltipId = `${server.name}-tooltip`;
-
-                                      setPinnedTooltip(tooltipId);
-                                    }}
-                                  >
-                                    ?
-                                  </button>
-                                  <div
-                                    className={classNames(
-                                      'tooltip-container absolute p-4 w-[36rem] text-sm font-normal text-white bg-gray-800 border border-gray-600 rounded-lg transition-all duration-100 pointer-events-auto z-50 shadow-xl cursor-default',
-                                      pinnedTooltip === `${server.name}-tooltip` ? 'block' : 'hidden',
-                                      server.name === 'Image' || server.name === 'Cinematic' || server.name === 'Audio'
-                                        ? 'top-full -left-30 mt-1'
-                                        : 'bottom-full -left-30 mb-1',
-                                    )}
-                                  >
-                                    <div className="flex justify-between items-center mb-3">
-                                      <div className="text-base font-medium">{server.name} - Usage Guide</div>
-                                      <span
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPinnedTooltip(null);
-                                        }}
-                                        className="text-gray-400 hover:text-gray-200 cursor-pointer"
-                                      >
-                                        <div className="i-ph:x w-4 h-4" />
-                                      </span>
-                                    </div>
-                                    <p className="mb-3 leading-relaxed text-gray-200">
-                                      {getServerDescription(server.name)}
-                                    </p>
-
-                                    {/* Credit information / Will be revised after cost policy decision */}
-                                    <div className="mb-3 p-2 text-xs bg-gray-900 rounded-md border border-gray-700">
-                                      {server.name === 'Image' && (
-                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
-                                      )}
-                                      {server.name === 'Cinematic' && (
-                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
-                                      )}
-                                      {server.name === 'Audio' && (
-                                        <p className="text-gray-200">Cost: 1 credit per second (default: 30 seconds)</p>
-                                      )}
-                                      {server.name === 'Skybox' && (
-                                        <p className="text-gray-200">Cost: 1 credit (fixed)</p>
-                                      )}
-                                      {server.name === 'UI' && <p className="text-gray-200">Cost: 1 credit (fixed)</p>}
-                                    </div>
-
-                                    <div className="mt-4 pt-3 border-t border-gray-700">
-                                      <div
-                                        className="flex justify-between items-center cursor-pointer"
-                                        onClick={() => toggleUsageTips(server.name)}
-                                      >
-                                        <div className="text-cyan-300 text-[10px] uppercase tracking-wider mb-2 font-bold">
-                                          USAGE TIPS
-                                        </div>
-                                        <div
-                                          className={`text-gray-400 transition-transform duration-200 ${collapsedTips[server.name] ? 'rotate-180' : ''}`}
-                                        >
-                                          <div className="i-ph:caret-up w-4 h-4" />
-                                        </div>
-                                      </div>
-                                      {!collapsedTips[server.name] && (
-                                        <>
-                                          {server.name === 'Image' && (
-                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                              <li>Provide specific and detailed descriptions for assets</li>
-                                              <li>Clearly specify the desired style</li>
-                                              <li>Include game type information (platformer, shooter, RPG, etc.)</li>
-                                              <li>Use additional prompts to fine-tune generation results</li>
-                                            </ul>
-                                          )}
-                                          {server.name === 'Cinematic' && (
-                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                              <li>
-                                                Provide specific descriptions of environment, atmosphere, characters,
-                                                and key activities
-                                              </li>
-                                              <li>Select reference images that match your game art style (max 3)</li>
-                                              <li>Clearly specify camera angles, lighting, and color palette</li>
-                                              <li>
-                                                Include sufficient references to maintain consistency with your game's
-                                                actual assets
-                                              </li>
-                                            </ul>
-                                          )}
-                                          {server.name === 'Audio' && (
-                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                              <li>
-                                                All prompts must be in English only (other languages not supported by
-                                                API)
-                                              </li>
-                                              <li>Clearly describe music style, instruments, mood, tempo, and key</li>
-                                              <li>
-                                                Expect to wait about 10 seconds for generation to complete (use
-                                                audio_wait tool)
-                                              </li>
-                                              <li>
-                                                Use separate tools for music and sound effects (music_generate,
-                                                sfx_generate)
-                                              </li>
-                                            </ul>
-                                          )}
-                                          {server.name === 'Skybox' && (
-                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                              <li>Use skybox_styles tool to check available style IDs</li>
-                                              <li>
-                                                Provide detailed descriptions of environment, lighting conditions, and
-                                                atmospheric details
-                                              </li>
-                                              <li>Different character limits exist depending on style ID</li>
-                                              <li>Check skybox generation status with skybox_status tool</li>
-                                            </ul>
-                                          )}
-                                          {server.name === 'UI' && (
-                                            <ul className="text-gray-300 list-disc pl-5 space-y-2">
-                                              <li>Provide specific CSS styles for UI elements</li>
-                                              <li>
-                                                Use the ui_themes tool to check available themes and CSS ui_styles
-                                              </li>
-                                            </ul>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </h4>
-
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-bolt-elements-textSecondary">{server.url}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mr-2">
-                      <div className="flex items-center gap-1">
-                        <Switch
-                          checked={server.enabled}
-                          onCheckedChange={(checked) => handleToggleServer(index, checked)}
-                        />
-                      </div>
-                      {!isDefaultServer(server.name) && (
-                        <button
-                          onClick={() => handleRemoveServer(index)}
-                          className="p-1 rounded-full hover:bg-red-500/10 text-red-500 ml-2"
-                        >
-                          <div className="i-ph:trash w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <div className="text-center p-4 text-bolt-elements-textSecondary text-sm">
-              No MCP servers registered. Add a new server to get started.
-            </div>
-          )}
-
-          {showAddForm && (
-            <motion.div
-              className="mt-4 bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-md"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-800 pb-3">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
-                    <span className="bg-cyan-100 dark:bg-cyan-900/30 p-1.5 rounded-md mr-2">
-                      <div className="i-ph:plus-circle-fill w-4 h-4 text-cyan-700 dark:text-cyan-400" />
-                    </span>
-                    Add Custom MCP Tool
-                  </h4>
-                  <button
-                    onClick={() => setShowAddForm(false)}
-                    className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 group transition-all duration-200"
-                  >
-                    <div className="i-ph:x w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
-                  </button>
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <div className="flex-[0.4]">
-                    <label
-                      htmlFor="mcp-tool-name"
-                      className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 ml-1"
-                    >
-                      MCP Tool Name
-                    </label>
-                    <input
-                      id="mcp-tool-name"
-                      type="text"
-                      placeholder="e.g. agent8"
-                      value={newServer.name}
-                      onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
-                      className={classNames(
-                        'w-full p-2.5 rounded-lg text-sm',
-                        'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-                        'text-gray-900 dark:text-gray-100',
-                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
-                        'transition-all duration-200',
-                      )}
-                    />
-                  </div>
-                  <div className="flex-[0.6]">
-                    <label
-                      htmlFor="mcp-tool-url"
-                      className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 ml-1"
-                    >
-                      MCP Tool URL
-                    </label>
-                    <input
-                      id="mcp-tool-url"
-                      type="text"
-                      placeholder="http://localhost:3333/sse"
-                      value={newServer.url}
-                      onChange={(e) => setNewServer({ ...newServer, url: e.target.value })}
-                      className={classNames(
-                        'w-full p-2.5 rounded-lg text-sm',
-                        'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-                        'text-gray-900 dark:text-gray-100',
-                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
-                        'transition-all duration-200',
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowAddForm(false)}
-                      className={classNames(
-                        'px-4 py-2 rounded-lg text-sm font-medium',
-                        'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700',
-                        'text-gray-700 dark:text-gray-300',
-                        'transition-colors duration-200',
-                        'border border-gray-200 dark:border-gray-700',
-                      )}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleAddServer}
-                      className={classNames(
-                        'px-4 py-2 rounded-lg text-sm font-medium',
-                        'transition-colors duration-200',
-                        'shadow-sm',
-                        'disabled:cursor-not-allowed',
-                        !newServer.name || !newServer.url
-                          ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700'
-                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 dark:hover:text-white hover:border-cyan-400 dark:hover:border-cyan-500',
-                      )}
-                      disabled={!newServer.name || !newServer.url}
-                    >
-                      Add Tool
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          <div className="flex justify-end mr-2">
+    <div
+      className={classNames('w-full mx-auto', {
+        'max-w-chat': chatStarted,
+        'max-w-chat-before-start': !chatStarted,
+      })}
+    >
+      <div className="flex items-center gap-[6.3px] flex-wrap relative">
+        {hasActiveTools && (
+          <span className="text-[var(--color-text-subtle,#767D8C)] font-primary text-[12px] font-semibold leading-[142.9%] font-feature-[ss10]">
+            Tools Active
+          </span>
+        )}
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className={classNames('bg-transparent text-cyan-500 hover:underline text-sm font-medium')}
+              ref={buttonRef}
+              onClick={() => setShowServerManager(!showServerManager)}
+              className={classNames(
+                hasActiveTools
+                  ? 'flex w-[32px] min-h-[32px] max-h-[32px] justify-center items-center rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-neutral,#222428)] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)]'
+                  : 'flex min-h-8 max-h-8 px-3.2 py-2 justify-center items-center gap-1.5 rounded-full border border-white/18 bg-[#222428] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)] text-xs font-medium hover:text-gray-500',
+                'transition-colors duration-200',
+              )}
             >
-              Add Custom MCP Tool
+              <img src="/icons/Plus.svg" alt="Plus" className={hasActiveTools ? 'w-4 h-4' : ''} />
+              {!hasActiveTools && <span className="font-normal text-cyan-400 text-[11.2px]">Use Tools</span>}
             </button>
-          </div>
-        </motion.div>
-      )}
-      <div className="flex items-center gap-2 mb-0 flex-wrap">
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%] w-[292px] justify-between"
+              sideOffset={5}
+              side={chatStarted ? 'top' : 'bottom'}
+              align="start"
+              alignOffset={0}
+            >
+              Use it to create images, cinematics, audio, skyboxes, and UI elements
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+
         {mcpServers
           .map((server, index) => ({ server, index }))
           .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
           .map(({ server, index }) => (
             <div
               key={index}
-              className="flex items-center ml-3 gap-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full px-3 py-1.5 text-sm font-medium text-gray-800 dark:text-gray-200"
+              className="flex min-h-8 max-h-8 px-[12.8px] py-[8px] justify-center items-center gap-[4.8px] rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral-hovered,rgba(255,255,255,0.22))] text-[11.2px] font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
               title={server.url}
+              onMouseEnter={() => setHoveredServerIndex(index)}
+              onMouseLeave={() => setHoveredServerIndex(null)}
             >
-              <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
+              {hoveredServerIndex === index ? (
+                <img
+                  src="/icons/Close.svg"
+                  alt="Remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleServer(index, false);
+                  }}
+                  className="cursor-pointer"
+                />
+              ) : server.name === 'All-in-one' ||
+                !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
+                <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
+              ) : (
+                <img
+                  src={getServerIcon(server.name)}
+                  alt={server.name}
+                  className={server.enabled ? '' : 'opacity-60'}
+                />
+              )}
               {server.name}
             </div>
           ))}
 
-        <button
-          onClick={() => setShowServerManager(!showServerManager)}
-          className={classNames(
-            'flex items-center gap-1.5',
-            'text-sm font-medium',
-            'bg-transparent',
-            'text-gray-300 hover:text-gray-500',
-            'transition-colors duration-200',
-          )}
-        >
-          <div className="i-ph:plus-circle w-4 h-4 ml-4" />
-          <span className="font-normal">Use Tools</span>
-        </button>
+        {showServerManager && (
+          <motion.div
+            ref={dropdownRef}
+            className={classNames(
+              'absolute left-0 flex w-[284.8px] py-[6.4px] px-0 flex-col items-start rounded-[var(--border-radius-8,8px)] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10',
+              chatStarted ? 'bottom-full mb-2' : 'top-full mt-2',
+            )}
+            style={{
+              boxShadow: '0px 8px 16px 0px rgba(0, 0, 0, 0.32), 0px 0px 8px 0px rgba(0, 0, 0, 0.28)',
+            }}
+            initial={{ opacity: 0, y: chatStarted ? 10 : -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: chatStarted ? 10 : -10 }}
+          >
+            {mcpServers.length > 0 ? (
+              <div className="w-full">
+                {mcpServers
+                  .map((server, index) => ({ server, index }))
+                  .filter((item) => !isDisabledServer(item.server.name))
+                  .map(({ server, index }) => (
+                    <div
+                      key={index}
+                      className={classNames(
+                        'flex items-center justify-between w-full',
+                        'px-4 py-3.2',
+                        'transition-all duration-200',
+                        server.enabled
+                          ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))]'
+                          : 'hover:bg-bolt-elements-item-backgroundActive',
+                      )}
+                    >
+                      <div className="flex items-center gap-4.8">
+                        <button
+                          type="button"
+                          className={classNames(
+                            'flex w-4 h-4 p-[var(--spacing-0,0px)] flex-col items-start gap-[var(--spacing-0,0px)] aspect-square rounded-[var(--border-radius-2,2px)] cursor-pointer',
+                            server.enabled
+                              ? 'bg-[var(--color-bg-interactive-primary,#1A92A4)]'
+                              : 'bg-[#383838] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))]',
+                          )}
+                          onClick={() => handleToggleServer(index, !server.enabled)}
+                          aria-pressed={server.enabled}
+                          aria-label={`${server.enabled ? 'Disable' : 'Enable'} ${server.name} server`}
+                        >
+                          {server.enabled && <img src="/icons/Check.svg" alt="Selected" className="w-full h-full" />}
+                        </button>
+
+                        <div className="flex flex-col justify-center items-start gap-1.6 flex-1">
+                          <div className="flex items-center gap-1.6 self-stretch">
+                            {server.name === 'All-in-one' ||
+                            !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
+                              <div
+                                className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')}
+                              />
+                            ) : (
+                              <img
+                                src={getServerIcon(server.name)}
+                                alt={server.name}
+                                className={server.enabled ? '' : 'opacity-60'}
+                              />
+                            )}
+
+                            <div className="flex items-center gap-1.2">
+                              <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[12.8px] font-medium leading-[150%]">
+                                {server.name}
+                              </h4>
+                              <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[11.2px] font-medium leading-[142.9%]">
+                                {server.name === 'Audio' ? '1 credit/s (default: 30s)' : '1 Credit'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-[11.2px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)]">
+                              {server.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="w-full text-center py-3.2 px-3.2 text-bolt-elements-textSecondary text-[11.2px]">
+                No MCP servers registered. Add a new server to get started.
+              </div>
+            )}
+          </motion.div>
+        )}
       </div>
     </div>
   );
