@@ -32,7 +32,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
   };
 
   return (
-    <div className="flex w-full flex-1 max-w-chat mx-auto max-h-22 mb-6 rounded-[24px] border border-[#3FD2E8] bg-[var(--color-bg-primary,#111315)] p-4 transition-all hover:border-[#3FD2E8] hover:shadow-lg">
+    <div className="flex w-full flex-1 max-w-chat mx-auto max-h-22 mb-6 rounded-lg border border-[#3FD2E8] bg-[var(--color-bg-primary,#111315)] p-4 transition-all hover:border-[#3FD2E8] hover:shadow-lg">
       <div className="flex flex-col flex-grow overflow-hidden">
         <div className="flex items-center mb-1 w-full">
           <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-[rgba(63,210,232,0.5)] rounded-full mr-2 flex-shrink-0">

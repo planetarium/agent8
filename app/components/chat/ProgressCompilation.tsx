@@ -2,8 +2,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState, useEffect } from 'react';
 import type { ProgressAnnotation } from '~/types/context';
 import { classNames } from '~/utils/classNames';
-import { cubicEasingFn } from '~/utils/easings';
 import Lottie from 'lottie-react';
+
+// import { cubicEasingFn } from '~/utils/easings';
 
 const textColorAnimation = `
 @keyframes textColorWave {
@@ -21,7 +22,10 @@ const textColorAnimation = `
 
 export default function ProgressCompilation({ data }: { data?: ProgressAnnotation[] }) {
   const [progressList, setProgressList] = React.useState<ProgressAnnotation[]>([]);
-  const [expanded, setExpanded] = useState(false);
+
+  // const [expanded, setExpanded] = useState(false);
+  const EXPANDED = false;
+
   React.useEffect(() => {
     if (!data || data.length == 0) {
       setProgressList([]);
@@ -54,7 +58,7 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
         className={classNames('border-radius-8 bg-color-bg-transperant', 'relative w-full max-w-chat mx-auto z-prompt')}
         style={{
           borderRadius: 'var(--border-radius-8, 8px)',
-          background: 'var(--color-bg-transperant, rgba(255, 255, 255, 0.12))',
+          background: 'var(--color-bg-depth-2, #2A2D33)',
         }}
       >
         <div
@@ -66,7 +70,7 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
         >
           <div className="flex-1">
             <AnimatePresence>
-              {expanded ? (
+              {EXPANDED ? (
                 <motion.div
                   className="actions"
                   initial={{ height: 0 }}
@@ -83,7 +87,7 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
               )}
             </AnimatePresence>
           </div>
-          <motion.button
+          {/* <motion.button
             initial={{ width: 0 }}
             animate={{ width: 'auto' }}
             exit={{ width: 0 }}
@@ -92,7 +96,7 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
             onClick={() => setExpanded((v) => !v)}
           >
             <div className={expanded ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-          </motion.button>
+          </motion.button> */}
         </div>
       </div>
     </AnimatePresence>

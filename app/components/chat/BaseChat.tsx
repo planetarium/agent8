@@ -603,7 +603,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                 <div
                   className={classNames(
-                    'flex flex-col self-stretch p-5 rounded-lg relative w-full mx-auto z-prompt mt-1 relative min-h-58',
+                    'flex flex-col self-stretch p-4 rounded-lg relative w-full mx-auto z-prompt mt-1 relative min-h-58',
                     {
                       'max-w-chat': chatStarted,
                       'max-w-chat-before-start': !chatStarted,
@@ -646,13 +646,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full outline-none resize-none bg-transparent font-primary text-[20px] font-semibold font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
+                        'w-full outline-none resize-none bg-transparent font-primary text-[14px] font-semibold font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
                       )}
                       style={{
                         fontStyle: 'normal',
-                        lineHeight: '140%',
+                        lineHeight: '150%',
                         height: `${TEXTAREA_MIN_HEIGHT}px`,
                         maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
@@ -743,11 +743,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     {!chatStarted && input.length === 0 && (
                       <div
                         className={classNames(
-                          'absolute left-0 top-0 w-full font-primary text-[20px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
+                          'absolute left-0 top-0 w-full font-primary text-[14px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
                           animationDirection === 'in' ? styles.placeholderAnimationIn : styles.placeholderAnimationOut,
                         )}
                         style={{
-                          lineHeight: '140%',
+                          lineHeight: '150%',
                           padding: 'inherit',
                         }}
                       >
@@ -756,7 +756,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     )}
                   </div>
                   <div className="flex justify-between items-center self-stretch text-sm mt-auto">
-                    <div className="flex items-center gap-[6px]">
+                    <div className="flex items-center gap-[4.8px]">
                       <div className="flex items-center hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
                         <ClientOnly>
                           {() => (
@@ -777,9 +777,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
                                   sideOffset={5}
-                                  side="bottom"
+                                  side={chatStarted ? 'top' : 'bottom'}
                                 >
                                   Select Model
                                   <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
@@ -808,9 +808,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
                               sideOffset={5}
-                              side="bottom"
+                              side={chatStarted ? 'top' : 'bottom'}
                             >
                               {chatStarted ? 'Upload a file' : 'Upload a file or import a project'}
                               <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
@@ -828,9 +828,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
                                 sideOffset={5}
-                                side="bottom"
+                                side="top"
                               >
                                 Export chat
                                 <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
@@ -878,9 +878,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </p>
                   <img src="/icons/Magic.svg" alt="Magic" />
                 </div>
-                <div className="flex items-center gap-3 self-stretch">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 self-stretch w-full">
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.';
@@ -894,12 +894,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Fps.svg" alt="Fps" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       First-Person Shooter
                     </span>
                   </button>
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.';
@@ -913,12 +913,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Tps.svg" alt="Tps" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       Third-Person Shooter
                     </span>
                   </button>
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above and clicks to move and attack.';
@@ -932,14 +932,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Topdown.svg" alt="Topdown" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       Top-Down Action
                     </span>
                   </button>
-                </div>
-                <div className="flex items-center gap-3 self-stretch">
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.';
@@ -953,12 +951,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Puzzle.svg" alt="Puzzle" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       Puzzle & Logic
                     </span>
                   </button>
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural terrain generation, block placement, and first-person movement.';
@@ -972,12 +970,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Voxel.svg" alt="Voxel" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       Voxel Sandbox Builder
                     </span>
                   </button>
                   <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
                         'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.';
@@ -991,7 +989,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   >
                     <img src="/icons/Flight.svg" alt="Flight" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
                       Flight Simulator
                     </span>
                   </button>

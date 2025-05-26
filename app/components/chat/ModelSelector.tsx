@@ -234,7 +234,7 @@ export const ModelSelector = ({
 
         {isDropdownOpen && (
           <div
-            className="absolute z-10 bottom-full mb-1 py-1 min-w-[300px] rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg"
+            className="absolute z-10 bottom-full mb-1 py-1 min-w-[300px] rounded-lg border border-bolt-elements-borderColor bg-[var(--color-bg-interactive-neutral,#222428)] shadow-lg"
             role="listbox"
             id="model-listbox"
           >
@@ -295,7 +295,7 @@ export const ModelSelector = ({
                     }
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
-                      'hover:bg-bolt-elements-background-depth-3',
+                      'hover:bg-bolt-elements-item-backgroundActive',
                       'text-bolt-elements-textPrimary opacity-90',
                       'outline-none',
                       (model === AUTO_MODEL_NAME && option.modelName === AUTO_MODEL_NAME) ||

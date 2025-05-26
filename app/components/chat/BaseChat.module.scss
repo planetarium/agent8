@@ -45,7 +45,7 @@
     border-radius: 24px;
     background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
     animation: rotate 4s linear infinite;
-    filter: blur(40px);
+    filter: blur(32px);
     opacity: 0.75;
   }
 }
@@ -79,8 +79,8 @@
   background: var(--color-bg-primary, #111315);
   /* Elevation/Light/3 */
   box-shadow:
-    0px 2px 8px 2px rgba(26, 220, 217, 0.12),
-    0px 12px 80px 16px rgba(148, 250, 239, 0.2);
+    0px 1.6px 6.4px 1.6px rgba(26, 220, 217, 0.12),
+    0px 9.6px 64px 12.8px rgba(148, 250, 239, 0.2);
 }
 
 /* 순환하는 placeholder 애니메이션 스타일 */

@@ -142,7 +142,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         {isStreaming && (
           <div className="text-center w-full mt-4">
             {animationData ? (
-              <div style={{ width: '88px', height: '88px', aspectRatio: '1/1', margin: '0 auto' }}>
+              <div style={{ width: '70.4px', height: '70.4px', aspectRatio: '1/1', margin: '0 auto' }}>
                 <Lottie animationData={animationData} loop={true} />
               </div>
             ) : (
