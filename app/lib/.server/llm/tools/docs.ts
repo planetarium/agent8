@@ -41,13 +41,17 @@ export async function createDocTools(env: Env): Promise<Record<string, any>> {
 
     for (const doc of data as DocTool[]) {
       // Create a tool for each entry in the docs table
-      tools[doc.tool_name] = tool({
-        description: doc.description,
-        parameters: z.object({}), // No parameters needed as these are simple documentation responses
-        execute: async () => {
-          return { content: doc.response };
-        },
-      });
+      const toolName = doc.tool_name.trim();
+
+      if (toolName.match(/^[a-zA-Z_][a-zA-Z0-9_-]{1,63}$/)) {
+        tools[toolName] = tool({
+          description: doc.description,
+          parameters: z.object({}), // No parameters needed as these are simple documentation responses
+          execute: async () => {
+            return { content: doc.response };
+          },
+        });
+      }
     }
 
     return tools;
