@@ -10,6 +10,7 @@ export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonP
   return show ? (
     <button
       className="inline-flex justify-center items-center py-2.5 px-3.5 gap-1.5 rounded-[4px] border border-solid border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.22)] active:border-[rgba(255,255,255,0.35)] disabled:border-[rgba(255,255,255,0.08)] bg-interactive-gradient hover:bg-interactive-gradient-hovered active:bg-interactive-gradient-pressed disabled:bg-[var(--color-bg-disabled)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{ backgroundSize: '102% 102%', backgroundPosition: 'center' }}
       disabled={disabled}
       onClick={(event) => {
         event.preventDefault();
