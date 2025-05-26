@@ -57,7 +57,7 @@ export function cleanoutFileContent(content: string, filePath: string): string {
 
   // Remove markdown code block syntax if present and file is not markdown
   if (!filePath.endsWith('.md')) {
-    processedContent = cleanoutMarkdownSyntax(processedContent);
+    processedContent = cleanoutCodeblockSyntax(processedContent);
     processedContent = cleanEscapedTags(processedContent);
   }
 
@@ -66,21 +66,21 @@ export function cleanoutFileContent(content: string, filePath: string): string {
   return processedContent;
 }
 
-function cleanoutMarkdownSyntax(content: string) {
-  const codeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const match = content.match(codeBlockRegex);
+function cleanoutCodeblockSyntax(content: string) {
+  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
+  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[\n([\s\S]*?)\n\s*\]\]>\s*$/;
 
-  // console.log('matching', !!match, content);
+  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
 
   if (match) {
-    return match[1]; // Remove common leading 4-space indent
+    return match[1];
   } else {
     return content;
   }
 }
 
 function cleanEscapedTags(content: string) {
-  return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
 export class StreamingMessageParser {
