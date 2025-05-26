@@ -8,6 +8,7 @@ import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import WithTooltip from '~/components/ui/Tooltip';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
+import { IframeLink } from '~/components/ui/IframeLink';
 
 export function Header() {
   const chat = useStore(chatStore);
@@ -38,9 +39,9 @@ export function Header() {
           </WithTooltip>
         </TooltipProvider>
         {!isEmbedMode && (
-          <a href="/" className="text-xl font-semibold text-accent flex items-center ml-3">
+          <IframeLink to="/" className="text-xl font-semibold text-accent flex items-center ml-3">
             AGENT8
-          </a>
+          </IframeLink>
         )}
       </div>
 

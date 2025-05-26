@@ -19,7 +19,7 @@ import { Slider } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
-import { renderLogger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
@@ -35,6 +35,8 @@ interface WorkspaceProps {
   };
   updateChatMestaData?: (metadata: any) => void;
 }
+
+const logger = createScopedLogger('Workbench');
 
 const viewTransition = { ease: cubicEasingFn };
 
@@ -309,7 +311,7 @@ const DiffViewWithCommitHash = memo(
 );
 
 export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: WorkspaceProps) => {
-  renderLogger.trace('Workbench');
+  logger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);

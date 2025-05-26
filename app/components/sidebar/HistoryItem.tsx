@@ -7,6 +7,7 @@ import { forwardRef, type ForwardedRef } from 'react';
 import { useStore } from '@nanostores/react';
 import { chatStore } from '~/lib/stores/chat';
 import { repoStore } from '~/lib/stores/repo';
+import { IframeLink } from '~/components/ui/IframeLink';
 
 interface HistoryItemProps {
   item: RepositoryItem;
@@ -32,7 +33,7 @@ export function HistoryItem({ item, onDelete }: HistoryItemProps) {
         { 'text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50': isActiveChat },
       )}
     >
-      <a href={`/chat/${item.urlId}`} className="flex w-full relative truncate block">
+      <IframeLink to={`/chat/${item.urlId}`} className="flex w-full relative truncate block">
         <span className="truncate pr-24">{item.description}</span>
         <div className="absolute right-0 top-0 bottom-0 flex items-center px-2">
           <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -49,7 +50,7 @@ export function HistoryItem({ item, onDelete }: HistoryItemProps) {
             </Dialog.Trigger>
           </div>
         </div>
-      </a>
+      </IframeLink>
     </div>
   );
 }

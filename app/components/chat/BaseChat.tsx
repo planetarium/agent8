@@ -138,7 +138,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [transcript, setTranscript] = useState('');
     const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
-    const [autoFixChance, setAutoFixChance] = useState(1);
+    const [autoFixChance, setAutoFixChance] = useState(3);
     const repo = useStore(repoStore);
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
@@ -246,7 +246,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         lastActionStore.set({ action: 'SEND_MESSAGE' });
         sendMessage(event, messageInput);
 
-        setAutoFixChance(1);
+        setAutoFixChance(3);
 
         if (recognition) {
           recognition.abort(); // Stop current recognition

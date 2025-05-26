@@ -17,6 +17,7 @@ import { chatStore } from '~/lib/stores/chat';
 import { menuStore, closeMenu } from '~/lib/stores/menu';
 import { useSearchParams } from '@remix-run/react';
 import { IconButton } from '~/components/ui/IconButton';
+import { IframeLink } from '~/components/ui/IframeLink';
 
 const menuVariants = {
   closed: {
@@ -195,13 +196,13 @@ export const Menu = () => {
         <CurrentDateTime />
         <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
           <div className="p-4 space-y-3">
-            <a
-              href="/"
+            <IframeLink
+              to="/"
               className="flex gap-2 items-center bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-500/20 rounded-lg px-4 py-2 transition-colors"
             >
               <span className="inline-block i-lucide:message-square h-4 w-4" />
               <span className="text-sm font-medium">Start new chat</span>
-            </a>
+            </IframeLink>
             <div className="relative w-full">
               <div className="absolute left-3 top-1/2 -translate-y-1/2">
                 <span className="i-lucide:search h-4 w-4 text-gray-400 dark:text-gray-500" />
