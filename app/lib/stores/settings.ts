@@ -167,39 +167,35 @@ const getDefaultMCPServers = (): MCPServer[] => {
         url: 'https://mcp-image.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
-        description:
-          'Generate various 2D image assets for game development. Create character sprites, items, backgrounds, UI elements, and tilemaps. Supports various styles (pixel art, cartoon, vector, fantasy, realistic). Provides optimized generation parameters based on game type. Outputs in formats compatible with game engines. Customizable size settings.',
+        description: 'Create 2D game assets in various styles',
       },
       {
         name: 'Cinematic',
         url: 'https://mcp-cinematic.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
-        description:
-          'Create high-quality cinematics for game storytelling, trailers, cutscenes, and promotional materials. Converts text-based game context into visual cinematics. Maintains game style consistency using reference images. Supports various aspect ratios (16:9, 9:16, 1:1). Adjustable motion amplitude (auto, small, medium, large).',
+        description: 'Turn text into styled game cutscenes',
       },
       {
         name: 'Audio',
         url: 'https://mcp-audio.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
-        description:
-          'Generate game background music, character/level theme music, and sound effects. Fast generation speed (30-second sample: about 2 seconds, 3-minute track: within 10 seconds). High-quality 44.1kHz stereo audio output. Maintains professional consistency without interruptions. Provides results in WAV file format.',
+        description: 'Generate music and sound effects fast',
       },
       {
         name: 'Skybox',
         url: 'https://mcp-skybox.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
-        description:
-          'Create immersive 360° environments for VR/AR and games. Generate 360° panoramic environments based on text prompts. Provides various style options (realistic environments, animated art styles). Features asynchronous generation and status checking through queue system.',
+        description: 'Make 360° environments for games or VR',
       },
       {
         name: 'UI',
         url: 'https://mcp-ui.verse8.io/mcp',
         enabled: false,
         v8AuthIntegrated: false,
-        description: 'Create CSS styles for UI elements, used for web development or game development.',
+        description: 'Design CSS styles for game interfaces',
       },
     ];
   }
@@ -243,8 +239,14 @@ const getInitialMCPServers = (): MCPServer[] => {
       const existingIndex = resultServers.findIndex((server) => server.url === storedServer.url);
 
       if (existingIndex >= 0) {
-        // Replace default with stored version if URL already exists
-        resultServers[existingIndex] = storedServer;
+        /*
+         * Replace default with stored version if URL already exists
+         * Always use the latest description from the codebase (defaultServers)
+         */
+        resultServers[existingIndex] = {
+          ...storedServer,
+          description: resultServers[existingIndex].description, // Always use codebase description
+        };
       } else {
         // Add stored server if it's not in default list
         resultServers.push(storedServer);

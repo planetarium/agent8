@@ -6,7 +6,6 @@ import type { JSONValue, Message } from 'ai';
 import React, { type RefCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
-import { IconButton } from '~/components/ui/IconButton';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
@@ -28,15 +27,14 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
-import { ImportProjectZip } from './ImportProjectZip';
 import McpServerManager from '~/components/chat/McpServerManager';
-import { FaCheckSquare, FaSquare } from 'react-icons/fa';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
 import { TaskMessages } from './TaskMessages.client';
 import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
+import { AttachmentSelector } from './AttachmentSelector';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 const MAX_ATTACHMENTS = 10;
@@ -107,8 +105,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setProvider,
       providerList,
       input = '',
-      enabledTaskMode,
-      setEnabledTaskMode,
+
+      /*
+       * enabledTaskMode,
+       * setEnabledTaskMode,
+       */
+
       taskBranches,
       reloadTaskBranches,
       handleInputChange,
@@ -130,7 +132,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     },
     ref,
   ) => {
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const TEXTAREA_MAX_HEIGHT = 200;
     const [modelList, setModelList] = useState<ModelInfo[]>([]);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
@@ -138,6 +140,41 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(1);
     const repo = useStore(repoStore);
+    const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
+    const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
+    const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
+
+    const prompts = [
+      'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.',
+      'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+      'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above and clicks to move and attack.',
+      'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
+      'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural terrain generation, block placement, and first-person movement.',
+      'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.',
+    ];
+    const [currentPromptIndex, setCurrentPromptIndex] = useState<number>(0);
+    const [animationDirection, setAnimationDirection] = useState('in');
+
+    useEffect(() => {
+      if (!chatStarted) {
+        const rotatePrompt = () => {
+          setAnimationDirection('out');
+
+          setTimeout(() => {
+            setCurrentPromptIndex((prevIndex) => {
+              return (prevIndex + 1) % prompts.length;
+            });
+            setAnimationDirection('in');
+          }, 500);
+        };
+
+        const promptTimer = setInterval(rotatePrompt, 4000);
+
+        return () => clearInterval(promptTimer);
+      }
+
+      return undefined;
+    }, [chatStarted, prompts.length]);
 
     useEffect(() => {
       if (data) {
@@ -448,10 +485,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       URL.revokeObjectURL(url);
     };
 
+    const handleImportProjectModalChange = (isOpen: boolean) => {
+      setImportProjectModalOpen(isOpen);
+      setAttachmentHovered(false);
+    };
+
+    const shouldShowAttachmentTooltip = () => {
+      return attachmentHovered && !attachmentDropdownOpen && !importProjectModalOpen;
+    };
+
     const baseChat = (
       <div
         ref={ref}
-        className={classNames(styles.BaseChat, 'relative flex h-full w-full overflow-hidden')}
+        className={classNames(
+          styles.BaseChat,
+          'relative flex flex-col items-center gap-12 w-full h-full overflow-hidden',
+        )}
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
@@ -463,17 +512,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
           >
             {!chatStarted && (
-              <div id="intro" className="mt-[16vh] max-w-chat mx-auto text-center px-4 lg:px-0">
-                <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
-                </h1>
-                <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
-                </p>
+              <div id="intro" className="mt-[30px] max-w-chat-before-start mx-auto text-center px-4 lg:px-0">
+                <div className="flex justify-center mb-4">
+                  <img src="/title/Title.svg" alt="Agent8 Title" className="max-w-full h-auto" />
+                </div>
               </div>
             )}
             <div
-              className={classNames('pt-6 px-2 sm:px-6 relative', {
+              className={classNames('pt-4 px-2 sm:px-6 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -518,8 +564,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </ClientOnly>
 
               <div
-                className={classNames('flex flex-col gap-2 w-full max-w-chat mx-auto z-prompt', {
+                className={classNames('flex flex-col gap-4 w-full mx-auto z-prompt', {
                   'sticky bottom-8': chatStarted,
+                  'max-w-chat': chatStarted,
+                  'max-w-chat-before-start': !chatStarted,
                 })}
               >
                 <div className="bg-bolt-elements-background-depth-2">
@@ -553,16 +601,32 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
-                <McpServerManager />
-
                 <div
                   className={classNames(
-                    'bg-bolt-elements-background-depth-2 p-3 rounded-lg relative w-full max-w-chat mx-auto z-prompt mt-1 relative',
+                    'flex flex-col self-stretch p-5 rounded-lg relative w-full mx-auto z-prompt mt-1 relative min-h-58',
+                    {
+                      'max-w-chat': chatStarted,
+                      'max-w-chat-before-start': !chatStarted,
+                      'bg-primary': !chatStarted,
+                      [styles.promptInputActive]: chatStarted,
+                    },
                   )}
-                  style={{ boxShadow: '0 0 15px rgba(63, 210, 232, 0.05)' }}
+                  style={
+                    !chatStarted
+                      ? {
+                          boxShadow: '0 0 15px rgba(63, 210, 232, 0.05)',
+                        }
+                      : {}
+                  }
                 >
-                  <div className={classNames(styles.PromptEffectContainer)}>
-                    <span className={classNames(styles.PromptEffectInner)}></span>
+                  {!chatStarted && (
+                    <div className={classNames(styles.PromptEffectContainer)}>
+                      <span className={classNames(styles.PromptEffectInner)}></span>
+                    </div>
+                  )}
+
+                  <div className="mb-4 relative">
+                    <McpServerManager chatStarted={chatStarted} />
                   </div>
 
                   <FilePreview
@@ -572,18 +636,28 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       setAttachmentList?.((prev) => prev?.filter((_, i) => i !== index) || []);
                     }}
                   />
+
                   <div
                     className={classNames(
-                      'relative shadow-xs border border-bolt-elements-borderColor backdrop-blur rounded-lg',
+                      'relative shadow-xs backdrop-blur rounded-lg flex-1',
+                      attachmentList && attachmentList.length > 0 ? 'mb-12 mt-4' : '',
                     )}
                   >
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full pl-4 pt-4 pr-16 outline-none resize-none text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent text-sm',
+                        'w-full outline-none resize-none bg-transparent font-primary text-[20px] font-semibold font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
                       )}
+                      style={{
+                        fontStyle: 'normal',
+                        lineHeight: '140%',
+                        height: `${TEXTAREA_MIN_HEIGHT}px`,
+                        maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
+                        border: '1px solid transparent',
+                        overflowY: 'scroll',
+                      }}
                       onDragEnter={(e) => {
                         e.preventDefault();
                         e.currentTarget.style.border = '2px solid #1488fc';
@@ -594,11 +668,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       }}
                       onDragLeave={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
+                        e.currentTarget.style.border = '1px solid transparent';
                       }}
                       onDrop={async (e) => {
                         e.preventDefault();
-                        e.currentTarget.style.border = '1px solid var(--bolt-elements-borderColor)';
+                        e.currentTarget.style.border = '1px solid transparent';
 
                         const files = Array.from(e.dataTransfer.files);
 
@@ -662,80 +736,268 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         handleInputChange?.(event);
                       }}
                       onPaste={handlePaste}
-                      style={{
-                        minHeight: TEXTAREA_MIN_HEIGHT + (!chatStarted ? 30 : 0),
-                        maxHeight: TEXTAREA_MAX_HEIGHT,
-                      }}
-                      placeholder="Create your own game here"
+                      placeholder=""
                       translate="no"
                     />
-                    <ClientOnly>
-                      {() => (
-                        <SendButton
-                          show={input.length > 0 || isStreaming || attachmentList.length > 0}
-                          isStreaming={isStreaming}
-                          disabled={!providerList || providerList.length === 0}
-                          onClick={(event) => {
-                            if (isStreaming) {
-                              handleStop?.();
-                              return;
-                            }
 
-                            if (input.length > 0 || attachmentList.length > 0) {
-                              handleSendMessage?.(event);
-                            }
-                          }}
-                        />
-                      )}
-                    </ClientOnly>
-                    <div className="flex justify-between items-center text-sm p-4 pt-2">
-                      <div className="flex gap-1 items-center">
-                        <IconButton title="Upload file" className="transition-all" onClick={() => handleFileUpload()}>
-                          <div className="i-ph:paperclip text-xl"></div>
-                        </IconButton>
-
-                        {chatStarted && <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>}
-
-                        <div className="ml-1 flex items-center">
-                          <ClientOnly>
-                            {() => (
-                              <ModelSelector
-                                key={provider?.name + ':' + modelList.length}
-                                model={model}
-                                setModel={setModel}
-                                modelList={modelList}
-                                provider={provider}
-                                setProvider={setProvider}
-                                providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
-                                modelLoading={isModelLoading}
-                              />
-                            )}
-                          </ClientOnly>
-                        </div>
+                    {!chatStarted && input.length === 0 && (
+                      <div
+                        className={classNames(
+                          'absolute left-0 top-0 w-full font-primary text-[20px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
+                          animationDirection === 'in' ? styles.placeholderAnimationIn : styles.placeholderAnimationOut,
+                        )}
+                        style={{
+                          lineHeight: '140%',
+                          padding: 'inherit',
+                        }}
+                      >
+                        {prompts[currentPromptIndex]}
                       </div>
-                      {input.length > 3 ? (
-                        <div className="text-xs text-bolt-elements-textTertiary">
-                          Use <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Shift</kbd>{' '}
-                          + <kbd className="kdb px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">Return</kbd>{' '}
-                          a new line
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <div
-                            className="text-xs text-bolt-elements-textSecondary flex items-center gap-1 pointer hover:text-bolt-elements-textPrimary cursor-pointer"
-                            onClick={() => setEnabledTaskMode?.(!enabledTaskMode)}
-                          >
-                            {enabledTaskMode ? <FaCheckSquare /> : <FaSquare />}
-                            Task Mode
-                          </div>
-                          {!chatStarted && <ImportProjectZip onImport={onProjectZipImport} />}
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center self-stretch text-sm mt-auto">
+                    <div className="flex items-center gap-[6px]">
+                      <div className="flex items-center hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
+                        <ClientOnly>
+                          {() => (
+                            <Tooltip.Root>
+                              <Tooltip.Trigger asChild>
+                                <div>
+                                  <ModelSelector
+                                    key={provider?.name + ':' + modelList.length}
+                                    model={model}
+                                    setModel={setModel}
+                                    modelList={modelList}
+                                    provider={provider}
+                                    setProvider={setProvider}
+                                    providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
+                                    modelLoading={isModelLoading}
+                                  />
+                                </div>
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                                  sideOffset={5}
+                                  side="bottom"
+                                >
+                                  Select Model
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
+                        </ClientOnly>
+                      </div>
+                      <div
+                        className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200"
+                        onMouseEnter={() => setAttachmentHovered(true)}
+                        onMouseLeave={() => setAttachmentHovered(false)}
+                      >
+                        <Tooltip.Root open={shouldShowAttachmentTooltip()}>
+                          <Tooltip.Trigger asChild>
+                            <div>
+                              <AttachmentSelector
+                                onImportProject={onProjectZipImport}
+                                onUploadFile={handleFileUpload}
+                                chatStarted={chatStarted}
+                                onDropdownOpenChange={setAttachmentDropdownOpen}
+                                onImportProjectModalChange={handleImportProjectModalChange}
+                              />
+                            </div>
+                          </Tooltip.Trigger>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                              sideOffset={5}
+                              side="bottom"
+                            >
+                              {chatStarted ? 'Upload a file' : 'Upload a file or import a project'}
+                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        </Tooltip.Root>
+                      </div>
+                      {chatStarted && (
+                        <div className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
+                          <Tooltip.Root>
+                            <Tooltip.Trigger asChild>
+                              <div>
+                                <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>
+                              </div>
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-3 shadow-md z-[9999] font-primary text-sm font-medium leading-[150%]"
+                                sideOffset={5}
+                                side="bottom"
+                              >
+                                Export chat
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
                         </div>
                       )}
+                    </div>
+
+                    <div className="flex items-center">
+                      <ClientOnly>
+                        {() => (
+                          <SendButton
+                            show={true}
+                            isStreaming={isStreaming}
+                            disabled={
+                              !providerList ||
+                              providerList.length === 0 ||
+                              (input.length === 0 && attachmentList.length === 0 && !isStreaming)
+                            }
+                            onClick={(event) => {
+                              if (isStreaming) {
+                                handleStop?.();
+                                return;
+                              }
+
+                              if (input.length > 0 || attachmentList.length > 0) {
+                                handleSendMessage?.(event);
+                              }
+                            }}
+                          />
+                        )}
+                      </ClientOnly>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+            {!chatStarted && (
+              <div className="flex flex-col justify-center items-start gap-3 self-stretch w-full mx-auto max-w-chat-before-start mt-[36px] mb-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-left font-primary text-secondary text-sm font-medium leading-[142.9%] not-italic">
+                    What do you want to create? Try it
+                  </p>
+                  <img src="/icons/Magic.svg" alt="Magic" />
+                </div>
+                <div className="flex items-center gap-3 self-stretch">
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Fps.svg" alt="Fps" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                      First-Person Shooter
+                    </span>
+                  </button>
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Tps.svg" alt="Tps" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                      Third-Person Shooter
+                    </span>
+                  </button>
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above and clicks to move and attack.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Topdown.svg" alt="Topdown" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[14px] not-italic font-semibold leading-[142.9%]">
+                      Top-Down Action
+                    </span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 self-stretch">
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Puzzle.svg" alt="Puzzle" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                      Puzzle & Logic
+                    </span>
+                  </button>
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural terrain generation, block placement, and first-person movement.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Voxel.svg" alt="Voxel" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                      Voxel Sandbox Builder
+                    </span>
+                  </button>
+                  <button
+                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 flex-1 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
+                    onClick={() => {
+                      const prompt =
+                        'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.';
+
+                      if (handleInputChange) {
+                        const syntheticEvent = {
+                          target: { value: prompt },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleInputChange(syntheticEvent);
+                      }
+                    }}
+                  >
+                    <img src="/icons/Flight.svg" alt="Flight" />
+                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-sm not-italic font-semibold leading-[142.9%]">
+                      Flight Simulator
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex flex-col justify-center gap-5">
               {!chatStarted &&
                 ExamplePrompts((event, messageInput) => {

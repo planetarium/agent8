@@ -227,20 +227,14 @@ export const ModelSelector = ({
           aria-haspopup="listbox"
           tabIndex={0}
         >
-          <div className="flex items-center gap-1">
-            <span className="max-w-[300px] truncate">{selectedOption?.label || 'Auto'}</span>
-            <span
-              className={classNames(
-                'i-ph:caret-down opacity-75 transform transition-transform',
-                isDropdownOpen ? 'rotate-180' : '',
-              )}
-            ></span>
+          <div className="flex p-2 justify-center items-center gap-1.5">
+            <img src="/icons/Model.svg" alt="Model" />
           </div>
         </div>
 
         {isDropdownOpen && (
           <div
-            className="absolute z-10 mt-1 py-1 min-w-[300px] rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg"
+            className="absolute z-10 bottom-full mb-1 py-1 min-w-[300px] rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg"
             role="listbox"
             id="model-listbox"
           >
@@ -307,7 +301,7 @@ export const ModelSelector = ({
                       (model === AUTO_MODEL_NAME && option.modelName === AUTO_MODEL_NAME) ||
                         selectedOption?.label === option.label ||
                         focusedIndex === index
-                        ? 'bg-bolt-elements-background-depth-2'
+                        ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))]'
                         : undefined,
                       focusedIndex === index ? 'ring-1 ring-inset ring-bolt-elements-focus' : undefined,
                     )}

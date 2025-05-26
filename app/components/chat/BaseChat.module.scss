@@ -24,55 +24,37 @@
 .PromptEffectContainer {
   position: absolute;
   pointer-events: none;
-  inset: -4px;
-  border-radius: 10px;
+  inset: 0;
+  border-radius: 24px;
   overflow: visible;
   z-index: -1;
-  filter: drop-shadow(0 0 4px rgba(63, 210, 232, 0.15));
 
   &::before {
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 10px;
-    background: repeating-conic-gradient(
-      from var(--angle),
-      rgba(63, 210, 232, 0.7) 0%,
-      rgba(63, 210, 232, 0.7) 45%,
-      rgba(255, 229, 163, 0.7) 55%,
-      rgba(255, 229, 163, 0.7) 100%
-    );
+    border-radius: 24px;
+    background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
     animation: rotate 4s linear infinite;
-    box-shadow:
-      0 0 6px 1px rgba(63, 210, 232, 0.2),
-      0 0 10px 2px rgba(255, 229, 163, 0.15),
-      inset 0 0 5px rgba(63, 210, 232, 0.2);
   }
 
   &::after {
     content: '';
     position: absolute;
-    inset: -10px;
-    border-radius: 15px;
-    background: repeating-conic-gradient(
-      from var(--angle),
-      rgba(63, 210, 232, 0.3) 0%,
-      rgba(63, 210, 232, 0.3) 45%,
-      rgba(255, 229, 163, 0.3) 55%,
-      rgba(255, 229, 163, 0.3) 100%
-    );
+    inset: 0;
+    border-radius: 24px;
+    background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
     animation: rotate 4s linear infinite;
-    filter: blur(20px);
-    opacity: 0.4;
-    mix-blend-mode: normal;
+    filter: blur(40px);
+    opacity: 0.75;
   }
 }
 
 .PromptEffectInner {
   position: absolute;
   inset: 2px;
-  background: var(--bolt-elements-background-depth-2, #222);
-  border-radius: 8px;
+  background: var(--color-bg-primary, #111315);
+  border-radius: 22px;
   z-index: 1;
 }
 
@@ -88,5 +70,46 @@
   }
   100% {
     --angle: 360deg;
+  }
+}
+
+.promptInputActive {
+  border-radius: var(--border-radius-24, 24px);
+  border: 1px solid #3fd2e8;
+  background: var(--color-bg-primary, #111315);
+  /* Elevation/Light/3 */
+  box-shadow:
+    0px 2px 8px 2px rgba(26, 220, 217, 0.12),
+    0px 12px 80px 16px rgba(148, 250, 239, 0.2);
+}
+
+/* 순환하는 placeholder 애니메이션 스타일 */
+.placeholderAnimationIn {
+  animation: slideInUp 0.5s forwards;
+}
+
+.placeholderAnimationOut {
+  animation: slideOutUp 0.5s forwards;
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-20px);
+    opacity: 0;
   }
 }
