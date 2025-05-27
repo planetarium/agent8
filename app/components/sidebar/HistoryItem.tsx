@@ -33,24 +33,22 @@ export function HistoryItem({ item, onDelete }: HistoryItemProps) {
         { 'text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50': isActiveChat },
       )}
     >
-      <IframeLink to={`/chat/${item.urlId}`} className="flex w-full relative truncate block">
-        <span className="truncate pr-24">{item.description}</span>
-        <div className="absolute right-0 top-0 bottom-0 flex items-center px-2">
-          <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Dialog.Trigger asChild>
-              <ChatActionButton
-                toolTipContent="Delete"
-                icon="i-ph:trash h-4 w-4"
-                className="hover:text-red-500"
-                onClick={(event) => {
-                  event.preventDefault();
-                  onDelete?.(event);
-                }}
-              />
-            </Dialog.Trigger>
-          </div>
-        </div>
+      <IframeLink to={`/chat/${item.urlId}`} className="flex-1 truncate block pr-12">
+        <span className="truncate">{item.description}</span>
       </IframeLink>
+      <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Dialog.Trigger asChild>
+          <ChatActionButton
+            toolTipContent="Delete"
+            icon="i-ph:trash h-4 w-4"
+            className="hover:text-red-500"
+            onClick={(event) => {
+              event.preventDefault();
+              onDelete?.(event);
+            }}
+          />
+        </Dialog.Trigger>
+      </div>
     </div>
   );
 }
