@@ -57,6 +57,20 @@ const inlineThemeCode = stripIndents`
   }
 `;
 
+const hotjarCode = (() => {
+  const siteId = import.meta.env.VITE_HOTJAR_SITE_ID || '6416786';
+  return stripIndents`
+    (function(h,o,t,j,a,r){
+      h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};
+      h._hjSettings={hjid:${siteId},hjsv:6};
+      a=o.getElementsByTagName('head')[0];
+      r=o.createElement('script');r.async=1;
+      r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;
+      a.appendChild(r);
+    })(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');
+  `;
+})();
+
 export const Head = createHead(() => (
   <>
     <meta charSet="utf-8" />
@@ -64,6 +78,7 @@ export const Head = createHead(() => (
     <Meta />
     <Links />
     <script dangerouslySetInnerHTML={{ __html: inlineThemeCode }} />
+    <script dangerouslySetInnerHTML={{ __html: hotjarCode }} />
   </>
 ));
 
