@@ -170,11 +170,12 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                       className={classNames(
                         'flex items-center justify-between w-full',
                         'px-4 py-3.2',
-                        'transition-all duration-200',
+                        'transition-all duration-200 cursor-pointer',
                         server.enabled
-                          ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))]'
-                          : 'hover:bg-bolt-elements-item-backgroundActive',
+                          ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
+                          : 'hover:bg-bolt-elements-item-backgroundActive active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)]',
                       )}
+                      onClick={() => handleToggleServer(index, !server.enabled)}
                     >
                       <div className="flex items-center gap-4.8">
                         <button
@@ -185,7 +186,10 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                               ? 'bg-[var(--color-bg-interactive-primary,#1A92A4)]'
                               : 'bg-[#383838] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))]',
                           )}
-                          onClick={() => handleToggleServer(index, !server.enabled)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleServer(index, !server.enabled);
+                          }}
                           aria-pressed={server.enabled}
                           aria-label={`${server.enabled ? 'Disable' : 'Enable'} ${server.name} server`}
                         >

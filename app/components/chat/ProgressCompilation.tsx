@@ -55,11 +55,11 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
   return (
     <AnimatePresence>
       <div
-        className={classNames('border-radius-8 bg-color-bg-transperant', 'relative w-full max-w-chat mx-auto z-prompt')}
+        className={classNames('border-radius-8 bg-color-bg-transperant', 'relative w-full max-w-chat mx-auto')}
         style={{
           borderRadius: 'var(--border-radius-8, 8px)',
           background: 'var(--color-bg-depth-2, #2A2D33)',
-          zIndex: 3,
+          zIndex: 2,
           position: 'relative',
         }}
       >
@@ -133,7 +133,7 @@ const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
-        style={{ position: 'relative', zIndex: 3 }}
+        style={{ position: 'relative', zIndex: 2 }}
       >
         <div className="flex items-center gap-1.5">
           <div>

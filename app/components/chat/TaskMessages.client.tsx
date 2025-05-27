@@ -135,7 +135,9 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               </button>
             </div>
             <div className="flex flex-col flex-grow overflow-hidden">
-              <div className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-1')}>
+              <div
+                className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-[2px]')}
+              >
                 <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
                   Task
                 </span>

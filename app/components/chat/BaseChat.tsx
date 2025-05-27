@@ -641,6 +641,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     className={classNames(
                       'relative shadow-xs backdrop-blur rounded-lg flex-1',
                       attachmentList && attachmentList.length > 0 ? 'mb-12 mt-4' : '',
+                      'flex',
                     )}
                   >
                     <textarea
@@ -649,11 +650,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         'w-full outline-none resize-none bg-transparent font-primary text-[16px] font-medium font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
+                        'flex-1',
                       )}
                       style={{
                         // fontStyle: 'normal',
                         lineHeight: '160%',
-                        height: `${TEXTAREA_MIN_HEIGHT}px`,
+                        minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
                         maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
                         overflowY: 'scroll',
