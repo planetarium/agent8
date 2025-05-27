@@ -1,5 +1,3 @@
-import { AnimatePresence, cubicBezier, motion } from 'framer-motion';
-
 interface SendButtonProps {
   show: boolean;
   isStreaming?: boolean;
@@ -8,32 +6,24 @@ interface SendButtonProps {
   onImagesSelected?: (images: File[]) => void;
 }
 
-const customEasingFn = cubicBezier(0.4, 0, 0.2, 1);
-
 export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonProps) => {
-  return (
-    <AnimatePresence>
-      {show ? (
-        <motion.button
-          className="absolute flex justify-center items-center top-[18px] right-[22px] p-1 bg-cyan-600 hover:brightness-94 color-white rounded-md w-[34px] h-[34px] transition-theme disabled:opacity-50 disabled:cursor-not-allowed"
-          transition={{ ease: customEasingFn, duration: 0.17 }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
-          disabled={disabled}
-          onClick={(event) => {
-            event.preventDefault();
+  return show ? (
+    <button
+      className="inline-flex justify-center items-center py-2 px-2.8 gap-1.2 rounded-[3.2px] border border-solid border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.22)] active:border-[rgba(255,255,255,0.35)] disabled:border-[rgba(255,255,255,0.08)] bg-interactive-gradient hover:bg-interactive-gradient-hovered active:bg-interactive-gradient-pressed disabled:bg-[var(--color-bg-disabled)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{ backgroundSize: '104% 104%', backgroundPosition: 'center' }}
+      disabled={disabled}
+      onClick={(event) => {
+        event.preventDefault();
 
-            if (!disabled) {
-              onClick?.(event);
-            }
-          }}
-        >
-          <div className="text-lg">
-            {!isStreaming ? <div className="i-ph:arrow-right"></div> : <div className="i-ph:stop-circle-bold"></div>}
-          </div>
-        </motion.button>
-      ) : null}
-    </AnimatePresence>
-  );
+        if (!disabled) {
+          onClick?.(event);
+        }
+      }}
+    >
+      <div className="text-[0.9rem]">{!isStreaming && <img src="/icons/Sparkle.svg" alt="Send" />}</div>
+      <span className="text-interactive-on-primary font-feature-stylistic font-primary text-[11.2px] font-semibold leading-[142.9%]">
+        {!isStreaming ? 'Create' : 'Stop'}
+      </span>
+    </button>
+  ) : null;
 };

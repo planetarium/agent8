@@ -4,15 +4,25 @@ import { IconButton } from '~/components/ui/IconButton';
 
 interface ImportProjectZipProps {
   onImport?: (title: string, zipFile: File) => void;
+  showModal?: boolean;
+  setShowModal?: (show: boolean) => void;
 }
 
-export const ImportProjectZip = ({ onImport }: ImportProjectZipProps) => {
-  const [showModal, setShowModal] = useState(false);
+export const ImportProjectZip = ({
+  onImport,
+  showModal: externalShowModal,
+  setShowModal: externalSetShowModal,
+}: ImportProjectZipProps) => {
+  const [internalShowModal, setInternalShowModal] = useState(false);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [projectTitle, setProjectTitle] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 외부에서 제어되는 경우와 내부에서 제어되는 경우를 구분
+  const showModal = externalShowModal !== undefined ? externalShowModal : internalShowModal;
+  const setShowModal = externalSetShowModal || setInternalShowModal;
 
   useEffect(() => {
     if (showModal) {
@@ -106,9 +116,12 @@ export const ImportProjectZip = ({ onImport }: ImportProjectZipProps) => {
 
   return (
     <>
-      <IconButton title="Import Project" className="transition-all" onClick={() => setShowModal(true)}>
-        <div className="i-ph:import text-xs">Import Project</div>
-      </IconButton>
+      {/* 외부에서 모달 상태를 제어하지 않을 때만 IconButton 렌더링 */}
+      {externalShowModal === undefined && (
+        <IconButton title="Import Project" className="transition-all" onClick={() => setShowModal(true)}>
+          <div className="i-ph:import text-xs">Import Project</div>
+        </IconButton>
+      )}
 
       {showModal && (
         <div

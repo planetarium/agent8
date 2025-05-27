@@ -218,10 +218,37 @@
 :root {
   --header-height: 54px;
   --chat-max-width: 37rem;
+  --chat-max-width-before-start: 37.4rem;
   --chat-min-width: 640px;
   --workbench-width: min(calc(100% - var(--chat-min-width)), 2536px);
   --workbench-inner-width: var(--workbench-width);
   --workbench-left: calc(100% - var(--workbench-width));
+
+  /* Font Families */
+  --font-primary: 'Instrument Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-feature-stylistic: "'ss10' on";
+
+  /* Color Variables */
+  --color-text-primary: #fff;
+  --color-text-tertiary: #99a2b0;
+  --color-text-secondary: #dbe0e9;
+  --color-text-interactive-neutral: #f3f5f8;
+  --color-text-interactive-on-primary: #f3f5f8;
+  --color-bg-interactive-neutral: #222428;
+  --color-bg-interactive-neutral-hovered: #32363c;
+  --color-bg-interactive-neutral-pressed: #464c54;
+  --color-border-interactive-neutral: rgba(255, 255, 255, 0.18);
+  --color-border-interactive-neutral-hovered: rgba(255, 255, 255, 0.22);
+  --color-border-interactive-neutral-pressed: rgba(255, 255, 255, 0.35);
+  --color-border-disabled: rgba(255, 255, 255, 0.08);
+  --color-bg-disabled: rgba(255, 255, 255, 0.05);
+  --color-bg-interactive-gradient-start: #111315;
+  --color-bg-interactive-gradient-end: #11b9d2;
+  --color-bg-interactive-gradient-end-hovered: #1a7583;
+  --color-bg-interactive-gradient-end-pressed: #1b5862;
+
+  /* Border Radius Variables */
+  --border-radius-8: 8px;
 
   /* Toasts */
   --toastify-color-progress-success: var(--bolt-elements-icon-success);
@@ -248,4 +275,18 @@
   --bolt-elements-terminal-color-brightMagenta: var(--bolt-terminal-brightMagenta);
   --bolt-elements-terminal-color-brightCyan: var(--bolt-terminal-brightCyan);
   --bolt-elements-terminal-color-brightWhite: var(--bolt-terminal-brightWhite);
+
+  /* Spacing Variables */
+  --spacing-6: 6px;
+  --spacing-10: 10px;
+  --spacing-14: 14px;
+
+  /* Border Variables */
+  --border-radius-4: 4px;
+  --border-width-1: 1px;
+}
+
+/* Typography Utilities */
+.font-feature-stylistic {
+  font-feature-settings: var(--font-feature-stylistic);
 }

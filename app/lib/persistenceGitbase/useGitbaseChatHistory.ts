@@ -117,7 +117,7 @@ export function useGitbaseChatHistory() {
         return;
       }
 
-     logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
+      logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
 
       // 이미 로딩 중이면 종료
       if (loading) {

@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -10,6 +10,7 @@ import type { ForwardedRef } from 'react';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
+import Lottie from 'lottie-react';
 
 interface MessagesProps {
   id?: string;
@@ -26,6 +27,16 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
     const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert, onViewDiff } = props;
     const profile = useStore(profileStore);
+    const [animationData, setAnimationData] = useState<any>(null);
+
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        fetch('/animations/loading.json')
+          .then((response) => response.json())
+          .then((data) => setAnimationData(data))
+          .catch((error) => console.error('animation load error:', error));
+      }
+    }, []);
 
     return (
       <div id={id} className={classNames(props.className, 'pr-1')} ref={ref}>
@@ -129,7 +140,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             })
           : null}
         {isStreaming && (
-          <div className="text-center w-full text-bolt-elements-textSecondary i-svg-spinners:3-dots-fade text-4xl mt-4"></div>
+          <div className="text-center w-full mt-4">
+            {animationData ? (
+              <div style={{ width: '70.4px', height: '70.4px', aspectRatio: '1/1', margin: '0 auto' }}>
+                <Lottie animationData={animationData} loop={true} />
+              </div>
+            ) : (
+              <div className="text-bolt-elements-textSecondary i-svg-spinners:3-dots-fade text-4xl"></div>
+            )}
+          </div>
         )}
       </div>
     );

@@ -133,6 +133,7 @@
     "js-cookie": "^3.0.5",
     "jspdf": "^2.5.2",
     "jszip": "^3.10.1",
+    "lottie-react": "^2.4.1",
     "mime": "^4.0.4",
     "nanostores": "^0.10.3",
     "ollama-ai-provider": "^0.15.2",
