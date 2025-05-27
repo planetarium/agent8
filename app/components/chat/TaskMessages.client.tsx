@@ -162,11 +162,14 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                     setIsLoading(true);
 
                     try {
-                      await removeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                      const targetTaskBranch = repoStore.get().taskBranch;
+                      lastActionStore.set({ action: 'LOAD' });
+                      await removeTaskBranch(repoStore.get().path, targetTaskBranch);
                       repoStore.set({
                         ...repoStore.get(),
                         taskBranch: DEFAULT_TASK_BRANCH,
                       });
+                      reloadTaskBranches?.(repoStore.get().path);
                     } catch {
                       toast.error('Failed to remove task branch');
                     } finally {
@@ -207,10 +210,12 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
 
                         try {
                           await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                          lastActionStore.set({ action: 'LOAD' });
                           repoStore.set({
                             ...repoStore.get(),
                             taskBranch: DEFAULT_TASK_BRANCH,
                           });
+                          reloadTaskBranches?.(repoStore.get().path);
                         } catch {
                           toast.error('Failed to merge task branch');
                         } finally {
