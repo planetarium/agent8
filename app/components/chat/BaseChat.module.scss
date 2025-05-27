@@ -25,7 +25,7 @@
   position: absolute;
   pointer-events: none;
   inset: 0;
-  border-radius: 24px;
+  border-radius: 16px;
   overflow: visible;
   z-index: -1;
 
@@ -33,7 +33,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 24px;
+    border-radius: 16px;
     background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
     animation: rotate 4s linear infinite;
   }
@@ -42,7 +42,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 24px;
+    border-radius: 16px;
     background: repeating-conic-gradient(from var(--angle), #3fd2e8, #ffe5a3);
     animation: rotate 4s linear infinite;
     filter: blur(32px);
@@ -54,7 +54,7 @@
   position: absolute;
   inset: 1.5px;
   background: var(--color-bg-primary, #111315);
-  border-radius: 22px;
+  border-radius: 14px;
   z-index: 1;
 }
 
@@ -74,7 +74,7 @@
 }
 
 .promptInputActive {
-  border-radius: var(--border-radius-24, 24px);
+  border-radius: var(--border-radius-16, 16px);
   border: 1px solid #3fd2e8;
   background: var(--color-bg-primary, #111315);
   /* Elevation/Light/3 */

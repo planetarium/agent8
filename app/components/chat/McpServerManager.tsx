@@ -117,9 +117,9 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
             <div
               key={index}
               className="flex min-h-8 max-h-8 px-[12.8px] py-[8px] justify-center items-center gap-[4.8px] rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral-hovered,rgba(255,255,255,0.22))] text-[14px] font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
-              title={server.url}
               onMouseEnter={() => setHoveredServerIndex(index)}
               onMouseLeave={() => setHoveredServerIndex(null)}
+              onClick={() => handleToggleServer(index, false)}
             >
               {hoveredServerIndex === index ? (
                 <img

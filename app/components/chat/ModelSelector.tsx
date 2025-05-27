@@ -215,7 +215,7 @@ export const ModelSelector = ({
       <div className="relative" onKeyDown={handleKeyDown} ref={dropdownRef}>
         <div
           className={classNames(
-            'flex items-center text-bolt-elements-textSecondary text-xs cursor-pointer hover:text-bolt-elements-textPrimary transition-colors',
+            'flex items-center text-bolt-elements-textSecondary text-xs cursor-pointer hover:text-bolt-elements-textPrimary transition-colors gap-1.5 py-2 px-4',
             isDropdownOpen ? 'text-bolt-elements-textPrimary' : '',
           )}
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -231,8 +231,15 @@ export const ModelSelector = ({
           aria-haspopup="listbox"
           tabIndex={0}
         >
-          <div className="flex p-2 justify-center items-center gap-1.5">
-            <img src="/icons/Model.svg" alt="Model" />
+          <div className="flex items-center gap-[10px]">
+            <span className="max-w-[300px] truncate text-[14px] font-medium">{selectedOption?.label || 'Auto'}</span>
+            <div>
+              <img
+                src="/icons/ChevronDown.svg"
+                alt="Chevron Down"
+                className={classNames('opacity-75 transform transition-transform', isDropdownOpen ? 'rotate-180' : '')}
+              />
+            </div>
           </div>
         </div>
 
@@ -299,14 +306,13 @@ export const ModelSelector = ({
                     }
                     className={classNames(
                       'px-3 py-2 text-sm cursor-pointer',
-                      'hover:bg-bolt-elements-item-backgroundActive',
                       'text-bolt-elements-textPrimary opacity-90',
                       'outline-none',
+                      'transition-all duration-200',
                       (model === AUTO_MODEL_NAME && option.modelName === AUTO_MODEL_NAME) ||
-                        selectedOption?.label === option.label ||
-                        focusedIndex === index
-                        ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))]'
-                        : undefined,
+                        selectedOption?.label === option.label
+                        ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
+                        : 'hover:bg-bolt-elements-item-backgroundActive active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)]',
                       focusedIndex === index ? 'ring-1 ring-inset ring-bolt-elements-focus' : undefined,
                     )}
                     onClick={(e) => {
