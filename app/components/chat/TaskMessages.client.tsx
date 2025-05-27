@@ -157,7 +157,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             {mergeStatus && (
               <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
                 <button
-                  className="px-4 py-2 my-2 text-lg bg-zinc-800 text-white rounded-md hover:bg-zinc-700 active:bg-zinc-900 transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 my-2 border border-zinc-700 bg-zinc-800 text-white rounded-md hover:bg-zinc-700 active:bg-zinc-900 transition-colors shadow-sm font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
                     setIsLoading(true);
 
