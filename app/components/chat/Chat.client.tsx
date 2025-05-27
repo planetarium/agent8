@@ -824,32 +824,38 @@ export const ChatImpl = memo(
         setFakeLoading(true);
         runAnimation();
 
-        repoStore.set({
-          name: source.title,
-          path: '',
-          title: source.title,
-          taskBranch: DEFAULT_TASK_BRANCH,
-        });
-
-        const messages = [
-          {
-            id: `1-${new Date().getTime()}`,
-            role: 'user',
-            content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-              attachmentList,
-            )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
-          },
-        ] as Message[];
-
-        setInitialMessages(messages);
-
         const containerInstance = await container;
         await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
-        setChatStarted(true);
-        workbenchStore.showWorkbench.set(true);
-        reload();
-        sendEventToParent('EVENT', { name: 'START_EDITING' });
+        if (!chatStarted) {
+          repoStore.set({
+            name: source.title,
+            path: '',
+            title: source.title,
+            taskBranch: DEFAULT_TASK_BRANCH,
+          });
+
+          const messages = [
+            {
+              id: `1-${new Date().getTime()}`,
+              role: 'user',
+              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                attachmentList,
+              )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+            },
+            {
+              id: `2-${new Date().getTime()}`,
+              role: 'assistant',
+              content: `I will import the files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+            },
+          ] as Message[];
+
+          setInitialMessages(messages);
+
+          setChatStarted(true);
+          workbenchStore.showWorkbench.set(true);
+          sendEventToParent('EVENT', { name: 'START_EDITING' });
+        }
 
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
