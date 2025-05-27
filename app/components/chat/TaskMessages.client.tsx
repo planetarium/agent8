@@ -3,10 +3,12 @@ import { forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import { Messages } from './Messages.client';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { mergeTaskBranch } from '~/lib/persistenceGitbase/api.client';
+import { mergeTaskBranch, removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
+import { AnimatePresence, motion } from 'framer-motion';
+import { lastActionStore } from '~/lib/stores/lastAction';
 
 interface TaskMessagesProps {
   id?: string;
@@ -88,6 +90,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               <button
                 className="flex items-center justify-center p-1.5 rounded-full bg-cyan-700 hover:bg-cyan-600 transition-colors"
                 onClick={() => {
+                  lastActionStore.set({ action: 'LOAD' });
                   repoStore.set({
                     ...repoStore.get(),
                     taskBranch: DEFAULT_TASK_BRANCH,
@@ -153,82 +156,110 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             </div>
             {mergeStatus && (
               <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
-                {/* <button
-                  className="px-4 py-1.5 bg-cyan-600 text-white rounded-md hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                <button
+                  className="px-4 py-2 my-2 text-lg bg-zinc-800 text-white rounded-md hover:bg-zinc-700 active:bg-zinc-900 transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    alert('WIP');
-                  }}
-                  disabled={isConfirming || isProcessing}
-                >
-                  Retry
-                </button> */}
-                {(mergeStatus === 'can_be_merged' && (
-                  <button
-                    className="px-4 py-1.5 bg-cyan-600 text-white rounded-md hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={async () => {
-                      setIsConfirming(true);
-                      setIsLoading(true);
+                    setIsLoading(true);
 
-                      try {
-                        await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
-                        repoStore.set({
-                          ...repoStore.get(),
-                          taskBranch: DEFAULT_TASK_BRANCH,
-                        });
-                      } catch {
-                        toast.error('Failed to merge task branch');
-                      } finally {
-                        setIsConfirming(false);
-                        setIsLoading(false);
-                      }
-                    }}
-                    disabled={isConfirming || isProcessing}
-                  >
-                    {isConfirming ? (
-                      <span className="flex items-center">
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Confirming...
-                      </span>
-                    ) : (
-                      'Confirm'
-                    )}
-                  </button>
-                )) || (
-                  <button
-                    className="flex items-center justify-center px-4 py-1.5 bg-cyan-600 text-white rounded-md opacity-50 cursor-not-allowed transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50"
-                    disabled={true}
-                  >
-                    {reloadCount < 2 ? 'Confirm' : mergeStatus}
-                  </button>
-                )}
+                    try {
+                      await removeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                      repoStore.set({
+                        ...repoStore.get(),
+                        taskBranch: DEFAULT_TASK_BRANCH,
+                      });
+                    } catch {
+                      toast.error('Failed to remove task branch');
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                >
+                  Remove Task
+                </button>
               </div>
             )}
           </div>
         </div>
 
-        <div className="px-1 pb-4 -mt-4">
+        <div className="px-1 pb-4 -mt-4 relative">
           <div className="relative z-1 pl-2 border-l border-cyan-400/70 ml-1 pt-4">
             <Messages {...otherProps} ref={ref} />
           </div>
+          {!isStreaming && (
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.8, delay: 1 }}
+                className="flex items-center justify-between px-2 sticky bottom-[245px] bg-black z-[100] py-4"
+              >
+                <span className="text-[15px] text-white">
+                  Will you confirm this version and proceed with additional work?
+                </span>
+                <div className="flex gap-2">
+                  {(mergeStatus === 'can_be_merged' && (
+                    <button
+                      className="px-6 py-2 bg-cyan-600 text-white rounded-[4px] hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={async () => {
+                        setIsConfirming(true);
+                        setIsLoading(true);
+
+                        try {
+                          await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                          repoStore.set({
+                            ...repoStore.get(),
+                            taskBranch: DEFAULT_TASK_BRANCH,
+                          });
+                        } catch {
+                          toast.error('Failed to merge task branch');
+                        } finally {
+                          setIsConfirming(false);
+                          setIsLoading(false);
+                        }
+                      }}
+                      disabled={isConfirming || isProcessing}
+                    >
+                      {isConfirming ? (
+                        <span className="flex items-center">
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Confirming...
+                        </span>
+                      ) : (
+                        'Confirm'
+                      )}
+                    </button>
+                  )) || (
+                    <button
+                      className="flex items-center justify-center px-4 py-1.5 bg-[#2791a2] text-white rounded-md opacity-50 cursor-not-allowed transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50"
+                      disabled={true}
+                    >
+                      {reloadCount < 2 ? 'Confirm' : mergeStatus}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </div>
     );

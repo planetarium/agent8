@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import type { ProgressAnnotation } from '~/types/context';
 import { classNames } from '~/utils/classNames';
 import Lottie from 'lottie-react';
+import { loadingAnimationData } from '~/utils/animationData';
 
 // import { cubicEasingFn } from '~/utils/easings';
 
@@ -46,6 +47,12 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
     const newData = Array.from(progressMap.values());
     newData.sort((a, b) => a.order - b.order);
     setProgressList(newData);
+
+    if (newData.find((x) => x.label === 'response' && x.status === 'complete')) {
+      setTimeout(() => {
+        setProgressList([]);
+      }, 1000);
+    }
   }, [data]);
 
   if (progressList.length === 0) {
@@ -106,17 +113,6 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
 }
 
 const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
-  const [animationData, setAnimationData] = useState<any>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && progress.status === 'in-progress') {
-      fetch('/animations/loading.json')
-        .then((response) => response.json())
-        .then((data) => setAnimationData(data))
-        .catch((error) => console.error('animation load error:', error));
-    }
-  }, [progress.status]);
-
   const textColorWaveStyle =
     progress.status === 'in-progress'
       ? ({
@@ -138,13 +134,9 @@ const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
         <div className="flex items-center gap-1.5">
           <div>
             {progress.status === 'in-progress' ? (
-              animationData ? (
-                <div style={{ width: '24px', height: '24px' }}>
-                  <Lottie animationData={animationData} loop={true} />
-                </div>
-              ) : (
-                <div className="i-svg-spinners:90-ring-with-bg ml-[10px] mt-1"></div>
-              )
+              <div style={{ width: '24px', height: '24px' }}>
+                <Lottie animationData={loadingAnimationData} loop={true} />
+              </div>
             ) : progress.status === 'complete' ? (
               <img src="/icons/CheckCircle.svg" alt="Complete" />
             ) : null}

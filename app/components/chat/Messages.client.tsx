@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -11,6 +11,7 @@ import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import Lottie from 'lottie-react';
+import { loadingAnimationData } from '~/utils/animationData';
 
 interface MessagesProps {
   id?: string;
@@ -27,16 +28,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
     const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert, onViewDiff } = props;
     const profile = useStore(profileStore);
-    const [animationData, setAnimationData] = useState<any>(null);
-
-    useEffect(() => {
-      if (typeof window !== 'undefined') {
-        fetch('/animations/loading.json')
-          .then((response) => response.json())
-          .then((data) => setAnimationData(data))
-          .catch((error) => console.error('animation load error:', error));
-      }
-    }, []);
 
     return (
       <div
@@ -144,14 +135,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             })
           : null}
         {isStreaming && (
-          <div className="flex items-center justify-center flex-grow">
-            {animationData ? (
-              <div style={{ width: '100px', height: '100px', aspectRatio: '1/1' }}>
-                <Lottie animationData={animationData} loop={true} />
-              </div>
-            ) : (
-              <div className="text-bolt-elements-textSecondary i-svg-spinners:3-dots-fade text-4xl"></div>
-            )}
+          <div className="flex items-center justify-center flex-grow mt-10 mb-12">
+            <div style={{ width: '60px', height: '60px', aspectRatio: '1/1' }}>
+              <Lottie animationData={loadingAnimationData} loop={true} />
+            </div>
           </div>
         )}
       </div>

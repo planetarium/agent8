@@ -535,7 +535,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           taskBranches={taskBranches}
                           currentTaskBranch={currentTaskBranch}
                           reloadTaskBranches={reloadTaskBranches}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                          className="flex flex-col w-full flex-1 max-w-chat pb-10 mx-auto z-1"
                           messages={messages}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
@@ -546,7 +546,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       ) : (
                         <Messages
                           ref={messageRef}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-6 mx-auto z-1"
+                          className="flex flex-col w-full flex-1 max-w-chat pb-10 mx-auto z-1"
                           messages={messages}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
@@ -556,7 +556,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         />
                       )}
                       {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
-                        <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
+                        <div className="mb-5">
+                          <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
+                        </div>
                       )}
                     </>
                   ) : null;
