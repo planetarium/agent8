@@ -39,7 +39,11 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     }, []);
 
     return (
-      <div id={id} className={classNames(props.className, 'pr-1')} ref={ref}>
+      <div
+        id={id}
+        className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-center' : '')}
+        ref={ref}
+      >
         {messages.length > 0
           ? messages.map((message, index) => {
               const { role, id: messageId, annotations } = message;
@@ -140,9 +144,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             })
           : null}
         {isStreaming && (
-          <div className="text-center w-full mt-4">
+          <div className="flex items-center justify-center flex-grow">
             {animationData ? (
-              <div style={{ width: '70.4px', height: '70.4px', aspectRatio: '1/1', margin: '0 auto' }}>
+              <div style={{ width: '100px', height: '100px', aspectRatio: '1/1' }}>
                 <Lottie animationData={animationData} loop={true} />
               </div>
             ) : (

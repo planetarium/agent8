@@ -9,7 +9,7 @@ interface SendButtonProps {
 export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonProps) => {
   return show ? (
     <button
-      className="inline-flex justify-center items-center py-2 px-2.8 gap-1.2 rounded-[3.2px] border border-solid border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.22)] active:border-[rgba(255,255,255,0.35)] disabled:border-[rgba(255,255,255,0.08)] bg-interactive-gradient hover:bg-interactive-gradient-hovered active:bg-interactive-gradient-pressed disabled:bg-[var(--color-bg-disabled)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex justify-center items-center py-2 px-[14px] gap-1.2 rounded-[3.2px] border border-solid border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.22)] active:border-[rgba(255,255,255,0.35)] disabled:border-[rgba(255,255,255,0.08)] bg-interactive-gradient hover:bg-interactive-gradient-hovered active:bg-interactive-gradient-pressed disabled:bg-[var(--color-bg-disabled)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
       style={{ backgroundSize: '104% 104%', backgroundPosition: 'center' }}
       disabled={disabled}
       onClick={(event) => {
@@ -20,8 +20,14 @@ export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonP
         }
       }}
     >
-      <div className="text-[0.9rem]">{!isStreaming && <img src="/icons/Sparkle.svg" alt="Send" />}</div>
-      <span className="text-interactive-on-primary font-feature-stylistic font-primary text-[11.2px] font-semibold leading-[142.9%]">
+      <div className="text-[0.9rem]">
+        {!isStreaming ? (
+          <img src="/icons/Sparkle.svg" alt="Send" />
+        ) : (
+          <div className="i-ph:stop-circle-bold w-5 h-5 text-white" />
+        )}
+      </div>
+      <span className="text-interactive-on-primary font-feature-stylistic font-primary text-[14px] font-semibold leading-[142.9%]">
         {!isStreaming ? 'Create' : 'Stop'}
       </span>
     </button>

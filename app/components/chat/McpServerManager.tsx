@@ -88,17 +88,17 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
               className={classNames(
                 hasActiveTools
                   ? 'flex w-[32px] min-h-[32px] max-h-[32px] justify-center items-center rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-neutral,#222428)] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)]'
-                  : 'flex min-h-8 max-h-8 px-3.2 py-2 justify-center items-center gap-1.5 rounded-full border border-white/18 bg-[#222428] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)] text-xs font-medium hover:text-gray-500',
+                  : 'flex min-h-8 max-h-8 px-[14px] py-[8px] justify-center items-center gap-1.5 rounded-full border border-white/18 bg-[#222428] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)] text-xs font-medium hover:text-gray-500',
                 'transition-colors duration-200',
               )}
             >
               <img src="/icons/Plus.svg" alt="Plus" className={hasActiveTools ? 'w-4 h-4' : ''} />
-              {!hasActiveTools && <span className="font-normal text-cyan-400 text-[11.2px]">Use Tools</span>}
+              {!hasActiveTools && <span className="font-normal text-cyan-400 text-[14px]">Use Tools</span>}
             </button>
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%] w-[292px] justify-between"
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%] w-[292px] justify-between"
               sideOffset={5}
               side={chatStarted ? 'top' : 'bottom'}
               align="start"
@@ -116,7 +116,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           .map(({ server, index }) => (
             <div
               key={index}
-              className="flex min-h-8 max-h-8 px-[12.8px] py-[8px] justify-center items-center gap-[4.8px] rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral-hovered,rgba(255,255,255,0.22))] text-[11.2px] font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
+              className="flex min-h-8 max-h-8 px-[12.8px] py-[8px] justify-center items-center gap-[4.8px] rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral-hovered,rgba(255,255,255,0.22))] text-[14px] font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
               title={server.url}
               onMouseEnter={() => setHoveredServerIndex(index)}
               onMouseLeave={() => setHoveredServerIndex(null)}
@@ -149,7 +149,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           <motion.div
             ref={dropdownRef}
             className={classNames(
-              'absolute left-0 flex w-[284.8px] py-[6.4px] px-0 flex-col items-start rounded-[var(--border-radius-8,8px)] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10',
+              'absolute left-0 flex w-[300px] py-[6.4px] px-0 flex-col items-start rounded-[var(--border-radius-8,8px)] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10',
               chatStarted ? 'bottom-full mb-2' : 'top-full mt-2',
             )}
             style={{
@@ -208,17 +208,17 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                             )}
 
                             <div className="flex items-center gap-1.2">
-                              <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[12.8px] font-medium leading-[150%]">
+                              <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[14px] font-medium leading-[150%]">
                                 {server.name}
                               </h4>
-                              <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[11.2px] font-medium leading-[142.9%]">
+                              <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[14px] font-medium leading-[142.9%]">
                                 {server.name === 'Audio' ? '1 credit/s (default: 30s)' : '1 Credit'}
                               </span>
                             </div>
                           </div>
 
                           <div>
-                            <p className="text-[11.2px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)]">
+                            <p className="text-[12px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)]">
                               {server.description}
                             </p>
                           </div>
