@@ -3,7 +3,7 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import type { JSONValue, Message } from 'ai';
-import React, { type RefCallback, useEffect, useState } from 'react';
+import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
@@ -191,6 +191,47 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     useEffect(() => {
       onStreamingChange?.(isStreaming);
     }, [isStreaming, onStreamingChange]);
+
+    // State to store scroll container ref
+    const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+
+    // State to track auto-scroll mode
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState<boolean>(true);
+
+    // Check if scroll is at bottom
+    const isScrollAtBottom = useCallback((element: HTMLDivElement): boolean => {
+      const threshold = 1;
+      return Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight) <= threshold;
+    }, []);
+
+    // Handle scroll events to detect user manual scrolling
+    useEffect(() => {
+      if (!scrollElement) {
+        return;
+      }
+
+      const handleScroll = () => {
+        const atBottom = isScrollAtBottom(scrollElement);
+        setAutoScrollEnabled(atBottom);
+      };
+
+      scrollElement.addEventListener('scroll', handleScroll);
+
+      // eslint-disable-next-line consistent-return
+      return () => {
+        scrollElement.removeEventListener('scroll', handleScroll);
+      };
+    }, [scrollElement, isScrollAtBottom]);
+
+    // Auto-scroll to bottom when messages update (only if auto-scroll is enabled)
+    useEffect(() => {
+      if (scrollElement && autoScrollEnabled) {
+        // Use requestAnimationFrame to ensure DOM updates are complete
+        requestAnimationFrame(() => {
+          scrollElement.scrollTop = scrollElement.scrollHeight;
+        });
+      }
+    }, [messages, isStreaming, scrollElement, autoScrollEnabled]);
 
     useEffect(() => {
       if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -504,8 +545,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
-        <div ref={scrollRef} className="flex flex-col lg:flex-row w-full h-full">
+
+        <div className="flex flex-col lg:flex-row w-full h-full">
           <div
+            ref={(node) => {
+              setScrollElement(node);
+
+              if (scrollRef) {
+                scrollRef(node);
+              }
+            }}
             className={classNames(
               styles.Chat,
               'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-y-auto chat-container',
