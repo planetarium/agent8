@@ -54,12 +54,17 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
             transition={{ delay: 0.1 }}
             className="text-[var(--color-text-primary,#FFF)] font-feature-stylistic font-primary text-md font-semibold leading-[140%]"
           >
-            {title} {description && `(${description})`}
+            {title}
           </motion.h3>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className={`mt-2`}>
             <p className="text-[var(--color-text-tertiary,#99A2B0)] font-primary text-sm font-medium leading-[150%]">
               {message}
             </p>
+            {description && (
+              <div className="text-[12px] text-bolt-elements-textSecondary p-2 bg-bolt-elements-background-depth-3 rounded mt-4 mb-4 max-h-[80px] overflow-y-auto">
+                Error: {description}
+              </div>
+            )}
           </motion.div>
 
           {/* Actions */}

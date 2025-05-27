@@ -603,7 +603,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                 <div
                   className={classNames(
-                    'flex flex-col self-stretch p-4 rounded-lg relative w-full mx-auto z-prompt relative min-h-53',
+                    'flex flex-col self-stretch p-4 relative w-full mx-auto z-prompt relative min-h-53',
                     {
                       'max-w-chat': chatStarted,
                       'max-w-chat-before-start': !chatStarted,
@@ -641,6 +641,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     className={classNames(
                       'relative shadow-xs backdrop-blur rounded-lg flex-1',
                       attachmentList && attachmentList.length > 0 ? 'mb-12 mt-4' : '',
+                      'flex',
                     )}
                   >
                     <textarea
@@ -649,11 +650,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         'w-full outline-none resize-none bg-transparent font-primary text-[16px] font-medium font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
+                        'flex-1',
                       )}
                       style={{
                         // fontStyle: 'normal',
                         lineHeight: '160%',
-                        height: `${TEXTAREA_MIN_HEIGHT}px`,
+                        minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
                         maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
                         overflowY: 'scroll',
@@ -757,6 +759,58 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </div>
                   <div className="flex justify-between items-center self-stretch text-sm mt-auto">
                     <div className="flex items-center gap-[4.8px]">
+                      <div
+                        className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200"
+                        onMouseEnter={() => setAttachmentHovered(true)}
+                        onMouseLeave={() => setAttachmentHovered(false)}
+                      >
+                        <Tooltip.Root open={shouldShowAttachmentTooltip()}>
+                          <Tooltip.Trigger asChild>
+                            <div>
+                              <AttachmentSelector
+                                onImportProject={onProjectZipImport}
+                                onUploadFile={handleFileUpload}
+                                chatStarted={chatStarted}
+                                onDropdownOpenChange={setAttachmentDropdownOpen}
+                                onImportProjectModalChange={handleImportProjectModalChange}
+                              />
+                            </div>
+                          </Tooltip.Trigger>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                              sideOffset={5}
+                              side={chatStarted ? 'top' : 'bottom'}
+                            >
+                              {chatStarted ? 'Upload a file' : 'Upload a file or import a project'}
+                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        </Tooltip.Root>
+                      </div>
+
+                      {chatStarted && (
+                        <div className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
+                          <Tooltip.Root>
+                            <Tooltip.Trigger asChild>
+                              <div>
+                                <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>
+                              </div>
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                                sideOffset={5}
+                                side="top"
+                              >
+                                Export chat
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        </div>
+                      )}
+
                       <div className="flex items-center hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
                         <ClientOnly>
                           {() => (
@@ -789,56 +843,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           )}
                         </ClientOnly>
                       </div>
-                      <div
-                        className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200"
-                        onMouseEnter={() => setAttachmentHovered(true)}
-                        onMouseLeave={() => setAttachmentHovered(false)}
-                      >
-                        <Tooltip.Root open={shouldShowAttachmentTooltip()}>
-                          <Tooltip.Trigger asChild>
-                            <div>
-                              <AttachmentSelector
-                                onImportProject={onProjectZipImport}
-                                onUploadFile={handleFileUpload}
-                                chatStarted={chatStarted}
-                                onDropdownOpenChange={setAttachmentDropdownOpen}
-                                onImportProjectModalChange={handleImportProjectModalChange}
-                              />
-                            </div>
-                          </Tooltip.Trigger>
-                          <Tooltip.Portal>
-                            <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-                              sideOffset={5}
-                              side={chatStarted ? 'top' : 'bottom'}
-                            >
-                              {chatStarted ? 'Upload a file' : 'Upload a file or import a project'}
-                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                            </Tooltip.Content>
-                          </Tooltip.Portal>
-                        </Tooltip.Root>
-                      </div>
-                      {chatStarted && (
-                        <div className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
-                          <Tooltip.Root>
-                            <Tooltip.Trigger asChild>
-                              <div>
-                                <ClientOnly>{() => <ExportChatButton exportChat={exportChat} />}</ClientOnly>
-                              </div>
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-                                sideOffset={5}
-                                side="top"
-                              >
-                                Export chat
-                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center">
