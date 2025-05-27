@@ -603,7 +603,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                 <div
                   className={classNames(
-                    'flex flex-col self-stretch p-4 relative w-full mx-auto z-prompt relative min-h-53',
+                    'flex flex-col self-stretch p-5 relative w-full mx-auto z-prompt relative min-h-53',
                     {
                       'max-w-chat': chatStarted,
                       'max-w-chat-before-start': !chatStarted,
@@ -625,7 +625,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     </div>
                   )}
 
-                  <div className="mb-4 relative">
+                  <div className="mb-3 relative">
                     <McpServerManager chatStarted={chatStarted} />
                   </div>
 
@@ -833,7 +833,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                                 <Tooltip.Content
                                   className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
                                   sideOffset={5}
-                                  side={chatStarted ? 'top' : 'bottom'}
+                                  side={'bottom'}
                                 >
                                   Select model
                                   <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
