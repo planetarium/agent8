@@ -12,7 +12,7 @@ const textColorAnimation = `
     color: var(--color-text-primary, #FFF);
   }
   50% {
-    color: #3FD2E8;
+    color: #6b7280;
   }
   100% {
     color: var(--color-text-primary, #FFF);
@@ -59,6 +59,8 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
         style={{
           borderRadius: 'var(--border-radius-8, 8px)',
           background: 'var(--color-bg-depth-2, #2A2D33)',
+          zIndex: 3,
+          position: 'relative',
         }}
       >
         <div
@@ -131,6 +133,7 @@ const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
+        style={{ position: 'relative', zIndex: 3 }}
       >
         <div className="flex items-center gap-1.5">
           <div>

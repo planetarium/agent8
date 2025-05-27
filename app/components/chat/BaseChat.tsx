@@ -564,7 +564,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </ClientOnly>
 
               <div
-                className={classNames('flex flex-col gap-4 w-full mx-auto z-prompt', {
+                className={classNames('flex flex-col gap-3 w-full mx-auto z-prompt', {
                   'sticky bottom-8': chatStarted,
                   'max-w-chat': chatStarted,
                   'max-w-chat-before-start': !chatStarted,
@@ -603,7 +603,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                 <div
                   className={classNames(
-                    'flex flex-col self-stretch p-4 rounded-lg relative w-full mx-auto z-prompt mt-1 relative min-h-58',
+                    'flex flex-col self-stretch p-4 rounded-lg relative w-full mx-auto z-prompt relative min-h-53',
                     {
                       'max-w-chat': chatStarted,
                       'max-w-chat-before-start': !chatStarted,
@@ -646,13 +646,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full outline-none resize-none bg-transparent font-primary text-[14px] font-semibold font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
+                        'w-full outline-none resize-none bg-transparent font-primary text-[16px] font-medium font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
                       )}
                       style={{
-                        fontStyle: 'normal',
-                        lineHeight: '150%',
+                        // fontStyle: 'normal',
+                        lineHeight: '160%',
                         height: `${TEXTAREA_MIN_HEIGHT}px`,
                         maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
@@ -743,11 +743,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     {!chatStarted && input.length === 0 && (
                       <div
                         className={classNames(
-                          'absolute left-0 top-0 w-full font-primary text-[14px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
+                          'absolute left-0 top-0 w-full font-primary text-[16px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
                           animationDirection === 'in' ? styles.placeholderAnimationIn : styles.placeholderAnimationOut,
                         )}
                         style={{
-                          lineHeight: '150%',
+                          lineHeight: '160%',
                           padding: 'inherit',
                         }}
                       >
@@ -777,11 +777,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
                                   sideOffset={5}
                                   side={chatStarted ? 'top' : 'bottom'}
                                 >
-                                  Select Model
+                                  Select model
                                   <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
                                 </Tooltip.Content>
                               </Tooltip.Portal>
@@ -808,7 +808,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
                               sideOffset={5}
                               side={chatStarted ? 'top' : 'bottom'}
                             >
@@ -828,7 +828,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[11.2px] font-medium leading-[150%]"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
                                 sideOffset={5}
                                 side="top"
                               >
