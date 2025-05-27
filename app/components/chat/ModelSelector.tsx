@@ -50,6 +50,10 @@ export const ModelSelector = ({
 
   // 사용 가능한 화이트리스트 항목 만들기
   const whitelistOptions = MODEL_WHITELIST.filter((item) => {
+    if (!item.userSelectable) {
+      return false;
+    }
+
     // 해당 프로바이더가 활성화되어 있는지 확인
     const providerEnabled = providerList.some((p) => p.name === item.providerName);
 

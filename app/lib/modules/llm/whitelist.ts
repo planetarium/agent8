@@ -10,6 +10,7 @@ export interface WhitelistItem {
   label: string;
   providerName: string;
   modelName: string;
+  userSelectable?: boolean;
 }
 
 /**
@@ -21,6 +22,7 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     label: 'Claude 4 Sonnet',
     providerName: 'Anthropic',
     modelName: 'claude-sonnet-4-20250514',
+    userSelectable: true,
   },
   {
     label: 'Claude 3.7 Sonnet (OpenRouter)',
@@ -28,7 +30,7 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'anthropic/claude-3.7-sonnet',
   },
   {
-    label: 'Claude 3.7 Sonnet (Anthropic)',
+    label: 'Claude 3.7 Sonnet',
     providerName: 'Anthropic',
     modelName: 'claude-3-7-sonnet-20250219',
   },
@@ -48,9 +50,10 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'google/gemini-2.5-pro-preview',
   },
   {
-    label: 'Gemini 2.5 Pro (Google)',
+    label: 'Gemini 2.5 Pro',
     providerName: 'Google',
     modelName: 'gemini-2.5-pro-preview-05-06',
+    userSelectable: true,
   },
   {
     label: 'Gemini 2.0 Flash',
