@@ -319,6 +319,7 @@ export const ChatImpl = memo(
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    const lastSendMessageTime = useRef(0);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -529,6 +530,12 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      if (lastSendMessageTime.current && Date.now() - lastSendMessageTime.current < 1000) {
+        return;
+      }
+
+      lastSendMessageTime.current = Date.now();
+
       const messageContent = messageInput || input;
 
       if (!messageContent?.trim()) {
