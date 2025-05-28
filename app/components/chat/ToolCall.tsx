@@ -47,7 +47,7 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
           <div className="mt-2 bg-gray-900 p-4 rounded-md">
             <div className="text-sm">
               <strong className="text-sm text-gray-300">Parameters:</strong>
-              <pre className="block p-2 mt-2 rounded-md bg-gray-800 text-sm">
+              <pre className="block p-2 mt-2 rounded-md bg-gray-800 text-sm overflow-auto max-h-64">
                 {JSON.stringify(toolCall.args, null, 2)}
               </pre>
             </div>
