@@ -639,7 +639,7 @@ export class WorkbenchStore {
 
     try {
       // Install dependencies
-      await this.#runShellCommand(shell, 'pnpm install');
+      await this.#runShellCommand(shell, 'pnpm update');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');

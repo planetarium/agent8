@@ -282,9 +282,9 @@ async function runAndPreview(message: Message) {
     await workbenchStore.setupDeployConfig(shell);
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      shell.executeCommand(Date.now().toString(), 'pnpm install && pnpm run dev');
+      shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
     } else {
-      shell.executeCommand(Date.now().toString(), 'pnpm install && npx -y @agent8/deploy --preview && pnpm run dev');
+      shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
     }
 
     break;
