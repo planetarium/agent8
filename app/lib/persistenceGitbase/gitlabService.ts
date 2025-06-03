@@ -1159,4 +1159,109 @@ export class GitlabService {
       throw new Error(`Failed to remove task branch: ${errorMessage}`);
     }
   }
+
+  /**
+   * Reverts a specific branch to a given commit hash
+   */
+  async revertBranchToCommit(
+    projectId: number | string,
+    branchName: string,
+    commitHash: string,
+  ): Promise<{
+    message: string;
+    branchName: string;
+    revertedToCommit: string;
+    backupBranchName?: string;
+  }> {
+    try {
+      // Check if project exists
+      let project;
+
+      try {
+        project = await this.gitlab.Projects.show(projectId);
+      } catch (projectError) {
+        logger.error('Project not found:', projectError);
+        throw new Error(`Project not found: ${projectId}`);
+      }
+
+      // Check if branch exists
+      let branchExists = false;
+
+      try {
+        await this.gitlab.Branches.show(project.id, branchName);
+        branchExists = true;
+      } catch {
+        branchExists = false;
+      }
+
+      if (!branchExists) {
+        throw new Error(`Branch '${branchName}' does not exist`);
+      }
+
+      // Verify that the commit exists
+      try {
+        await this.getCommit(project.path_with_namespace as string, commitHash);
+      } catch (commitError) {
+        logger.error('Commit verification failed:', commitError);
+        throw new Error(`Commit '${commitHash}' does not exist or is not accessible`);
+      }
+
+      // Create a backup branch in case something goes wrong
+      const backupBranchName = `backup-${branchName}-${Date.now()}`;
+
+      try {
+        await this.gitlab.Branches.create(project.id, backupBranchName, branchName);
+        logger.info(`Created backup branch: ${backupBranchName}`);
+      } catch (backupError) {
+        logger.error('Failed to create backup branch:', backupError);
+        throw new Error(
+          `Failed to create backup branch: ${backupError instanceof Error ? backupError.message : 'Unknown error'}`,
+        );
+      }
+
+      // Revert the branch to the specified commit
+      try {
+        // Delete the existing branch
+        await this.gitlab.Branches.remove(project.id, branchName);
+        logger.info(`Deleted original branch: ${branchName}`);
+
+        // Create a new branch pointing to the target commit
+        await this.gitlab.Branches.create(project.id, branchName, commitHash);
+        logger.info(`Created new branch '${branchName}' pointing to commit '${commitHash}'`);
+
+        return {
+          message: `Successfully reverted branch '${branchName}' to commit '${commitHash}'`,
+          branchName,
+          revertedToCommit: commitHash,
+          backupBranchName,
+        };
+      } catch (revertError) {
+        // If something went wrong, try to restore from backup
+        logger.error('Error reverting branch:', revertError);
+
+        try {
+          // Try to restore the original branch from backup
+          await this.gitlab.Branches.remove(project.id, branchName).catch(() => {
+            // Ignore error if branch doesn't exist
+          });
+          await this.gitlab.Branches.create(project.id, branchName, backupBranchName);
+          logger.info(`Restored branch '${branchName}' from backup`);
+        } catch (restoreError) {
+          logger.error('Failed to restore branch from backup:', restoreError);
+          throw new Error(
+            `Failed to revert branch and could not restore from backup. Backup branch '${backupBranchName}' is available for manual recovery.`,
+          );
+        }
+
+        throw new Error(
+          `Failed to revert branch: ${revertError instanceof Error ? revertError.message : 'Unknown error'}`,
+        );
+      }
+    } catch (error) {
+      logger.error('Failed to revert branch to commit:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
+    }
+  }
 }

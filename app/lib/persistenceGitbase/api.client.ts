@@ -333,3 +333,13 @@ export const removeTaskBranch = async (projectPath: string, branchName: string) 
 
   return response.data;
 };
+
+export const revertBranch = async (projectPath: string, branchName: string, commitHash: string) => {
+  const response = await axios.post('/api/gitlab/revert-branch', {
+    projectPath,
+    branchName,
+    commitHash,
+  });
+
+  return response.data;
+};
