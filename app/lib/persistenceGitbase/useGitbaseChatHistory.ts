@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
-import { getProjectCommits, fetchProjectFiles, getTaskBranches } from '~/lib/persistenceGitbase/api.client';
+import {
+  getProjectCommits,
+  fetchProjectFiles,
+  getTaskBranches,
+  revertBranch,
+} from '~/lib/persistenceGitbase/api.client';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
 
@@ -219,8 +224,15 @@ export function useGitbaseChatHistory() {
   return {
     loaded: loaded && filesLoaded,
     chats,
-    revertTo: (hash: string) => {
-      load({ page: 1, taskBranch: prevRequestParams.current.taskBranch, untilCommit: hash });
+    revertTo: async (hash: string) => {
+      setLoading(true);
+
+      try {
+        await revertBranch(projectPath, prevRequestParams.current.taskBranch, hash);
+        await load({ page: 1, taskBranch: prevRequestParams.current.taskBranch, untilCommit: hash });
+      } finally {
+        setLoading(false);
+      }
     },
     project,
     files,
