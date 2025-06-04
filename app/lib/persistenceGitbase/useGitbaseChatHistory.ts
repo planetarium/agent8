@@ -112,7 +112,17 @@ export function useGitbaseChatHistory() {
   );
 
   const load = useCallback(
-    async ({ page = 1, taskBranch, untilCommit }: { page?: number; taskBranch?: string; untilCommit?: string }) => {
+    async ({
+      page = 1,
+      taskBranch,
+      untilCommit,
+      force,
+    }: {
+      page?: number;
+      taskBranch?: string;
+      untilCommit?: string;
+      force?: boolean;
+    }) => {
       if (!projectPath) {
         setLoaded(true);
         setFilesLoaded(true);
@@ -124,18 +134,20 @@ export function useGitbaseChatHistory() {
 
       logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
 
-      // 이미 로딩 중이면 종료
-      if (loading) {
-        return;
-      }
+      if (!force) {
+        // 이미 로딩 중이면 종료
+        if (loading) {
+          return;
+        }
 
-      if (
-        projectPath === prevRequestParams.current.projectPath &&
-        page === prevRequestParams.current.page &&
-        taskBranch === prevRequestParams.current.taskBranch &&
-        untilCommit === prevRequestParams.current.untilCommit
-      ) {
-        return;
+        if (
+          projectPath === prevRequestParams.current.projectPath &&
+          page === prevRequestParams.current.page &&
+          taskBranch === prevRequestParams.current.taskBranch &&
+          untilCommit === prevRequestParams.current.untilCommit
+        ) {
+          return;
+        }
       }
 
       setLoaded(false);
@@ -228,8 +240,8 @@ export function useGitbaseChatHistory() {
       setLoading(true);
 
       try {
-        await revertBranch(projectPath, prevRequestParams.current.taskBranch, hash);
-        await load({ page: 1, taskBranch: prevRequestParams.current.taskBranch, untilCommit: hash });
+        await revertBranch(projectPath, repoStore.get().taskBranch, hash);
+        await load({ page: 1, taskBranch: repoStore.get().taskBranch, untilCommit: hash, force: true });
       } finally {
         setLoading(false);
       }
