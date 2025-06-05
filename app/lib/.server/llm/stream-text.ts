@@ -11,6 +11,7 @@ import {
   getProjectMdPrompt,
   getProjectPackagesPrompt,
   getAgent8Prompt,
+  getProjectDocsPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
@@ -110,6 +111,7 @@ export async function streamText(props: {
       getProjectFilesPrompt(files),
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
+      getProjectDocsPrompt(files),
     ].map(
       (content) =>
         ({
@@ -164,6 +166,8 @@ export async function streamText(props: {
       throw e;
     }
   })();
+
+  logger.debug(`streamText: ${JSON.stringify(coreMessages)}`);
 
   return result;
 }
