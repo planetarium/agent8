@@ -1,7 +1,4 @@
-export const IGNORED_PREVIEW_ERROR_PATTERNS: RegExp[] = [
-  /Cannot redefine property: ethereum/,
-  /chrome-extension:\/\//,
-];
+export const IGNORED_PREVIEW_ERROR_PATTERNS: RegExp[] = [/Cannot redefine property: ethereum/, /chrome-extension:\/\//];
 
 export function shouldIgnorePreviewError(message?: string): boolean {
   if (!message) {
