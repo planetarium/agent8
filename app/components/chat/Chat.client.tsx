@@ -395,11 +395,12 @@ export const ChatImpl = memo(
 
         workbenchStore.onArtifactClose(message.id, async () => {
           await runAndPreview(message);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
+          setFakeLoading(false);
           workbenchStore.offArtifactClose(message.id);
         });
 
-        setFakeLoading(false);
         logger.debug('Finished streaming');
       },
       initialMessages,
@@ -703,7 +704,6 @@ export const ChatImpl = memo(
           resetEnhancer();
 
           textareaRef.current?.blur();
-          setFakeLoading(false);
 
           return;
         } catch (error) {

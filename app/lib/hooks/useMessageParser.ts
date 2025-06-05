@@ -28,14 +28,18 @@ const messageParser = new StreamingMessageParser({
         workbenchStore.addAction(data);
       }
     },
-    onActionClose: (data) => {
+    onActionClose: async (data) => {
       logger.trace('onActionClose', data.action);
 
       if (data.action.type !== 'file') {
         workbenchStore.addAction(data);
       }
 
-      workbenchStore.runAction(data);
+      if (data.action.type === 'shell') {
+        await workbenchStore.runActionAndWait(data);
+      } else {
+        workbenchStore.runAction(data);
+      }
     },
     onActionStream: (data) => {
       logger.trace('onActionStream', data.action);
