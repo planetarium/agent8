@@ -343,6 +343,41 @@ export function getProjectFilesPrompt(files: any) {
 `;
 }
 
+export function getProjectDocsPrompt(files: any) {
+  const docsMdFiles = Object.keys(files)
+    .filter((x) => files[x]?.type == 'file')
+    .filter((x) => x.includes('/docs/') && x.endsWith('.md'))
+    .map((x) => x.replace(WORK_DIR + '/', ''))
+    .map((filePath) => {
+      const fileName = filePath.split('/').pop()?.replace('.md', '') || '';
+      const content = files[`${WORK_DIR}/${filePath}`]?.content || '';
+
+      return { path: filePath, name: fileName, content };
+    });
+
+  if (docsMdFiles.length === 0) {
+    return '';
+  }
+
+  const docsContent = docsMdFiles
+    .map(
+      ({ path, name, content }) => `
+      <doc_file name="${name}" path="${path}">
+        ${content}
+      </doc_file>`,
+    )
+    .join('\n');
+
+  return `
+<PROJECT_DESCRIPTION>
+    These files contain essential information that must be understood before performing any work on the project. Please always familiarize yourself with the contents of these files before starting any task.
+    <docs_files>
+      ${docsContent}
+    </docs_files>
+</PROJECT_DESCRIPTION>
+`;
+}
+
 export function getProjectMdPrompt(files: any) {
   const projectMd = files[`${WORK_DIR}/PROJECT.md`];
 

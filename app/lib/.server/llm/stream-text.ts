@@ -8,6 +8,7 @@ import { createFileSearchTools } from './tools/file-search';
 import {
   getResourceSystemPrompt,
   getProjectFilesPrompt,
+  getProjectDocsPrompt,
   getProjectMdPrompt,
   getProjectPackagesPrompt,
   getAgent8Prompt,
@@ -108,6 +109,7 @@ export async function streamText(props: {
     ...[
       systemPrompt,
       getProjectFilesPrompt(files),
+      getProjectDocsPrompt(files),
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
     ].map(
