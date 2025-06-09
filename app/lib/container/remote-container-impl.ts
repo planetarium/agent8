@@ -533,13 +533,15 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
+  readonly machineId: string;
 
   private _connection: RemoteContainerConnection;
 
-  constructor(serverUrl: string, workdir: string, token: string) {
+  constructor(serverUrl: string, workdir: string, token: string, machineId: string) {
     this._connection = new RemoteContainerConnection(serverUrl, token);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
+    this.machineId = machineId;
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
@@ -928,6 +930,7 @@ export class RemoteContainerFactory implements ContainerFactory {
         `wss://${this._appName}-${machineId}.${ROUTER_DOMAIN}`,
         workdir,
         v8AccessToken,
+        machineId,
       );
 
       // Initialize connection
