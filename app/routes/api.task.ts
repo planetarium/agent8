@@ -1,6 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { generateId } from 'ai';
+import type { Messages } from '~/lib/.server/llm/stream-text';
 
 // @ts-ignore - Task Master module doesn't have TypeScript declarations
 import { parsePRD } from 'task-master-ai/scripts/modules/task-manager';
@@ -8,12 +10,20 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// GitLab integration
+import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
+import type { GitlabProject, GitlabIssue } from '~/lib/persistenceGitbase/types';
+
 export const action = withV8AuthUser(taskAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.task');
 
 interface TaskBreakdownRequest {
-  userPrompt: string;
+  messages: Messages;
+  createGitlabIssues?: boolean;
+  projectName?: string;
+  projectDescription?: string;
+  existingProjectPath?: string;
 }
 
 interface TaskMasterTask {
@@ -36,6 +46,173 @@ interface TaskMasterResult {
     projectName: string;
     sourceFile: string;
   };
+}
+
+// Generate project name from user prompt
+function generateProjectName(prompt: string): string {
+  // Extract meaningful keywords and create a project name (match existing project format)
+  const cleanPrompt = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(' ')
+    .filter((word) => word.length > 2 && !['the', 'and', 'for', 'with', 'that', 'this'].includes(word))
+    .slice(0, 3)
+    .join('-'); // Use hyphen to match existing projects
+
+  // Use full timestamp (same as existing projects like basic-lol-style-game-1748328947078)
+  const timestamp = Date.now();
+
+  return `${cleanPrompt}-${timestamp}`;
+}
+
+// Extract user prompt from messages
+function extractUserPrompt(messages: Messages): string {
+  // Find the last user message
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      return messages[i].content;
+    }
+  }
+  throw new Error('No user message found in messages array');
+}
+
+// Create conversation response with history
+function createConversationResponse(
+  messages: Messages,
+  taskBreakdown: TaskMasterResult,
+  gitlabResult?: {
+    project: GitlabProject;
+    issues: GitlabIssue[];
+    projectPath: string;
+  },
+  env?: any,
+) {
+  const conversationId = generateId();
+  const assistantMessage = {
+    role: 'assistant' as const,
+    content: `I've broken down your request into ${taskBreakdown.tasks.length} tasks${gitlabResult ? ` and created GitLab issues in project ${gitlabResult.projectPath}` : ''}.`,
+  };
+
+  return {
+    success: true,
+    data: {
+      // Task breakdown data
+      summary: taskBreakdown.summary,
+      tasks: taskBreakdown.tasks,
+      totalTasks: taskBreakdown.totalTasks,
+      generatedAt: taskBreakdown.generatedAt,
+      originalPrompt: extractUserPrompt(messages),
+      metadata: taskBreakdown.metadata,
+
+      // Conversation data
+      conversationId,
+      messages: [...messages, assistantMessage],
+
+      // GitLab data (if applicable)
+      ...(gitlabResult && {
+        gitlab: {
+          project: gitlabResult.project,
+          issues: gitlabResult.issues,
+          projectPath: gitlabResult.projectPath,
+        },
+      }),
+
+      // API status
+      apiKeysConfigured: {
+        anthropic: !!env?.ANTHROPIC_API_KEY,
+        openai: !!env?.OPENAI_API_KEY,
+        google: !!env?.GOOGLE_API_KEY,
+        gitlab: !!(env?.GITLAB_URL && env?.GITLAB_ACCESS_TOKEN),
+      },
+    },
+  };
+}
+
+// Format task description for GitLab issue
+function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string, number>): string {
+  let description = task.description;
+
+  if (task.estimatedTime) {
+    description += `\n\n**Estimated Time:** ${task.estimatedTime}`;
+  }
+
+  if (task.dependencies && task.dependencies.length > 0) {
+    description += `\n\n**Dependencies:**`;
+
+    task.dependencies.forEach((depId) => {
+      if (taskToIssueMap?.has(depId)) {
+        const issueNumber = taskToIssueMap.get(depId);
+        description += `\n- Issue #${issueNumber}`;
+      } else {
+        description += `\n- Issue pending`;
+      }
+    });
+  }
+
+  return description;
+}
+
+// Create GitLab issues from tasks with proper dependency handling
+async function createIssuesFromTasks(
+  gitlabService: GitlabService,
+  projectPath: string,
+  tasks: TaskMasterTask[],
+): Promise<{
+  issues: GitlabIssue[];
+  errors: Array<{ task: TaskMasterTask; error: string }>;
+  taskToIssueMap: Map<string, number>;
+}> {
+  const issues: GitlabIssue[] = [];
+  const errors: Array<{ task: TaskMasterTask; error: string }> = [];
+  const taskToIssueMap = new Map<string, number>();
+
+  // Phase 1: Create issues without dependency links
+  logger.info(`Creating ${tasks.length} GitLab issues...`);
+
+  for (const task of tasks) {
+    try {
+      logger.debug(`Creating GitLab issue for task: ${task.title}`);
+
+      const issue = await gitlabService.createIssue(
+        projectPath,
+        task.title,
+        formatTaskDescription(task), // First pass without dependency links
+        {
+          labels: [`priority-${task.priority}`, task.type ? `type-${task.type}` : 'type-development'],
+        },
+      );
+
+      issues.push(issue);
+      taskToIssueMap.set(task.id, issue.iid);
+      logger.info(`Created GitLab issue #${issue.iid}: ${task.title}`);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Unknown error';
+      errors.push({ task, error: errorMessage });
+      logger.error(`Failed to create GitLab issue for task "${task.title}": ${errorMessage}`);
+    }
+  }
+
+  // Phase 2: Update issues with proper dependency links
+  logger.info('Updating issues with dependency links...');
+
+  for (const task of tasks) {
+    if (task.dependencies && task.dependencies.length > 0 && taskToIssueMap.has(task.id)) {
+      try {
+        const issueIid = taskToIssueMap.get(task.id)!;
+        const updatedDescription = formatTaskDescription(task, taskToIssueMap);
+
+        await gitlabService.updateIssue(projectPath, issueIid, {
+          description: updatedDescription,
+        });
+
+        logger.debug(`Updated issue #${issueIid} with dependency links`);
+      } catch (error: any) {
+        logger.warn(`Failed to update dependency links for issue #${taskToIssueMap.get(task.id)}: ${error.message}`);
+      }
+    }
+  }
+
+  return { issues, errors, taskToIssueMap };
 }
 
 async function callTaskMasterAPI(prompt: string, env: any): Promise<TaskMasterResult> {
@@ -136,52 +313,107 @@ async function callTaskMasterAPI(prompt: string, env: any): Promise<TaskMasterRe
   }
 }
 
-async function taskAction({ request }: ActionFunctionArgs) {
+async function taskAction({ context, request }: ActionFunctionArgs) {
   try {
     const body = await request.json<TaskBreakdownRequest>();
-    const { userPrompt } = body;
+    const {
+      messages,
+      createGitlabIssues,
+      projectName: requestProjectName,
+      projectDescription: requestProjectDescription,
+      existingProjectPath,
+    } = body;
 
-    if (!userPrompt?.trim()) {
+    if (!messages?.length) {
       return Response.json(
         {
           success: false,
-          error: 'userPrompt is required',
+          error: 'messages are required',
         },
         { status: 400 },
       );
     }
 
-    logger.info(`Autonomous task breakdown: ${userPrompt.slice(0, 100)}...`);
+    const userPrompt = extractUserPrompt(messages);
+    logger.info(`Task breakdown request: ${userPrompt.slice(0, 100)}...`);
 
-    const env = process.env;
+    const env = { ...context.cloudflare.env, ...process.env } as Env;
+    const user = context?.user as { email: string; isActivated: boolean };
+
+    // Step 1: Get task breakdown from Task Master
     const taskBreakdown = await callTaskMasterAPI(userPrompt, env);
+    logger.info(`Task Master generated ${taskBreakdown.tasks.length} tasks`);
 
-    logger.info(`LLM autonomously generated ${taskBreakdown.tasks.length} tasks`);
+    // Step 2: GitLab integration (if requested)
+    if (createGitlabIssues) {
+      try {
+        logger.info('Starting GitLab integration...');
 
-    return Response.json({
-      success: true,
-      data: {
-        summary: taskBreakdown.summary,
-        tasks: taskBreakdown.tasks,
-        totalTasks: taskBreakdown.totalTasks,
-        generatedAt: taskBreakdown.generatedAt,
-        originalPrompt: userPrompt,
-        metadata: taskBreakdown.metadata,
-        apiKeysConfigured: {
-          anthropic: !!env.ANTHROPIC_API_KEY,
-          openai: !!env.OPENAI_API_KEY,
-          google: !!env.GOOGLE_API_KEY,
-        },
-      },
-    });
+        const gitlabService = new GitlabService(env as any);
+
+        // Get or create GitLab user
+        const gitlabUser = await gitlabService.getOrCreateUser(user.email);
+        logger.info(`GitLab user: ${gitlabUser.username}`);
+
+        // Get or create GitLab project
+        let project: GitlabProject;
+
+        if (existingProjectPath) {
+          // Use the provided project path directly
+          logger.info(`Using existing project: ${existingProjectPath}`);
+
+          try {
+            const [username, projectName] = existingProjectPath.split('/');
+            project = await gitlabService.findProject(username, projectName);
+            logger.info(`Found existing project: ${project.path_with_namespace}`);
+          } catch (error: any) {
+            throw new Error(
+              `Failed to find project at path: ${existingProjectPath}. Error: ${error.message || 'Unknown error'}`,
+            );
+          }
+        } else {
+          // Create new project
+          const projectName = requestProjectName || generateProjectName(userPrompt);
+          const projectDescription =
+            requestProjectDescription ||
+            `Project generated from: ${userPrompt.slice(0, 100)}${userPrompt.length > 100 ? '...' : ''}`;
+          project = await gitlabService.createProject(gitlabUser, projectName, projectDescription);
+        }
+
+        logger.info(`GitLab project: ${project.path_with_namespace}`);
+
+        // Create GitLab issues from tasks
+        const issueResults = await createIssuesFromTasks(
+          gitlabService,
+          project.path_with_namespace,
+          taskBreakdown.tasks,
+        );
+        logger.info(`Created ${issueResults.issues.length} GitLab issues, ${issueResults.errors.length} errors`);
+
+        const gitlabResult = {
+          project,
+          issues: issueResults.issues,
+          projectPath: project.path_with_namespace,
+          taskToIssueMap: Object.fromEntries(issueResults.taskToIssueMap),
+        };
+
+        return Response.json(createConversationResponse(messages, taskBreakdown, gitlabResult, env));
+      } catch (gitlabError: any) {
+        logger.error('GitLab integration failed:', gitlabError);
+
+        // Return task breakdown even if GitLab fails
+        return Response.json(createConversationResponse(messages, taskBreakdown, undefined, env));
+      }
+    }
+
+    // Return task breakdown without GitLab integration
+    return Response.json(createConversationResponse(messages, taskBreakdown, undefined, env));
   } catch (error: any) {
-    logger.error('Autonomous task breakdown failed:', error);
-
+    logger.error('Task breakdown failed:', error);
     return Response.json(
       {
         success: false,
-        error: error.message || 'Autonomous task breakdown failed',
-        details: error.stack,
+        error: error.message || 'Task breakdown failed',
       },
       { status: 500 },
     );

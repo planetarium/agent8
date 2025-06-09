@@ -7,6 +7,7 @@ import type {
   GitlabProtectedBranch,
   CommitAction,
   FileContent,
+  GitlabIssue,
 } from './types';
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
@@ -1263,5 +1264,182 @@ export class GitlabService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Create GitLab Issue
+   * @param projectPath project path (e.g., "username/projectname")
+   * @param title issue title
+   * @param description issue description
+   * @param options additional options
+   * @returns created issue
+   */
+  async createIssue(
+    projectPath: string,
+    title: string,
+    description: string,
+    options: {
+      labels?: string[];
+      assigneeIds?: number[];
+      milestoneId?: number;
+      dueDate?: string;
+    } = {},
+  ): Promise<GitlabIssue> {
+    try {
+      const { labels, assigneeIds, milestoneId, dueDate } = options;
+
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      const issue = await this.gitlab.Issues.create(project.id, title, {
+        description,
+        labels: labels?.join(','),
+        assigneeIds,
+        milestoneId,
+        dueDate,
+      });
+
+      return this._formatIssue(issue);
+    } catch (error) {
+      throw this._formatError(error, 'Failed to create issue');
+    }
+  }
+
+  /**
+   * Get project issue
+   * @param projectPath project path (e.g., "username/projectname")
+   * @param issueIid issue IID
+   * @returns issue details
+   */
+  async getIssue(projectPath: string, issueIid: number): Promise<GitlabIssue> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Fixed: API signature is show(issueId: number, { projectId, ...options }?)
+      const issue = await this.gitlab.Issues.show(issueIid, {
+        projectId: project.id,
+      });
+
+      return this._formatIssue(issue);
+    } catch (error) {
+      throw this._formatError(error, 'Failed to get issue');
+    }
+  }
+
+  /**
+   * Get project issues
+   * @param projectPath project path (e.g., "username/projectname")
+   * @param options filter options
+   * @returns list of issues
+   */
+  async getIssues(
+    projectPath: string,
+    options: {
+      state?: 'opened' | 'closed' | 'all';
+      labels?: string[];
+      milestone?: string;
+    } = {},
+  ): Promise<GitlabIssue[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      const issues = await this.gitlab.Issues.all({
+        projectId: project.id,
+        state: options.state,
+        labels: options.labels?.join(','),
+        milestone: options.milestone,
+      });
+
+      return issues.map((issue: any) => this._formatIssue(issue));
+    } catch (error) {
+      throw this._formatError(error, 'Failed to get issues list');
+    }
+  }
+
+  /**
+   * Update project issue
+   * @param projectPath project path (e.g., "username/projectname")
+   * @param issueIid issue IID
+   * @param updates update fields
+   * @returns updated issue
+   */
+  async updateIssue(
+    projectPath: string,
+    issueIid: number,
+    updates: {
+      title?: string;
+      description?: string;
+      stateEvent?: 'close' | 'reopen';
+      labels?: string[];
+      assigneeIds?: number[];
+      milestoneId?: number;
+      dueDate?: string;
+    },
+  ): Promise<GitlabIssue> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      const issue = await this.gitlab.Issues.edit(project.id, issueIid, {
+        title: updates.title,
+        description: updates.description,
+        stateEvent: updates.stateEvent,
+        labels: updates.labels?.join(','),
+        assigneeIds: updates.assigneeIds,
+        milestoneId: updates.milestoneId,
+        dueDate: updates.dueDate,
+      });
+
+      return this._formatIssue(issue);
+    } catch (error) {
+      throw this._formatError(error, 'Failed to update issue');
+    }
+  }
+
+  /**
+   * Delete project issue
+   * @param projectPath project path (e.g., "username/projectname")
+   * @param issueIid issue IID
+   */
+  async deleteIssue(projectPath: string, issueIid: number): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      await this.gitlab.Issues.remove(project.id, issueIid);
+    } catch (error) {
+      throw this._formatError(error, 'Failed to delete issue');
+    }
+  }
+
+  /**
+   * Format GitLab API returned Issue object
+   * @param issue Issue data returned by GitLab API
+   * @returns formatted Issue object
+   */
+  private _formatIssue(issue: any): GitlabIssue {
+    return {
+      id: issue.id,
+      iid: issue.iid,
+      projectId: issue.project_id,
+      title: issue.title,
+      description: issue.description || '',
+      state: issue.state,
+      createdAt: issue.created_at,
+      updatedAt: issue.updated_at,
+      closedAt: issue.closed_at,
+      labels: issue.labels || [],
+      milestone: issue.milestone,
+      assignees: issue.assignees || [],
+      author: issue.author,
+      webUrl: issue.web_url,
+    };
+  }
+
+  /**
+   * Format error message
+   * @param error error object
+   * @param defaultMessage default error message
+   * @returns formatted error object
+   */
+  private _formatError(error: any, defaultMessage: string): Error {
+    const errorMessage = error instanceof Error ? error.message : defaultMessage;
+    return new Error(errorMessage);
   }
 }
