@@ -24,8 +24,6 @@ interface TaskMasterTask {
   priority: string;
   estimatedTime?: string;
   dependencies: string[];
-  details?: string;
-  testStrategy?: string;
   status?: string;
 }
 
@@ -101,8 +99,6 @@ async function callTaskMasterAPI(prompt: string, env: any): Promise<TaskMasterRe
         type: 'development',
         priority: task.priority || 'medium',
         dependencies: (task.dependencies || []).map((dep: number) => dep.toString()),
-        details: task.details || '',
-        testStrategy: task.testStrategy || '',
         status: task.status || 'pending',
       }));
 
