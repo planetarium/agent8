@@ -9,6 +9,7 @@ import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
 import { AnimatePresence, motion } from 'framer-motion';
 import { lastActionStore } from '~/lib/stores/lastAction';
+import { workbenchStore } from '~/lib/stores/workbench';
 
 interface TaskMessagesProps {
   id?: string;
@@ -89,7 +90,8 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             <div className="flex items-center mr-3">
               <button
                 className="flex items-center justify-center p-1.5 rounded-full bg-cyan-700 hover:bg-cyan-600 transition-colors"
-                onClick={() => {
+                onClick={async () => {
+                  await workbenchStore.commitModifiedFiles();
                   lastActionStore.set({ action: 'LOAD' });
                   repoStore.set({
                     ...repoStore.get(),
@@ -210,6 +212,13 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                         setIsLoading(true);
 
                         try {
+                          const commit = await workbenchStore.commitModifiedFiles();
+
+                          if (commit) {
+                            // Temporary fix for bug where merge commits are not reflected immediately
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                          }
+
                           await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
                           lastActionStore.set({ action: 'LOAD' });
                           repoStore.set({
