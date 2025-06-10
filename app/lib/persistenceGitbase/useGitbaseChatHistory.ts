@@ -223,8 +223,6 @@ export function useGitbaseChatHistory() {
 
   useEffect(() => {
     const unsubscribe = repoStore.subscribe((state) => {
-      console.log(state, prevRequestParams);
-
       if (
         projectPath !== prevRequestParams.current.projectPath ||
         state.taskBranch !== prevRequestParams.current.taskBranch
