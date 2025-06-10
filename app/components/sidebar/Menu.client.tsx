@@ -2,8 +2,6 @@ import { motion, type Variants } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogButton, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
-import { ControlPanel } from '~/components/@settings/core/ControlPanel';
-import { SettingsButton } from '~/components/ui/SettingsButton';
 import { cubicEasingFn } from '~/utils/easings';
 import { HistoryItem } from './HistoryItem';
 import { binDates } from './date-binning';
@@ -69,7 +67,6 @@ export const Menu = () => {
   const [list, setList] = useState<RepositoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [dialogContent, setDialogContent] = useState<DialogContent | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   const open = useStore(menuStore);
 
@@ -129,7 +126,7 @@ export const Menu = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isSettingsOpen || !open) {
+      if (!open) {
         return;
       }
 
@@ -150,20 +147,11 @@ export const Menu = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isSettingsOpen, open]);
+  }, [open]);
 
   const handleDeleteClick = (event: React.UIEvent, item: RepositoryItem) => {
     event.preventDefault();
     setDialogContent({ type: 'delete', item });
-  };
-
-  const handleSettingsClick = () => {
-    setIsSettingsOpen(true);
-    menuStore.set(false);
-  };
-
-  const handleSettingsClose = () => {
-    setIsSettingsOpen(false);
   };
 
   return (
@@ -177,8 +165,8 @@ export const Menu = () => {
         className={classNames(
           'flex selection-accent flex-col side-menu fixed top-0',
           'bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800/50',
-          'shadow-sm text-sm',
-          isSettingsOpen ? 'z-40' : 'z-sidebar',
+          'shadow-sm text-sm ',
+          'z-sidebar',
           isEmbedMode ? (!chat.started ? 'mt-[56px] h-[calc(100%-56px)]' : 'mt-2 h-full') : 'h-full',
         )}
       >
@@ -280,20 +268,17 @@ export const Menu = () => {
               isEmbedMode && chat.started ? 'mb-2' : '',
             )}
           >
-            <SettingsButton onClick={handleSettingsClick} />
             <ThemeSwitch />
             <IconButton
               onClick={() => menuStore.set(false)}
               icon="i-ph:x-circle"
               size="xl"
               title="Close"
-              className="text-[#666] dark:text-gray-400 hover:text-bolt-elements-textPrimary dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/30 transition-colors"
+              className="ml-auto text-[#666] dark:text-gray-400 hover:text-bolt-elements-textPrimary dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/30 transition-colors"
             />
           </div>
         </div>
       </motion.div>
-
-      <ControlPanel open={isSettingsOpen} onClose={handleSettingsClose} />
     </>
   );
 };

@@ -1,20 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { classNames } from '~/utils/classNames';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 // MCP Server Manager Component
 const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = false }) => {
-  const { mcpServers, toggleMCPServer, toggleMCPServerV8Auth } = useSettings();
+  const { mcpServers, toggleMCPServer, toggleMCPServerV8Auth, addMCPServer, removeMCPServer } = useSettings();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hoveredServerIndex, setHoveredServerIndex] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState<boolean>(false);
+  const [newServer, setNewServer] = useState<{ name: string; url: string }>({
+    name: '',
+    url: '',
+  });
 
+  const defaultServerNames = import.meta.env?.VITE_DEFAULT_SERVER_NAMES
+    ? JSON.parse(import.meta.env.VITE_DEFAULT_SERVER_NAMES)
+    : ['Image', 'Cinematic', 'Audio', 'Skybox', 'UI'];
   const disabledServerNames = import.meta.env?.VITE_DISABLED_SERVER_NAMES
     ? JSON.parse(import.meta.env.VITE_DISABLED_SERVER_NAMES)
     : ['All-in-one'];
   const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
+  const isDefaultServer = (serverName: string) => defaultServerNames.includes(serverName);
 
   const hasActiveTools = mcpServers.some((server) => server.enabled && !isDisabledServer(server.name));
 
@@ -31,7 +41,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
       case 'UI':
         return '/icons/UI.svg';
       default:
-        return 'i-ph:cube w-4 h-4 text-bolt-elements-textSecondary';
+        return '/icons/Sparkle.svg';
     }
   };
 
@@ -65,6 +75,27 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
     } else {
       toggleMCPServerV8Auth(index, false);
     }
+  };
+
+  const handleAddServer = () => {
+    if (newServer.name && newServer.url) {
+      const server = {
+        name: newServer.name,
+        url: newServer.url,
+        enabled: true,
+        v8AuthIntegrated: true,
+        description: '',
+      };
+
+      addMCPServer(server);
+
+      setNewServer({ name: '', url: '' });
+      setShowAddForm(false);
+    }
+  };
+
+  const handleRemoveServer = (index: number) => {
+    removeMCPServer(index);
   };
 
   return (
@@ -133,15 +164,19 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                 />
               ) : server.name === 'All-in-one' ||
                 !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
-                <div className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')} />
+                <img
+                  src={getServerIcon(server.name)}
+                  alt={server.name}
+                  className={classNames('w-5 h-5', server.enabled ? '' : 'opacity-60')}
+                />
               ) : (
                 <img
                   src={getServerIcon(server.name)}
                   alt={server.name}
-                  className={server.enabled ? '' : 'opacity-60'}
+                  className={classNames('w-5 h-5', server.enabled ? '' : 'opacity-60')}
                 />
               )}
-              {server.name}
+              <span className="max-w-[120px] truncate">{server.name}</span>
             </div>
           ))}
 
@@ -149,7 +184,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           <motion.div
             ref={dropdownRef}
             className={classNames(
-              'absolute left-0 flex w-[300px] py-[6.4px] px-0 flex-col items-start rounded-[var(--border-radius-8,8px)] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10',
+              'absolute left-0 flex w-[330px] py-[6.4px] px-0 flex-col items-start rounded-[var(--border-radius-8,8px)] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10',
               chatStarted ? 'bottom-full mb-2' : 'top-full mt-2',
             )}
             style={{
@@ -161,75 +196,103 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           >
             {mcpServers.length > 0 ? (
               <div className="w-full">
-                {mcpServers
-                  .map((server, index) => ({ server, index }))
-                  .filter((item) => !isDisabledServer(item.server.name))
-                  .map(({ server, index }) => (
-                    <div
-                      key={index}
-                      className={classNames(
-                        'flex items-center justify-between w-full',
-                        'px-4 py-3.2',
-                        'transition-all duration-200 cursor-pointer',
-                        server.enabled
-                          ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
-                          : 'hover:bg-bolt-elements-item-backgroundActive active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)]',
-                      )}
-                      onClick={() => handleToggleServer(index, !server.enabled)}
-                    >
-                      <div className="flex items-center gap-4.8">
-                        <button
-                          type="button"
-                          className={classNames(
-                            'flex w-4 h-4 p-[var(--spacing-0,0px)] flex-col items-start gap-[var(--spacing-0,0px)] aspect-square rounded-[var(--border-radius-2,2px)] cursor-pointer',
-                            server.enabled
-                              ? 'bg-[var(--color-bg-interactive-primary,#1A92A4)]'
-                              : 'bg-[#383838] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))]',
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleServer(index, !server.enabled);
-                          }}
-                          aria-pressed={server.enabled}
-                          aria-label={`${server.enabled ? 'Disable' : 'Enable'} ${server.name} server`}
-                        >
-                          {server.enabled && <img src="/icons/Check.svg" alt="Selected" className="w-full h-full" />}
-                        </button>
-
-                        <div className="flex flex-col justify-center items-start gap-1.6 flex-1">
-                          <div className="flex items-center gap-1.6 self-stretch">
-                            {server.name === 'All-in-one' ||
-                            !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
-                              <div
-                                className={classNames(getServerIcon(server.name), server.enabled ? '' : 'opacity-60')}
-                              />
-                            ) : (
-                              <img
-                                src={getServerIcon(server.name)}
-                                alt={server.name}
-                                className={server.enabled ? '' : 'opacity-60'}
-                              />
+                <div className="max-h-[364.95px] overflow-y-auto">
+                  {mcpServers
+                    .map((server, index) => ({ server, index }))
+                    .filter((item) => !isDisabledServer(item.server.name))
+                    .map(({ server, index }) => (
+                      <div
+                        key={index}
+                        className={classNames(
+                          'flex items-center justify-between w-full',
+                          'px-4 py-3.2',
+                          'transition-all duration-200 cursor-pointer',
+                          server.enabled
+                            ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
+                            : 'hover:bg-bolt-elements-item-backgroundActive active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)]',
+                        )}
+                        onClick={() => handleToggleServer(index, !server.enabled)}
+                      >
+                        <div className="flex items-center gap-4.8">
+                          <button
+                            type="button"
+                            className={classNames(
+                              'flex w-4 h-4 p-[var(--spacing-0,0px)] flex-col items-start gap-[var(--spacing-0,0px)] aspect-square rounded-[var(--border-radius-2,2px)] cursor-pointer',
+                              server.enabled
+                                ? 'bg-[var(--color-bg-interactive-primary,#1A92A4)]'
+                                : 'bg-[#383838] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))]',
                             )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleServer(index, !server.enabled);
+                            }}
+                            aria-pressed={server.enabled}
+                            aria-label={`${server.enabled ? 'Disable' : 'Enable'} ${server.name} server`}
+                          >
+                            {server.enabled && <img src="/icons/Check.svg" alt="Selected" className="w-full h-full" />}
+                          </button>
 
-                            <div className="flex items-center gap-1.2">
-                              <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[14px] font-medium leading-[150%]">
-                                {server.name}
-                              </h4>
-                              <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[14px] font-medium leading-[142.9%]">
-                                {server.name === 'Audio' ? '1 credit/s (default: 30s)' : '1 Credit'}
-                              </span>
+                          <div className="flex flex-col justify-center items-start gap-1.6 flex-1 min-w-0">
+                            <div className="flex items-center gap-1.6 self-stretch min-w-0">
+                              {server.name === 'All-in-one' ||
+                              !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
+                                <img
+                                  src={getServerIcon(server.name)}
+                                  alt={server.name}
+                                  className={classNames('w-5 h-5 flex-shrink-0', server.enabled ? '' : 'opacity-60')}
+                                />
+                              ) : (
+                                <img
+                                  src={getServerIcon(server.name)}
+                                  alt={server.name}
+                                  className={classNames('w-5 h-5 flex-shrink-0', server.enabled ? '' : 'opacity-60')}
+                                />
+                              )}
+
+                              <div className="flex items-center gap-1.2 flex-1 min-w-0">
+                                <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[14px] font-medium leading-[150%] break-all min-w-0 line-clamp-1">
+                                  {server.name}
+                                </h4>
+                                {isDefaultServer(server.name) && (
+                                  <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[14px] font-medium leading-[142.9%] flex-shrink-0">
+                                    {server.name === 'Audio' ? '1 credit/s (default: 30s)' : '1 Credit'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="w-full min-w-0">
+                              <p className="text-[12px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)] break-all w-full line-clamp-3">
+                                {isDefaultServer(server.name) ? server.description : server.url}
+                              </p>
                             </div>
                           </div>
-
-                          <div>
-                            <p className="text-[12px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)]">
-                              {server.description}
-                            </p>
-                          </div>
                         </div>
+
+                        {!isDefaultServer(server.name) && (
+                          <button
+                            className="ml-2 p-1 bg-transparent flex-shrink-0 min-w-[28px] min-h-[28px] flex items-center justify-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveServer(index);
+                            }}
+                            aria-label={`Remove ${server.name} server`}
+                          >
+                            <img src="/icons/Close.svg" alt="Remove" className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
+
+                <div className="w-full flex justify-end px-2 pt-3">
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="text-[var(--color-text-interactive-primary,#11B9D2)] hover:text-[var(--color-text-interactive-primary-hovered,#1A92A4)] active:text-[var(--color-text-interactive-primary-pressed,#1A7583)] focus:text-[var(--color-text-interactive-primary,#11B9D2)] font-primary bg-transparent border-none text-[14px] font-semibold leading-[142.9%] font-feature-[ss10] px-[14px] py-[10px] transition-colors duration-200"
+                  >
+                    Add Custom MCP Tool
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="w-full text-center py-3.2 px-3.2 text-bolt-elements-textSecondary text-[11.2px]">
@@ -239,6 +302,121 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           </motion.div>
         )}
       </div>
+
+      {showAddForm &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 font-primary flex items-center justify-center"
+            style={{ zIndex: 1200 }}
+            onClick={() => setShowAddForm(false)}
+          >
+            <motion.div
+              className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-md w-[500px] max-w-[90vw]"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-800 pb-3">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span className="bg-cyan-100 dark:bg-cyan-900/30 p-1.5 rounded-md mr-2">
+                      <div className="i-ph:plus-circle-fill w-4 h-4 text-cyan-700 dark:text-cyan-400" />
+                    </span>
+                    Add Custom MCP Tool
+                  </h4>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 group transition-all duration-200"
+                  >
+                    <div className="i-ph:x w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex-[0.4]">
+                    <label
+                      htmlFor="mcp-tool-name"
+                      className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 ml-1"
+                    >
+                      MCP Tool Name
+                    </label>
+                    <input
+                      id="mcp-tool-name"
+                      type="text"
+                      placeholder="e.g. agent8"
+                      value={newServer.name}
+                      onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
+                      className={classNames(
+                        'w-full p-2.5 rounded-lg text-sm',
+                        'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+                        'text-gray-900 dark:text-gray-100',
+                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
+                        'transition-all duration-200',
+                      )}
+                    />
+                  </div>
+                  <div className="flex-[0.6]">
+                    <label
+                      htmlFor="mcp-tool-url"
+                      className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 ml-1"
+                    >
+                      MCP Tool URL
+                    </label>
+                    <input
+                      id="mcp-tool-url"
+                      type="text"
+                      placeholder="http://localhost:3333/sse"
+                      value={newServer.url}
+                      onChange={(e) => setNewServer({ ...newServer, url: e.target.value })}
+                      className={classNames(
+                        'w-full p-2.5 rounded-lg text-sm',
+                        'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+                        'text-gray-900 dark:text-gray-100',
+                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
+                        'transition-all duration-200',
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowAddForm(false)}
+                      className={classNames(
+                        'px-4 py-2 rounded-lg text-sm font-medium',
+                        'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700',
+                        'text-gray-700 dark:text-gray-300',
+                        'transition-colors duration-200',
+                        'border border-gray-200 dark:border-gray-700',
+                      )}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddServer}
+                      disabled={!newServer.name || !newServer.url}
+                      className={classNames(
+                        'px-4 py-2 rounded-lg text-sm font-medium',
+                        'transition-colors duration-200',
+                        'shadow-sm',
+                        'disabled:cursor-not-allowed',
+                        !newServer.name || !newServer.url
+                          ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700'
+                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 dark:hover:text-white hover:border-cyan-400 dark:hover:border-cyan-500',
+                      )}
+                    >
+                      Add Tool
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
