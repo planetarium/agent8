@@ -7,6 +7,7 @@ import React, { type RefCallback, useCallback, useEffect, useState } from 'react
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import { TaskList } from '~/components/chat/TaskList.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -555,10 +556,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 scrollRef(node);
               }
             }}
-            className={classNames(
-              styles.Chat,
-              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-y-auto chat-container',
-            )}
+            className={classNames(styles.Chat, 'flex flex-col h-full overflow-y-auto chat-container', {
+              // Limit to fixed width only when chatStarted is true and in the default branch
+              'lg:min-w-[var(--chat-min-width)] lg:max-w-[var(--chat-min-width)]':
+                chatStarted && repo.taskBranch === DEFAULT_TASK_BRANCH,
+
+              // Use flex-grow for other cases (before chat starts, in task branch)
+              'flex-grow lg:min-w-[var(--chat-min-width)]': !chatStarted || repo.taskBranch !== DEFAULT_TASK_BRANCH,
+            })}
           >
             {!chatStarted && (
               <div id="intro" className="mt-[30px] max-w-chat-before-start mx-auto text-center px-4 lg:px-0">
@@ -1065,13 +1070,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </div>
           </div>
           <ClientOnly>
-            {() => (
-              <Workbench
-                actionRunner={actionRunner ?? ({} as ActionRunner)}
-                chatStarted={chatStarted}
-                isStreaming={isStreaming}
-              />
-            )}
+            {() => {
+              const currentTaskBranch = repo.taskBranch;
+
+              // Show TaskList only when chatStarted is true and in the default branch (develop branch)
+              if (chatStarted && currentTaskBranch === DEFAULT_TASK_BRANCH) {
+                return <TaskList taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />;
+              }
+
+              // Show Workbench when chatStarted is false or in task branch
+              return (
+                <Workbench
+                  actionRunner={actionRunner ?? ({} as ActionRunner)}
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                />
+              );
+            }}
           </ClientOnly>
         </div>
       </div>

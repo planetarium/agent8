@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ActionCallbackData } from '~/lib/runtime/message-parser';
 import { streamingState } from '~/lib/stores/streaming';
 import { NetlifyDeploymentLink } from '~/components/chat/NetlifyDeploymentLink.client';
-import { repoStore } from '~/lib/stores/repo';
+import { repoStore, DEFAULT_TASK_BRANCH } from '~/lib/stores/repo';
 interface HeaderActionButtonsProps {}
 
 export function HeaderActionButtons({}: HeaderActionButtonsProps) {
@@ -27,6 +27,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isStreaming = useStore(streamingState);
+  const repo = useStore(repoStore);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -202,8 +203,31 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
     }
   };
 
+  // Function to return to task management
+  const handleBackToTaskManagement = () => {
+    repoStore.setKey('taskBranch', DEFAULT_TASK_BRANCH);
+    toast.success('Returned to Task Management');
+  };
+
+  // Check if currently in a task
+  const isInTask = repo.taskBranch !== DEFAULT_TASK_BRANCH;
+
   return (
     <div className="flex">
+      {/* Button to return to task management when in a task */}
+      {isInTask && (
+        <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden mr-2">
+          <Button
+            active={false}
+            onClick={handleBackToTaskManagement}
+            className="px-3 py-1.5 hover:bg-bolt-elements-item-backgroundActive flex items-center gap-2 text-sm"
+          >
+            <div className="i-ph:arrow-left text-sm" />
+            Tasks
+          </Button>
+        </div>
+      )}
+
       <div className="relative" ref={dropdownRef}>
         <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden mr-2 text-sm">
           <Button
