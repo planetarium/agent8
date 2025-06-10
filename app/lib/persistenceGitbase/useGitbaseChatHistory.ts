@@ -231,7 +231,7 @@ export function useGitbaseChatHistory() {
       }
     });
     return () => unsubscribe();
-  }, [load]);
+  }, [load, projectPath]);
 
   return {
     loaded: loaded && filesLoaded,

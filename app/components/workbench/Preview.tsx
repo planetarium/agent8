@@ -13,6 +13,13 @@ interface WindowSize {
   icon: string;
 }
 
+const IGNORE_ERRORS = [
+  'HMRClient',
+  `Couldn't load texture blob`,
+  'null pointer passed to rust',
+  'Failed to load animation',
+];
+
 const WINDOW_SIZES: WindowSize[] = [
   { name: 'iPhone 14 Pro Max', width: 430, height: 932, icon: 'i-ph:device-mobile' },
   { name: 'iPhone SE', width: 375, height: 667, icon: 'i-ph:device-mobile' },
@@ -315,14 +322,7 @@ export const Preview = memo(() => {
         }
 
         if (error.stack) {
-          const ignoreErrors = [
-            'HMRClient',
-            `Couldn't load texture blob`,
-            'null pointer passed to rust',
-            'Failed to load animation',
-          ];
-
-          if (ignoreErrors.some((text) => error.stack.includes(text))) {
+          if (IGNORE_ERRORS.some((text) => error.stack.includes(text))) {
             return;
           }
 
