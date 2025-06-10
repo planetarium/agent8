@@ -70,18 +70,6 @@ export function useGitbaseChatHistory() {
   const [error, setError] = useState<string | null>(null);
   const prevRequestParams = useRef<{ [key: string]: any }>({});
 
-  useEffect(() => {
-    const unsubscribe = repoStore.subscribe((state) => {
-      if (
-        projectPath !== prevRequestParams.current.projectPath ||
-        state.taskBranch !== prevRequestParams.current.taskBranch
-      ) {
-        load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
   const loadTaskBranches = useCallback(async (projectPath: string) => {
     const { data } = await getTaskBranches(projectPath);
     setTaskBranches(data);
@@ -232,6 +220,20 @@ export function useGitbaseChatHistory() {
       untilCommit: prevRequestParams.current.untilCommit,
     });
   }, [loading, hasMore, currentPage, load]);
+
+  useEffect(() => {
+    const unsubscribe = repoStore.subscribe((state) => {
+      console.log(state, prevRequestParams);
+
+      if (
+        projectPath !== prevRequestParams.current.projectPath ||
+        state.taskBranch !== prevRequestParams.current.taskBranch
+      ) {
+        load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
+      }
+    });
+    return () => unsubscribe();
+  }, [load]);
 
   return {
     loaded: loaded && filesLoaded,

@@ -21,7 +21,7 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
 
   const handleAskBolt = (isAutoFix = false) => {
     postMessage(
-      `*Fix this ${isPreview ? 'preview' : 'terminal'} error* \n\`\`\`${isPreview ? 'js' : 'sh'}\n${content}\n\`\`\`\n`,
+      `*Fix this ${isPreview ? 'preview' : 'terminal'} error* \n\`\`\`${isPreview ? 'js' : 'sh'}\n${description}\n${content}\n\`\`\`\n`,
       isAutoFix,
     );
   };

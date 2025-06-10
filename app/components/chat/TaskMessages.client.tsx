@@ -95,6 +95,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                     ...repoStore.get(),
                     taskBranch: DEFAULT_TASK_BRANCH,
                   });
+                  reloadTaskBranches?.(repoStore.get().path);
                 }}
                 disabled={isProcessing || isConfirming}
               >

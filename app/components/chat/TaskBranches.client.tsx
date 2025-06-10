@@ -1,6 +1,7 @@
 import { forwardRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
+import { lastActionStore } from '~/lib/stores/lastAction';
 import { repoStore } from '~/lib/stores/repo';
 
 interface TaskBranchesProps {
@@ -25,6 +26,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
   };
 
   const handleContinue = async () => {
+    lastActionStore.set({ action: 'LOAD' });
     repoStore.set({
       ...repoStore.get(),
       taskBranch: branch.name,
