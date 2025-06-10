@@ -84,7 +84,7 @@ function extractUserPrompt(messages: TaskMessage[]): string {
 function buildTaskBreakdownSystemPrompt(): string {
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
-Analyze the provided requirement content and generate approximately 5-10 top-level development tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
+Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 15 items. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
 
 **Task Breakdown Guidelines:**
 1. Each task should be atomic and focused on a single responsibility, following the latest best practices and standards
@@ -523,7 +523,6 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
     logger.debug(
       `Environment variables: GOOGLE_GENERATIVE_AI_API_KEY exists: ${!!env.GOOGLE_GENERATIVE_AI_API_KEY}, length: ${env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 0}`,
     );
-    logger.debug(`Environment keys: ${Object.keys(env).join(', ')}`);
 
     const user = context?.user as { email: string; isActivated: boolean };
     const cookieHeader = request.headers.get('Cookie');
