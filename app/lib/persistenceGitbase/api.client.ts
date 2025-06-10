@@ -334,6 +334,24 @@ export const removeTaskBranch = async (projectPath: string, branchName: string) 
   return response.data;
 };
 
+export const getProjectIssues = async (
+  projectPath: string,
+  page: number = 1,
+  perPage: number = 20,
+  state: 'opened' | 'closed' | 'all' = 'opened',
+) => {
+  const response = await axios.get('/api/gitlab/issues', {
+    params: {
+      projectPath,
+      page,
+      perPage,
+      state,
+    },
+  });
+
+  return response.data;
+};
+
 export const revertBranch = async (projectPath: string, branchName: string, commitHash: string) => {
   const response = await axios.post('/api/gitlab/revert-branch', {
     projectPath,

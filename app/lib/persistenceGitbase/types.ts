@@ -66,3 +66,25 @@ export interface FileContent {
   path: string;
   content: string;
 }
+
+export interface GitlabIssue {
+  id: number;
+  iid: number;
+  title: string;
+  description: string;
+  state: 'opened' | 'closed';
+  created_at: string;
+  updated_at: string;
+  author: {
+    id: number;
+    name: string;
+    username: string;
+  };
+  assignee?: {
+    id: number;
+    name: string;
+    username: string;
+  } | null;
+  labels: string[];
+  web_url: string;
+}

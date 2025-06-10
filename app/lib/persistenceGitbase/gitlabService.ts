@@ -7,6 +7,7 @@ import type {
   GitlabProtectedBranch,
   CommitAction,
   FileContent,
+  GitlabIssue,
 } from './types';
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
@@ -1262,6 +1263,86 @@ export class GitlabService {
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get issues for a project
+   */
+  async getProjectIssues(
+    projectPath: string,
+    page: number = 1,
+    perPage: number = 20,
+    state: 'opened' | 'closed' | 'all' = 'opened',
+  ): Promise<{
+    project: {
+      id: number;
+      name: string;
+      description: string;
+    };
+    issues: GitlabIssue[];
+    total: number;
+    hasMore: boolean;
+  }> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      const issuesResponse = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/issues`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            state,
+            page,
+            per_page: perPage,
+            order_by: 'updated_at',
+            sort: 'desc',
+          },
+        },
+      );
+
+      const totalIssues = parseInt(issuesResponse.headers['x-total'] || '0', 10);
+      const hasMore = page * perPage < totalIssues;
+
+      const issues = issuesResponse.data.map((issue: any) => ({
+        id: issue.id,
+        iid: issue.iid,
+        title: issue.title,
+        description: issue.description || '',
+        state: issue.state,
+        created_at: issue.created_at,
+        updated_at: issue.updated_at,
+        author: {
+          id: issue.author.id,
+          name: issue.author.name,
+          username: issue.author.username,
+        },
+        assignee: issue.assignee
+          ? {
+              id: issue.assignee.id,
+              name: issue.assignee.name,
+              username: issue.assignee.username,
+            }
+          : null,
+        labels: issue.labels || [],
+        web_url: issue.web_url,
+      })) as GitlabIssue[];
+
+      return {
+        project: {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+        },
+        issues,
+        total: totalIssues,
+        hasMore,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to fetch project issues: ${errorMessage}`);
     }
   }
 }
