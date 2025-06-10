@@ -1,25 +1,27 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
-import { generateId } from 'ai';
-import type { Messages } from '~/lib/.server/llm/stream-text';
-
-// @ts-ignore - Task Master module doesn't have TypeScript declarations
-import { parsePRD } from 'task-master-ai/scripts/modules/task-manager';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { generateId, generateText } from 'ai';
+import { getMCPConfigFromCookie } from '~/lib/api/cookies';
+import { createToolSet } from '~/lib/modules/mcp/toolset';
+import { DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
 
 // GitLab integration
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import type { GitlabProject, GitlabIssue } from '~/lib/persistenceGitbase/types';
+
+// Define message types
+type TaskMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
 
 export const action = withV8AuthUser(taskAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.task');
 
 interface TaskBreakdownRequest {
-  messages: Messages;
+  messages: TaskMessage[];
   createGitlabIssues?: boolean;
   projectName?: string;
   projectDescription?: string;
@@ -30,11 +32,12 @@ interface TaskMasterTask {
   id: string;
   title: string;
   description: string;
-  type?: string;
-  priority: string;
-  estimatedTime?: string;
+  details: string;
+  testStrategy: string;
+  priority: 'high' | 'medium' | 'low';
   dependencies: string[];
-  status?: string;
+  status: string;
+  estimatedTime?: string;
 }
 
 interface TaskMasterResult {
@@ -42,9 +45,10 @@ interface TaskMasterResult {
   tasks: TaskMasterTask[];
   totalTasks: number;
   generatedAt: string;
-  metadata?: {
+  metadata: {
     projectName: string;
     sourceFile: string;
+    totalTasks: number;
   };
 }
 
@@ -66,7 +70,7 @@ function generateProjectName(prompt: string): string {
 }
 
 // Extract user prompt from messages
-function extractUserPrompt(messages: Messages): string {
+function extractUserPrompt(messages: TaskMessage[]): string {
   // Find the last user message
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
@@ -76,9 +80,276 @@ function extractUserPrompt(messages: Messages): string {
   throw new Error('No user message found in messages array');
 }
 
+// Build advanced system prompt for task breakdown
+function buildTaskBreakdownSystemPrompt(): string {
+  return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
+
+Analyze the provided requirement content and generate approximately 5-10 top-level development tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
+
+**Task Breakdown Guidelines:**
+1. Each task should be atomic and focused on a single responsibility, following the latest best practices and standards
+2. Order tasks logically - consider dependencies and implementation sequence
+3. Early tasks should focus on setup and core functionality, then advanced features
+4. Include clear validation/testing approach for each task
+5. Set appropriate dependency IDs (tasks can only depend on tasks with lower IDs)
+6. Assign priority (high/medium/low) based on criticality and dependency order
+7. Include detailed implementation guidance in the "details" field
+8. If requirements contain specific libraries, database schemas, frameworks, tech stacks, or other implementation details, STRICTLY ADHERE to these requirements
+9. Focus on filling gaps left by requirements or areas that aren't fully specified, while preserving all explicit requirements
+10. Always provide the most direct path to implementation, avoiding over-engineering or roundabout approaches
+11. Include specific, actionable guidance for each task
+12. Set reasonable estimated time and acceptance criteria
+
+**Respond strictly in the following JSON format, without any explanation or markdown formatting:**
+
+{
+  "summary": "Task breakdown summary description",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Task title",
+      "description": "Task description", 
+      "details": "Detailed implementation guidance and technical details",
+      "testStrategy": "Validation and testing approach",
+      "priority": "high|medium|low",
+      "dependencies": ["Dependent task IDs"],
+      "status": "pending",
+      "estimatedTime": "Estimated time"
+    }
+  ],
+  "totalTasks": number_of_tasks,
+  "generatedAt": "ISO_timestamp",
+  "metadata": {
+    "projectName": "Project name",
+    "sourceFile": "Source file",
+    "totalTasks": number_of_tasks
+  }
+}`;
+}
+
+// Parse task breakdown response from LLM
+function parseTaskBreakdownResponse(response: string, _userPrompt: string): TaskMasterResult {
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error('No valid JSON found in LLM response');
+    }
+
+    let jsonStr = jsonMatch[0];
+    let taskData;
+
+    try {
+      // Try to parse the JSON normally first
+      taskData = JSON.parse(jsonStr);
+    } catch (jsonError: any) {
+      // If JSON parsing failed, attempt to fix potential truncation issues
+      logger.warn('Initial JSON parse failed:', jsonError.message);
+
+      // Check if error is due to truncation
+      if (
+        jsonError.message.includes('Unexpected end of JSON input') ||
+        jsonError.message.includes('Expected') ||
+        jsonError.message.includes('Unterminated')
+      ) {
+        logger.info('Attempting to fix potentially truncated JSON...');
+
+        /* Fix common JSON truncation issues */
+        // 1. Check for missing closing braces
+        const openBraces = (jsonStr.match(/\{/g) || []).length;
+        const closeBraces = (jsonStr.match(/\}/g) || []).length;
+
+        if (openBraces > closeBraces) {
+          // Add missing closing braces
+          jsonStr += '}'.repeat(openBraces - closeBraces);
+          logger.debug('Added missing closing braces');
+        }
+
+        // 2. Check for missing closing brackets
+        const openBrackets = (jsonStr.match(/\[/g) || []).length;
+        const closeBrackets = (jsonStr.match(/\]/g) || []).length;
+
+        if (openBrackets > closeBrackets) {
+          // Add missing closing brackets after the last object
+          const lastBraceIndex = jsonStr.lastIndexOf('}');
+
+          if (lastBraceIndex !== -1) {
+            const closingBrackets = ']'.repeat(openBrackets - closeBrackets);
+            jsonStr = `${jsonStr.slice(0, lastBraceIndex + 1)}${closingBrackets}${jsonStr.slice(lastBraceIndex + 1)}`;
+            logger.debug('Added missing closing brackets');
+          }
+        }
+
+        // 3. Fix truncated property values
+        jsonStr = jsonStr.replace(/,\s*"[^"]*"\s*:(?!\s*[{\["0-9]|true|false|null)/g, (match) => {
+          logger.debug(`Found potentially truncated property: ${match}`);
+          return `${match} ""`;
+        });
+
+        // Try parsing JSON again after fixes
+        try {
+          taskData = JSON.parse(jsonStr);
+          logger.info('Successfully fixed and parsed JSON');
+        } catch (retryError) {
+          logger.error('Failed to fix JSON:', retryError);
+          throw new Error(`Failed to parse JSON after fix attempts: ${jsonError.message}`);
+        }
+      } else {
+        // If not a truncation error, rethrow original error
+        throw jsonError;
+      }
+    }
+
+    // Validate and transform the response to match TaskMasterResult format
+    const tasks: TaskMasterTask[] = (taskData.tasks || []).map((task: any, index: number) => ({
+      id: task.id?.toString() || (index + 1).toString(),
+      title: task.title || 'Untitled Task',
+      description: task.description || '',
+      details: task.details || '',
+      testStrategy: task.testStrategy || '',
+      priority: ['high', 'medium', 'low'].includes(task.priority) ? task.priority : 'medium',
+      dependencies: Array.isArray(task.dependencies) ? task.dependencies.map((dep: any) => dep.toString()) : [],
+      status: task.status || 'pending',
+      estimatedTime: task.estimatedTime || '',
+    }));
+
+    return {
+      summary: taskData.summary || `Task breakdown completed: ${tasks.length} tasks`,
+      tasks,
+      totalTasks: tasks.length,
+      generatedAt: new Date().toISOString(),
+      metadata: {
+        projectName: taskData.metadata?.projectName || 'User Requirements Project',
+        sourceFile: taskData.metadata?.sourceFile || 'API Request',
+        totalTasks: tasks.length,
+      },
+    };
+  } catch (error: any) {
+    logger.error('Failed to parse task breakdown response:', error);
+
+    // Since we removed the fallback, just throw the error
+    throw new Error(`Failed to parse LLM response: ${error.message}`);
+  }
+}
+
+// Execute task breakdown using generateText with MCP tools
+async function executeEnhancedTaskBreakdown(
+  userPrompt: string,
+  env: any,
+  cookieHeader: string | null,
+  userAccessToken?: string,
+): Promise<TaskMasterResult> {
+  try {
+    logger.info('Starting enhanced task breakdown execution');
+
+    // Setup MCP tools from cookie
+    const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+    const mcpToolset = await createToolSet(mcpConfig, userAccessToken);
+    const mcpTools = mcpToolset.tools;
+    logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
+
+    // Build messages for task breakdown
+    const systemPrompt = buildTaskBreakdownSystemPrompt();
+    const userMessage = `Please break down the following requirements into specific development tasks:\n\n${userPrompt}`;
+
+    // Validate message content
+    if (!systemPrompt || systemPrompt.trim().length === 0) {
+      throw new Error('System prompt is empty');
+    }
+
+    if (!userMessage || userMessage.trim().length === 0) {
+      throw new Error('User message is empty');
+    }
+
+    logger.debug('Message validation:', {
+      systemPromptLength: systemPrompt.length,
+      userMessageLength: userMessage.length,
+      userPromptPreview: userPrompt.slice(0, 100),
+    });
+
+    // Debug providers
+    logger.debug(`Available providers: ${PROVIDER_LIST.map((p) => p.name).join(', ')}`);
+    logger.debug(`DEFAULT_PROVIDER: ${DEFAULT_PROVIDER.name}`);
+
+    // Get the provider and model instance (similar to streamText)
+    const provider = PROVIDER_LIST.find((p) => p.name === 'Google') || DEFAULT_PROVIDER;
+    logger.debug(`Selected provider: ${provider.name}`);
+
+    // Get model instance using provider directly, similar to how streamText does it
+    logger.debug(
+      `API Key available: ${!!env.GOOGLE_GENERATIVE_AI_API_KEY}, length: ${env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 0}`,
+    );
+
+    const modelInstance = provider.getModelInstance({
+      model: 'gemini-2.5-pro-preview-05-06',
+      serverEnv: env,
+    });
+
+    logger.debug('Using Google model: gemini-2.5-pro-preview-05-06');
+
+    // Prepare messages for AI SDK
+    const messages = [
+      {
+        role: 'system' as const,
+        content: systemPrompt,
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+      },
+      {
+        role: 'user' as const,
+        content: userMessage,
+      },
+    ];
+
+    logger.info('🔄 Calling generateText with MCP tools...');
+
+    // Setup generateText parameters with tools
+    const generateParams: any = {
+      model: modelInstance,
+      messages,
+      temperature: 0.3,
+    };
+
+    // Only add tools if we have them
+    if (Object.keys(mcpTools).length > 0) {
+      logger.info(`Adding ${Object.keys(mcpTools).length} MCP tools to request`);
+      generateParams.tools = mcpTools;
+      generateParams.toolChoice = 'auto';
+    }
+
+    // Use LLM call with tools
+    const result = await generateText(generateParams);
+
+    logger.info('✅ generateText call successful');
+
+    const fullResponse = result.text;
+    logger.info(`🎉 Response received: ${fullResponse.length} characters`);
+
+    // Log full response for debugging
+    logger.debug('Full response text:');
+    logger.debug(fullResponse);
+
+    if (fullResponse.length === 0) {
+      logger.error('❌ Empty response from generateText');
+      throw new Error('Empty response from generateText');
+    }
+
+    // Parse the response
+    const taskBreakdown = parseTaskBreakdownResponse(fullResponse, userPrompt);
+    logger.info(`✨ Task breakdown completed: ${taskBreakdown.tasks.length} tasks`);
+
+    return taskBreakdown;
+  } catch (error: any) {
+    logger.error('Enhanced task breakdown execution failed:', error);
+    throw new Error(`Task breakdown failed: ${error.message}`);
+  }
+}
+
 // Create conversation response with history
 function createConversationResponse(
-  messages: Messages,
+  messages: TaskMessage[],
   taskBreakdown: TaskMasterResult,
   gitlabResult?: {
     project: GitlabProject;
@@ -90,7 +361,7 @@ function createConversationResponse(
   const conversationId = generateId();
   const assistantMessage = {
     role: 'assistant' as const,
-    content: `I've broken down your request into ${taskBreakdown.tasks.length} tasks${gitlabResult ? ` and created GitLab issues in project ${gitlabResult.projectPath}` : ''}.`,
+    content: `I've broken down your requirements into ${taskBreakdown.tasks.length} specific tasks${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
   };
 
   return {
@@ -121,7 +392,8 @@ function createConversationResponse(
       apiKeysConfigured: {
         anthropic: !!env?.ANTHROPIC_API_KEY,
         openai: !!env?.OPENAI_API_KEY,
-        google: !!env?.GOOGLE_API_KEY,
+        google: !!env?.GOOGLE_GENERATIVE_AI_API_KEY,
+        openrouter: !!env?.OPEN_ROUTER_API_KEY,
         gitlab: !!(env?.GITLAB_URL && env?.GITLAB_ACCESS_TOKEN),
       },
     },
@@ -132,19 +404,27 @@ function createConversationResponse(
 function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string, number>): string {
   let description = task.description;
 
+  if (task.details) {
+    description += `\n\n**Implementation Details:**\n${task.details}`;
+  }
+
+  if (task.testStrategy) {
+    description += `\n\n**Test Strategy:**\n${task.testStrategy}`;
+  }
+
   if (task.estimatedTime) {
     description += `\n\n**Estimated Time:** ${task.estimatedTime}`;
   }
 
   if (task.dependencies && task.dependencies.length > 0) {
-    description += `\n\n**Dependencies:**`;
+    description += `\n\n**Dependent Tasks:**`;
 
     task.dependencies.forEach((depId) => {
       if (taskToIssueMap?.has(depId)) {
         const issueNumber = taskToIssueMap.get(depId);
         description += `\n- Issue #${issueNumber}`;
       } else {
-        description += `\n- Issue pending`;
+        description += `\n- Task ${depId}`;
       }
     });
   }
@@ -178,13 +458,13 @@ async function createIssuesFromTasks(
         task.title,
         formatTaskDescription(task), // First pass without dependency links
         {
-          labels: [`priority-${task.priority}`, task.type ? `type-${task.type}` : 'type-development'],
+          labels: [`priority-${task.priority}`, 'type-development'],
         },
       );
 
       issues.push(issue);
       taskToIssueMap.set(task.id, issue.iid);
-      logger.info(`Created GitLab issue #${issue.iid}: ${task.title}`);
+      logger.info(`Created GitLab issue successfully #${issue.iid}: ${task.title}`);
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error';
       errors.push({ task, error: errorMessage });
@@ -215,104 +495,6 @@ async function createIssuesFromTasks(
   return { issues, errors, taskToIssueMap };
 }
 
-async function callTaskMasterAPI(prompt: string, env: any): Promise<TaskMasterResult> {
-  try {
-    logger.info('Calling Task Master API for autonomous task breakdown');
-
-    const hasAnthropicKey = env.ANTHROPIC_API_KEY;
-    const hasOpenAIKey = env.OPENAI_API_KEY;
-
-    if (!hasAnthropicKey && !hasOpenAIKey) {
-      throw new Error(
-        'No LLM API keys found. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY in environment variables.',
-      );
-    }
-
-    logger.debug(`API Keys available: Anthropic=${!!hasAnthropicKey}, OpenAI=${!!hasOpenAIKey}`);
-
-    const tempDir = os.tmpdir();
-    const tempPrdFile = path.join(tempDir, `prd-${Date.now()}-${Math.random().toString(36).substring(7)}.txt`);
-    const tempTasksFile = path.join(tempDir, `tasks-${Date.now()}-${Math.random().toString(36).substring(7)}.json`);
-
-    try {
-      // Write the user prompt directly - let LLM decide completely
-      fs.writeFileSync(tempPrdFile, prompt, 'utf8');
-      logger.debug(`Created temporary PRD file: ${tempPrdFile}`);
-
-      // Set up environment variables
-      process.env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
-      process.env.OPENAI_API_KEY = env.OPENAI_API_KEY;
-      process.env.GOOGLE_API_KEY = env.GOOGLE_API_KEY;
-
-      logger.info('Calling Task Master parsePRD function with autonomous mode');
-
-      // Pass 0 to let LLM decide autonomously (will result in "approximately 0" in prompt)
-      await parsePRD(tempPrdFile, tempTasksFile, 0, {
-        force: true,
-        append: false,
-        research: false,
-        mcpLog: {
-          info: (msg: string) => logger.info(`TaskMaster: ${msg}`),
-          warn: (msg: string) => logger.warn(`TaskMaster: ${msg}`),
-          error: (msg: string) => logger.error(`TaskMaster: ${msg}`),
-          debug: (msg: string) => logger.debug(`TaskMaster: ${msg}`),
-          success: (msg: string) => logger.info(`TaskMaster SUCCESS: ${msg}`),
-        },
-      });
-
-      // Read the generated tasks
-      if (!fs.existsSync(tempTasksFile)) {
-        throw new Error('Task Master did not generate tasks file');
-      }
-
-      const tasksData = JSON.parse(fs.readFileSync(tempTasksFile, 'utf8'));
-      logger.info(`LLM autonomously generated ${tasksData.tasks?.length || 0} tasks`);
-
-      // Transform Task Master format to our expected format
-      const transformedTasks: TaskMasterTask[] = (tasksData.tasks || []).map((task: any) => ({
-        id: task.id?.toString() || 'unknown',
-        title: task.title || 'Untitled Task',
-        description: task.description || '',
-        type: 'development',
-        priority: task.priority || 'medium',
-        dependencies: (task.dependencies || []).map((dep: number) => dep.toString()),
-        status: task.status || 'pending',
-      }));
-
-      const result: TaskMasterResult = {
-        summary: `Autonomous task breakdown: ${transformedTasks.length} tasks generated by LLM analysis for: ${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}`,
-        tasks: transformedTasks,
-        totalTasks: transformedTasks.length,
-        generatedAt: new Date().toISOString(),
-        metadata: tasksData.metadata || {
-          projectName: 'User Request',
-          sourceFile: 'API Request',
-        },
-      };
-
-      return result;
-    } finally {
-      // Clean up temporary files
-      try {
-        if (fs.existsSync(tempPrdFile)) {
-          fs.unlinkSync(tempPrdFile);
-          logger.debug(`Cleaned up temporary PRD file: ${tempPrdFile}`);
-        }
-
-        if (fs.existsSync(tempTasksFile)) {
-          fs.unlinkSync(tempTasksFile);
-          logger.debug(`Cleaned up temporary tasks file: ${tempTasksFile}`);
-        }
-      } catch (cleanupError) {
-        logger.warn(`Failed to clean up temporary files: ${cleanupError}`);
-      }
-    }
-  } catch (error: any) {
-    logger.error('Autonomous Task Master API call failed:', error);
-    throw new Error(`Autonomous Task Master failed: ${error.message}`);
-  }
-}
-
 async function taskAction({ context, request }: ActionFunctionArgs) {
   try {
     const body = await request.json<TaskBreakdownRequest>();
@@ -338,11 +520,22 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
     logger.info(`Task breakdown request: ${userPrompt.slice(0, 100)}...`);
 
     const env = { ...context.cloudflare.env, ...process.env } as Env;
-    const user = context?.user as { email: string; isActivated: boolean };
+    logger.debug(
+      `Environment variables: GOOGLE_GENERATIVE_AI_API_KEY exists: ${!!env.GOOGLE_GENERATIVE_AI_API_KEY}, length: ${env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 0}`,
+    );
+    logger.debug(`Environment keys: ${Object.keys(env).join(', ')}`);
 
-    // Step 1: Get task breakdown from Task Master
-    const taskBreakdown = await callTaskMasterAPI(userPrompt, env);
-    logger.info(`Task Master generated ${taskBreakdown.tasks.length} tasks`);
+    const user = context?.user as { email: string; isActivated: boolean };
+    const cookieHeader = request.headers.get('Cookie');
+
+    // Step 1: Execute enhanced task breakdown using our own implementation
+    const taskBreakdown = await executeEnhancedTaskBreakdown(
+      userPrompt,
+      env,
+      cookieHeader,
+      user?.email ? 'user-access-token' : undefined,
+    );
+    logger.info(`Task breakdown completed, generated ${taskBreakdown.tasks.length} tasks`);
 
     // Step 2: GitLab integration (if requested)
     if (createGitlabIssues) {
@@ -368,7 +561,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
             logger.info(`Found existing project: ${project.path_with_namespace}`);
           } catch (error: any) {
             throw new Error(
-              `Failed to find project at path: ${existingProjectPath}. Error: ${error.message || 'Unknown error'}`,
+              `Unable to find project at path: ${existingProjectPath}. Error: ${error.message || 'Unknown error'}`,
             );
           }
         } else {
