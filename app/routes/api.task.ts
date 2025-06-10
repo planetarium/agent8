@@ -5,6 +5,16 @@ import { generateId, generateText } from 'ai';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
+import { type FileMap } from '~/lib/.server/llm/constants';
+import { createFileSearchTools } from '~/lib/.server/llm/tools/file-search';
+import { createDocTools } from '~/lib/.server/llm/tools/docs';
+import { createSearchCodebase, createSearchResources } from '~/lib/.server/llm/tools/vectordb';
+import {
+  getProjectFilesPrompt,
+  getProjectPackagesPrompt,
+  getResourceSystemPrompt,
+  getProjectMdPrompt,
+} from '~/lib/common/prompts/agent8-prompts';
 
 // GitLab integration
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
@@ -26,6 +36,7 @@ interface TaskBreakdownRequest {
   projectName?: string;
   projectDescription?: string;
   existingProjectPath?: string;
+  files?: FileMap;
 }
 
 interface TaskMasterTask {
@@ -239,6 +250,7 @@ async function executeEnhancedTaskBreakdown(
   env: any,
   cookieHeader: string | null,
   userAccessToken?: string,
+  files?: FileMap,
 ): Promise<TaskMasterResult> {
   try {
     logger.info('Starting enhanced task breakdown execution');
@@ -288,8 +300,39 @@ async function executeEnhancedTaskBreakdown(
 
     logger.debug('Using Google model: gemini-2.5-pro-preview-05-06');
 
-    // Prepare messages for AI SDK
-    const messages = [
+    // Initialize tools with MCP tools
+    let combinedTools: Record<string, any> = { ...mcpTools };
+
+    // Add additional tools if available
+    if (env) {
+      const docTools = await createDocTools(env as Env);
+      const codebaseTools = await createSearchCodebase(env as Env);
+      const resourcesTools = await createSearchResources(env as Env);
+      combinedTools = {
+        ...combinedTools,
+        ...docTools,
+        ...codebaseTools,
+        ...resourcesTools,
+      };
+    }
+
+    logger.info(`combinedTools length: ${Object.keys(combinedTools)}`);
+
+    // Add file search tools if files are provided
+    if (files) {
+      logger.info('Adding file search tools to task breakdown');
+
+      const fileSearchTools = createFileSearchTools(files);
+      combinedTools = {
+        ...combinedTools,
+        ...fileSearchTools,
+      };
+    }
+
+    logger.info(`combinedTools after file search tools length: ${Object.keys(combinedTools)}`);
+
+    // Create system messages array
+    const systemMessages = [
       {
         role: 'system' as const,
         content: systemPrompt,
@@ -297,13 +340,60 @@ async function executeEnhancedTaskBreakdown(
           anthropic: { cacheControl: { type: 'ephemeral' } },
         },
       },
+    ];
+
+    // Add project context if files are provided
+    if (files) {
+      logger.info('Adding project context to task breakdown');
+
+      systemMessages.push({
+        role: 'system' as const,
+        content: getProjectFilesPrompt(files),
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+      });
+
+      // Add package.json context if available
+      systemMessages.push({
+        role: 'system' as const,
+        content: getProjectPackagesPrompt(files),
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+      });
+
+      // Add resource system prompt
+      systemMessages.push({
+        role: 'system' as const,
+        content: getResourceSystemPrompt(files),
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+      });
+
+      // Add PROJECT.md context if available
+      systemMessages.push({
+        role: 'system' as const,
+        content: getProjectMdPrompt(files),
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
+      });
+    }
+
+    // Add user message
+    const userMessages = [
       {
         role: 'user' as const,
         content: userMessage,
       },
     ];
 
-    logger.info('🔄 Calling generateText with MCP tools...');
+    // Combine all messages
+    const messages = [...systemMessages, ...userMessages];
+
+    logger.info('🔄 Calling generateText with tools and project context...');
 
     // Setup generateText parameters with tools
     const generateParams: any = {
@@ -313,9 +403,9 @@ async function executeEnhancedTaskBreakdown(
     };
 
     // Only add tools if we have them
-    if (Object.keys(mcpTools).length > 0) {
-      logger.info(`Adding ${Object.keys(mcpTools).length} MCP tools to request`);
-      generateParams.tools = mcpTools;
+    if (Object.keys(combinedTools).length > 0) {
+      logger.info(`Adding ${Object.keys(combinedTools).length} tools to request`);
+      generateParams.tools = combinedTools;
       generateParams.toolChoice = 'auto';
     }
 
@@ -383,7 +473,6 @@ function createConversationResponse(
       ...(gitlabResult && {
         gitlab: {
           project: gitlabResult.project,
-          issues: gitlabResult.issues,
           projectPath: gitlabResult.projectPath,
         },
       }),
@@ -504,6 +593,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
       projectName: requestProjectName,
       projectDescription: requestProjectDescription,
       existingProjectPath,
+      files,
     } = body;
 
     if (!messages?.length) {
@@ -533,6 +623,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
       env,
       cookieHeader,
       user?.email ? 'user-access-token' : undefined,
+      files,
     );
     logger.info(`Task breakdown completed, generated ${taskBreakdown.tasks.length} tasks`);
 
