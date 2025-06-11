@@ -231,7 +231,7 @@ function parseIssueBreakdownResponse(response: string, _userPrompt: string): Iss
       },
     };
   } catch (error: any) {
-    logger.error('Failed to parse task breakdown response:', error);
+    logger.error('Failed to parse issue breakdown response:', error);
 
     // Since we removed the fallback, just throw the error
     throw new Error(`Failed to parse LLM response: ${error.message}`);
@@ -257,7 +257,7 @@ async function executeEnhancedIssueBreakdown(
 
     // Build messages for task breakdown
     const systemPrompt = buildIssueBreakdownSystemPrompt();
-    const userMessage = `Please break down the following requirements into specific development tasks:\n\n${userPrompt}`;
+    const userMessage = `Please break down the following requirements into specific development issues:\n\n${userPrompt}`;
 
     // Validate message content
     if (!systemPrompt || systemPrompt.trim().length === 0) {
@@ -314,7 +314,7 @@ async function executeEnhancedIssueBreakdown(
 
     // Add file search tools if files are provided
     if (files) {
-      logger.info('Adding file search tools to task breakdown');
+      logger.info('Adding file search tools to issue breakdown');
 
       const fileSearchTools = createFileSearchTools(files);
       combinedTools = {
@@ -338,7 +338,7 @@ async function executeEnhancedIssueBreakdown(
 
     // Add project context if files are provided
     if (files) {
-      logger.info('Adding project context to task breakdown');
+      logger.info('Adding project context to issue breakdown');
 
       systemMessages.push({
         role: 'system' as const,
@@ -443,7 +443,7 @@ async function executeEnhancedIssueBreakdown(
 // Create conversation response with history
 function createConversationResponse(
   messages: IssueMessage[],
-  taskBreakdown: IssueMasterResult,
+  issueBreakdown: IssueMasterResult,
   gitlabResult?: {
     project: GitlabProject;
     issues: GitlabIssue[];
@@ -454,19 +454,19 @@ function createConversationResponse(
   const conversationId = generateId();
   const assistantMessage = {
     role: 'assistant' as const,
-    content: `I've broken down your requirements into ${taskBreakdown.issues.length} specific issues${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
+    content: `I've broken down your requirements into ${issueBreakdown.issues.length} specific issues${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
   };
 
   return {
     success: true,
     data: {
       // Task breakdown data
-      summary: taskBreakdown.summary,
-      issues: taskBreakdown.issues,
-      totalIssues: taskBreakdown.totalIssues,
-      generatedAt: taskBreakdown.generatedAt,
+      summary: issueBreakdown.summary,
+      issues: issueBreakdown.issues,
+      totalIssues: issueBreakdown.totalIssues,
+      generatedAt: issueBreakdown.generatedAt,
       originalPrompt: extractUserPrompt(messages),
-      metadata: taskBreakdown.metadata,
+      metadata: issueBreakdown.metadata,
 
       // Conversation data
       conversationId,
@@ -493,21 +493,21 @@ function createConversationResponse(
 }
 
 // Format issue description for GitLab issue
-function formatIssueDescription(task: IssueMasterTask, issueIdMap?: Map<string, number>): string {
-  let description = task.description;
+function formatIssueDescription(issue: IssueMasterTask, issueIdMap?: Map<string, number>): string {
+  let description = issue.description;
 
-  if (task.details) {
-    description += `\n\n**Implementation Details:**\n${task.details}`;
+  if (issue.details) {
+    description += `\n\n**Implementation Details:**\n${issue.details}`;
   }
 
-  if (task.testStrategy) {
-    description += `\n\n**Test Strategy:**\n${task.testStrategy}`;
+  if (issue.testStrategy) {
+    description += `\n\n**Test Strategy:**\n${issue.testStrategy}`;
   }
 
-  if (task.dependencies && task.dependencies.length > 0) {
+  if (issue.dependencies && issue.dependencies.length > 0) {
     description += `\n\n**Dependent Issues:**`;
 
-    task.dependencies.forEach((depId) => {
+    issue.dependencies.forEach((depId) => {
       if (issueIdMap?.has(depId)) {
         const issueNumber = issueIdMap.get(depId);
         description += `\n- Issue #${issueNumber}`;
