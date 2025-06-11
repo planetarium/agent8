@@ -21,17 +21,17 @@ import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import type { GitlabProject, GitlabIssue } from '~/lib/persistenceGitbase/types';
 
 // Define message types
-type TaskMessage = {
+type IssueMessage = {
   role: 'system' | 'user' | 'assistant';
   content: string;
 };
 
-export const action = withV8AuthUser(taskAction, { checkCredit: true });
+export const action = withV8AuthUser(issueAction, { checkCredit: true });
 
-const logger = createScopedLogger('api.task');
+const logger = createScopedLogger('api.issue');
 
-interface TaskBreakdownRequest {
-  messages: TaskMessage[];
+interface IssueBreakdownRequest {
+  messages: IssueMessage[];
   createGitlabIssues?: boolean;
   projectName?: string;
   projectDescription?: string;
@@ -39,7 +39,7 @@ interface TaskBreakdownRequest {
   files?: FileMap;
 }
 
-interface TaskMasterTask {
+interface IssueMasterTask {
   id: string;
   title: string;
   description: string;
@@ -49,15 +49,15 @@ interface TaskMasterTask {
   dependencies: string[];
 }
 
-interface TaskMasterResult {
+interface IssueMasterResult {
   summary: string;
-  tasks: TaskMasterTask[];
-  totalTasks: number;
+  issues: IssueMasterTask[];
+  totalIssues: number;
   generatedAt: string;
   metadata: {
     projectName: string;
     sourceFile: string;
-    totalTasks: number;
+    totalIssues: number;
   };
 }
 
@@ -79,7 +79,7 @@ function generateProjectName(prompt: string): string {
 }
 
 // Extract user prompt from messages
-function extractUserPrompt(messages: TaskMessage[]): string {
+function extractUserPrompt(messages: IssueMessage[]): string {
   // Find the last user message
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
@@ -90,7 +90,7 @@ function extractUserPrompt(messages: TaskMessage[]): string {
 }
 
 // Build advanced system prompt for task breakdown
-function buildTaskBreakdownSystemPrompt(): string {
+function buildIssueBreakdownSystemPrompt(): string {
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
 Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 15 tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
@@ -134,8 +134,8 @@ Analyze the provided requirement content and generate a concise list of top-leve
 }`;
 }
 
-// Parse task breakdown response from LLM
-function parseTaskBreakdownResponse(response: string, _userPrompt: string): TaskMasterResult {
+// Parse issue breakdown response from LLM
+function parseIssueBreakdownResponse(response: string, _userPrompt: string): IssueMasterResult {
   try {
     // Try to extract JSON from the response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -208,8 +208,8 @@ function parseTaskBreakdownResponse(response: string, _userPrompt: string): Task
       }
     }
 
-    // Validate and transform the response to match TaskMasterResult format
-    const tasks: TaskMasterTask[] = (taskData.tasks || []).map((task: any, index: number) => ({
+    // Validate and transform the response to match IssueMasterResult format
+    const issues: IssueMasterTask[] = (taskData.tasks || []).map((task: any, index: number) => ({
       id: task.id?.toString() || (index + 1).toString(),
       title: task.title || 'Untitled Task',
       description: task.description || '',
@@ -220,14 +220,14 @@ function parseTaskBreakdownResponse(response: string, _userPrompt: string): Task
     }));
 
     return {
-      summary: taskData.summary || `Task breakdown completed: ${tasks.length} tasks`,
-      tasks,
-      totalTasks: tasks.length,
+      summary: taskData.summary || `Issue breakdown completed: ${issues.length} issues`,
+      issues,
+      totalIssues: issues.length,
       generatedAt: new Date().toISOString(),
       metadata: {
         projectName: taskData.metadata?.projectName || 'User Requirements Project',
         sourceFile: taskData.metadata?.sourceFile || 'API Request',
-        totalTasks: tasks.length,
+        totalIssues: issues.length,
       },
     };
   } catch (error: any) {
@@ -238,16 +238,16 @@ function parseTaskBreakdownResponse(response: string, _userPrompt: string): Task
   }
 }
 
-// Execute task breakdown using generateText with MCP tools
-async function executeEnhancedTaskBreakdown(
+// Execute issue breakdown using generateText with MCP tools
+async function executeEnhancedIssueBreakdown(
   userPrompt: string,
   env: any,
   cookieHeader: string | null,
   userAccessToken?: string,
   files?: FileMap,
-): Promise<TaskMasterResult> {
+): Promise<IssueMasterResult> {
   try {
-    logger.info('Starting enhanced task breakdown execution');
+    logger.info('Starting enhanced issue breakdown execution');
 
     // Setup MCP tools from cookie
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
@@ -256,7 +256,7 @@ async function executeEnhancedTaskBreakdown(
     logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
     // Build messages for task breakdown
-    const systemPrompt = buildTaskBreakdownSystemPrompt();
+    const systemPrompt = buildIssueBreakdownSystemPrompt();
     const userMessage = `Please break down the following requirements into specific development tasks:\n\n${userPrompt}`;
 
     // Validate message content
@@ -410,9 +410,9 @@ async function executeEnhancedTaskBreakdown(
 
     const fullResponse = result.text;
 
-    // 打印工具调用和模型信息统计
+    // Log tool usage and model information statistics
     logger.info(
-      `🔧 工具调用统计: ${JSON.stringify(
+      `🔧 Tool usage statistics: ${JSON.stringify(
         {
           toolCallsCount: result.toolCalls?.length || 0,
           toolResultsCount: result.toolResults?.length || 0,
@@ -423,27 +423,27 @@ async function executeEnhancedTaskBreakdown(
       )}`,
     );
 
-    // 记录详细的工具调用和结果信息
-    logger.debug('详细工具和步骤信息:');
-    logger.debug(`工具调用详情: ${JSON.stringify(result.toolCalls, null, 2)}`);
-    logger.debug(`工具结果详情: ${JSON.stringify(result.toolResults, null, 2)}`);
-    logger.debug(`步骤详情: ${JSON.stringify(result.steps, null, 2)}`);
+    // Record detailed tool calls and results information
+    logger.debug('Detailed tools and steps information:');
+    logger.debug(`Tool calls details: ${JSON.stringify(result.toolCalls, null, 2)}`);
+    logger.debug(`Tool results details: ${JSON.stringify(result.toolResults, null, 2)}`);
+    logger.debug(`Steps details: ${JSON.stringify(result.steps, null, 2)}`);
 
     // Parse the response
-    const taskBreakdown = parseTaskBreakdownResponse(fullResponse, userPrompt);
-    logger.info(`✨ Task breakdown completed: ${taskBreakdown.tasks.length} tasks`);
+    const issueBreakdown = parseIssueBreakdownResponse(fullResponse, userPrompt);
+    logger.info(`✨ Issue breakdown completed: ${issueBreakdown.issues.length} issues`);
 
-    return taskBreakdown;
+    return issueBreakdown;
   } catch (error: any) {
-    logger.error('Enhanced task breakdown execution failed:', error);
-    throw new Error(`Task breakdown failed: ${error.message}`);
+    logger.error('Enhanced issue breakdown execution failed:', error);
+    throw new Error(`Issue breakdown failed: ${error.message}`);
   }
 }
 
 // Create conversation response with history
 function createConversationResponse(
-  messages: TaskMessage[],
-  taskBreakdown: TaskMasterResult,
+  messages: IssueMessage[],
+  taskBreakdown: IssueMasterResult,
   gitlabResult?: {
     project: GitlabProject;
     issues: GitlabIssue[];
@@ -454,7 +454,7 @@ function createConversationResponse(
   const conversationId = generateId();
   const assistantMessage = {
     role: 'assistant' as const,
-    content: `I've broken down your requirements into ${taskBreakdown.tasks.length} specific tasks${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
+    content: `I've broken down your requirements into ${taskBreakdown.issues.length} specific issues${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
   };
 
   return {
@@ -462,8 +462,8 @@ function createConversationResponse(
     data: {
       // Task breakdown data
       summary: taskBreakdown.summary,
-      tasks: taskBreakdown.tasks,
-      totalTasks: taskBreakdown.totalTasks,
+      issues: taskBreakdown.issues,
+      totalIssues: taskBreakdown.totalIssues,
       generatedAt: taskBreakdown.generatedAt,
       originalPrompt: extractUserPrompt(messages),
       metadata: taskBreakdown.metadata,
@@ -492,8 +492,8 @@ function createConversationResponse(
   };
 }
 
-// Format task description for GitLab issue
-function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string, number>): string {
+// Format issue description for GitLab issue
+function formatIssueDescription(task: IssueMasterTask, issueIdMap?: Map<string, number>): string {
   let description = task.description;
 
   if (task.details) {
@@ -505,14 +505,14 @@ function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string
   }
 
   if (task.dependencies && task.dependencies.length > 0) {
-    description += `\n\n**Dependent Tasks:**`;
+    description += `\n\n**Dependent Issues:**`;
 
     task.dependencies.forEach((depId) => {
-      if (taskToIssueMap?.has(depId)) {
-        const issueNumber = taskToIssueMap.get(depId);
+      if (issueIdMap?.has(depId)) {
+        const issueNumber = issueIdMap.get(depId);
         description += `\n- Issue #${issueNumber}`;
       } else {
-        description += `\n- Task ${depId}`;
+        description += `\n- Issue ${depId}`;
       }
     });
   }
@@ -520,54 +520,54 @@ function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string
   return description;
 }
 
-// Create GitLab issues from tasks with proper dependency handling
-async function createIssuesFromTasks(
+// Create GitLab issues from breakdown tasks
+async function createGitlabIssuesFromTasks(
   gitlabService: GitlabService,
   projectPath: string,
-  tasks: TaskMasterTask[],
+  issues: IssueMasterTask[],
 ): Promise<{
   issues: GitlabIssue[];
-  errors: Array<{ task: TaskMasterTask; error: string }>;
-  taskToIssueMap: Map<string, number>;
+  errors: Array<{ issue: IssueMasterTask; error: string }>;
+  issueIdMap: Map<string, number>;
 }> {
-  const issues: GitlabIssue[] = [];
-  const errors: Array<{ task: TaskMasterTask; error: string }> = [];
-  const taskToIssueMap = new Map<string, number>();
+  const gitlabIssues: GitlabIssue[] = [];
+  const errors: Array<{ issue: IssueMasterTask; error: string }> = [];
+  const issueIdMap = new Map<string, number>();
 
   // Phase 1: Create issues without dependency links
-  logger.info(`Creating ${tasks.length} GitLab issues...`);
+  logger.info(`Creating ${issues.length} GitLab issues...`);
 
-  for (const task of tasks) {
+  for (const issue of issues) {
     try {
-      logger.debug(`Creating GitLab issue for task: ${task.title}`);
+      logger.debug(`Creating GitLab issue for task: ${issue.title}`);
 
-      const issue = await gitlabService.createIssue(
+      const gitlabIssue = await gitlabService.createIssue(
         projectPath,
-        task.title,
-        formatTaskDescription(task), // First pass without dependency links
+        issue.title,
+        formatIssueDescription(issue), // First pass without dependency links
         {
-          labels: [`priority-${task.priority}`, 'type-development'],
+          labels: [`priority-${issue.priority}`, 'type-development'],
         },
       );
 
-      issues.push(issue);
-      taskToIssueMap.set(task.id, issue.iid);
-      logger.info(`Created GitLab issue successfully #${issue.iid}: ${task.title}`);
+      gitlabIssues.push(gitlabIssue);
+      issueIdMap.set(issue.id, gitlabIssue.iid);
+      logger.info(`Created GitLab issue successfully #${gitlabIssue.iid}: ${issue.title}`);
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error';
-      errors.push({ task, error: errorMessage });
-      logger.error(`Failed to create GitLab issue for task "${task.title}": ${errorMessage}`);
+      errors.push({ issue, error: errorMessage });
+      logger.error(`Failed to create GitLab issue for "${issue.title}": ${errorMessage}`);
     }
   }
 
   // Phase 2: Update issues with proper dependency links
   logger.info('Updating issues with dependency links...');
 
-  for (const task of tasks) {
-    if (task.dependencies && task.dependencies.length > 0 && taskToIssueMap.has(task.id)) {
+  for (const issue of issues) {
+    if (issue.dependencies && issue.dependencies.length > 0 && issueIdMap.has(issue.id)) {
       try {
-        const issueIid = taskToIssueMap.get(task.id)!;
-        const updatedDescription = formatTaskDescription(task, taskToIssueMap);
+        const issueIid = issueIdMap.get(issue.id)!;
+        const updatedDescription = formatIssueDescription(issue, issueIdMap);
 
         await gitlabService.updateIssue(projectPath, issueIid, {
           description: updatedDescription,
@@ -575,17 +575,17 @@ async function createIssuesFromTasks(
 
         logger.debug(`Updated issue #${issueIid} with dependency links`);
       } catch (error: any) {
-        logger.warn(`Failed to update dependency links for issue #${taskToIssueMap.get(task.id)}: ${error.message}`);
+        logger.warn(`Failed to update dependency links for issue #${issueIdMap.get(issue.id)}: ${error.message}`);
       }
     }
   }
 
-  return { issues, errors, taskToIssueMap };
+  return { issues: gitlabIssues, errors, issueIdMap };
 }
 
-async function taskAction({ context, request }: ActionFunctionArgs) {
+async function issueAction({ context, request }: ActionFunctionArgs) {
   try {
-    const body = await request.json<TaskBreakdownRequest>();
+    const body = await request.json<IssueBreakdownRequest>();
     const {
       messages,
       createGitlabIssues,
@@ -606,7 +606,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
     }
 
     const userPrompt = extractUserPrompt(messages);
-    logger.info(`Task breakdown request: ${userPrompt.slice(0, 100)}...`);
+    logger.info(`Issue breakdown request: ${userPrompt.slice(0, 100)}...`);
 
     const env = { ...context.cloudflare.env, ...process.env } as Env;
     logger.debug(
@@ -616,15 +616,15 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
     const user = context?.user as { email: string; isActivated: boolean };
     const cookieHeader = request.headers.get('Cookie');
 
-    // Step 1: Execute enhanced task breakdown using our own implementation
-    const taskBreakdown = await executeEnhancedTaskBreakdown(
+    // Step 1: Execute enhanced issue breakdown using our own implementation
+    const issueBreakdown = await executeEnhancedIssueBreakdown(
       userPrompt,
       env,
       cookieHeader,
       user?.email ? 'user-access-token' : undefined,
       files,
     );
-    logger.info(`Task breakdown completed, generated ${taskBreakdown.tasks.length} tasks`);
+    logger.info(`Issue breakdown completed, generated ${issueBreakdown.issues.length} issues`);
 
     // Step 2: GitLab integration (if requested)
     if (createGitlabIssues) {
@@ -664,11 +664,11 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
 
         logger.info(`GitLab project: ${project.path_with_namespace}`);
 
-        // Create GitLab issues from tasks
-        const issueResults = await createIssuesFromTasks(
+        // Create GitLab issues from breakdown tasks
+        const issueResults = await createGitlabIssuesFromTasks(
           gitlabService,
           project.path_with_namespace,
-          taskBreakdown.tasks,
+          issueBreakdown.issues,
         );
         logger.info(`Created ${issueResults.issues.length} GitLab issues, ${issueResults.errors.length} errors`);
 
@@ -676,26 +676,26 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
           project,
           issues: issueResults.issues,
           projectPath: project.path_with_namespace,
-          taskToIssueMap: Object.fromEntries(issueResults.taskToIssueMap),
+          issueIdMap: Object.fromEntries(issueResults.issueIdMap),
         };
 
-        return Response.json(createConversationResponse(messages, taskBreakdown, gitlabResult, env));
+        return Response.json(createConversationResponse(messages, issueBreakdown, gitlabResult, env));
       } catch (gitlabError: any) {
         logger.error('GitLab integration failed:', gitlabError);
 
         // Return task breakdown even if GitLab fails
-        return Response.json(createConversationResponse(messages, taskBreakdown, undefined, env));
+        return Response.json(createConversationResponse(messages, issueBreakdown, undefined, env));
       }
     }
 
     // Return task breakdown without GitLab integration
-    return Response.json(createConversationResponse(messages, taskBreakdown, undefined, env));
+    return Response.json(createConversationResponse(messages, issueBreakdown, undefined, env));
   } catch (error: any) {
-    logger.error('Task breakdown failed:', error);
+    logger.error('Issue breakdown failed:', error);
     return Response.json(
       {
         success: false,
-        error: error.message || 'Task breakdown failed',
+        error: error.message || 'Issue breakdown failed',
       },
       { status: 500 },
     );
