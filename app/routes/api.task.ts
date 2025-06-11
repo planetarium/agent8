@@ -47,8 +47,6 @@ interface TaskMasterTask {
   testStrategy: string;
   priority: 'high' | 'medium' | 'low';
   dependencies: string[];
-  status: string;
-  estimatedTime?: string;
 }
 
 interface TaskMasterResult {
@@ -72,9 +70,9 @@ function generateProjectName(prompt: string): string {
     .split(' ')
     .filter((word) => word.length > 2 && !['the', 'and', 'for', 'with', 'that', 'this'].includes(word))
     .slice(0, 3)
-    .join('-'); // Use hyphen to match existing projects
+    .join('-');
 
-  // Use full timestamp (same as existing projects like basic-lol-style-game-1748328947078)
+  // Use full timestamp
   const timestamp = Date.now();
 
   return `${cleanPrompt}-${timestamp}`;
@@ -95,7 +93,7 @@ function extractUserPrompt(messages: TaskMessage[]): string {
 function buildTaskBreakdownSystemPrompt(): string {
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
-Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 15 items. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
+Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 15 tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
 
 **Task Breakdown Guidelines:**
 1. Each task should be atomic and focused on a single responsibility, following the latest best practices and standards
@@ -124,8 +122,6 @@ Analyze the provided requirement content and generate a concise list of top-leve
       "testStrategy": "Validation and testing approach",
       "priority": "high|medium|low",
       "dependencies": ["Dependent task IDs"],
-      "status": "pending",
-      "estimatedTime": "Estimated time"
     }
   ],
   "totalTasks": number_of_tasks,
@@ -221,8 +217,6 @@ function parseTaskBreakdownResponse(response: string, _userPrompt: string): Task
       testStrategy: task.testStrategy || '',
       priority: ['high', 'medium', 'low'].includes(task.priority) ? task.priority : 'medium',
       dependencies: Array.isArray(task.dependencies) ? task.dependencies.map((dep: any) => dep.toString()) : [],
-      status: task.status || 'pending',
-      estimatedTime: task.estimatedTime || '',
     }));
 
     return {
@@ -415,16 +409,25 @@ async function executeEnhancedTaskBreakdown(
     logger.info('✅ generateText call successful');
 
     const fullResponse = result.text;
-    logger.info(`🎉 Response received: ${fullResponse.length} characters`);
 
-    // Log full response for debugging
-    logger.debug('Full response text:');
-    logger.debug(fullResponse);
+    // 打印工具调用和模型信息统计
+    logger.info(
+      `🔧 工具调用统计: ${JSON.stringify(
+        {
+          toolCallsCount: result.toolCalls?.length || 0,
+          toolResultsCount: result.toolResults?.length || 0,
+          stepsCount: result.steps?.length || 0,
+        },
+        null,
+        2,
+      )}`,
+    );
 
-    if (fullResponse.length === 0) {
-      logger.error('❌ Empty response from generateText');
-      throw new Error('Empty response from generateText');
-    }
+    // 记录详细的工具调用和结果信息
+    logger.debug('详细工具和步骤信息:');
+    logger.debug(`工具调用详情: ${JSON.stringify(result.toolCalls, null, 2)}`);
+    logger.debug(`工具结果详情: ${JSON.stringify(result.toolResults, null, 2)}`);
+    logger.debug(`步骤详情: ${JSON.stringify(result.steps, null, 2)}`);
 
     // Parse the response
     const taskBreakdown = parseTaskBreakdownResponse(fullResponse, userPrompt);
@@ -499,10 +502,6 @@ function formatTaskDescription(task: TaskMasterTask, taskToIssueMap?: Map<string
 
   if (task.testStrategy) {
     description += `\n\n**Test Strategy:**\n${task.testStrategy}`;
-  }
-
-  if (task.estimatedTime) {
-    description += `\n\n**Estimated Time:** ${task.estimatedTime}`;
   }
 
   if (task.dependencies && task.dependencies.length > 0) {
