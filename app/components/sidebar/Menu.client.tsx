@@ -204,7 +204,7 @@ export const Menu = () => {
               <span className="text-sm font-medium">Start new chat</span>
             </IframeLink>
             <IframeLink
-              to="/issue-breakdown"
+              to="/issue"
               className="flex gap-2 items-center bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 rounded-lg px-4 py-2 transition-colors"
             >
               <span className="inline-block i-lucide:layout-list h-4 w-4" />
