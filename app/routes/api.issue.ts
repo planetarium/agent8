@@ -4,7 +4,7 @@ import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { generateId, generateText } from 'ai';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
-import { DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
+import { DEFAULT_PROVIDER, PROVIDER_LIST, FIXED_MODELS } from '~/utils/constants';
 import { type FileMap } from '~/lib/.server/llm/constants';
 import { createFileSearchTools } from '~/lib/.server/llm/tools/file-search';
 import { createDocTools } from '~/lib/.server/llm/tools/docs';
@@ -15,6 +15,8 @@ import {
   getResourceSystemPrompt,
   getProjectMdPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
+import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
+import { LLMManager } from '~/lib/modules/llm/manager';
 
 // GitLab integration
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
@@ -275,6 +277,7 @@ async function executeEnhancedIssueBreakdown(
   cookieHeader: string | null,
   userAccessToken?: string,
   files?: FileMap,
+  messages?: IssueMessage[],
 ): Promise<IssueMasterResult> {
   try {
     logger.info('Starting enhanced issue breakdown execution');
@@ -308,21 +311,89 @@ async function executeEnhancedIssueBreakdown(
     logger.debug(`Available providers: ${PROVIDER_LIST.map((p) => p.name).join(', ')}`);
     logger.debug(`DEFAULT_PROVIDER: ${DEFAULT_PROVIDER.name}`);
 
-    // Get the provider and model instance (similar to streamText)
-    const provider = PROVIDER_LIST.find((p) => p.name === 'Google') || DEFAULT_PROVIDER;
+    // Extract model and provider from the last user message
+    let providerName = 'Google';
+    let modelName = 'gemini-2.5-pro-preview-05-06';
+
+    if (messages && messages.length > 0) {
+      // Find the last user message
+      const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+
+      if (lastUserMessage) {
+        const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
+
+        if (model && provider) {
+          modelName = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
+          providerName = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
+          logger.info(`Using model: ${modelName}, provider: ${providerName}`);
+        }
+      }
+    }
+
+    // Get provider instance
+    const provider = PROVIDER_LIST.find((p) => p.name === providerName) || DEFAULT_PROVIDER;
     logger.debug(`Selected provider: ${provider.name}`);
 
-    // Get model instance using provider directly, similar to how streamText does it
-    logger.debug(
-      `API Key available: ${!!env.GOOGLE_GENERATIVE_AI_API_KEY}, length: ${env.GOOGLE_GENERATIVE_AI_API_KEY?.length || 0}`,
-    );
+    const staticModels = LLMManager.getInstance().getStaticModelListFromProvider(provider);
+    let modelDetails = staticModels.find((m: any) => m.name === modelName);
 
-    const modelInstance = provider.getModelInstance({
-      model: 'gemini-2.5-pro-preview-05-06',
-      serverEnv: env,
-    });
+    let modelInstance;
 
-    logger.debug('Using Google model: gemini-2.5-pro-preview-05-06');
+    try {
+      if (!modelDetails) {
+        logger.warn(`Model ${modelName} not found in static models for provider ${provider.name}`);
+
+        const modelsList = [
+          ...(provider.staticModels || []),
+          ...(await LLMManager.getInstance().getModelListFromProvider(provider, {
+            serverEnv: env,
+          })),
+        ];
+
+        if (!modelsList.length) {
+          logger.error(`No models found for provider ${provider.name}`);
+          throw new Error(`No models found for provider ${provider.name}`);
+        }
+
+        modelDetails = modelsList.find((m: any) => m.name === modelName);
+
+        if (!modelDetails) {
+          logger.warn(
+            `MODEL [${modelName}] not found in provider [${provider.name}]. Falling back to first model: ${modelsList[0].name}`,
+          );
+          modelDetails = modelsList[0];
+          modelName = modelDetails.name;
+        }
+      }
+
+      modelInstance = provider.getModelInstance({
+        model: modelName,
+        serverEnv: env,
+      });
+
+      logger.debug(`Successfully created model instance: ${modelName} from provider: ${provider.name}`);
+    } catch (error: any) {
+      logger.error(`Failed to create model instance for ${provider.name}/${modelName}: ${error.message}`);
+
+      logger.info('Falling back to default model and provider');
+
+      try {
+        const defaultProvider = DEFAULT_PROVIDER;
+        const defaultModel = FIXED_MODELS.DEFAULT_MODEL.model;
+
+        modelInstance = defaultProvider.getModelInstance({
+          model: defaultModel,
+          serverEnv: env,
+        });
+
+        logger.info(
+          `Successfully created default model instance: ${defaultModel} from provider: ${defaultProvider.name}`,
+        );
+      } catch (fallbackError: any) {
+        logger.error(`Failed to create default model instance: ${fallbackError.message}`);
+        throw new Error(`All fallback attempts failed. Cannot create any model instance.`);
+      }
+    }
 
     // Initialize tools with MCP tools
     let combinedTools: Record<string, any> = { ...mcpTools };
@@ -415,14 +486,14 @@ async function executeEnhancedIssueBreakdown(
     ];
 
     // Combine all messages
-    const messages = [...systemMessages, ...userMessages];
+    const combinedMessages = [...systemMessages, ...userMessages];
 
     logger.info('🔄 Calling generateText with tools and project context...');
 
     // Setup generateText parameters with tools
     const generateParams: any = {
       model: modelInstance,
-      messages,
+      messages: combinedMessages,
       temperature: 0.3,
     };
 
@@ -654,6 +725,7 @@ async function issueAction({ context, request }: ActionFunctionArgs) {
       cookieHeader,
       user?.email ? 'user-access-token' : undefined,
       files,
+      messages,
     );
     logger.info(`Issue breakdown completed, generated ${issueBreakdown.issues.length} issues`);
 

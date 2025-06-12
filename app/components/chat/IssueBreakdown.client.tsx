@@ -164,7 +164,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   const [fakeLoading, setFakeLoading] = useState(false);
   const files = useStore(workbenchStore.files);
   const actionAlert = useStore(workbenchStore.alert);
-  const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
+  const { promptId, contextOptimizationEnabled } = useSettings();
 
   const [existingProjectPath, setExistingProjectPath] = useState('');
 
@@ -172,7 +172,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     const savedModel = Cookies.get('SelectedModel');
     return savedModel || DEFAULT_MODEL;
   });
-  const [provider, setProvider] = useState(() => {
+  const [provider, setProvider] = useState<ProviderInfo>(() => {
     const savedProvider = Cookies.get('SelectedProvider');
     return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
   });
@@ -514,7 +514,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
         setModel={handleModelChange}
         provider={provider}
         setProvider={handleProviderChange}
-        providerList={activeProviders}
+        providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
         messageRef={messageRef}
         scrollRef={scrollRef}
         handleInputChange={(e) => {
