@@ -411,7 +411,7 @@ async function executeEnhancedIssueBreakdown(
       };
     }
 
-    logger.info(`combinedTools length: ${Object.keys(combinedTools)}`);
+    logger.info(`combinedTools length: ${Object.keys(combinedTools).length}`);
 
     // Add file search tools if files are provided
     if (files) {
@@ -424,7 +424,7 @@ async function executeEnhancedIssueBreakdown(
       };
     }
 
-    logger.info(`combinedTools after file search tools length: ${Object.keys(combinedTools)}`);
+    logger.info(`combinedTools after file search tools length: ${Object.keys(combinedTools).length}`);
 
     // Create system messages array
     const systemMessages = [
@@ -497,17 +497,25 @@ async function executeEnhancedIssueBreakdown(
       temperature: 0.3,
     };
 
+    combinedTools = {};
+    logger.info('🔄 temprary disable tools, combinedTools length: ', Object.keys(combinedTools).length);
+
     // Only add tools if we have them
     if (Object.keys(combinedTools).length > 0) {
       logger.info(`Adding ${Object.keys(combinedTools).length} tools to request`);
       generateParams.tools = combinedTools;
       generateParams.toolChoice = 'auto';
+      generateParams.maxSteps = 10;
     }
 
     // Use LLM call with tools
     const result = await generateText(generateParams);
 
     logger.info('✅ generateText call successful');
+
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      logger.info(`Tool calls were made: ${result.toolCalls.length} calls`);
+    }
 
     const fullResponse = result.text;
 
