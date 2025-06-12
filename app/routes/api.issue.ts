@@ -137,14 +137,20 @@ Analyze the provided requirement content and generate a concise list of top-leve
 // Parse issue breakdown response from LLM
 function parseIssueBreakdownResponse(response: string, _userPrompt: string): IssueMasterResult {
   try {
+    // Log the full response for debugging
+    logger.debug(`Response from LLM (first 500 chars): ${response.slice(0, 500)}...`);
+
     // Try to extract JSON from the response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
+      logger.error('No JSON pattern found in response, raw response:', response);
       throw new Error('No valid JSON found in LLM response');
     }
 
     let jsonStr = jsonMatch[0];
+    logger.debug(`Extracted JSON string (first 200 chars): ${jsonStr.slice(0, 200)}...`);
+
     let taskData;
 
     try {
@@ -200,11 +206,35 @@ function parseIssueBreakdownResponse(response: string, _userPrompt: string): Iss
           logger.info('Successfully fixed and parsed JSON');
         } catch (retryError) {
           logger.error('Failed to fix JSON:', retryError);
+          logger.error('JSON after fix attempts (first 300 chars):', jsonStr.slice(0, 300));
           throw new Error(`Failed to parse JSON after fix attempts: ${jsonError.message}`);
         }
       } else {
         // If not a truncation error, rethrow original error
         throw jsonError;
+      }
+    }
+
+    // Check if we have the expected structure
+    if (!taskData || typeof taskData !== 'object') {
+      logger.error('Parsed data is not an object:', taskData);
+      throw new Error('Invalid JSON structure: not an object');
+    }
+
+    if (!taskData.tasks && !Array.isArray(taskData.tasks)) {
+      logger.warn('No tasks array found in JSON, looking for fallback structures');
+
+      // Try to use issues array if tasks array is missing
+      if (Array.isArray(taskData.issues)) {
+        logger.info('Using "issues" array instead of "tasks"');
+        taskData.tasks = taskData.issues;
+      } else if (Array.isArray(taskData.items)) {
+        logger.info('Using "items" array instead of "tasks"');
+        taskData.tasks = taskData.items;
+      } else {
+        // If no array is found, create an empty array
+        logger.warn('No suitable task array found, using empty array');
+        taskData.tasks = [];
       }
     }
 
@@ -453,6 +483,7 @@ function createConversationResponse(
 ) {
   const conversationId = generateId();
   const assistantMessage = {
+    id: generateId(),
     role: 'assistant' as const,
     content: `I've broken down your requirements into ${issueBreakdown.issues.length} specific issues${gitlabResult ? ` and created corresponding issues in GitLab project ${gitlabResult.projectPath}` : ''}.`,
   };

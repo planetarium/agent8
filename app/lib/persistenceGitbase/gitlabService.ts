@@ -261,7 +261,7 @@ export class GitlabService {
         }
       }
 
-      const existingFiles = await this._getProjectFiles(projectId, branch);
+      const existingFiles = await this.getProjectFiles(projectId, branch);
 
       const actions: CommitAction[] = [];
 
@@ -363,7 +363,7 @@ export class GitlabService {
     }
   }
 
-  private async _getProjectFiles(projectId: number, branch: string = 'develop'): Promise<string[]> {
+  async getProjectFiles(projectId: number, branch: string = 'develop'): Promise<string[]> {
     try {
       const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/tree`, {
         headers: {
@@ -387,6 +387,36 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get project files: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get the content of a specific file from a project and branch
+   * @param projectId Project ID
+   * @param filePath Path to the file
+   * @param branch Branch name, defaults to 'develop'
+   * @returns A string containing the file content
+   */
+  async getFileContent(projectId: number, filePath: string, branch: string = 'develop'): Promise<string> {
+    try {
+      const encodedFilePath = encodeURIComponent(filePath);
+      const url = `${this.gitlabUrl}/api/v4/projects/${projectId}/repository/files/${encodedFilePath}/raw`;
+
+      const response = await axios.get(url, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          ref: branch,
+        },
+        responseType: 'text',
+        timeout: 5000,
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get file content: ${errorMessage}`);
     }
   }
 
