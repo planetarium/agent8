@@ -179,17 +179,15 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
   const { showChat } = useStore(chatStore);
   const [animationScope, animate] = useAnimate();
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
 
   const requestBody = useMemo(
     () => ({
-      apiKeys,
       files,
       promptId,
       contextOptimization: contextOptimizationEnabled,
       existingProjectPath: existingProjectPath.trim() || undefined,
     }),
-    [apiKeys, files, promptId, contextOptimizationEnabled, existingProjectPath],
+    [files, promptId, contextOptimizationEnabled, existingProjectPath],
   );
 
   const {
@@ -399,7 +397,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
         createGitlabIssues: true, // Always enable GitLab integration
         existingProjectPath: projectPathToUse || undefined,
         projectName: templateResponse?.project?.name || '',
-        projectDescription: `Project generated from template for: ${messageContent.slice(0, 100)}${messageContent.length > 100 ? '...' : ''}`,
         files: filesForRequest, // Send retrieved files (template files for first request, GitLab files for subsequent ones)
       };
 
@@ -439,14 +436,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   );
 
   const [messageRef, scrollRef] = useSnapScroll();
-
-  useEffect(() => {
-    const storedApiKeys = Cookies.get('apiKeys');
-
-    if (storedApiKeys) {
-      setApiKeys(JSON.parse(storedApiKeys));
-    }
-  }, []);
 
   const handleModelChange = (newModel: string) => {
     setModel(newModel);
@@ -554,7 +543,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
             },
             model,
             provider,
-            apiKeys,
           );
         }}
         attachmentList={attachmentList}

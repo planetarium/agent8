@@ -677,14 +677,7 @@ async function createGitlabIssuesFromTasks(
 async function issueAction({ context, request }: ActionFunctionArgs) {
   try {
     const body = await request.json<IssueBreakdownRequest>();
-    const {
-      messages,
-      createGitlabIssues,
-      projectName: requestProjectName,
-      projectDescription: requestProjectDescription,
-      existingProjectPath,
-      files,
-    } = body;
+    const { messages, createGitlabIssues, projectName: requestProjectName, existingProjectPath, files } = body;
 
     if (!messages?.length) {
       return Response.json(
@@ -718,43 +711,41 @@ async function issueAction({ context, request }: ActionFunctionArgs) {
     );
     logger.info(`Issue breakdown completed, generated ${issueBreakdown.issues.length} issues`);
 
+    const gitlabService = new GitlabService(env as any);
+    const gitlabUser = await gitlabService.getOrCreateUser(user.email);
+    logger.info(`GitLab user: ${gitlabUser.username}`);
+
+    const [username, projectName] = existingProjectPath?.split('/') || [];
+    const project = await gitlabService.findProject(username, projectName);
+    logger.info(`Found existing project: ${project.path_with_namespace}`);
+
+    const branch = 'issue';
+
+    let projectPath = existingProjectPath;
+
+    if (!projectPath) {
+      const projectName = requestProjectName || generateProjectName(userPrompt);
+      projectPath = `${gitlabUser.username}/${projectName}`;
+    }
+
+    // Check if branch exists
+    let branchExists = false;
+
+    try {
+      await gitlabService.gitlab.Branches.show(project.id, branch);
+      branchExists = true;
+    } catch {
+      branchExists = false;
+    }
+
+    if (!branchExists) {
+      await gitlabService.gitlab.Branches.create(project.id, branch, 'main');
+    }
+
     // Step 2: GitLab integration (if requested)
     if (createGitlabIssues) {
       try {
         logger.info('Starting GitLab integration...');
-
-        const gitlabService = new GitlabService(env as any);
-
-        // Get or create GitLab user
-        const gitlabUser = await gitlabService.getOrCreateUser(user.email);
-        logger.info(`GitLab user: ${gitlabUser.username}`);
-
-        // Get or create GitLab project
-        let project: GitlabProject;
-
-        if (existingProjectPath) {
-          // Use the provided project path directly
-          logger.info(`Using existing project: ${existingProjectPath}`);
-
-          try {
-            const [username, projectName] = existingProjectPath.split('/');
-            project = await gitlabService.findProject(username, projectName);
-            logger.info(`Found existing project: ${project.path_with_namespace}`);
-          } catch (error: any) {
-            throw new Error(
-              `Unable to find project at path: ${existingProjectPath}. Error: ${error.message || 'Unknown error'}`,
-            );
-          }
-        } else {
-          // Create new project
-          const projectName = requestProjectName || generateProjectName(userPrompt);
-          const projectDescription =
-            requestProjectDescription ||
-            `Project generated from: ${userPrompt.slice(0, 100)}${userPrompt.length > 100 ? '...' : ''}`;
-          project = await gitlabService.createProject(gitlabUser, projectName, projectDescription);
-        }
-
-        logger.info(`GitLab project: ${project.path_with_namespace}`);
 
         // Create GitLab issues from breakdown tasks
         const issueResults = await createGitlabIssuesFromTasks(
@@ -771,7 +762,50 @@ async function issueAction({ context, request }: ActionFunctionArgs) {
           issueIdMap: Object.fromEntries(issueResults.issueIdMap),
         };
 
-        return Response.json(createConversationResponse(messages, issueBreakdown, gitlabResult, env));
+        const branch = 'issue';
+        const responseData = createConversationResponse(messages, issueBreakdown, gitlabResult, env);
+
+        const lastUserMsg =
+          messages
+            .slice()
+            .reverse()
+            .find((m) => m.role === 'user')?.content || '';
+
+        const purePrompt = lastUserMsg
+          .split('\n')
+          .filter((line) => !/^\[.*?\]/.test(line.trim()))
+          .join(' ')
+          .trim();
+
+        const commitTitle = purePrompt.slice(0, 40).replace(/\n/g, '');
+
+        const commitMsg = `${commitTitle}\n\n<V8Metadata>${JSON.stringify({ Branch: branch })}</V8Metadata>\n<V8UserMessage>\n${userPrompt}\n</V8UserMessage>\n<V8AssistantMessage>\n${responseData.data?.messages?.at(-1)?.content || 'update: issue breakdown'}\n</V8AssistantMessage>\n`;
+        const fileName = `issue-history/issue-${Date.now()}.json`;
+        const filesToCommit = [
+          {
+            path: fileName,
+            content: JSON.stringify(
+              {
+                timestamp: new Date().toISOString(),
+                userPrompt,
+                messages,
+                issueBreakdown,
+              },
+              null,
+              2,
+            ),
+          },
+        ];
+
+        try {
+          await gitlabService.commitFiles(project.id, filesToCommit, commitMsg, branch);
+          logger.info(`Committed issue breakdown to GitLab branch ${branch} as ${fileName}`);
+        } catch (e: any) {
+          logger.warn('Failed to commit issue breakdown to GitLab branch: ' + (e?.message || e));
+        }
+
+        // Return response
+        return Response.json(responseData);
       } catch (gitlabError: any) {
         logger.error('GitLab integration failed:', gitlabError);
 
