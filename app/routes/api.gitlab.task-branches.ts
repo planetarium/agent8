@@ -42,8 +42,12 @@ async function branchesLoader({ context, request }: ActionFunctionArgs) {
  */
 async function branchesAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
-  const user = context?.user as { email: string; isActivated: boolean };
 
+  if (!context?.user) {
+    return json({ success: false, message: 'Unauthorized: User not authenticated' }, { status: 401 });
+  }
+
+  const user = context.user as { email: string; isActivated: boolean };
   // Get request body as JSON
   const requestData = (await request.json()) as {
     projectPath: string;
