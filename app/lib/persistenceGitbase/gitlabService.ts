@@ -1315,4 +1315,28 @@ export class GitlabService {
       throw new Error(`Failed to get project issues: ${errorMessage}`);
     }
   }
+
+  async updateIssueLabels(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          labels: labels.join(','),
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update issue labels: ${errorMessage}`);
+    }
+  }
 }

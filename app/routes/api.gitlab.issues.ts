@@ -4,6 +4,7 @@ import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 
 export const loader = withV8AuthUser(issuesLoader, { checkCredit: true });
+export const action = withV8AuthUser(issuesAction, { checkCredit: true });
 
 /**
  * Loader function for getting project issues
@@ -49,5 +50,43 @@ async function issuesLoader({ context, request }: ActionFunctionArgs) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     return json({ success: false, message: `Failed to fetch project issues: ${errorMessage}` }, { status: 500 });
+  }
+}
+
+/**
+ * Action function for updating issues
+ */
+async function issuesAction({ context, request }: ActionFunctionArgs) {
+  const env = { ...context.cloudflare.env, ...process.env } as Env;
+
+  if (request.method !== 'PUT') {
+    return json({ success: false, message: 'Method not allowed' }, { status: 405 });
+  }
+
+  const { projectPath, issueIid, labels } = (await request.json()) as {
+    projectPath: string;
+    issueIid: number;
+    labels: string[];
+  };
+
+  if (!projectPath || !issueIid || !labels) {
+    return json({ success: false, message: 'Project path, issue IID, and labels are required' }, { status: 400 });
+  }
+
+  const gitlabService = new GitlabService(env);
+
+  try {
+    const updatedIssue = await gitlabService.updateIssueLabels(projectPath, issueIid, labels);
+
+    return json({
+      success: true,
+      data: updatedIssue,
+    });
+  } catch (error) {
+    logger.error('Failed to update issue labels:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    return json({ success: false, message: `Failed to update issue labels: ${errorMessage}` }, { status: 500 });
   }
 }

@@ -1,8 +1,11 @@
 import { useStore } from '@nanostores/react';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { toast } from 'react-toastify';
 import { repoStore } from '~/lib/stores/repo';
-import { getProjectIssues } from '~/lib/persistenceGitbase/api.client';
+import { getProjectIssues, updateIssueLabels } from '~/lib/persistenceGitbase/api.client';
 import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
+import { TaskDetail } from './TaskDetail.client';
 
 interface TaskListProps {
   // Remove taskBranches props as we'll fetch issues directly
@@ -28,6 +31,8 @@ export function TaskList({}: TaskListProps) {
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedIssue, setSelectedIssue] = useState<GitlabIssue | null>(null);
+  const [updatingIssues, setUpdatingIssues] = useState<Set<number>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchIssues = async (filter: FilterType = 'All', page: number = 1, appendToExisting: boolean = false) => {
@@ -46,7 +51,7 @@ export function TaskList({}: TaskListProps) {
     try {
       const result = await getProjectIssues(repo.path, {
         state: 'opened',
-        perPage: 10,
+        perPage: 20,
         page,
         additionalLabel: FILTER_LABELS[filter],
       });
@@ -146,8 +151,122 @@ export function TaskList({}: TaskListProps) {
   };
 
   const handleIssueClick = (issue: GitlabIssue) => {
-    // Open issue in new tab
-    window.open(issue.web_url, '_blank');
+    // Check if issue is clickable (has labels other than auto-container and not TODO)
+    if (!isIssueClickable(issue)) {
+      return;
+    }
+
+    // Show task detail instead of opening external link
+    setSelectedIssue(issue);
+  };
+
+  const isIssueClickable = (_issue: GitlabIssue) => {
+    // All issues are now clickable for detail view
+    return true;
+  };
+
+  const handleBackToList = () => {
+    setSelectedIssue(null);
+  };
+
+  const handleAddTodoLabel = async (issue: GitlabIssue) => {
+    if (!repo.path) {
+      return;
+    }
+
+    // Prevent multiple simultaneous updates
+    if (updatingIssues.has(issue.id)) {
+      return;
+    }
+
+    setUpdatingIssues((prev) => new Set(prev).add(issue.id));
+
+    try {
+      // Get current labels and add TODO (keep auto-container)
+      const currentLabels = issue.labels || [];
+      const newLabels = [...currentLabels, 'TODO'];
+
+      const response = await updateIssueLabels(repo.path, issue.iid, newLabels);
+
+      if (response.success) {
+        // Update the issue in the local state
+        setIssues((prevIssues) =>
+          prevIssues.map((prevIssue) => (prevIssue.id === issue.id ? { ...prevIssue, labels: newLabels } : prevIssue)),
+        );
+
+        toast.success('Task started successfully');
+      } else {
+        throw new Error(response.message || 'Failed to add TODO label');
+      }
+    } catch (error) {
+      console.error('Error adding TODO label:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to start task: ${errorMessage}`);
+    } finally {
+      setUpdatingIssues((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(issue.id);
+
+        return newSet;
+      });
+    }
+  };
+
+  const handleRestartTask = async (issue: GitlabIssue) => {
+    if (!repo.path) {
+      return;
+    }
+
+    // Prevent multiple simultaneous updates
+    if (updatingIssues.has(issue.id)) {
+      return;
+    }
+
+    setUpdatingIssues((prev) => new Set(prev).add(issue.id));
+
+    try {
+      // Get current labels, remove REJECT and add TODO
+      const currentLabels = issue.labels || [];
+      const newLabels = currentLabels.filter((label) => label !== 'REJECT').concat('TODO');
+
+      const response = await updateIssueLabels(repo.path, issue.iid, newLabels);
+
+      if (response.success) {
+        // Update the issue in the local state
+        setIssues((prevIssues) =>
+          prevIssues.map((prevIssue) => (prevIssue.id === issue.id ? { ...prevIssue, labels: newLabels } : prevIssue)),
+        );
+
+        toast.success('Task restarted successfully');
+      } else {
+        throw new Error(response.message || 'Failed to restart task');
+      }
+    } catch (error) {
+      console.error('Error restarting task:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to restart task: ${errorMessage}`);
+    } finally {
+      setUpdatingIssues((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(issue.id);
+
+        return newSet;
+      });
+    }
+  };
+
+  const isIssueWithoutLabels = (issue: GitlabIssue) => {
+    const filteredLabels = issue.labels?.filter((label) => label !== 'auto-container') || [];
+
+    return filteredLabels.length === 0;
+  };
+
+  const isIssueRejected = (issue: GitlabIssue) => {
+    const filteredLabels = issue.labels?.filter((label) => label !== 'auto-container') || [];
+
+    return filteredLabels.includes('REJECT');
   };
 
   const getLabelColor = (label: string) => {
@@ -200,141 +319,230 @@ export function TaskList({}: TaskListProps) {
     <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 left-[var(--workbench-left)] transition-[left,width] duration-200">
       <div className="absolute inset-0 px-2 lg:px-6">
         <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-          <div className="flex-shrink-0 p-6 border-b border-bolt-elements-borderColor">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">🎯 Tasks</h2>
-            </div>
+          <div className="relative flex-1 overflow-hidden">
+            {/* Task List View */}
+            <motion.div
+              className="absolute inset-0 flex flex-col"
+              initial={{ x: 0 }}
+              animate={{ x: selectedIssue ? '-100%' : 0 }}
+              transition={{ type: 'tween', duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            >
+              <div className="flex-shrink-0 p-6 border-b border-bolt-elements-borderColor">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">🎯 Tasks</h2>
+                </div>
 
-            {/* Filter buttons */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {Object.keys(FILTER_LABELS).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => handleFilterChange(filter as FilterType)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 ${
-                    activeFilter === filter
-                      ? 'bg-blue-500 text-white shadow-sm'
-                      : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary'
-                  }`}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-base text-bolt-elements-textSecondary">
-              {loading
-                ? 'Loading...'
-                : `${issues.length} ${activeFilter === 'All' ? '' : activeFilter.toLowerCase()} issues available`}
-            </p>
-          </div>
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6">
-            {error ? (
-              <div className="text-center py-16">
-                <div className="text-6xl mb-6">⚠️</div>
-                <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Error</h3>
-                <p className="text-bolt-elements-textSecondary text-base mb-3 max-w-md mx-auto">{error}</p>
-                <button
-                  onClick={() => {
-                    setCurrentPage(1);
-                    setHasMore(true);
-                    fetchIssues(activeFilter, 1, false);
-                  }}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="text-center py-16">
-                <div className="text-6xl mb-6">⏳</div>
-                <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Loading Issues</h3>
-                <p className="text-bolt-elements-textSecondary text-base">Fetching issues from GitLab...</p>
-              </div>
-            ) : issues.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="text-6xl mb-6">📝</div>
-                <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">
-                  No {activeFilter === 'All' ? 'Auto-Container' : activeFilter} Issues
-                </h3>
-                <p className="text-bolt-elements-textSecondary text-base mb-3 max-w-md mx-auto">
-                  {activeFilter === 'All'
-                    ? "There are no open issues with 'auto-container' label in this project."
-                    : `There are no open issues with 'auto-container' and '${activeFilter}' labels in this project.`}
-                </p>
-                <p className="text-bolt-elements-textTertiary text-sm">
-                  💡 Create issues with appropriate labels in GitLab to see them here
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  {issues.map((issue) => (
-                    <div
-                      key={issue.id}
-                      onClick={() => handleIssueClick(issue)}
-                      className="group p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColorAccent cursor-pointer transition-all duration-200 hover:shadow-sm"
+                {/* Filter buttons */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {Object.keys(FILTER_LABELS).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => handleFilterChange(filter as FilterType)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200 ${
+                        activeFilter === filter
+                          ? 'bg-blue-500 text-white shadow-sm'
+                          : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary'
+                      }`}
                     >
-                      <div className="flex items-center gap-4">
-                        {/* Status indicator and issue number */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(issue)}`}></div>
-                          <span className="text-sm font-semibold text-bolt-elements-textPrimary">#{issue.iid}</span>
-                        </div>
-
-                        {/* Issue title */}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-bolt-elements-textPrimary truncate">{issue.title}</h3>
-                        </div>
-
-                        {/* Labels */}
-                        {issue.labels && issue.labels.filter((label) => label !== 'auto-container').length > 0 && (
-                          <div className="flex gap-2 flex-shrink-0">
-                            {issue.labels
-                              .filter((label) => label !== 'auto-container')
-                              .slice(0, 2)
-                              .map((label) => (
-                                <span
-                                  key={label}
-                                  className="px-2 py-1 text-xs rounded-full text-white font-medium"
-                                  style={{ backgroundColor: getLabelColor(label) }}
-                                >
-                                  {label}
-                                </span>
-                              ))}
-                            {issue.labels.filter((label) => label !== 'auto-container').length > 2 && (
-                              <span className="px-2 py-1 text-xs rounded-full bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary">
-                                +{issue.labels.filter((label) => label !== 'auto-container').length - 2}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* External link icon */}
-                        <div className="flex-shrink-0 text-bolt-elements-textTertiary group-hover:text-bolt-elements-textPrimary transition-colors">
-                          <div className="i-ph:arrow-square-out w-4 h-4" />
-                        </div>
-                      </div>
-                    </div>
+                      {filter}
+                    </button>
                   ))}
                 </div>
 
-                {/* Loading more indicator */}
-                {loadingMore && (
-                  <div className="text-center py-8">
-                    <div className="text-2xl mb-2">⏳</div>
-                    <p className="text-sm text-bolt-elements-textSecondary">Loading more issues...</p>
+                <p className="text-base text-bolt-elements-textSecondary">
+                  {loading
+                    ? 'Loading...'
+                    : `${issues.length} ${activeFilter === 'All' ? '' : activeFilter.toLowerCase()} issues available`}
+                </p>
+              </div>
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6">
+                {error ? (
+                  <div className="text-center py-16">
+                    <div className="text-6xl mb-6">⚠️</div>
+                    <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Error</h3>
+                    <p className="text-bolt-elements-textSecondary text-base mb-3 max-w-md mx-auto">{error}</p>
+                    <button
+                      onClick={() => {
+                        setCurrentPage(1);
+                        setHasMore(true);
+                        fetchIssues(activeFilter, 1, false);
+                      }}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                    >
+                      Retry
+                    </button>
                   </div>
-                )}
+                ) : loading ? (
+                  <div className="text-center py-16">
+                    <div className="text-6xl mb-6">⏳</div>
+                    <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Loading Issues</h3>
+                    <p className="text-bolt-elements-textSecondary text-base">Fetching issues from GitLab...</p>
+                  </div>
+                ) : issues.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="text-6xl mb-6">📝</div>
+                    <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">
+                      No {activeFilter === 'All' ? 'Auto-Container' : activeFilter} Issues
+                    </h3>
+                    <p className="text-bolt-elements-textSecondary text-base mb-3 max-w-md mx-auto">
+                      {activeFilter === 'All'
+                        ? "There are no open issues with 'auto-container' label in this project."
+                        : `There are no open issues with 'auto-container' and '${activeFilter}' labels in this project.`}
+                    </p>
+                    <p className="text-bolt-elements-textTertiary text-sm">
+                      💡 Create issues with appropriate labels in GitLab to see them here
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      {issues.map((issue) => {
+                        const clickable = isIssueClickable(issue);
+                        const hasNoLabels = isIssueWithoutLabels(issue);
+                        const isRejected = isIssueRejected(issue);
+                        const isUpdating = updatingIssues.has(issue.id);
 
-                {/* End of list indicator */}
-                {!hasMore && issues.length > 0 && (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-bolt-elements-textTertiary">No more issues to load</p>
-                  </div>
+                        return (
+                          <div
+                            key={issue.id}
+                            className={`group p-4 rounded-lg border transition-all duration-200 ${
+                              clickable
+                                ? 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColorAccent cursor-pointer hover:shadow-sm'
+                                : 'border-bolt-elements-borderColor/50 bg-bolt-elements-background-depth-1/50'
+                            } ${hasNoLabels && !clickable ? 'opacity-60' : clickable ? '' : 'opacity-60'}`}
+                          >
+                            <div className="flex items-center gap-4">
+                              {/* Status indicator and issue number */}
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(issue)}`}></div>
+                                <span className="text-sm font-semibold text-bolt-elements-textPrimary">
+                                  #{issue.iid}
+                                </span>
+                              </div>
+
+                              {/* Issue title */}
+                              <div className="flex-1 min-w-0" onClick={() => clickable && handleIssueClick(issue)}>
+                                <h3 className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+                                  {issue.title}
+                                </h3>
+                              </div>
+
+                              {/* Labels and Action buttons */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {/* Show labels if they exist */}
+                                {issue.labels &&
+                                  issue.labels.filter((label) => label !== 'auto-container').length > 0 && (
+                                    <div className="flex gap-2">
+                                      {issue.labels
+                                        .filter((label) => label !== 'auto-container')
+                                        .slice(0, 2)
+                                        .map((label) => (
+                                          <span
+                                            key={label}
+                                            className="px-2 py-0.5 text-xs rounded-full text-white font-medium"
+                                            style={{ backgroundColor: getLabelColor(label) }}
+                                          >
+                                            {label}
+                                          </span>
+                                        ))}
+                                      {issue.labels.filter((label) => label !== 'auto-container').length > 2 && (
+                                        <span className="px-2 py-0.5 text-xs rounded-full bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary">
+                                          +{issue.labels.filter((label) => label !== 'auto-container').length - 2}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                {/* Action buttons */}
+                                {hasNoLabels ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddTodoLabel(issue);
+                                    }}
+                                    disabled={isUpdating}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {isUpdating ? (
+                                      <>
+                                        <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
+                                        <span>Starting...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="i-ph:play w-3 h-3" />
+                                        <span>Start Task</span>
+                                      </>
+                                    )}
+                                  </button>
+                                ) : isRejected ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRestartTask(issue);
+                                    }}
+                                    disabled={isUpdating}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {isUpdating ? (
+                                      <>
+                                        <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
+                                        <span>Restarting...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="i-ph:arrow-clockwise w-3 h-3" />
+                                        <span>Restart</span>
+                                      </>
+                                    )}
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              {/* External link icon or disabled indicator */}
+                              <div
+                                className={`flex-shrink-0 transition-colors ${
+                                  clickable
+                                    ? 'text-bolt-elements-textTertiary group-hover:text-bolt-elements-textPrimary'
+                                    : 'text-bolt-elements-textTertiary/50'
+                                }`}
+                              >
+                                <div className={`w-4 h-4 ${clickable ? 'i-ph:arrow-square-out' : 'i-ph:lock'}`} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Loading more indicator */}
+                    {loadingMore && (
+                      <div className="text-center py-8">
+                        <div className="text-2xl mb-2">⏳</div>
+                        <p className="text-sm text-bolt-elements-textSecondary">Loading more issues...</p>
+                      </div>
+                    )}
+
+                    {/* End of list indicator */}
+                    {!hasMore && issues.length > 0 && (
+                      <div className="text-center py-8">
+                        <p className="text-sm text-bolt-elements-textTertiary">No more issues to load</p>
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
+              </div>
+            </motion.div>
+
+            {/* Task Detail View */}
+            <motion.div
+              className="absolute inset-0 flex flex-col"
+              initial={{ x: '100%' }}
+              animate={{ x: selectedIssue ? 0 : '100%' }}
+              transition={{ type: 'tween', duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            >
+              {selectedIssue && <TaskDetail issue={selectedIssue} onBack={handleBackToList} />}
+            </motion.div>
           </div>
         </div>
       </div>
