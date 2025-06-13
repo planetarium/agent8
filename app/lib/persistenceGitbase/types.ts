@@ -54,6 +54,29 @@ export interface GitlabCommit {
   };
 }
 
+export interface GitlabIssue {
+  id: number;
+  iid: number;
+  title: string;
+  description?: string;
+  state: 'opened' | 'closed';
+  created_at: string;
+  updated_at: string;
+  closed_at?: string;
+  labels: string[];
+  author: {
+    id: number;
+    name: string;
+    username: string;
+  };
+  assignees?: Array<{
+    id: number;
+    name: string;
+    username: string;
+  }>;
+  web_url: string;
+}
+
 export interface CommitAction {
   action: 'create' | 'delete' | 'move' | 'update' | 'chmod';
   filePath: string;

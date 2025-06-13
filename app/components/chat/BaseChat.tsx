@@ -1075,7 +1075,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
               // Show TaskList only when chatStarted is true and in the default branch (develop branch)
               if (chatStarted && currentTaskBranch === DEFAULT_TASK_BRANCH) {
-                return <TaskList taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />;
+                return <TaskList />;
               }
 
               // Show Workbench when chatStarted is false or in task branch

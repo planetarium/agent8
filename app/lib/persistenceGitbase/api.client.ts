@@ -343,3 +343,39 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
 
   return response.data;
 };
+
+export const getProjectIssues = async (
+  projectPath: string,
+  options: {
+    page?: number;
+    perPage?: number;
+    state?: 'opened' | 'closed' | 'all';
+    additionalLabel?: string;
+  } = {},
+) => {
+  const queryParams = new URLSearchParams({
+    projectPath,
+  });
+
+  if (options.page) {
+    queryParams.append('page', options.page.toString());
+  }
+
+  if (options.perPage) {
+    queryParams.append('perPage', options.perPage.toString());
+  }
+
+  if (options.state) {
+    queryParams.append('state', options.state);
+  }
+
+  if (options.additionalLabel) {
+    queryParams.append('additionalLabel', options.additionalLabel);
+  }
+
+  const response = await axios.get(`/api/gitlab/issues`, {
+    params: Object.fromEntries(queryParams),
+  });
+
+  return response.data;
+};
