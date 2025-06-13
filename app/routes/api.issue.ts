@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
-import { withV8AuthUser } from '~/lib/verse8/middleware';
-import { generateId, generateText } from 'ai';
+import { withV8AuthUser, type ContextUser } from '~/lib/verse8/middleware';
+import { generateId, streamText } from 'ai';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { DEFAULT_PROVIDER, PROVIDER_LIST, FIXED_MODELS } from '~/utils/constants';
@@ -497,9 +497,6 @@ async function executeEnhancedIssueBreakdown(
       temperature: 0.3,
     };
 
-    combinedTools = {};
-    logger.info('🔄 temprary disable tools, combinedTools length: ', Object.keys(combinedTools).length);
-
     // Only add tools if we have them
     if (Object.keys(combinedTools).length > 0) {
       logger.info(`Adding ${Object.keys(combinedTools).length} tools to request`);
@@ -509,37 +506,21 @@ async function executeEnhancedIssueBreakdown(
     }
 
     // Use LLM call with tools
-    const result = await generateText(generateParams);
+    const result = await streamText(generateParams);
 
-    logger.info('✅ generateText call successful');
+    let allText = '';
 
-    if (result.toolCalls && result.toolCalls.length > 0) {
-      logger.info(`Tool calls were made: ${result.toolCalls.length} calls`);
+    for await (const part of result.fullStream) {
+      logger.info('stream part:', JSON.stringify(part));
+
+      if (part.type === 'text-delta' && part.textDelta) {
+        allText += part.textDelta;
+      }
     }
 
-    const fullResponse = result.text;
+    logger.info('allText:', allText);
 
-    // Log tool usage and model information statistics
-    logger.info(
-      `🔧 Tool usage statistics: ${JSON.stringify(
-        {
-          toolCallsCount: result.toolCalls?.length || 0,
-          toolResultsCount: result.toolResults?.length || 0,
-          stepsCount: result.steps?.length || 0,
-        },
-        null,
-        2,
-      )}`,
-    );
-
-    // Record detailed tool calls and results information
-    logger.debug('Detailed tools and steps information:');
-    logger.debug(`Tool calls details: ${JSON.stringify(result.toolCalls, null, 2)}`);
-    logger.debug(`Tool results details: ${JSON.stringify(result.toolResults, null, 2)}`);
-    logger.debug(`Steps details: ${JSON.stringify(result.steps, null, 2)}`);
-
-    // Parse the response
-    const issueBreakdown = parseIssueBreakdownResponse(fullResponse, userPrompt);
+    const issueBreakdown = parseIssueBreakdownResponse(allText, userPrompt);
     logger.info(`✨ Issue breakdown completed: ${issueBreakdown.issues.length} issues`);
 
     return issueBreakdown;
@@ -731,7 +712,7 @@ async function issueAction({ context, request }: ActionFunctionArgs) {
       userPrompt,
       env,
       cookieHeader,
-      user?.email ? 'user-access-token' : undefined,
+      (context.user as ContextUser)?.accessToken,
       files,
       messages,
     );
