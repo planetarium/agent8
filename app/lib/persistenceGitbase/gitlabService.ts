@@ -1280,8 +1280,8 @@ export class GitlabService {
     try {
       const projectId = encodeURIComponent(projectPath);
 
-      // Build labels parameter - always include auto-container
-      let labels = 'auto-container';
+      // Build labels parameter - always include agentic
+      let labels = 'agentic';
 
       if (additionalLabel) {
         labels += `,${additionalLabel}`;

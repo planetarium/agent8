@@ -13,10 +13,11 @@ import {
   type OnChangeCallback as OnEditorChange,
   type OnScrollCallback as OnEditorScroll,
 } from '~/components/editor/codemirror/CodeMirrorEditor';
-import { IconButton } from '~/components/ui/IconButton';
+
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
 import { Slider } from '~/components/ui/Slider';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
+import { repoStore, DEFAULT_TASK_BRANCH } from '~/lib/stores/repo';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
@@ -25,6 +26,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { TaskList } from './TaskList.client';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -41,6 +43,10 @@ const logger = createScopedLogger('Workbench');
 const viewTransition = { ease: cubicEasingFn };
 
 const sliderOptions = [
+  {
+    value: 'tasks' as WorkbenchViewType,
+    text: 'Tasks',
+  },
   {
     value: 'code' as WorkbenchViewType,
     text: 'Code',
@@ -326,6 +332,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const files = useStore(workbenchStore.files);
   const selectedView = useStore(workbenchStore.currentView);
   const diffEnabled = useStore(workbenchStore.diffEnabled);
+  const repo = useStore(repoStore);
 
   const isSmallViewport = useViewport(1024);
 
@@ -358,6 +365,15 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   useEffect(() => {
     workbenchStore.setDocuments(files);
   }, [files]);
+
+  useEffect(() => {
+    // Set Workbench to show by default and set tasks as default view
+    workbenchStore.setShowWorkbench(true);
+
+    if (!chatStarted) {
+      setSelectedView('tasks');
+    }
+  }, [chatStarted]);
 
   useEffect(() => {
     if (chatStarted) {
@@ -412,138 +428,157 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, []);
 
   return (
-    chatStarted && (
-      <motion.div
-        initial="closed"
-        animate={showWorkbench ? 'open' : 'closed'}
-        variants={workbenchVariants}
-        className="z-workbench"
-      >
-        {showWorkbench && !terminalReady && (
-          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
-            <div className="absolute inset-0 px-2 lg:px-6">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
-                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
-                    <div className="animate-spin w-6 h-6 mb-2 mx-auto">
-                      <div className="i-ph:spinner" />
-                    </div>
-                    <div className="text-sm text-bolt-elements-textPrimary">Preparing Workbench...</div>
+    <motion.div
+      initial="closed"
+      animate={showWorkbench ? 'open' : 'closed'}
+      variants={workbenchVariants}
+      className="z-workbench"
+    >
+      {showWorkbench && chatStarted && !terminalReady && (
+        <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+          <div className="absolute inset-0 px-2 lg:px-6">
+            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+              <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
+                <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
+                  <div className="animate-spin w-6 h-6 mb-2 mx-auto">
+                    <div className="i-ph:spinner" />
                   </div>
+                  <div className="text-sm text-bolt-elements-textPrimary">Preparing Workbench...</div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+      )}
+      <div
+        className={classNames(
+          'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+          {
+            'w-full': isSmallViewport,
+            'left-0': showWorkbench && isSmallViewport,
+            'left-[var(--workbench-left)]': showWorkbench,
+            'left-[100%]': !showWorkbench,
+          },
         )}
-        <div
-          className={classNames(
-            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
-            {
-              'w-full': isSmallViewport,
-              'left-0': showWorkbench && isSmallViewport,
-              'left-[var(--workbench-left)]': showWorkbench,
-              'left-[100%]': !showWorkbench,
-            },
-          )}
-        >
-          <div className="absolute inset-0 px-2 lg:px-6">
-            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-              <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
-                <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
-                <button
-                  onClick={() => {
-                    onRun();
-                  }}
-                  className={classNames(
-                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
-                  )}
-                >
-                  <div className="i-ph:play" />
-                  <span>Run Preview</span>
-                </button>
-                <div className="ml-auto" />
-                {(selectedView === 'code' || selectedView === 'resource') && (
-                  <div className="flex overflow-y-auto">
-                    <PanelHeaderButton
-                      className="mr-1 text-sm"
-                      onClick={() => {
-                        workbenchStore.downloadZip();
-                      }}
-                    >
-                      <div className="i-ph:download" />
-                      Download
-                    </PanelHeaderButton>
+      >
+        <div className="absolute inset-0 px-2 lg:px-6">
+          <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+            <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
+              <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
+              <button
+                onClick={() => {
+                  onRun();
+                }}
+                className={classNames(
+                  'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
+                  'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
+                )}
+              >
+                <div className="i-ph:play" />
+                <span>Run Preview</span>
+              </button>
+              <div className="ml-auto" />
+              {(selectedView === 'code' || selectedView === 'resource') && (
+                <div className="flex overflow-y-auto">
+                  <PanelHeaderButton
+                    className="mr-1 text-sm"
+                    onClick={() => {
+                      workbenchStore.downloadZip();
+                    }}
+                  >
+                    <div className="i-ph:download" />
+                    Download
+                  </PanelHeaderButton>
+                </div>
+              )}
+              {selectedView === 'diff' && (
+                <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+              )}
+            </div>
+            <div className="relative flex-1 overflow-hidden">
+              <View
+                initial={{ x: selectedView === 'tasks' ? 0 : '-100%' }}
+                animate={{ x: selectedView === 'tasks' ? 0 : '-100%' }}
+              >
+                {repo.taskBranch === DEFAULT_TASK_BRANCH ? (
+                  <TaskList />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">🔧</div>
+                      <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-2">Tasks Not Available</h3>
+                      <p className="text-bolt-elements-textSecondary text-sm">
+                        Tasks are only available in the default branch
+                      </p>
+                    </div>
                   </div>
                 )}
-                {selectedView === 'diff' && (
-                  <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
-                )}
-                <IconButton
-                  icon="i-ph:x-circle"
-                  className="-mr-1"
-                  size="xl"
-                  onClick={() => {
-                    workbenchStore.showWorkbench.set(false);
-                  }}
+              </View>
+              <View
+                initial={{ x: '100%' }}
+                animate={{ x: selectedView === 'code' ? 0 : selectedView === 'tasks' ? '100%' : '-100%' }}
+              >
+                <EditorPanel
+                  editorDocument={currentDocument}
+                  isStreaming={isStreaming}
+                  selectedFile={selectedFile}
+                  files={files}
+                  unsavedFiles={unsavedFiles}
+                  onFileSelect={onFileSelect}
+                  onEditorScroll={onEditorScroll}
+                  onEditorChange={onEditorChange}
+                  onFileSave={onFileSave}
+                  onFileReset={onFileReset}
                 />
-              </div>
-              <div className="relative flex-1 overflow-hidden">
-                <View
-                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                  animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                >
-                  <EditorPanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <ResourcePanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <DiffViewWithCommitHash
-                    fileHistory={fileHistory}
-                    setFileHistory={setFileHistory}
-                    actionRunner={actionRunner}
-                  />
-                </View>
-                <View
-                  initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                  animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                >
-                  <Preview />
-                </View>
-              </div>
+              </View>
+              <View
+                initial={{ x: '100%' }}
+                animate={{
+                  x:
+                    selectedView === 'resource'
+                      ? '0%'
+                      : selectedView === 'tasks' || selectedView === 'code'
+                        ? '100%'
+                        : '-100%',
+                }}
+              >
+                <ResourcePanel
+                  editorDocument={currentDocument}
+                  isStreaming={isStreaming}
+                  selectedFile={selectedFile}
+                  files={files}
+                  unsavedFiles={unsavedFiles}
+                  onFileSelect={onFileSelect}
+                  onEditorScroll={onEditorScroll}
+                  onEditorChange={onEditorChange}
+                  onFileSave={onFileSave}
+                  onFileReset={onFileReset}
+                />
+              </View>
+              <View
+                initial={{ x: '100%' }}
+                animate={{
+                  x:
+                    selectedView === 'diff'
+                      ? '0%'
+                      : selectedView === 'tasks' || selectedView === 'code' || selectedView === 'resource'
+                        ? '100%'
+                        : '-100%',
+                }}
+              >
+                <DiffViewWithCommitHash
+                  fileHistory={fileHistory}
+                  setFileHistory={setFileHistory}
+                  actionRunner={actionRunner}
+                />
+              </View>
+              <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? 0 : '100%' }}>
+                <Preview />
+              </View>
             </div>
           </div>
         </div>
-      </motion.div>
-    )
+      </div>
+    </motion.div>
   );
 });

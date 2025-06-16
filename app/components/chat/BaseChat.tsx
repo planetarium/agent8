@@ -7,7 +7,6 @@ import React, { type RefCallback, useCallback, useEffect, useState } from 'react
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
-import { TaskList } from '~/components/chat/TaskList.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -1071,14 +1070,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           </div>
           <ClientOnly>
             {() => {
-              const currentTaskBranch = repo.taskBranch;
-
-              // Show TaskList only when chatStarted is true and in the default branch (develop branch)
-              if (chatStarted && currentTaskBranch === DEFAULT_TASK_BRANCH) {
-                return <TaskList />;
-              }
-
-              // Show Workbench when chatStarted is false or in task branch
+              // Always show Workbench which will handle Tasks internally
               return (
                 <Workbench
                   actionRunner={actionRunner ?? ({} as ActionRunner)}
