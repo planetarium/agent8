@@ -78,3 +78,39 @@ export async function unzipCode(zipBlob: Buffer) {
 
   return fileMap;
 }
+
+/**
+ * Extract issue IID from branch name
+ * Supports patterns like: issue-123, issue-123-description, 123-issue, etc.
+ */
+export function extractIssueIidFromBranch(branchName: string): number | null {
+  if (!branchName) {
+    return null;
+  }
+
+  // Pattern 1: issue-123 or issue-123-description
+  const issuePattern1 = /^issue-(\d+)/i;
+  const match1 = branchName.match(issuePattern1);
+
+  if (match1) {
+    return parseInt(match1[1], 10);
+  }
+
+  // Pattern 2: 123-issue or 123-description
+  const issuePattern2 = /^(\d+)-/;
+  const match2 = branchName.match(issuePattern2);
+
+  if (match2) {
+    return parseInt(match2[1], 10);
+  }
+
+  // Pattern 3: contains -123- or -123 at end
+  const issuePattern3 = /-(\d+)(?:-|$)/;
+  const match3 = branchName.match(issuePattern3);
+
+  if (match3) {
+    return parseInt(match3[1], 10);
+  }
+
+  return null;
+}

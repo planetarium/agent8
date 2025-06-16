@@ -1329,6 +1329,23 @@ export class GitlabService {
     }
   }
 
+  async getIssue(projectPath: string, issueIid: number): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+      });
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get issue: ${errorMessage}`);
+    }
+  }
+
   async updateIssueLabels(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
     try {
       const projectId = encodeURIComponent(projectPath);

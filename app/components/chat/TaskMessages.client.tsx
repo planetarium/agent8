@@ -3,13 +3,14 @@ import { forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import { Messages } from './Messages.client';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { mergeTaskBranch, removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
+import { mergeTaskBranch, removeTaskBranch, getIssue, updateIssueLabels } from '~/lib/persistenceGitbase/api.client';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
 import { AnimatePresence, motion } from 'framer-motion';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { extractIssueIidFromBranch } from '~/lib/persistenceGitbase/utils';
 
 interface TaskMessagesProps {
   id?: string;
@@ -238,7 +239,45 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                             await new Promise((resolve) => setTimeout(resolve, 2000));
                           }
 
-                          await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                          const currentBranch = repoStore.get().taskBranch;
+                          await mergeTaskBranch(repoStore.get().path, currentBranch);
+
+                          // Update issue labels if this is an issue branch
+                          const issueIid = extractIssueIidFromBranch(currentBranch);
+
+                          if (issueIid && currentBranch.startsWith('issue-')) {
+                            try {
+                              const projectPath = repoStore.get().path;
+
+                              // Get current issue to preserve existing labels
+                              const issueResponse = await getIssue(projectPath, issueIid);
+
+                              if (issueResponse.success) {
+                                const currentLabels = issueResponse.data.labels || [];
+
+                                // Create new labels array: remove "CONFIRM NEEDED" and add "DONE"
+                                const newLabels = currentLabels
+                                  .filter((label: string) => label !== 'CONFIRM NEEDED')
+                                  .concat('DONE')
+                                  .filter(
+                                    (label: string, index: number, arr: string[]) => arr.indexOf(label) === index,
+                                  ); // Remove duplicates
+
+                                await updateIssueLabels(projectPath, issueIid, newLabels);
+                                toast.success('Issue labels updated: DONE added, CONFIRM NEEDED removed');
+                              } else {
+                                // Fallback to basic labels if we can't get current issue
+                                const newLabels = ['agentic', 'DONE'];
+
+                                await updateIssueLabels(projectPath, issueIid, newLabels);
+                                toast.success('Issue labels updated with basic labels');
+                              }
+                            } catch (labelError) {
+                              console.error('Failed to update issue labels:', labelError);
+                              toast.warn('Merge successful, but failed to update issue labels');
+                            }
+                          }
+
                           lastActionStore.set({ action: 'LOAD' });
                           repoStore.set({
                             ...repoStore.get(),
