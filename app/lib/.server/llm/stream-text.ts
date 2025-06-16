@@ -246,13 +246,15 @@ export async function streamText(props: {
       getVibeStarter3dDocsPrompt(),
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
-    ].map(
-      (content) =>
-        ({
-          role: 'system',
-          content,
-        }) as CoreSystemMessage,
-    ),
+    ]
+      .filter(Boolean)
+      .map(
+        (content) =>
+          ({
+            role: 'system',
+            content,
+          }) as CoreSystemMessage,
+      ),
     {
       role: 'system',
       content: getProjectMdPrompt(files),

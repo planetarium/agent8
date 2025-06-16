@@ -161,12 +161,16 @@ export function Chat() {
            */
 
           try {
-            await containerInstance.mount(convertFileMapToFileSystemTree(files));
-
             const previews = workbenchStore.previews.get();
             const currentPreview = previews.find((p) => p.ready);
 
-            if (currentPreview && workbenchStore.currentView.get() === 'preview') {
+            if (currentPreview) {
+              workbenchStore.previews.set([]);
+            }
+
+            await containerInstance.mount(convertFileMapToFileSystemTree(files));
+
+            if (currentPreview) {
               workbenchStore.previews.set(
                 previews.map((p) => {
                   if (p.baseUrl === currentPreview.baseUrl) {
@@ -395,11 +399,13 @@ export const ChatImpl = memo(
 
         workbenchStore.onArtifactClose(message.id, async () => {
           await runAndPreview(message);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
           workbenchStore.offArtifactClose(message.id);
         });
 
         setFakeLoading(false);
+
         logger.debug('Finished streaming');
       },
       initialMessages,
@@ -703,7 +709,6 @@ export const ChatImpl = memo(
           resetEnhancer();
 
           textareaRef.current?.blur();
-          setFakeLoading(false);
 
           return;
         } catch (error) {

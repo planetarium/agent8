@@ -421,6 +421,14 @@ export function getResourceSystemPrompt(files: any) {
   ${resourceContext}
   </ResourceContext>
 
+  <availableResources>
+    <resource>
+      <name>dotdot</name>
+      <url>https://agent8-games.verse8.io/assets/3d/event/dotdot/dotdot.glb</url>
+      <description>dotdot is a custom mascot character created specifically for Verse8's Closed Beta game jam. Use the name dotdot in prompts to refer to this object. It is a static glb object with no rig or animation, designed to be used as a passive in-game element. This minimal, teal-colored and cute-looking octopus has a round body and two black dot-like eyes. It can be placed anywhere in the scene, floated in the sky, clicked to trigger dialog, or used as a decorative object or NPC. By default, dotdot is not animated. Do not use dotdot as a replacement for animated characters or enemies. It is best suited for use as a companion, button, observer, or collectible. Advanced users may download the raw .glb file and add their own rig and animations. Example prompts: place an octopus dotdot in the field, make dotdot float gently up and down, place dotdot as a button to, scatter dotdots around the map as collectibles, have dotdot follow the player like a pet, make dotdot speak a line when clicked. Avoid using dotdot in prompts like: replace the player with dotdot, make dotdot attack enemies, play idle or walk animations on dotdot, make dotdot take damage and disappear on death. Keywords: dotdot, verse8, jam asset, event object, cbt, closed beta, game jam, octopus, teal, cute, minimal, mascot, npc, observer, spawn, floating, collectible, summon, sky, portal, button, follow, companion, glb, static</description>
+    </resource>
+  </availableResources>
+
   The resources needed to fulfill the user's request are provided in the ResourceContext.
   You can only use resource urls from \`src/assets.json\` or listed in \`availableResources\` or listed url in \`<Attachments />\` user attached
   If you want to use a resource from \`<availableResources>\`, \`<Attachments />\`, add that resource to \`src/assets.json\` in your response.
