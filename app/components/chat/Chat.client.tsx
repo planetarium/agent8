@@ -161,12 +161,16 @@ export function Chat() {
            */
 
           try {
-            await containerInstance.mount(convertFileMapToFileSystemTree(files));
-
             const previews = workbenchStore.previews.get();
             const currentPreview = previews.find((p) => p.ready);
 
-            if (currentPreview && workbenchStore.currentView.get() === 'preview') {
+            if (currentPreview) {
+              workbenchStore.previews.set([]);
+            }
+
+            await containerInstance.mount(convertFileMapToFileSystemTree(files));
+
+            if (currentPreview) {
               workbenchStore.previews.set(
                 previews.map((p) => {
                   if (p.baseUrl === currentPreview.baseUrl) {
@@ -395,11 +399,13 @@ export const ChatImpl = memo(
 
         workbenchStore.onArtifactClose(message.id, async () => {
           await runAndPreview(message);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
           workbenchStore.offArtifactClose(message.id);
         });
 
         setFakeLoading(false);
+
         logger.debug('Finished streaming');
       },
       initialMessages,
@@ -703,7 +709,6 @@ export const ChatImpl = memo(
           resetEnhancer();
 
           textareaRef.current?.blur();
-          setFakeLoading(false);
 
           return;
         } catch (error) {
@@ -724,20 +729,20 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
-        const commit = await workbenchStore.commitModifiedFiles();
-
-        if (commit) {
-          setMessages((prev: Message[]) => [
-            ...prev,
-            {
-              id: commit.id,
-              role: 'assistant',
-              content: commit.message || 'The user changed the files.',
-            },
-          ]);
-        }
-
         if (repoStore.get().path) {
+          const commit = await workbenchStore.commitModifiedFiles();
+
+          if (commit) {
+            setMessages((prev: Message[]) => [
+              ...prev,
+              {
+                id: commit.id,
+                role: 'assistant',
+                content: commit.message || 'The user changed the files.',
+              },
+            ]);
+          }
+
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
 
@@ -834,6 +839,11 @@ export const ChatImpl = memo(
             title: source.title,
             taskBranch: DEFAULT_TASK_BRANCH,
           });
+
+          // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
+          if (!isEnabledGitbasePersistence) {
+            changeChatUrl(source.title, { replace: true });
+          }
 
           const messages = [
             {

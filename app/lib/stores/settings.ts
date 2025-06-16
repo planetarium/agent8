@@ -81,7 +81,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
       ...provider,
       settings: {
         // Only enable by default, disable all others
-        enabled: ['Anthropic', 'OpenRouter', 'OpenAI'].includes(provider.name),
+        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'Google'].includes(provider.name),
       },
     };
   });
@@ -95,13 +95,21 @@ const getInitialProviderSettings = (): ProviderSetting => {
         const parsed = JSON.parse(savedSettings);
         Object.entries(parsed).forEach(([key, value]) => {
           if (initialSettings[key]) {
-            initialSettings[key].settings = (value as IProviderConfig).settings;
+            const providerSettings = (value as IProviderConfig).settings;
+            const mandatoryProviders = ['Anthropic', 'OpenRouter', 'OpenAI', 'Google'];
+
+            initialSettings[key].settings = {
+              ...providerSettings,
+              enabled: mandatoryProviders.includes(key) ? true : providerSettings.enabled,
+            };
           }
         });
       } catch (error) {
         console.error('Error parsing saved provider settings:', error);
       }
     }
+
+    localStorage.setItem(PROVIDER_SETTINGS_KEY, JSON.stringify(initialSettings));
   }
 
   return initialSettings;

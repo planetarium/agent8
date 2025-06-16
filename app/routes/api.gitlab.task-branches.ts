@@ -43,6 +43,12 @@ async function branchesLoader({ context, request }: ActionFunctionArgs) {
 async function branchesAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
 
+  if (!context?.user) {
+    return json({ success: false, message: 'Unauthorized: User not authenticated' }, { status: 401 });
+  }
+
+  const user = context.user as { email: string; isActivated: boolean };
+
   // Get request body as JSON
   const requestData = (await request.json()) as {
     projectPath: string;
@@ -61,6 +67,13 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
+    // Verify the user owns this specific project (not just a project with same name)
+    const isOwner = await gitlabService.isProjectOwner(user.email, projectPath);
+
+    if (!isOwner) {
+      return json({ success: false, message: 'You do not have permission to access this project' }, { status: 403 });
+    }
+
     if (action === 'merge') {
       const { from, to = 'develop' } = requestData;
 

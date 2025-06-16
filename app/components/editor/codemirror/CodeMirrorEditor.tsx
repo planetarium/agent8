@@ -11,7 +11,6 @@ import {
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
-  scrollPastEnd,
   showTooltip,
   tooltips,
   type Tooltip,
@@ -335,7 +334,6 @@ function newEditorState(
       }),
       closeBrackets(),
       lineNumbers(),
-      scrollPastEnd(),
       dropCursor(),
       drawSelection(),
       bracketMatching(),
@@ -429,7 +427,9 @@ function setEditorDocument(
         }
       }
 
-      view.scrollDOM.scrollTo(newLeft, newTop);
+      if (needsScrolling && editable) {
+        view.scrollDOM.scrollTo(newLeft, newTop);
+      }
     });
   });
 }

@@ -59,6 +59,8 @@ export class WorkbenchStore {
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
+  #shellActionRunning = false;
+  #shellActionPromise: Promise<void> | null = null;
   constructor() {
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
@@ -320,6 +322,11 @@ export class WorkbenchStore {
       return;
     }
 
+    // shell 액션이 실행 중인 경우 완료를 기다림
+    if (this.#shellActionRunning && this.#shellActionPromise) {
+      await this.#shellActionPromise;
+    }
+
     this.updateArtifact(data, { closed: true });
 
     const { messageId } = data;
@@ -365,6 +372,19 @@ export class WorkbenchStore {
       this.addToExecutionQueue(() => this._runAction(data, isStreaming));
     }
   }
+
+  async runActionAndWait(data: ActionCallbackData, isStreaming: boolean = false): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.addToExecutionQueue(async () => {
+        try {
+          await this._runAction(data, isStreaming);
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  }
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
     const { messageId } = data;
 
@@ -378,6 +398,11 @@ export class WorkbenchStore {
 
     if (!action || action.executed) {
       return;
+    }
+
+    // shell 액션이 아닌 경우, 현재 실행 중인 shell 액션 완료를 기다림
+    if (data.action.type !== 'shell' && this.#shellActionRunning && this.#shellActionPromise) {
+      await this.#shellActionPromise;
     }
 
     // Don't run the action if it's a reload
@@ -410,6 +435,15 @@ export class WorkbenchStore {
         await artifact.runner.runAction(data);
         this.resetAllFileModifications();
       }
+    } else if (data.action.type === 'shell') {
+      // shell 액션의 경우 실행 상태 추적
+      this.#shellActionRunning = true;
+      this.#shellActionPromise = artifact.runner.runAction(data).finally(() => {
+        this.#shellActionRunning = false;
+        this.#shellActionPromise = null;
+      });
+
+      await this.#shellActionPromise;
     } else {
       await artifact.runner.runAction(data);
     }
