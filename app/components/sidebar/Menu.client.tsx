@@ -223,7 +223,7 @@ export const Menu = () => {
               />
             </div>
           </div>
-          <div className="text-gray-600 dark:text-gray-400 text-sm font-medium px-4 py-2">Your Chats</div>
+          <div className="text-gray-600 dark:text-gray-400 text-sm font-medium px-4 py-2">Your Projects</div>
           <div className="flex-1 overflow-auto px-3 pb-3">
             {loading ? (
               <div className="px-4 text-gray-500 dark:text-gray-400 text-sm">Loading...</div>

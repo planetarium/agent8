@@ -17,23 +17,23 @@ interface HistoryItemProps {
 export function HistoryItem({ item, onDelete }: HistoryItemProps) {
   const location = useLocation();
   const currentPath = location.pathname;
-  const chatPath = `/chat/${item.urlId}`;
+  const issueProjectPath = `/issue?project=${item.urlId}`;
 
   const chat = useStore(chatStore);
   const repo = useStore(repoStore);
 
-  const isPathMatch = currentPath === chatPath;
+  const isPathMatch = currentPath === `/issue` && location.search === `?project=${item.urlId}`;
   const isRepoMatch = repo.path === item.urlId && chat.started;
-  const isActiveChat = isPathMatch || isRepoMatch;
+  const isActiveProject = isPathMatch || isRepoMatch;
 
   return (
     <div
       className={classNames(
         'group rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50/80 dark:hover:bg-gray-800/30 overflow-hidden flex justify-between items-center px-3 py-2 transition-colors',
-        { 'text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50': isActiveChat },
+        { 'text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50': isActiveProject },
       )}
     >
-      <IframeLink to={`/chat/${item.urlId}`} className="flex-1 truncate block pr-12">
+      <IframeLink to={issueProjectPath} className="flex-1 truncate block pr-12">
         <span className="truncate">{item.description}</span>
       </IframeLink>
       <div className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">

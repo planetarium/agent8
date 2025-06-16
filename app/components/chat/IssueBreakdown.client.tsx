@@ -9,7 +9,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST, PROMPT_COOKIE_KEY } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
-import { BaseChat } from './BaseChat';
+import { BaseChat, type ChatAttachment } from './BaseChat';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -40,22 +40,22 @@ interface ChatMessage {
   shortId: string;
 }
 
-
-
 // 解析用户消息，提取实际内容
 function parseUserMessage(content: string): string {
   // 匹配 [Attachments: ...] 之后的内容
   const attachmentsMatch = content.match(/\[Attachments:\s*\[.*?\]\]\s*\n\n([\s\S]*)/);
+
   if (attachmentsMatch) {
     return attachmentsMatch[1].trim();
   }
-  
+
   // 如果没有找到 Attachments，尝试匹配 Provider 之后的内容
   const providerMatch = content.match(/\[Provider:\s*.*?\]\s*\n\n([\s\S]*)/);
+
   if (providerMatch) {
     return providerMatch[1].trim();
   }
-  
+
   // 如果都没有匹配到，返回原内容
   return content.trim();
 }
@@ -189,20 +189,30 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSendMessageTime = useRef(0);
-  const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [chatStarted, setChatStarted] = useState(() => {
+    // 如果有初始消息或者 URL 中有项目参数，就认为聊天已开始
+    return initialMessages.length > 0 || !!searchParams.get('project');
+  });
+  const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
   const [fakeLoading, setFakeLoading] = useState(false);
   const files = useStore(workbenchStore.files);
   const actionAlert = useStore(workbenchStore.alert);
   const { promptId, contextOptimizationEnabled } = useSettings();
 
-  // 项目相关状态
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  // 项目相关状态 - 在初始化时就检查 URL 参数
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => {
+    return searchParams.get('project');
+  });
   const [projectHistory, setProjectHistory] = useState<ChatMessage[]>([]);
-  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(() => {
+    return !!searchParams.get('project');
+  });
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const [existingProjectPath, setExistingProjectPath] = useState('');
+  const [existingProjectPath, setExistingProjectPath] = useState(() => {
+    return searchParams.get('project') || '';
+  });
 
   const [model, setModel] = useState(() => {
     const savedModel = Cookies.get('SelectedModel');
@@ -216,19 +226,21 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   const { showChat } = useStore(chatStore);
   const [animationScope, animate] = useAnimate();
 
-  // 从 URL 参数获取项目
+  // 从 URL 参数获取项目（处理 URL 变化）
   useEffect(() => {
     const projectFromUrl = searchParams.get('project');
-    if (projectFromUrl && projectFromUrl !== selectedProject) {
+
+    if (projectFromUrl !== selectedProject) {
       setSelectedProject(projectFromUrl);
-      setExistingProjectPath(projectFromUrl);
-      setShowHistoryPanel(true);
+      setExistingProjectPath(projectFromUrl || '');
+      setShowHistoryPanel(!!projectFromUrl);
+
       // 当从 URL 加载项目时，假设这是一个现有项目，设置 chatStarted 为 true
-      setChatStarted(true);
+      if (projectFromUrl) {
+        setChatStarted(true);
+      }
     }
   }, [searchParams, selectedProject]);
-
-
 
   // 加载项目历史记录
   useEffect(() => {
@@ -237,9 +249,18 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       return;
     }
 
+    /*
+     * 如果是通过 onFinish 回调新设置的项目，跳过立即加载，等待延迟刷新
+     * 这样避免加载到错误的或缓存的数据
+     */
+    if (!chatStarted && selectedProject && !searchParams.get('project')) {
+      return;
+    }
+
     const loadProjectHistory = async () => {
       try {
         setLoadingHistory(true);
+
         const response = await getProjectCommits(selectedProject, { branch: 'issue' });
 
         if (response.success) {
@@ -280,7 +301,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
           messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
           setProjectHistory(messages);
-          
+
           // 如果有历史记录，设置 chatStarted 为 true，避免创建新项目
           if (messages.length > 0) {
             setChatStarted(true);
@@ -336,7 +357,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       );
       setFakeLoading(false);
     },
-    onFinish: async (message) => {
+    onFinish: async (message, response) => {
       logStore.logProvider('Issue breakdown response completed', {
         component: 'IssueBreakdown',
         action: 'response',
@@ -348,13 +369,27 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       setFakeLoading(false);
       logger.debug('Issue breakdown completed');
 
+      const projectPathFromResponse = response?.data?.gitlab?.projectPath;
+
+      if (!selectedProject && projectPathFromResponse) {
+        // 先清空历史记录，避免显示其他项目的记录
+        setProjectHistory([]);
+        setSelectedProject(projectPathFromResponse);
+        setShowHistoryPanel(true);
+        setSearchParams({ project: projectPathFromResponse });
+        setExistingProjectPath(projectPathFromResponse);
+      }
+
       // 聊天完成后，如果有选中的项目，刷新历史记录
-      if (selectedProject) {
+      if (selectedProject || existingProjectPath || projectPathFromResponse) {
+        const projectToLoad = selectedProject || existingProjectPath || projectPathFromResponse;
+
         // 延迟一下再刷新，确保 GitLab 数据已更新
         setTimeout(() => {
           const loadProjectHistory = async () => {
             try {
-              const response = await getProjectCommits(selectedProject, { branch: 'issue' });
+              const response = await getProjectCommits(projectToLoad!, { branch: 'issue' });
+
               if (response.success) {
                 const commitsData = response.data.commits || [];
                 const messages: ChatMessage[] = [];
@@ -393,7 +428,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
                 messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                 setProjectHistory(messages);
-                
+
                 // 如果有历史记录，确保 chatStarted 为 true
                 if (messages.length > 0) {
                   setChatStarted(true);
@@ -551,11 +586,13 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
               // Save project path for subsequent requests
               setExistingProjectPath(projectPath);
-              setSelectedProject(projectPath);
-              setShowHistoryPanel(true);
 
-              // 更新 URL 参数
-              setSearchParams({ project: projectPath });
+              /*
+               * 不立即切换界面，等消息发送完成后再切换
+               * setSelectedProject(projectPath);
+               * setShowHistoryPanel(true);
+               * setSearchParams({ project: projectPath });
+               */
             }
 
             // Use template files for the first request
@@ -583,13 +620,16 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
       append(
         {
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: []]\n\n${messageContent}`,
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+            attachmentList,
+          )}]\n\n${messageContent}`,
         },
         requestOptions,
       );
 
       setInput('');
       Cookies.remove(PROMPT_COOKIE_KEY);
+      setAttachmentList([]);
       resetEnhancer();
       textareaRef.current?.blur();
     } catch (error) {
@@ -625,8 +665,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
   };
 
-
-
   const isStreaming = isLoading || fakeLoading;
 
   const getSimpleProgressData = useMemo(() => {
@@ -658,8 +696,69 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     return progressItems;
   }, [issueData]);
 
-  // 判断是否有历史记录需要显示
-  const hasHistory = showHistoryPanel && selectedProject && projectHistory.length > 0;
+  /*
+   * 判断是否有历史记录需要显示
+   * 如果有选中的项目且显示历史面板，就认为有历史记录（避免界面闪烁）
+   */
+  const hasHistory = showHistoryPanel && selectedProject;
+
+  // 合并历史记录和当前聊天消息
+  const allMessages = useMemo(() => {
+    if (!hasHistory) {
+      return [];
+    }
+
+    // 如果有当前消息或正在流式传输，显示当前消息
+    if (messages.length > 0 || isStreaming) {
+      // 将当前聊天的 messages 转换为 ChatMessage 格式
+      const currentMessages: ChatMessage[] = messages.map((message, index) => ({
+        id: `current-${index}`,
+        role: message.role as 'user' | 'assistant',
+        content: message.role === 'user' ? parseUserMessage(message.content) : parsedMessages[index] || message.content,
+        timestamp: new Date().toISOString(),
+        commitId: 'current',
+        shortId: 'current',
+      }));
+
+      // 合并历史记录和当前消息，去除重复内容
+      const combined = [...projectHistory];
+
+      // 只添加不重复的当前消息
+      currentMessages.forEach((currentMsg) => {
+        const isDuplicate = projectHistory.some(
+          (historyMsg) =>
+            historyMsg.role === currentMsg.role && historyMsg.content.trim() === currentMsg.content.trim(),
+        );
+
+        if (!isDuplicate) {
+          combined.push(currentMsg);
+        }
+      });
+
+      return combined.sort((a, b) => {
+        // 历史记录按时间排序，当前消息放在最后
+        if (a.commitId === 'current' && b.commitId !== 'current') {
+          return 1;
+        }
+
+        if (a.commitId !== 'current' && b.commitId === 'current') {
+          return -1;
+        }
+
+        if (a.commitId === 'current' && b.commitId === 'current') {
+          // 当前消息按索引排序
+          const aIndex = parseInt(a.id.split('-')[1]);
+          const bIndex = parseInt(b.id.split('-')[1]);
+
+          return aIndex - bIndex;
+        }
+
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      });
+    }
+
+    return projectHistory;
+  }, [hasHistory, projectHistory, messages, parsedMessages, isStreaming]);
 
   return (
     <div className="flex flex-col h-full">
@@ -669,14 +768,14 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
           <div className="w-[650px] border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex flex-col">
             {/* 历史记录区域 */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto p-4" ref={scrollRef}>
                 {loadingHistory ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="text-sm text-gray-500 dark:text-gray-400">Loading history...</div>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {projectHistory.map((message) => (
+                    {allMessages.map((message) => (
                       <div
                         key={message.id}
                         className={`p-3 rounded-lg text-sm ${
@@ -684,20 +783,28 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                             ? 'bg-blue-100 dark:bg-blue-900/30 ml-4'
                             : 'bg-gray-100 dark:bg-gray-800 mr-4'
                         }`}
+                        ref={message.id === allMessages[allMessages.length - 1]?.id ? messageRef : undefined}
                       >
                         {message.role === 'user' ? (
-                          <div className="text-gray-900 dark:text-white">
-                            {message.content}
-                          </div>
+                          <div className="text-gray-900 dark:text-white">{message.content}</div>
                         ) : (
                           <div>
-                            <div className="text-gray-900 dark:text-white">
-                              {message.content}
-                            </div>
+                            <div className="text-gray-900 dark:text-white">{message.content}</div>
                           </div>
                         )}
                       </div>
                     ))}
+                    {/* 显示加载状态 - 只有当有消息时才显示 */}
+                    {isStreaming && messages.length > 0 && (
+                      <div className="p-3 rounded-lg text-sm bg-gray-100 dark:bg-gray-800 mr-4">
+                        <div className="text-gray-900 dark:text-white">
+                          <div className="flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                            <span>Issue generating...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -711,7 +818,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                 input={input}
                 showChat={showChat}
                 chatStarted={true}
-                isStreaming={isStreaming}
+                isStreaming={false}
                 onStreamingChange={(streaming) => {
                   streamingState.set(streaming);
                 }}
@@ -728,7 +835,13 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                 setModel={handleModelChange}
                 provider={provider}
                 setProvider={handleProviderChange}
-                providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
+                providerList={PROVIDER_LIST.map((p) => ({
+                  name: p.name,
+                  staticModels: p.staticModels,
+                  getApiKeyLink: p.getApiKeyLink,
+                  labelForGetApiKey: p.labelForGetApiKey,
+                  icon: p.icon,
+                }))}
                 messageRef={messageRef}
                 scrollRef={scrollRef}
                 handleInputChange={(e) => {
@@ -749,16 +862,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                   /* Diff view not implemented for IssueBreakdown */
                 }}
                 description={description}
-                messages={messages.map((message, i) => {
-                  if (message.role === 'user') {
-                    return message;
-                  }
-
-                  return {
-                    ...message,
-                    content: parsedMessages[i] || '',
-                  };
-                })}
+                messages={[]}
                 enhancePrompt={() => {
                   enhancePrompt(
                     input,
@@ -770,8 +874,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                     provider,
                   );
                 }}
-                attachmentList={[]}
-                setAttachmentList={undefined}
+                attachmentList={attachmentList}
+                setAttachmentList={setAttachmentList}
                 actionAlert={actionAlert}
                 clearAlert={() => workbenchStore.clearAlert()}
                 data={getSimpleProgressData}
@@ -780,7 +884,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
             </div>
           </div>
         ) : (
-          /* 中间聊天区域（没有历史记录时） */
           <div className="flex-1 flex flex-col">
             <BaseChat
               ref={animationScope}
@@ -805,7 +908,13 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
               setModel={handleModelChange}
               provider={provider}
               setProvider={handleProviderChange}
-              providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
+              providerList={PROVIDER_LIST.map((p) => ({
+                name: p.name,
+                staticModels: p.staticModels,
+                getApiKeyLink: p.getApiKeyLink,
+                labelForGetApiKey: p.labelForGetApiKey,
+                icon: p.icon,
+              }))}
               messageRef={messageRef}
               scrollRef={scrollRef}
               handleInputChange={(e) => {
@@ -847,8 +956,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                   provider,
                 );
               }}
-              attachmentList={[]}
-              setAttachmentList={undefined}
+              attachmentList={attachmentList}
+              setAttachmentList={setAttachmentList}
               actionAlert={actionAlert}
               clearAlert={() => workbenchStore.clearAlert()}
               data={getSimpleProgressData}
@@ -859,7 +968,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
         {/* 右侧区域（预留给其他内容） */}
         {hasHistory && (
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900/30 flex flex-col">
+          <div className="flex-1 bg-white dark:bg-gray-900 flex flex-col">
             {/* Issue 列表内容 */}
             <div className="flex-1 overflow-auto p-4">
               <div className="text-center text-gray-500 dark:text-gray-400 text-sm">
