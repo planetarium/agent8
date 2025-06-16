@@ -9,7 +9,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST, PROMPT_COOKIE_KEY } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
-import { BaseChat, type ChatAttachment } from './BaseChat';
+import { BaseChat } from './BaseChat';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -21,6 +21,7 @@ import { useIssueBreakdown } from '~/lib/hooks/useIssueBreakdown';
 import { selectStarterTemplate } from '~/utils/selectStarterTemplate';
 import type { Template } from '~/types/template';
 import type { FileMap } from '~/lib/stores/files';
+import { getProjectCommits } from '~/lib/persistenceGitbase/api.client';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -28,6 +29,36 @@ const toastAnimation = cssTransition({
 });
 
 const logger = createScopedLogger('IssueBreakdown');
+
+// 项目历史消息接口
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  commitId: string;
+  shortId: string;
+}
+
+
+
+// 解析用户消息，提取实际内容
+function parseUserMessage(content: string): string {
+  // 匹配 [Attachments: ...] 之后的内容
+  const attachmentsMatch = content.match(/\[Attachments:\s*\[.*?\]\]\s*\n\n([\s\S]*)/);
+  if (attachmentsMatch) {
+    return attachmentsMatch[1].trim();
+  }
+  
+  // 如果没有找到 Attachments，尝试匹配 Provider 之后的内容
+  const providerMatch = content.match(/\[Provider:\s*.*?\]\s*\n\n([\s\S]*)/);
+  if (providerMatch) {
+    return providerMatch[1].trim();
+  }
+  
+  // 如果都没有匹配到，返回原内容
+  return content.trim();
+}
 
 async function fetchTemplateFromAPI(
   template: Template,
@@ -159,12 +190,17 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSendMessageTime = useRef(0);
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-  const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [fakeLoading, setFakeLoading] = useState(false);
   const files = useStore(workbenchStore.files);
   const actionAlert = useStore(workbenchStore.alert);
   const { promptId, contextOptimizationEnabled } = useSettings();
+
+  // 项目相关状态
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [projectHistory, setProjectHistory] = useState<ChatMessage[]>([]);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [existingProjectPath, setExistingProjectPath] = useState('');
 
@@ -179,6 +215,86 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
   const { showChat } = useStore(chatStore);
   const [animationScope, animate] = useAnimate();
+
+  // 从 URL 参数获取项目
+  useEffect(() => {
+    const projectFromUrl = searchParams.get('project');
+    if (projectFromUrl && projectFromUrl !== selectedProject) {
+      setSelectedProject(projectFromUrl);
+      setExistingProjectPath(projectFromUrl);
+      setShowHistoryPanel(true);
+      // 当从 URL 加载项目时，假设这是一个现有项目，设置 chatStarted 为 true
+      setChatStarted(true);
+    }
+  }, [searchParams, selectedProject]);
+
+
+
+  // 加载项目历史记录
+  useEffect(() => {
+    if (!selectedProject) {
+      setProjectHistory([]);
+      return;
+    }
+
+    const loadProjectHistory = async () => {
+      try {
+        setLoadingHistory(true);
+        const response = await getProjectCommits(selectedProject, { branch: 'issue' });
+
+        if (response.success) {
+          const commitsData = response.data.commits || [];
+          const messages: ChatMessage[] = [];
+
+          commitsData.forEach((commit: any) => {
+            const userMessageMatch = commit.message.match(/<V8UserMessage>\n([\s\S]*?)\n<\/V8UserMessage>/);
+            const assistantMessageMatch = commit.message.match(
+              /<V8AssistantMessage>\n([\s\S]*?)\n<\/V8AssistantMessage>/,
+            );
+
+            if (userMessageMatch) {
+              const rawUserContent = userMessageMatch[1];
+              const parsedUserContent = parseUserMessage(rawUserContent);
+
+              messages.push({
+                id: `${commit.id}-user`,
+                role: 'user',
+                content: parsedUserContent,
+                timestamp: commit.created_at,
+                commitId: commit.id,
+                shortId: commit.short_id,
+              });
+
+              if (assistantMessageMatch) {
+                messages.push({
+                  id: `${commit.id}-assistant`,
+                  role: 'assistant',
+                  content: assistantMessageMatch[1],
+                  timestamp: commit.created_at,
+                  commitId: commit.id,
+                  shortId: commit.short_id,
+                });
+              }
+            }
+          });
+
+          messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          setProjectHistory(messages);
+          
+          // 如果有历史记录，设置 chatStarted 为 true，避免创建新项目
+          if (messages.length > 0) {
+            setChatStarted(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load project history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadProjectHistory();
+  }, [selectedProject]);
 
   const requestBody = useMemo(
     () => ({
@@ -231,6 +347,66 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
       setFakeLoading(false);
       logger.debug('Issue breakdown completed');
+
+      // 聊天完成后，如果有选中的项目，刷新历史记录
+      if (selectedProject) {
+        // 延迟一下再刷新，确保 GitLab 数据已更新
+        setTimeout(() => {
+          const loadProjectHistory = async () => {
+            try {
+              const response = await getProjectCommits(selectedProject, { branch: 'issue' });
+              if (response.success) {
+                const commitsData = response.data.commits || [];
+                const messages: ChatMessage[] = [];
+
+                commitsData.forEach((commit: any) => {
+                  const userMessageMatch = commit.message.match(/<V8UserMessage>\n([\s\S]*?)\n<\/V8UserMessage>/);
+                  const assistantMessageMatch = commit.message.match(
+                    /<V8AssistantMessage>\n([\s\S]*?)\n<\/V8AssistantMessage>/,
+                  );
+
+                  if (userMessageMatch) {
+                    const rawUserContent = userMessageMatch[1];
+                    const parsedUserContent = parseUserMessage(rawUserContent);
+
+                    messages.push({
+                      id: `${commit.id}-user`,
+                      role: 'user',
+                      content: parsedUserContent,
+                      timestamp: commit.created_at,
+                      commitId: commit.id,
+                      shortId: commit.short_id,
+                    });
+
+                    if (assistantMessageMatch) {
+                      messages.push({
+                        id: `${commit.id}-assistant`,
+                        role: 'assistant',
+                        content: assistantMessageMatch[1],
+                        timestamp: commit.created_at,
+                        commitId: commit.id,
+                        shortId: commit.short_id,
+                      });
+                    }
+                  }
+                });
+
+                messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                setProjectHistory(messages);
+                
+                // 如果有历史记录，确保 chatStarted 为 true
+                if (messages.length > 0) {
+                  setChatStarted(true);
+                }
+              }
+            } catch (error) {
+              console.error('Failed to refresh project history:', error);
+            }
+          };
+
+          loadProjectHistory();
+        }, 2000);
+      }
     },
   });
 
@@ -375,6 +551,11 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
               // Save project path for subsequent requests
               setExistingProjectPath(projectPath);
+              setSelectedProject(projectPath);
+              setShowHistoryPanel(true);
+
+              // 更新 URL 参数
+              setSearchParams({ project: projectPath });
             }
 
             // Use template files for the first request
@@ -402,16 +583,13 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
       append(
         {
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\n${messageContent}`,
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: []]\n\n${messageContent}`,
         },
         requestOptions,
       );
 
       setInput('');
       Cookies.remove(PROMPT_COOKIE_KEY);
-      setAttachmentList([]);
       resetEnhancer();
       textareaRef.current?.blur();
     } catch (error) {
@@ -447,6 +625,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
   };
 
+
+
   const isStreaming = isLoading || fakeLoading;
 
   const getSimpleProgressData = useMemo(() => {
@@ -478,80 +658,217 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     return progressItems;
   }, [issueData]);
 
+  // 判断是否有历史记录需要显示
+  const hasHistory = showHistoryPanel && selectedProject && projectHistory.length > 0;
+
   return (
     <div className="flex flex-col h-full">
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isStreaming}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        enabledTaskMode={false}
-        setEnabledTaskMode={() => {
-          /* Not implemented for IssueBreakdown */
-        }}
-        taskBranches={[]}
-        reloadTaskBranches={() => Promise.resolve([])}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
-        messageRef={messageRef}
-        scrollRef={scrollRef}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        handleRetry={() => {
-          /* Retry not implemented for IssueBreakdown */
-        }}
-        handleFork={() => {
-          /* Fork not implemented for IssueBreakdown */
-        }}
-        handleRevert={() => {
-          /* Revert not implemented for IssueBreakdown */
-        }}
-        onViewDiff={() => {
-          /* Diff view not implemented for IssueBreakdown */
-        }}
-        description={description}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
+      <div className="flex flex-1 overflow-hidden">
+        {/* 左侧面板：历史记录 + 聊天（当有历史记录时） */}
+        {hasHistory ? (
+          <div className="w-[650px] border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex flex-col">
+            {/* 历史记录区域 */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-auto p-4">
+                {loadingHistory ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">Loading history...</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {projectHistory.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`p-3 rounded-lg text-sm ${
+                          message.role === 'user'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 ml-4'
+                            : 'bg-gray-100 dark:bg-gray-800 mr-4'
+                        }`}
+                      >
+                        {message.role === 'user' ? (
+                          <div className="text-gray-900 dark:text-white">
+                            {message.content}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="text-gray-900 dark:text-white">
+                              {message.content}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-          );
-        }}
-        attachmentList={attachmentList}
-        setAttachmentList={setAttachmentList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbenchStore.clearAlert()}
-        data={getSimpleProgressData}
-        onProjectZipImport={() => {}}
-      />
+            {/* 聊天区域（在左侧面板下方） */}
+            <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <BaseChat
+                ref={animationScope}
+                textareaRef={textareaRef}
+                input={input}
+                showChat={showChat}
+                chatStarted={true}
+                isStreaming={isStreaming}
+                onStreamingChange={(streaming) => {
+                  streamingState.set(streaming);
+                }}
+                enhancingPrompt={enhancingPrompt}
+                promptEnhanced={promptEnhanced}
+                enabledTaskMode={false}
+                setEnabledTaskMode={() => {
+                  /* Not implemented for IssueBreakdown */
+                }}
+                taskBranches={[]}
+                reloadTaskBranches={() => Promise.resolve([])}
+                sendMessage={sendMessage}
+                model={model}
+                setModel={handleModelChange}
+                provider={provider}
+                setProvider={handleProviderChange}
+                providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
+                messageRef={messageRef}
+                scrollRef={scrollRef}
+                handleInputChange={(e) => {
+                  onTextareaChange(e);
+                  debouncedCachePrompt(e);
+                }}
+                handleStop={abort}
+                handleRetry={() => {
+                  /* Retry not implemented for IssueBreakdown */
+                }}
+                handleFork={() => {
+                  /* Fork not implemented for IssueBreakdown */
+                }}
+                handleRevert={() => {
+                  /* Revert not implemented for IssueBreakdown */
+                }}
+                onViewDiff={() => {
+                  /* Diff view not implemented for IssueBreakdown */
+                }}
+                description={description}
+                messages={messages.map((message, i) => {
+                  if (message.role === 'user') {
+                    return message;
+                  }
+
+                  return {
+                    ...message,
+                    content: parsedMessages[i] || '',
+                  };
+                })}
+                enhancePrompt={() => {
+                  enhancePrompt(
+                    input,
+                    (input) => {
+                      setInput(input);
+                      scrollTextArea();
+                    },
+                    model,
+                    provider,
+                  );
+                }}
+                attachmentList={[]}
+                setAttachmentList={undefined}
+                actionAlert={actionAlert}
+                clearAlert={() => workbenchStore.clearAlert()}
+                data={getSimpleProgressData}
+                onProjectZipImport={undefined}
+              />
+            </div>
+          </div>
+        ) : (
+          /* 中间聊天区域（没有历史记录时） */
+          <div className="flex-1 flex flex-col">
+            <BaseChat
+              ref={animationScope}
+              textareaRef={textareaRef}
+              input={input}
+              showChat={showChat}
+              chatStarted={chatStarted}
+              isStreaming={isStreaming}
+              onStreamingChange={(streaming) => {
+                streamingState.set(streaming);
+              }}
+              enhancingPrompt={enhancingPrompt}
+              promptEnhanced={promptEnhanced}
+              enabledTaskMode={false}
+              setEnabledTaskMode={() => {
+                /* Not implemented for IssueBreakdown */
+              }}
+              taskBranches={[]}
+              reloadTaskBranches={() => Promise.resolve([])}
+              sendMessage={sendMessage}
+              model={model}
+              setModel={handleModelChange}
+              provider={provider}
+              setProvider={handleProviderChange}
+              providerList={PROVIDER_LIST as unknown as ProviderInfo[]}
+              messageRef={messageRef}
+              scrollRef={scrollRef}
+              handleInputChange={(e) => {
+                onTextareaChange(e);
+                debouncedCachePrompt(e);
+              }}
+              handleStop={abort}
+              handleRetry={() => {
+                /* Retry not implemented for IssueBreakdown */
+              }}
+              handleFork={() => {
+                /* Fork not implemented for IssueBreakdown */
+              }}
+              handleRevert={() => {
+                /* Revert not implemented for IssueBreakdown */
+              }}
+              onViewDiff={() => {
+                /* Diff view not implemented for IssueBreakdown */
+              }}
+              description={description}
+              messages={messages.map((message, i) => {
+                if (message.role === 'user') {
+                  return message;
+                }
+
+                return {
+                  ...message,
+                  content: parsedMessages[i] || '',
+                };
+              })}
+              enhancePrompt={() => {
+                enhancePrompt(
+                  input,
+                  (input) => {
+                    setInput(input);
+                    scrollTextArea();
+                  },
+                  model,
+                  provider,
+                );
+              }}
+              attachmentList={[]}
+              setAttachmentList={undefined}
+              actionAlert={actionAlert}
+              clearAlert={() => workbenchStore.clearAlert()}
+              data={getSimpleProgressData}
+              onProjectZipImport={undefined}
+            />
+          </div>
+        )}
+
+        {/* 右侧区域（预留给其他内容） */}
+        {hasHistory && (
+          <div className="flex-1 bg-gray-50 dark:bg-gray-900/30 flex flex-col">
+            {/* Issue 列表内容 */}
+            <div className="flex-1 overflow-auto p-4">
+              <div className="text-center text-gray-500 dark:text-gray-400 text-sm">
+                Issue list from GitLab will be displayed here
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 });
