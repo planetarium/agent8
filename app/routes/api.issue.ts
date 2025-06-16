@@ -637,7 +637,7 @@ async function createGitlabIssuesFromTasks(
         issue.title,
         formatIssueDescription(issue), // First pass without dependency links
         {
-          labels: ['TODO'],
+          labels: ['TODO', 'agentic'],
         },
       );
 
