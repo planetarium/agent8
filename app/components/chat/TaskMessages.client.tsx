@@ -32,6 +32,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     const [isLoading, setIsLoading] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [reloadCount, setReloadCount] = useState(0);
+    const [issueTitle, setIssueTitle] = useState<string | null>(null);
 
     const repo = useStore(repoStore);
     const currentTaskBranch = repo.taskBranch;
@@ -39,6 +40,33 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     // Find the current branch info
     const branch = taskBranches?.find((branch) => branch.name === currentTaskBranch);
     const mergeStatus = branch?.mergeStatus;
+
+    // Load issue title if this is an issue branch
+    useEffect(() => {
+      const loadIssueTitle = async () => {
+        if (currentTaskBranch.startsWith('issue-')) {
+          const issueIid = extractIssueIidFromBranch(currentTaskBranch);
+
+          if (issueIid) {
+            try {
+              const projectPath = repo.path;
+              const issueResponse = await getIssue(projectPath, issueIid);
+
+              if (issueResponse.success) {
+                setIssueTitle(issueResponse.data.title);
+              }
+            } catch (error) {
+              console.error('Failed to load issue title:', error);
+              setIssueTitle(null);
+            }
+          }
+        } else {
+          setIssueTitle(null);
+        }
+      };
+
+      loadIssueTitle();
+    }, [currentTaskBranch, repo.path]);
 
     useEffect(() => {
       let intervalId: NodeJS.Timeout;
@@ -71,6 +99,21 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     }, [mergeStatus, reloadTaskBranches, repo.path, reloadCount, isStreaming]);
 
     const isProcessing = isLoading || isStreaming;
+
+    // Get display title
+    const getDisplayTitle = () => {
+      if (currentTaskBranch.startsWith('issue-') && issueTitle) {
+        // Truncate long titles with ellipsis
+        return issueTitle.length > 50 ? `${issueTitle.substring(0, 50)}...` : issueTitle;
+      }
+
+      return (
+        branch?.firstCommit?.title ||
+        `New ${
+          currentTaskBranch.startsWith('task-') ? 'Task' : currentTaskBranch.startsWith('issue-') ? 'Issue' : 'Branch'
+        }`
+      );
+    };
 
     return (
       <div
@@ -146,29 +189,12 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                 className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-[2px]')}
               >
                 <span
-                  className={`inline-block px-2 py-0.5 text-xs font-semibold text-white rounded-full mr-2 flex-shrink-0 ${
-                    currentTaskBranch.startsWith('task-')
-                      ? 'bg-cyan-600'
-                      : currentTaskBranch.startsWith('issue-')
-                        ? 'bg-green-600'
-                        : 'bg-gray-600'
-                  }`}
+                  className={`inline-block px-2 py-0.5 text-xs font-semibold text-white rounded-full mr-2 flex-shrink-0 bg-cyan-600`}
                 >
-                  {currentTaskBranch.startsWith('task-')
-                    ? 'Task'
-                    : currentTaskBranch.startsWith('issue-')
-                      ? 'Issue'
-                      : 'Branch'}
+                  Task
                 </span>
-                <h3 className="font-medium text-white truncate max-w-full">
-                  {branch?.firstCommit?.title ||
-                    `New ${
-                      currentTaskBranch.startsWith('task-')
-                        ? 'Task'
-                        : currentTaskBranch.startsWith('issue-')
-                          ? 'Issue'
-                          : 'Branch'
-                    }`}
+                <h3 className="font-medium text-white truncate max-w-full" title={issueTitle || undefined}>
+                  {getDisplayTitle()}
                 </h3>
               </div>
               {branch?.lastCommit?.message && (
