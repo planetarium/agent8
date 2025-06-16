@@ -48,6 +48,7 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
   }
 
   const user = context.user as { email: string; isActivated: boolean };
+
   // Get request body as JSON
   const requestData = (await request.json()) as {
     projectPath: string;
