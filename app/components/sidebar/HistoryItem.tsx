@@ -17,13 +17,15 @@ interface HistoryItemProps {
 export function HistoryItem({ item, onDelete }: HistoryItemProps) {
   const location = useLocation();
   const currentPath = location.pathname;
-  const issueProjectPath = `/issue?project=${item.urlId}`;
+
+  const [user, repo] = item.urlId.split('/');
+  const issueProjectPath = `/issue/${user}/${repo}`;
 
   const chat = useStore(chatStore);
-  const repo = useStore(repoStore);
+  const currentRepo = useStore(repoStore);
 
-  const isPathMatch = currentPath === `/issue` && location.search === `?project=${item.urlId}`;
-  const isRepoMatch = repo.path === item.urlId && chat.started;
+  const isPathMatch = currentPath === issueProjectPath;
+  const isRepoMatch = currentRepo.path === item.urlId && chat.started;
   const isActiveProject = isPathMatch || isRepoMatch;
 
   return (

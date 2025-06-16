@@ -14,7 +14,7 @@ import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
 import type { ProviderInfo } from '~/types/model';
-import { useSearchParams } from '@remix-run/react';
+import { useNavigate, useMatches } from '@remix-run/react';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { useIssueBreakdown } from '~/lib/hooks/useIssueBreakdown';
@@ -30,7 +30,6 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('IssueBreakdown');
 
-// 项目历史消息接口
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -40,23 +39,19 @@ interface ChatMessage {
   shortId: string;
 }
 
-// 解析用户消息，提取实际内容
 function parseUserMessage(content: string): string {
-  // 匹配 [Attachments: ...] 之后的内容
   const attachmentsMatch = content.match(/\[Attachments:\s*\[.*?\]\]\s*\n\n([\s\S]*)/);
 
   if (attachmentsMatch) {
     return attachmentsMatch[1].trim();
   }
 
-  // 如果没有找到 Attachments，尝试匹配 Provider 之后的内容
   const providerMatch = content.match(/\[Provider:\s*.*?\]\s*\n\n([\s\S]*)/);
 
   if (providerMatch) {
     return providerMatch[1].trim();
   }
 
-  // 如果都没有匹配到，返回原内容
   return content.trim();
 }
 
@@ -101,7 +96,6 @@ async function fetchTemplateFromAPI(
   }
 }
 
-// Function to retrieve project files from GitLab
 async function fetchGitlabProjectFiles(projectPath: string): Promise<FileMap> {
   try {
     if (!projectPath) {
@@ -189,10 +183,21 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSendMessageTime = useRef(0);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  let projectPathFromLoader: string | undefined;
+
+  try {
+    const matches = useMatches();
+    const currentMatch = matches.find((match) => match.id === 'routes/issue.$user.$repo');
+
+    projectPathFromLoader = (currentMatch?.data as any)?.projectPath;
+  } catch {
+    projectPathFromLoader = undefined;
+  }
+
   const [chatStarted, setChatStarted] = useState(() => {
-    // 如果有初始消息或者 URL 中有项目参数，就认为聊天已开始
-    return initialMessages.length > 0 || !!searchParams.get('project');
+    return initialMessages.length > 0 || !!projectPathFromLoader;
   });
   const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
   const [fakeLoading, setFakeLoading] = useState(false);
@@ -200,18 +205,17 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   const actionAlert = useStore(workbenchStore.alert);
   const { promptId, contextOptimizationEnabled } = useSettings();
 
-  // 项目相关状态 - 在初始化时就检查 URL 参数
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
-    return searchParams.get('project');
+    return projectPathFromLoader || null;
   });
   const [projectHistory, setProjectHistory] = useState<ChatMessage[]>([]);
   const [showHistoryPanel, setShowHistoryPanel] = useState(() => {
-    return !!searchParams.get('project');
+    return !!projectPathFromLoader;
   });
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [existingProjectPath, setExistingProjectPath] = useState(() => {
-    return searchParams.get('project') || '';
+    return projectPathFromLoader || '';
   });
 
   const [model, setModel] = useState(() => {
@@ -226,34 +230,26 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   const { showChat } = useStore(chatStore);
   const [animationScope, animate] = useAnimate();
 
-  // 从 URL 参数获取项目（处理 URL 变化）
   useEffect(() => {
-    const projectFromUrl = searchParams.get('project');
+    if (projectPathFromLoader !== selectedProject) {
+      setSelectedProject(projectPathFromLoader || null);
+      setExistingProjectPath(projectPathFromLoader || '');
+      setShowHistoryPanel(!!projectPathFromLoader);
 
-    if (projectFromUrl !== selectedProject) {
-      setSelectedProject(projectFromUrl);
-      setExistingProjectPath(projectFromUrl || '');
-      setShowHistoryPanel(!!projectFromUrl);
-
-      // 当从 URL 加载项目时，假设这是一个现有项目，设置 chatStarted 为 true
-      if (projectFromUrl) {
+      if (projectPathFromLoader) {
         setChatStarted(true);
       }
     }
-  }, [searchParams, selectedProject]);
+  }, [projectPathFromLoader, selectedProject]);
 
-  // 加载项目历史记录
   useEffect(() => {
     if (!selectedProject) {
       setProjectHistory([]);
+
       return;
     }
 
-    /*
-     * 如果是通过 onFinish 回调新设置的项目，跳过立即加载，等待延迟刷新
-     * 这样避免加载到错误的或缓存的数据
-     */
-    if (!chatStarted && selectedProject && !searchParams.get('project')) {
+    if (!chatStarted && selectedProject && !projectPathFromLoader) {
       return;
     }
 
@@ -265,6 +261,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
         if (response.success) {
           const commitsData = response.data.commits || [];
+
           const messages: ChatMessage[] = [];
 
           commitsData.forEach((commit: any) => {
@@ -302,7 +299,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
           messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
           setProjectHistory(messages);
 
-          // 如果有历史记录，设置 chatStarted 为 true，避免创建新项目
           if (messages.length > 0) {
             setChatStarted(true);
           }
@@ -315,7 +311,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     };
 
     loadProjectHistory();
-  }, [selectedProject]);
+  }, [selectedProject, chatStarted, projectPathFromLoader]);
 
   const requestBody = useMemo(
     () => ({
@@ -372,19 +368,19 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       const projectPathFromResponse = response?.data?.gitlab?.projectPath;
 
       if (!selectedProject && projectPathFromResponse) {
-        // 先清空历史记录，避免显示其他项目的记录
         setProjectHistory([]);
         setSelectedProject(projectPathFromResponse);
         setShowHistoryPanel(true);
-        setSearchParams({ project: projectPathFromResponse });
+
+        const [user, repo] = projectPathFromResponse.split('/');
+        navigate(`/issue/${user}/${repo}`);
+
         setExistingProjectPath(projectPathFromResponse);
       }
 
-      // 聊天完成后，如果有选中的项目，刷新历史记录
       if (selectedProject || existingProjectPath || projectPathFromResponse) {
         const projectToLoad = selectedProject || existingProjectPath || projectPathFromResponse;
 
-        // 延迟一下再刷新，确保 GitLab 数据已更新
         setTimeout(() => {
           const loadProjectHistory = async () => {
             try {
@@ -429,7 +425,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                 messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
                 setProjectHistory(messages);
 
-                // 如果有历史记录，确保 chatStarted 为 true
                 if (messages.length > 0) {
                   setChatStarted(true);
                 }
@@ -444,18 +439,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       }
     },
   });
-
-  useEffect(() => {
-    const prompt = searchParams.get('prompt');
-
-    if (prompt) {
-      setSearchParams({});
-      runAnimation();
-      append({
-        content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
-      });
-    }
-  }, [model, provider, searchParams]);
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
@@ -560,7 +543,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
 
       if (!chatStarted) {
         try {
-          // Select an appropriate template
           const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
@@ -569,7 +551,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
             throw new Error('No suitable template found');
           }
 
-          // Get template and create project
           templateResponse = await fetchTemplateFromAPI(template, title, projectRepo).catch((_error: Error) => {
             toast.warning('Failed to create template project\nPlease try again later');
             return null;
@@ -578,44 +559,30 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
           if (!templateResponse?.fileMap || Object.keys(templateResponse.fileMap).length === 0) {
             templateResponse = null;
           } else {
-            // Get project path and save it
             const projectPath = templateResponse?.project?.path;
 
             if (projectPath) {
               projectPathToUse = projectPath;
-
-              // Save project path for subsequent requests
               setExistingProjectPath(projectPath);
-
-              /*
-               * 不立即切换界面，等消息发送完成后再切换
-               * setSelectedProject(projectPath);
-               * setShowHistoryPanel(true);
-               * setSearchParams({ project: projectPath });
-               */
             }
 
-            // Use template files for the first request
             filesForRequest = templateResponse.fileMap;
             toast.success(`Project created successfully: ${projectPath || projectRepo}`);
           }
         } catch (_error) {
-          // Continue with empty template response
           console.log('Failed to create template project', _error);
         }
       } else if (existingProjectPath) {
-        // Subsequent requests: Get latest files from GitLab
         filesForRequest = await fetchGitlabProjectFiles(existingProjectPath).catch((_error) => {
           return {};
         });
       }
 
-      // Prepare API request parameters
       const requestOptions = {
-        createGitlabIssues: true, // Always enable GitLab integration
+        createGitlabIssues: true,
         existingProjectPath: projectPathToUse || undefined,
         projectName: templateResponse?.project?.name || '',
-        files: filesForRequest, // Send retrieved files (template files for first request, GitLab files for subsequent ones)
+        files: filesForRequest,
       };
 
       append(
@@ -682,7 +649,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       order: 1,
     });
 
-    // Add GitLab project information
     if (issueData.gitlab && issueData.gitlab.projectPath) {
       progressItems.push({
         type: 'progress',
@@ -696,21 +662,14 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
     return progressItems;
   }, [issueData]);
 
-  /*
-   * 判断是否有历史记录需要显示
-   * 如果有选中的项目且显示历史面板，就认为有历史记录（避免界面闪烁）
-   */
   const hasHistory = showHistoryPanel && selectedProject;
 
-  // 合并历史记录和当前聊天消息
   const allMessages = useMemo(() => {
     if (!hasHistory) {
       return [];
     }
 
-    // 如果有当前消息或正在流式传输，显示当前消息
     if (messages.length > 0 || isStreaming) {
-      // 将当前聊天的 messages 转换为 ChatMessage 格式
       const currentMessages: ChatMessage[] = messages.map((message, index) => ({
         id: `current-${index}`,
         role: message.role as 'user' | 'assistant',
@@ -720,10 +679,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
         shortId: 'current',
       }));
 
-      // 合并历史记录和当前消息，去除重复内容
       const combined = [...projectHistory];
 
-      // 只添加不重复的当前消息
       currentMessages.forEach((currentMsg) => {
         const isDuplicate = projectHistory.some(
           (historyMsg) =>
@@ -736,7 +693,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
       });
 
       return combined.sort((a, b) => {
-        // 历史记录按时间排序，当前消息放在最后
         if (a.commitId === 'current' && b.commitId !== 'current') {
           return 1;
         }
@@ -746,7 +702,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
         }
 
         if (a.commitId === 'current' && b.commitId === 'current') {
-          // 当前消息按索引排序
           const aIndex = parseInt(a.id.split('-')[1]);
           const bIndex = parseInt(b.id.split('-')[1]);
 
@@ -763,10 +718,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-1 overflow-hidden">
-        {/* 左侧面板：历史记录 + 聊天（当有历史记录时） */}
         {hasHistory ? (
           <div className="w-[650px] border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex flex-col">
-            {/* 历史记录区域 */}
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-auto p-4" ref={scrollRef}>
                 {loadingHistory ? (
@@ -794,7 +747,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                         )}
                       </div>
                     ))}
-                    {/* 显示加载状态 - 只有当有消息时才显示 */}
                     {isStreaming && messages.length > 0 && (
                       <div className="p-3 rounded-lg text-sm bg-gray-100 dark:bg-gray-800 mr-4">
                         <div className="text-gray-900 dark:text-white">
@@ -810,7 +762,6 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
               </div>
             </div>
 
-            {/* 聊天区域（在左侧面板下方） */}
             <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
               <BaseChat
                 ref={animationScope}
@@ -825,9 +776,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                 enhancingPrompt={enhancingPrompt}
                 promptEnhanced={promptEnhanced}
                 enabledTaskMode={false}
-                setEnabledTaskMode={() => {
-                  /* Not implemented for IssueBreakdown */
-                }}
+                setEnabledTaskMode={() => {}}
                 taskBranches={[]}
                 reloadTaskBranches={() => Promise.resolve([])}
                 sendMessage={sendMessage}
@@ -849,18 +798,10 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                   debouncedCachePrompt(e);
                 }}
                 handleStop={abort}
-                handleRetry={() => {
-                  /* Retry not implemented for IssueBreakdown */
-                }}
-                handleFork={() => {
-                  /* Fork not implemented for IssueBreakdown */
-                }}
-                handleRevert={() => {
-                  /* Revert not implemented for IssueBreakdown */
-                }}
-                onViewDiff={() => {
-                  /* Diff view not implemented for IssueBreakdown */
-                }}
+                handleRetry={() => {}}
+                handleFork={() => {}}
+                handleRevert={() => {}}
+                onViewDiff={() => {}}
                 description={description}
                 messages={[]}
                 enhancePrompt={() => {
@@ -898,9 +839,7 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
               enhancingPrompt={enhancingPrompt}
               promptEnhanced={promptEnhanced}
               enabledTaskMode={false}
-              setEnabledTaskMode={() => {
-                /* Not implemented for IssueBreakdown */
-              }}
+              setEnabledTaskMode={() => {}}
               taskBranches={[]}
               reloadTaskBranches={() => Promise.resolve([])}
               sendMessage={sendMessage}
@@ -922,18 +861,10 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
                 debouncedCachePrompt(e);
               }}
               handleStop={abort}
-              handleRetry={() => {
-                /* Retry not implemented for IssueBreakdown */
-              }}
-              handleFork={() => {
-                /* Fork not implemented for IssueBreakdown */
-              }}
-              handleRevert={() => {
-                /* Revert not implemented for IssueBreakdown */
-              }}
-              onViewDiff={() => {
-                /* Diff view not implemented for IssueBreakdown */
-              }}
+              handleRetry={() => {}}
+              handleFork={() => {}}
+              handleRevert={() => {}}
+              onViewDiff={() => {}}
               description={description}
               messages={messages.map((message, i) => {
                 if (message.role === 'user') {
@@ -966,10 +897,8 @@ const IssueBreakdownImpl = memo(({ description, initialMessages, setInitialMessa
           </div>
         )}
 
-        {/* 右侧区域（预留给其他内容） */}
         {hasHistory && (
           <div className="flex-1 bg-white dark:bg-gray-900 flex flex-col">
-            {/* Issue 列表内容 */}
             <div className="flex-1 overflow-auto p-4">
               <div className="text-center text-gray-500 dark:text-gray-400 text-sm">
                 Issue list from GitLab will be displayed here
