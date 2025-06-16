@@ -367,10 +367,9 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [files]);
 
   useEffect(() => {
-    // Set Workbench to show by default and set tasks as default view
-    workbenchStore.setShowWorkbench(true);
-
-    if (!chatStarted) {
+    if (chatStarted) {
+      // Set Workbench to show when chat starts and set tasks as default view
+      workbenchStore.setShowWorkbench(true);
       setSelectedView('tasks');
     }
   }, [chatStarted]);
