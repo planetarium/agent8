@@ -49,10 +49,22 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     // If repositoryName is not set, commit all files
     files = Object.entries(workbenchStore.files.get())
       .filter(([_, file]) => file && (file as any).content)
-      .map(([path, file]) => ({
-        path: path.replace(WORK_DIR + '/', ''),
-        content: (file as any).content,
-      }));
+      .reduce(
+        (acc, [path, file]) => {
+          const normalizedPath = path.replace(WORK_DIR + '/', '');
+
+          // Only add if path doesn't already exist
+          if (!acc.some((f) => f.path === normalizedPath)) {
+            acc.push({
+              path: normalizedPath,
+              content: (file as any).content,
+            });
+          }
+
+          return acc;
+        },
+        [] as Array<{ path: string; content: string }>,
+      );
   } else {
     // If not, commit the files in the message
     const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/bolt/g; // Sometimes, file tags do not close.

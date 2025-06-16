@@ -79,6 +79,12 @@ export class EditorStore {
     const documentState = documents[filePath];
 
     if (!documentState) {
+      // 파일이 없는 경우 새로운 document를 생성
+      this.documents.setKey(filePath, {
+        value: newContent,
+        filePath,
+        isBinary: false,
+      });
       return;
     }
 

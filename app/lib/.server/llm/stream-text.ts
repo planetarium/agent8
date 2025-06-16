@@ -112,13 +112,15 @@ export async function streamText(props: {
       getProjectDocsPrompt(files),
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
-    ].map(
-      (content) =>
-        ({
-          role: 'system',
-          content,
-        }) as CoreSystemMessage,
-    ),
+    ]
+      .filter(Boolean)
+      .map(
+        (content) =>
+          ({
+            role: 'system',
+            content,
+          }) as CoreSystemMessage,
+      ),
     {
       role: 'system',
       content: getProjectMdPrompt(files),

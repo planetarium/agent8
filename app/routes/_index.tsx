@@ -166,7 +166,9 @@ function AccessControlledChat() {
         };
       }
 
-      return () => {};
+      return () => {
+        // No cleanup needed
+      };
     }, [showMessage]);
 
     if (!showMessage) {
