@@ -33,7 +33,7 @@ import McpServerManager from '~/components/chat/McpServerManager';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
 import { TaskMessages } from './TaskMessages.client';
-import { TaskBranches } from './TaskBranches.client';
+
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
@@ -632,11 +632,6 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
                           onRevert={handleRevert}
                           onViewDiff={onViewDiff}
                         />
-                      )}
-                      {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
-                        <div className="mb-5">
-                          <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
-                        </div>
                       )}
                     </>
                   ) : null;
