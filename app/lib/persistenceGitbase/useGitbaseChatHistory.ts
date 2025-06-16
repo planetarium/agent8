@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
-import { getProjectCommits, fetchProjectFiles, getTaskBranches } from '~/lib/persistenceGitbase/api.client';
+import {
+  getProjectCommits,
+  fetchProjectFiles,
+  getTaskBranches,
+  revertBranch,
+} from '~/lib/persistenceGitbase/api.client';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
 
@@ -107,7 +112,17 @@ export function useGitbaseChatHistory() {
   );
 
   const load = useCallback(
-    async ({ page = 1, taskBranch, untilCommit }: { page?: number; taskBranch?: string; untilCommit?: string }) => {
+    async ({
+      page = 1,
+      taskBranch,
+      untilCommit,
+      force,
+    }: {
+      page?: number;
+      taskBranch?: string;
+      untilCommit?: string;
+      force?: boolean;
+    }) => {
       if (!projectPath) {
         setLoaded(true);
         setFilesLoaded(true);
@@ -119,18 +134,20 @@ export function useGitbaseChatHistory() {
 
       logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
 
-      // 이미 로딩 중이면 종료
-      if (loading) {
-        return;
-      }
+      if (!force) {
+        // 이미 로딩 중이면 종료
+        if (loading) {
+          return;
+        }
 
-      if (
-        projectPath === prevRequestParams.current.projectPath &&
-        page === prevRequestParams.current.page &&
-        taskBranch === prevRequestParams.current.taskBranch &&
-        untilCommit === prevRequestParams.current.untilCommit
-      ) {
-        return;
+        if (
+          projectPath === prevRequestParams.current.projectPath &&
+          page === prevRequestParams.current.page &&
+          taskBranch === prevRequestParams.current.taskBranch &&
+          untilCommit === prevRequestParams.current.untilCommit
+        ) {
+          return;
+        }
       }
 
       setLoaded(false);
@@ -219,8 +236,15 @@ export function useGitbaseChatHistory() {
   return {
     loaded: loaded && filesLoaded,
     chats,
-    revertTo: (hash: string) => {
-      load({ page: 1, taskBranch: prevRequestParams.current.taskBranch, untilCommit: hash });
+    revertTo: async (hash: string) => {
+      setLoading(true);
+
+      try {
+        await revertBranch(projectPath, repoStore.get().taskBranch, hash);
+        await load({ page: 1, taskBranch: repoStore.get().taskBranch, untilCommit: hash, force: true });
+      } finally {
+        setLoading(false);
+      }
     },
     project,
     files,

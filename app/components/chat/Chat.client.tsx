@@ -724,6 +724,19 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
+        const commit = await workbenchStore.commitModifiedFiles();
+
+        if (commit) {
+          setMessages((prev: Message[]) => [
+            ...prev,
+            {
+              id: commit.id,
+              role: 'assistant',
+              content: commit.message || 'The user changed the files.',
+            },
+          ]);
+        }
+
         if (repoStore.get().path) {
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
@@ -739,19 +752,6 @@ export const ChatImpl = memo(
             });
 
             setMessages(() => []);
-          }
-
-          const commit = await workbenchStore.commitModifiedFiles();
-
-          if (commit) {
-            setMessages((prev: Message[]) => [
-              ...prev,
-              {
-                id: commit.id,
-                role: 'assistant',
-                content: commit.message || 'The user changed the files.',
-              },
-            ]);
           }
         }
 

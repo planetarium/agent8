@@ -222,7 +222,7 @@ export default function Index() {
 
     if (isLocalDev) {
       const devToken =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiMTAwMDExIiwiaWF0IjoxNzQ5MDAzMzQwLCJleHAiOjE3NDk2MDgxNDB9.wDVZ1yCO_RjfPfMw5H4VmkBOFE9RyM-FSQkZiXBucWQ';
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiMTAwMDExIiwiaWF0IjoxNzQ5NzI2OTI5LCJleHAiOjE3NTAzMzE3Mjl9.SmeXYKxLMmmL3iUBFNak73CnHaE7bBsDbN3oTOnQWkA';
 
       updateV8AccessToken(devToken);
       window.postMessage(

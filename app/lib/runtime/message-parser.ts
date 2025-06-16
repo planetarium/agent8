@@ -80,7 +80,15 @@ function cleanoutCodeblockSyntax(content: string) {
 }
 
 function cleanEscapedTags(content: string) {
-  return content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  return content
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"');
 }
 
 export class StreamingMessageParser {
