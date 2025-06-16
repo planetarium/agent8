@@ -5,10 +5,15 @@ import { toast } from 'react-toastify';
 import { repoStore } from '~/lib/stores/repo';
 import { getProjectIssues, updateIssueLabels } from '~/lib/persistenceGitbase/api.client';
 import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
+
+// Export GitlabIssue type for use in other components
+export type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 import { TaskDetail } from './TaskDetail.client';
 
 interface TaskListProps {
   // Remove taskBranches props as we'll fetch issues directly
+  selectedTaskId?: string;
+  onTaskSelect?: (issue: GitlabIssue | null) => void;
 }
 
 type FilterType = 'All' | 'TODO' | 'WIP' | 'CONFIRM NEEDED' | 'DONE' | 'REJECT';
@@ -22,7 +27,7 @@ const FILTER_LABELS: Record<FilterType, string | undefined> = {
   REJECT: 'REJECT',
 };
 
-export function TaskList({}: TaskListProps) {
+export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
   const repo = useStore(repoStore);
   const [issues, setIssues] = useState<GitlabIssue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -156,6 +161,9 @@ export function TaskList({}: TaskListProps) {
       return;
     }
 
+    // Notify parent component about task selection
+    onTaskSelect?.(issue);
+
     // Show task detail instead of opening external link
     setSelectedIssue(issue);
   };
@@ -167,6 +175,9 @@ export function TaskList({}: TaskListProps) {
 
   const handleBackToList = () => {
     setSelectedIssue(null);
+
+    // Clear selection when going back to list
+    onTaskSelect?.(null);
   };
 
   const handleAddTodoLabel = async (issue: GitlabIssue) => {
@@ -408,9 +419,11 @@ export function TaskList({}: TaskListProps) {
                         key={issue.id}
                         onClick={() => clickable && handleIssueClick(issue)}
                         className={`group p-4 rounded-lg border transition-all duration-200 ${
-                          clickable
-                            ? 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColorAccent cursor-pointer hover:shadow-sm'
-                            : 'border-bolt-elements-borderColor/50 bg-bolt-elements-background-depth-1/50'
+                          selectedTaskId === issue.id.toString()
+                            ? 'border-bolt-elements-item-borderAccent bg-bolt-elements-item-backgroundAccent'
+                            : clickable
+                              ? 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColorAccent cursor-pointer hover:shadow-sm'
+                              : 'border-bolt-elements-borderColor/50 bg-bolt-elements-background-depth-1/50'
                         } ${hasNoLabels && !clickable ? 'opacity-60' : clickable ? '' : 'opacity-60'}`}
                       >
                         <div className="flex items-center gap-4">

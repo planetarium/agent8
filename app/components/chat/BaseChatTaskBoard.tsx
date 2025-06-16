@@ -6,7 +6,8 @@ import type { JSONValue, Message } from 'ai';
 import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
-import { Workbench } from '~/components/workbench/Workbench.client';
+import { Workspace } from '~/components/workspace/Workspace.client';
+import type { GitlabIssue } from '~/components/workspace/TaskList.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -87,6 +88,10 @@ interface BaseChatTaskBoardProps {
   handleFork?: (message: Message) => void;
   handleRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
+
+  // Task-related props
+  selectedTask?: GitlabIssue | null;
+  onTaskChange?: (task: GitlabIssue | null) => void;
 }
 
 export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBoardProps>(
@@ -129,6 +134,10 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
       handleFork,
       handleRevert,
       onViewDiff,
+
+      // Task-related props
+      selectedTask,
+      onTaskChange,
     },
     ref,
   ) => {
@@ -143,6 +152,9 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
+
+    // Task selection state
+    const [internalSelectedTask, setInternalSelectedTask] = useState<GitlabIssue | null>(selectedTask || null);
 
     const prompts = [
       'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.',
@@ -191,6 +203,22 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
     useEffect(() => {
       onStreamingChange?.(isStreaming);
     }, [isStreaming, onStreamingChange]);
+
+    // Handle task selection changes
+    useEffect(() => {
+      if (selectedTask !== internalSelectedTask) {
+        setInternalSelectedTask(selectedTask || null);
+      }
+    }, [selectedTask]);
+
+    const handleTaskSelect = useCallback(
+      (task: GitlabIssue | null) => {
+        console.log('Task selected in BaseChatTaskBoard:', task);
+        setInternalSelectedTask(task);
+        onTaskChange?.(task);
+      },
+      [onTaskChange],
+    );
 
     // State to store scroll container ref
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
@@ -1066,10 +1094,12 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
           </div>
           <ClientOnly>
             {() => (
-              <Workbench
+              <Workspace
                 actionRunner={actionRunner ?? ({} as ActionRunner)}
                 chatStarted={chatStarted}
                 isStreaming={isStreaming}
+                selectedTaskId={internalSelectedTask?.id.toString()}
+                onTaskSelect={handleTaskSelect}
               />
             )}
           </ClientOnly>
