@@ -729,20 +729,20 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
-        const commit = await workbenchStore.commitModifiedFiles();
-
-        if (commit) {
-          setMessages((prev: Message[]) => [
-            ...prev,
-            {
-              id: commit.id,
-              role: 'assistant',
-              content: commit.message || 'The user changed the files.',
-            },
-          ]);
-        }
-
         if (repoStore.get().path) {
+          const commit = await workbenchStore.commitModifiedFiles();
+
+          if (commit) {
+            setMessages((prev: Message[]) => [
+              ...prev,
+              {
+                id: commit.id,
+                role: 'assistant',
+                content: commit.message || 'The user changed the files.',
+              },
+            ]);
+          }
+
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
 
@@ -839,6 +839,11 @@ export const ChatImpl = memo(
             title: source.title,
             taskBranch: DEFAULT_TASK_BRANCH,
           });
+
+          // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
+          if (!isEnabledGitbasePersistence) {
+            changeChatUrl(source.title, { replace: true });
+          }
 
           const messages = [
             {
