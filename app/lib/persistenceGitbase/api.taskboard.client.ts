@@ -8,7 +8,7 @@ import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractTextContent } from '~/utils/message';
-import { changeChatUrl } from '~/utils/url';
+import { changeChatTaskBoardUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
@@ -142,11 +142,11 @@ ${content
       title: result.data.project.description.split('\n')[0] || result.data.project.name,
       taskBranch,
     });
-    changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
+    changeChatTaskBoardUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   }
 
   if (revertTo) {
-    changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
+    changeChatTaskBoardUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   }
 
   callback?.(result.data.commitHash);
@@ -192,7 +192,7 @@ export const commitUserChanged = async () => {
   }
 
   if (revertTo) {
-    changeChatUrl(location.pathname, { replace: true, searchParams: { revertTo: result.data.commitHash } });
+    changeChatTaskBoardUrl(location.pathname, { replace: true, searchParams: { revertTo: result.data.commitHash } });
   }
 
   return result;

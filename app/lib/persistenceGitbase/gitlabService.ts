@@ -7,6 +7,7 @@ import type {
   GitlabProtectedBranch,
   CommitAction,
   FileContent,
+  GitlabIssue,
 } from './types';
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
@@ -1262,6 +1263,80 @@ export class GitlabService {
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
+    }
+  }
+
+  async getProjectIssues(
+    projectPath: string,
+    page: number = 1,
+    perPage: number = 20,
+    state: 'opened' | 'closed' | 'all' = 'opened',
+    additionalLabel?: string,
+  ): Promise<{
+    issues: GitlabIssue[];
+    total: number;
+    hasMore: boolean;
+  }> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // Build labels parameter - always include agentic
+      let labels = 'agentic';
+
+      if (additionalLabel) {
+        labels += `,${additionalLabel}`;
+      }
+
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/issues`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          state,
+          page,
+          per_page: perPage,
+          order_by: 'created_at',
+          sort: 'asc', // Change to ascending order (oldest first)
+          labels, // Use the constructed labels string
+        },
+      });
+
+      const issues = response.data as GitlabIssue[];
+      const totalIssues = parseInt(response.headers['x-total'] || '0', 10);
+      const hasMore = page * perPage < totalIssues;
+
+      return {
+        issues,
+        total: totalIssues,
+        hasMore,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get project issues: ${errorMessage}`);
+    }
+  }
+
+  async updateIssueLabels(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          labels: labels.join(','),
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update issue labels: ${errorMessage}`);
     }
   }
 }
