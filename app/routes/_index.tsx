@@ -166,7 +166,7 @@ function AccessControlledChat() {
         };
       }
 
-      return () => {};
+      return undefined;
     }, [showMessage]);
 
     if (!showMessage) {
@@ -216,6 +216,24 @@ export default function Index() {
       });
     }
   }, [repoPath, repoName]);
+
+  useEffect(() => {
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (isLocalDev) {
+      const devToken =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiMTAwMDExIiwiaWF0IjoxNzQ5NzI2OTI5LCJleHAiOjE3NTAzMzE3Mjl9.SmeXYKxLMmmL3iUBFNak73CnHaE7bBsDbN3oTOnQWkA';
+
+      updateV8AccessToken(devToken);
+      window.postMessage(
+        {
+          type: 'INIT',
+          payload: { accessToken: devToken },
+        },
+        '*',
+      );
+    }
+  }, []);
 
   const isAccessControlEnabled = import.meta.env.VITE_ACCESS_CONTROL_ENABLED === 'true';
 
