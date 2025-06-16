@@ -7,6 +7,7 @@ import React, { type RefCallback, useCallback, useEffect, useState } from 'react
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workspace } from '~/components/workspace/Workspace.client';
+import { Workbench } from '~/components/workbench/Workbench.client';
 import type { GitlabIssue } from '~/components/workspace/TaskList.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
@@ -1093,15 +1094,26 @@ export const BaseChatTaskBoard = React.forwardRef<HTMLDivElement, BaseChatTaskBo
             </div>
           </div>
           <ClientOnly>
-            {() => (
-              <Workspace
-                actionRunner={actionRunner ?? ({} as ActionRunner)}
-                chatStarted={chatStarted}
-                isStreaming={isStreaming}
-                selectedTaskId={internalSelectedTask?.id.toString()}
-                onTaskSelect={handleTaskSelect}
-              />
-            )}
+            {() => {
+              const currentBranch = useStore(repoStore).taskBranch;
+              const isDefaultBranch = currentBranch === DEFAULT_TASK_BRANCH;
+
+              return isDefaultBranch ? (
+                <Workspace
+                  actionRunner={actionRunner ?? ({} as ActionRunner)}
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                  selectedTaskId={internalSelectedTask?.id.toString()}
+                  onTaskSelect={handleTaskSelect}
+                />
+              ) : (
+                <Workbench
+                  actionRunner={actionRunner ?? ({} as ActionRunner)}
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                />
+              );
+            }}
           </ClientOnly>
         </div>
       </div>

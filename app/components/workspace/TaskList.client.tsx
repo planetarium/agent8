@@ -9,6 +9,8 @@ import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 // Export GitlabIssue type for use in other components
 export type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 import { TaskDetail } from './TaskDetail.client';
+import { getIssueBranch } from '~/lib/persistenceGitbase/api.taskboard.client';
+import { lastActionStore } from '~/lib/stores/lastAction';
 
 interface TaskListProps {
   // Remove taskBranches props as we'll fetch issues directly
@@ -155,17 +157,42 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
     setActiveFilter(filter);
   };
 
-  const handleIssueClick = (issue: GitlabIssue) => {
+  const handleIssueClick = async (issue: GitlabIssue) => {
     // Check if issue is clickable (has labels other than agentic and not TODO)
     if (!isIssueClickable(issue)) {
       return;
     }
 
-    // Notify parent component about task selection
-    onTaskSelect?.(issue);
+    try {
+      // Find the branch associated with this issue
+      const result = await getIssueBranch(repo.path, issue.iid);
 
-    // Show task detail instead of opening external link
-    setSelectedIssue(issue);
+      if (result.success && result.data.branchName) {
+        // Switch to the issue's branch
+        lastActionStore.set({ action: 'LOAD' });
+        repoStore.set({
+          ...repoStore.get(),
+          taskBranch: result.data.branchName,
+        });
+
+        // Notify parent component about task selection
+        onTaskSelect?.(issue);
+
+        toast.success(`Switched to branch: ${result.data.branchName}`);
+      } else {
+        // If no branch found, show task detail as fallback
+        setSelectedIssue(issue);
+        onTaskSelect?.(issue);
+        toast.info('No associated branch found. Showing task details.');
+      }
+    } catch (error) {
+      console.error('Error switching to issue branch:', error);
+
+      // Fallback to showing task detail
+      setSelectedIssue(issue);
+      onTaskSelect?.(issue);
+      toast.error('Failed to switch branch. Showing task details.');
+    }
   };
 
   const isIssueClickable = (_issue: GitlabIssue) => {

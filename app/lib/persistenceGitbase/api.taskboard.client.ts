@@ -389,3 +389,14 @@ export const updateIssueLabels = async (projectPath: string, issueIid: number, l
 
   return response.data;
 };
+
+export const getIssueBranch = async (projectPath: string, issueIid: number) => {
+  const response = await axios.get('/api/gitlab/issue-branch', {
+    params: {
+      projectPath,
+      issueIid,
+    },
+  });
+
+  return response.data;
+};

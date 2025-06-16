@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
-import { repoStore } from '~/lib/stores/repo';
+import { repoStore, DEFAULT_TASK_BRANCH } from '~/lib/stores/repo';
 import {
   getProjectCommits,
   fetchProjectFiles,
@@ -174,8 +174,11 @@ export function useGitbaseChatHistory() {
           ]);
         }
 
+        // If current branch is DEFAULT_TASK_BRANCH, use 'issue' branch for chat history
+        const chatBranch = taskBranch === DEFAULT_TASK_BRANCH ? 'issue' : taskBranch;
+
         const data = (await getProjectCommits(projectPath, {
-          branch: taskBranch,
+          branch: chatBranch,
           untilCommit,
           page,
         })) as CommitResponse;

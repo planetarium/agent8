@@ -144,11 +144,30 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               <div
                 className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-[2px]')}
               >
-                <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
-                  Task
+                <span
+                  className={`inline-block px-2 py-0.5 text-xs font-semibold text-white rounded-full mr-2 flex-shrink-0 ${
+                    currentTaskBranch.startsWith('task-')
+                      ? 'bg-cyan-600'
+                      : currentTaskBranch.startsWith('issue-')
+                        ? 'bg-green-600'
+                        : 'bg-gray-600'
+                  }`}
+                >
+                  {currentTaskBranch.startsWith('task-')
+                    ? 'Task'
+                    : currentTaskBranch.startsWith('issue-')
+                      ? 'Issue'
+                      : 'Branch'}
                 </span>
                 <h3 className="font-medium text-white truncate max-w-full">
-                  {branch?.firstCommit?.title || 'New Task'}
+                  {branch?.firstCommit?.title ||
+                    `New ${
+                      currentTaskBranch.startsWith('task-')
+                        ? 'Task'
+                        : currentTaskBranch.startsWith('issue-')
+                          ? 'Issue'
+                          : 'Branch'
+                    }`}
                 </h3>
               </div>
               {branch?.lastCommit?.message && (

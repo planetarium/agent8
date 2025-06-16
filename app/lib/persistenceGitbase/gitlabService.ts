@@ -831,16 +831,29 @@ export class GitlabService {
     try {
       const projectId = encodeURIComponent(projectPath);
 
-      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
-        headers: {
-          'PRIVATE-TOKEN': this.gitlabToken,
-        },
-        params: {
-          search: '^task-',
-          per_page: 100,
-        },
-      });
-      const branches = response.data;
+      // Get both task- and issue- branches
+      const [taskBranchesResponse, issueBranchesResponse] = await Promise.all([
+        axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            search: 'task-',
+            per_page: 100,
+          },
+        }),
+        axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            search: 'issue-',
+            per_page: 100,
+          },
+        }),
+      ]);
+
+      const branches = [...taskBranchesResponse.data, ...issueBranchesResponse.data];
 
       // Get merge requests for this project using gitlab-api
       const openMergeRequestsResponse = await axios.get(
@@ -1337,6 +1350,79 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to update issue labels: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Find branch associated with an issue
+   * Looks for branches that contain the issue number in their name or merge requests that reference the issue
+   */
+  async getIssueBranch(projectPath: string, issueIid: number): Promise<string | null> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // First, try to find branches that contain the issue number
+      const branchesResponse = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          per_page: 100,
+        },
+      });
+
+      const branches = branchesResponse.data;
+
+      // Look for branches that contain the issue number
+      const issueBranches = branches.filter((branch: any) => {
+        const branchName = branch.name.toLowerCase();
+        return (
+          branchName.includes(`issue-${issueIid}`) ||
+          branchName.includes(`${issueIid}-`) ||
+          branchName.includes(`-${issueIid}`) ||
+          branchName.includes(`#${issueIid}`)
+        );
+      });
+
+      if (issueBranches.length > 0) {
+        // Return the most recently created branch
+        return issueBranches[0].name;
+      }
+
+      // If no branch found by name, look for merge requests that reference this issue
+      const mergeRequestsResponse = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          state: 'opened',
+          per_page: 100,
+        },
+      });
+
+      const mergeRequests = mergeRequestsResponse.data;
+
+      // Look for merge requests that mention this issue in title or description
+      const issueMR = mergeRequests.find((mr: any) => {
+        const title = mr.title.toLowerCase();
+        const description = (mr.description || '').toLowerCase();
+
+        return (
+          title.includes(`#${issueIid}`) ||
+          title.includes(`issue ${issueIid}`) ||
+          description.includes(`#${issueIid}`) ||
+          description.includes(`issue ${issueIid}`)
+        );
+      });
+
+      if (issueMR) {
+        return issueMR.source_branch;
+      }
+
+      return null;
+    } catch (error) {
+      logger.error('Failed to find issue branch:', error);
+      return null;
     }
   }
 }
