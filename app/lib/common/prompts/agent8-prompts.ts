@@ -384,7 +384,7 @@ export function getProjectMdPrompt(files: any) {
   return `
 <PROJECT_DESCRIPTION>
     This is a PROJECT.md file that describes the project. The contents are always up-to-date, so please do not read this file through tools.
-    <boltAction type="file" filePath="PROJECT.md">ew
+    <boltAction type="file" filePath="PROJECT.md">
       ${projectMd?.type === 'file' ? projectMd.content : ''}
     </boltAction>
 </PROJECT_DESCRIPTION>
