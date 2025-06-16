@@ -95,7 +95,7 @@ function extractUserPrompt(messages: IssueMessage[]): string {
 function buildIssueBreakdownSystemPrompt(): string {
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
-Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 15 tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
+Analyze the provided requirement content and generate a concise list of top-level development tasks, with no more than 5 tasks. Each task should represent a logical unit of work needed to implement the requirements, focusing on the most direct and effective implementation approach while avoiding unnecessary complexity or over-engineering.
 
 **Task Breakdown Guidelines:**
 1. Each task should be atomic and focused on a single responsibility, following the latest best practices and standards
@@ -511,8 +511,6 @@ async function executeEnhancedIssueBreakdown(
     let allText = '';
 
     for await (const part of result.fullStream) {
-      logger.info('stream part:', JSON.stringify(part));
-
       if (part.type === 'text-delta' && part.textDelta) {
         allText += part.textDelta;
       }
