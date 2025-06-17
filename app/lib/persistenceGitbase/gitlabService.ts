@@ -937,6 +937,72 @@ export class GitlabService {
     }
   }
 
+  /**
+   * Mark a draft merge request as ready for review
+   */
+  async markMergeRequestReady(
+    projectPath: string,
+    mergeRequestIid: number,
+  ): Promise<{
+    message: string;
+    mergeRequestIid: number;
+  }> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // First, get the current merge request to check its title and status
+      const mrResponse = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        },
+      );
+
+      const currentMR = mrResponse.data;
+      const updateData: any = {};
+
+      // Remove work_in_progress flag
+      if (currentMR.work_in_progress) {
+        updateData.work_in_progress = false;
+      }
+
+      // Remove "Draft:" or "WIP:" prefix from title if present
+      let newTitle = currentMR.title;
+
+      if (newTitle.startsWith('Draft: ') || newTitle.startsWith('draft: ')) {
+        newTitle = newTitle.replace(/^[Dd]raft: /, '');
+        updateData.title = newTitle;
+      } else if (newTitle.startsWith('WIP: ') || newTitle.startsWith('wip: ')) {
+        newTitle = newTitle.replace(/^[Ww][Ii][Pp]: /, '');
+        updateData.title = newTitle;
+      }
+
+      // Only make the API call if there's something to update
+      if (Object.keys(updateData).length > 0) {
+        await axios.put(
+          `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}`,
+          updateData,
+          {
+            headers: {
+              'PRIVATE-TOKEN': this.gitlabToken,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+
+      return {
+        message: `Successfully marked merge request #${mergeRequestIid} as ready`,
+        mergeRequestIid,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to mark merge request as ready: ${errorMessage}`);
+    }
+  }
+
   async mergeTaskBranch(
     projectPath: string,
     fromBranch: string,
@@ -965,6 +1031,21 @@ export class GitlabService {
       }
 
       const mergeRequest = mrs[0];
+
+      // Check if MR is in draft state and mark it as ready if needed
+      if (mergeRequest.draft || mergeRequest.work_in_progress) {
+        try {
+          await this.markMergeRequestReady(projectPath, mergeRequest.iid);
+          logger.info(`Marked merge request #${mergeRequest.iid} as ready`);
+
+          // Wait a moment for the status to update
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+          logger.warn(`Failed to mark merge request as ready: ${error}`);
+
+          // Continue with merge attempt even if marking as ready fails
+        }
+      }
 
       if (!mergeRequest.merge_status || mergeRequest.merge_status === 'cannot_be_merged') {
         throw new Error(`Branch cannot be merged automatically (status: ${mergeRequest.merge_status})`);
