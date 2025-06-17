@@ -103,10 +103,10 @@ async function updateVibeLibrariesDocs(files: any) {
   }
 
   try {
-    logger.debug(`updateVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}`);
     Object.keys(vibeStarter3dEnvironmentDocs).forEach((key) => delete vibeStarter3dEnvironmentDocs[key]);
 
     const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}@${version}/files/docs`;
+
     const docsResponse = await fetchWithCache(docsUrl);
     const html = await docsResponse.text();
 
@@ -121,8 +121,6 @@ async function updateVibeLibrariesDocs(files: any) {
     }
 
     loadedVibeStarter3dEnvironmentVersion = version;
-
-    logger.debug(`updateVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME} done`);
   } catch (error) {
     logger.error(`updateVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME} error: ${error}`);
     loadedVibeStarter3dEnvironmentVersion = undefined;

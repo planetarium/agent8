@@ -60,8 +60,8 @@ async function getLatestVersion(packageName: string): Promise<string> {
 }
 
 export async function fetchWithCache(url: string, cacheNamespace?: Cache): Promise<Response> {
-  const isCacheAvailable = cacheNamespace || (typeof caches !== 'undefined' && caches);
-  const cache = cacheNamespace ?? (isCacheAvailable ? (caches as CloudflareCacheStorage).default : undefined);
+  const isExistCaches = typeof caches !== 'undefined';
+  const cache = cacheNamespace ?? (isExistCaches ? (caches as CloudflareCacheStorage).default : undefined);
 
   try {
     if (cache) {
