@@ -9,7 +9,7 @@ import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 // Export GitlabIssue type for use in other components
 export type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 import { TaskDetail } from './TaskDetail.client';
-import { getIssueBranch } from '~/lib/persistenceGitbase/api.taskboard.client';
+import { getIssueBranch } from '~/lib/persistenceGitbase/api.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 
 interface TaskListProps {
