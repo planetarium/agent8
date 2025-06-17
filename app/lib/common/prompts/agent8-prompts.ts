@@ -6,9 +6,7 @@ import path from 'path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
 
 const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
-const vibeStarter3dDocs: Record<string, string> = {};
-
-let loadedVibeStarter3dVersion: string | undefined = undefined;
+const vibeStarter3dDocs: Record<string, Record<string, string>> = {};
 
 export const getAgent8Prompt = (
   cwd: string = WORK_DIR,
@@ -400,15 +398,21 @@ function is3dProject(files: any): boolean {
 }
 
 export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
-  if (!is3dProject(files)) {
-    return '';
-  }
+  let version: string | undefined;
 
   try {
-    const version = await resolvePackageVersion(VIBE_STARTER_3D_PACKAGE_NAME, files);
+    if (!is3dProject(files)) {
+      return '';
+    }
 
-    if (version !== loadedVibeStarter3dVersion) {
-      Object.keys(vibeStarter3dDocs).forEach((key) => delete vibeStarter3dDocs[key]);
+    version = await resolvePackageVersion(VIBE_STARTER_3D_PACKAGE_NAME, files);
+
+    if (!version) {
+      return '';
+    }
+
+    if (!vibeStarter3dDocs[version]) {
+      vibeStarter3dDocs[version] = {};
 
       const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/files/docs`;
       const docsResponse = await fetchWithCache(docsUrl);
@@ -421,17 +425,20 @@ export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
         const markdownResponse = await fetchWithCache(markdownUrl);
         const markdown = await markdownResponse.text();
         const keyName = path.basename(markdownFileName, '.md');
-        vibeStarter3dDocs[keyName] = markdown;
+        vibeStarter3dDocs[version][keyName] = markdown;
       }
-
-      loadedVibeStarter3dVersion = version;
     }
   } catch {
-    loadedVibeStarter3dVersion = undefined;
+    // Delete the object for this version if an error occurs and version is defined
+    if (version && vibeStarter3dDocs[version]) {
+      delete vibeStarter3dDocs[version];
+    }
+
     return '';
   }
 
-  const docsContent = Object.entries(vibeStarter3dDocs)
+  const currentVibeStarter3dDocs = vibeStarter3dDocs[version];
+  const docsContent = Object.entries(currentVibeStarter3dDocs)
     .map(
       ([key, content]) => `
       <doc_file name="${key}">

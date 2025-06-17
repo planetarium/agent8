@@ -7,9 +7,7 @@ import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVe
 
 const logger = createScopedLogger('docs-tools');
 const VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME = 'vibe-starter-3d-environment';
-const vibeStarter3dEnvironmentDocs: Record<string, string> = {};
-
-let loadedVibeStarter3dEnvironmentVersion: string | undefined = undefined;
+const vibeStarter3dEnvironmentDocs: Record<string, Record<string, string>> = {};
 
 interface DocTool {
   tool_name: string;
@@ -26,9 +24,6 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
   const isProduction = env.USE_PRODUCTION_VECTOR_DB === 'true';
 
   try {
-    // Update vibe-starter-3d-environment docs
-    await updateVibeLibrariesDocs(files);
-
     // Create Supabase client
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -63,16 +58,19 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
       }
     }
 
-    if (loadedVibeStarter3dEnvironmentVersion) {
+    // Get vibe-starter-3d-environment docs
+    const currentVibeStarter3dEnvironmentDocs = await getVibeLibrariesDocs(files);
+
+    if (currentVibeStarter3dEnvironmentDocs) {
       const keysToRemove: string[] = [];
       const checkToolName = 'vibe_starter_3d_environment';
       Object.keys(tools).forEach((key) => {
         if (key.includes(checkToolName)) {
           logger.debug(`Found docTools key containing '${checkToolName}': ${key}`);
 
-          if (vibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
+          if (currentVibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
             tools[key].execute = async () => {
-              return { content: vibeStarter3dEnvironmentDocs[key] };
+              return { content: currentVibeStarter3dEnvironmentDocs[key] };
             };
           } else {
             keysToRemove.push(key);
@@ -95,15 +93,23 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
   }
 }
 
-async function updateVibeLibrariesDocs(files: any) {
-  const version = await resolvePackageVersion(VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME, files);
-
-  if (version === loadedVibeStarter3dEnvironmentVersion) {
-    return;
-  }
+async function getVibeLibrariesDocs(files: any): Promise<Record<string, string> | undefined> {
+  let version: string | undefined;
 
   try {
-    Object.keys(vibeStarter3dEnvironmentDocs).forEach((key) => delete vibeStarter3dEnvironmentDocs[key]);
+    version = await resolvePackageVersion(VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME, files);
+
+    if (!version) {
+      return undefined;
+    }
+
+    // If the documentation for this version is already loaded, return the existing object
+    if (vibeStarter3dEnvironmentDocs[version]) {
+      return vibeStarter3dEnvironmentDocs[version];
+    }
+
+    // Initialize an object for the new version of documentation
+    vibeStarter3dEnvironmentDocs[version] = {};
 
     const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}@${version}/files/docs`;
 
@@ -117,12 +123,18 @@ async function updateVibeLibrariesDocs(files: any) {
       const markdownResponse = await fetchWithCache(markdownUrl);
       const markdown = await markdownResponse.text();
       const keyName = path.basename(markdownFileName, '.md');
-      vibeStarter3dEnvironmentDocs[keyName] = markdown;
+      vibeStarter3dEnvironmentDocs[version][keyName] = markdown;
     }
 
-    loadedVibeStarter3dEnvironmentVersion = version;
+    return vibeStarter3dEnvironmentDocs[version];
   } catch (error) {
-    logger.error(`updateVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME} error: ${error}`);
-    loadedVibeStarter3dEnvironmentVersion = undefined;
+    logger.error(`getVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME} error: ${error}`);
+
+    // Delete the object for this version if an error occurs and version is defined
+    if (version && vibeStarter3dEnvironmentDocs[version]) {
+      delete vibeStarter3dEnvironmentDocs[version];
+    }
+
+    return undefined;
   }
 }
