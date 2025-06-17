@@ -22,11 +22,25 @@ interface MessagesProps {
   onFork?: (message: Message) => void;
   onRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
+  hasMore?: boolean;
+  loadingBefore?: boolean;
+  loadBefore?: () => Promise<void>;
 }
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { id, isStreaming = false, messages = [], onRetry, onFork, onRevert, onViewDiff } = props;
+    const {
+      id,
+      isStreaming = false,
+      messages = [],
+      onRetry,
+      onFork,
+      onRevert,
+      onViewDiff,
+      hasMore,
+      loadingBefore,
+      loadBefore,
+    } = props;
     const profile = useStore(profileStore);
 
     return (
@@ -35,6 +49,24 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-center' : '')}
         ref={ref}
       >
+        {hasMore && !isStreaming && (
+          <div className="flex justify-center mb-4">
+            {loadingBefore ? (
+              <div className="flex items-center justify-center flex-grow">
+                <div style={{ width: '30px', height: '36px', aspectRatio: '1/1' }}>
+                  <Lottie animationData={loadingAnimationData} loop={true} />
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => loadBefore?.()}
+                className="px-4 py-2 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-md transition-colors duration-200 font-medium text-sm"
+              >
+                Load More
+              </button>
+            )}
+          </div>
+        )}
         {messages.length > 0
           ? messages.map((message, index) => {
               const { role, id: messageId, annotations } = message;

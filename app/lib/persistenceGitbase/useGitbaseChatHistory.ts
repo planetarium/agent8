@@ -63,6 +63,7 @@ export function useGitbaseChatHistory() {
   const [taskBranches, setTaskBranches] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingBefore, setLoadingBefore] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -138,9 +139,13 @@ export function useGitbaseChatHistory() {
         }
       }
 
-      setLoaded(false);
-      setLoading(true);
-      setError(null);
+      if (page === 1) {
+        setLoaded(false);
+        setLoading(true);
+        setError(null);
+      } else {
+        setLoadingBefore(true);
+      }
 
       try {
         const queryParams = new URLSearchParams({
@@ -189,7 +194,7 @@ export function useGitbaseChatHistory() {
         const newMessages = parseCommitMessages(data.data.commits);
 
         if (page > 1) {
-          setChats((prevChats) => [...prevChats, ...newMessages.reverse()]);
+          setChats((prevChats) => [...newMessages.reverse(), ...prevChats]);
         } else {
           setChats(newMessages.reverse());
         }
@@ -203,6 +208,7 @@ export function useGitbaseChatHistory() {
       } finally {
         setLoaded(true);
         setLoading(false);
+        setLoadingBefore(false);
       }
     },
     [projectPath, loading, fetchProjectFiles],
@@ -210,7 +216,7 @@ export function useGitbaseChatHistory() {
 
   // Load more commits
   const loadBefore = useCallback(async () => {
-    if (loading || !hasMore) {
+    if (loadingBefore || !hasMore) {
       return;
     }
 
@@ -253,6 +259,7 @@ export function useGitbaseChatHistory() {
     enabledTaskMode,
     setEnabledTaskMode,
     loading: loading || loadingFiles,
+    loadingBefore,
     error,
     hasMore,
     loadBefore,
