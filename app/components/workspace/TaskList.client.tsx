@@ -57,7 +57,7 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
 
     try {
       const result = await getProjectIssues(repo.path, {
-        state: 'opened',
+        state: 'all',
         perPage: 20,
         page,
         additionalLabel: FILTER_LABELS[filter],
@@ -139,7 +139,7 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
   useEffect(() => {
     if (!loading && issues.length > 0) {
       // Use setTimeout to ensure DOM is updated
-      const timer = setTimeout(checkAndLoadIfNeeded, 100);
+      const timer = setTimeout(checkAndLoadIfNeeded, 3000);
       return () => clearTimeout(timer);
     }
 
@@ -310,7 +310,7 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
   const getLabelColor = (label: string) => {
     // Define specific colors for common label types
     const labelColors: Record<string, string> = {
-      TODO: '#6B7280', // Gray - not started
+      TODO: '#F59E0B', // Orange/Amber - warning color
       WIP: '#10B981', // Green - in progress
       'CONFIRM NEEDED': '#3B82F6', // Blue - needs confirmation
       DONE: '#6B7280', // Gray - completed
@@ -386,7 +386,7 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
             <p className="text-base text-bolt-elements-textSecondary">
               {loading
                 ? 'Loading...'
-                : `${issues.length} ${activeFilter === 'All' ? '' : activeFilter.toLowerCase()} issues available`}
+                : `${issues.length} ${activeFilter === 'All' ? '' : activeFilter.toLowerCase()} tasks available`}
             </p>
           </div>
         </div>
@@ -414,22 +414,22 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
             ) : loading ? (
               <div className="text-center py-16">
                 <div className="text-6xl mb-6">⏳</div>
-                <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Loading Issues</h3>
-                <p className="text-bolt-elements-textSecondary text-base">Fetching issues from GitLab...</p>
+                <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">Loading Tasks</h3>
+                <p className="text-bolt-elements-textSecondary text-base">Fetching tasks from GitLab...</p>
               </div>
             ) : issues.length === 0 ? (
               <div className="text-center py-16">
                 <div className="text-6xl mb-6">📝</div>
                 <h3 className="text-bolt-elements-textPrimary font-semibold text-lg mb-3">
-                  No {activeFilter === 'All' ? 'Agentic' : activeFilter} Issues
+                  No {activeFilter === 'All' ? 'Agentic' : activeFilter} Tasks
                 </h3>
                 <p className="text-bolt-elements-textSecondary text-base mb-3 max-w-md mx-auto">
                   {activeFilter === 'All'
-                    ? "There are no open issues with 'agentic' label in this project."
-                    : `There are no open issues with 'agentic' and '${activeFilter}' labels in this project.`}
+                    ? "There are no open tasks with 'agentic' status in this project."
+                    : `There are no open tasks with 'agentic' and '${activeFilter}' status in this project.`}
                 </p>
                 <p className="text-bolt-elements-textTertiary text-sm">
-                  💡 Create issues with appropriate labels in GitLab to see them here
+                  💡 Create tasks with appropriate status in GitLab to see them here
                 </p>
               </div>
             ) : (
@@ -467,87 +467,73 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
                             </h3>
                           </div>
 
-                          {/* Labels and Action buttons */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {/* Show labels if they exist */}
-                            {issue.labels && issue.labels.filter((label) => label !== 'agentic').length > 0 && (
-                              <div className="flex gap-2">
-                                {issue.labels
-                                  .filter((label) => label !== 'agentic')
-                                  .slice(0, 2)
-                                  .map((label) => (
-                                    <span
-                                      key={label}
-                                      className="px-2 py-0.5 text-xs rounded-full text-white font-medium"
-                                      style={{ backgroundColor: getLabelColor(label) }}
-                                    >
-                                      {label}
-                                    </span>
-                                  ))}
-                                {issue.labels.filter((label) => label !== 'agentic').length > 2 && (
-                                  <span className="px-2 py-0.5 text-xs rounded-full bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary">
-                                    +{issue.labels.filter((label) => label !== 'agentic').length - 2}
+                          {/* Status labels */}
+                          {issue.labels && issue.labels.filter((label) => label !== 'agentic').length > 0 && (
+                            <div className="flex gap-2 flex-shrink-0">
+                              {issue.labels
+                                .filter((label) => label !== 'agentic')
+                                .slice(0, 2)
+                                .map((label) => (
+                                  <span
+                                    key={label}
+                                    className="px-2 py-0.5 text-xs rounded-full text-white font-medium"
+                                    style={{ backgroundColor: getLabelColor(label) }}
+                                  >
+                                    {label}
                                   </span>
-                                )}
-                              </div>
-                            )}
+                                ))}
+                              {issue.labels.filter((label) => label !== 'agentic').length > 2 && (
+                                <span className="px-2 py-0.5 text-xs rounded-full bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary">
+                                  +{issue.labels.filter((label) => label !== 'agentic').length - 2}
+                                </span>
+                              )}
+                            </div>
+                          )}
 
-                            {/* Action buttons */}
-                            {hasNoLabels ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddTodoLabel(issue);
-                                }}
-                                disabled={isUpdating}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {isUpdating ? (
-                                  <>
-                                    <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
-                                    <span>Starting...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="i-ph:play w-3 h-3" />
-                                    <span>Start Task</span>
-                                  </>
-                                )}
-                              </button>
-                            ) : isRejected ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRestartTask(issue);
-                                }}
-                                disabled={isUpdating}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {isUpdating ? (
-                                  <>
-                                    <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
-                                    <span>Restarting...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="i-ph:arrow-clockwise w-3 h-3" />
-                                    <span>Restart</span>
-                                  </>
-                                )}
-                              </button>
-                            ) : null}
-                          </div>
-
-                          {/* External link icon or disabled indicator */}
-                          <div
-                            className={`flex-shrink-0 transition-colors ${
-                              clickable
-                                ? 'text-bolt-elements-textTertiary group-hover:text-bolt-elements-textPrimary'
-                                : 'text-bolt-elements-textTertiary/50'
-                            }`}
-                          >
-                            <div className={`w-4 h-4 ${clickable ? 'i-ph:arrow-square-out' : 'i-ph:lock'}`} />
-                          </div>
+                          {/* Action buttons */}
+                          {hasNoLabels ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddTodoLabel(issue);
+                              }}
+                              disabled={isUpdating}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            >
+                              {isUpdating ? (
+                                <>
+                                  <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
+                                  <span>Starting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="i-ph:play w-3 h-3" />
+                                  <span>Start Task</span>
+                                </>
+                              )}
+                            </button>
+                          ) : isRejected ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRestartTask(issue);
+                              }}
+                              disabled={isUpdating}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            >
+                              {isUpdating ? (
+                                <>
+                                  <div className="i-ph:spinner-gap animate-spin w-3 h-3" />
+                                  <span>Restarting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="i-ph:arrow-clockwise w-3 h-3" />
+                                  <span>Restart</span>
+                                </>
+                              )}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -558,14 +544,14 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
                 {loadingMore && (
                   <div className="text-center py-8">
                     <div className="text-2xl mb-2">⏳</div>
-                    <p className="text-sm text-bolt-elements-textSecondary">Loading more issues...</p>
+                    <p className="text-sm text-bolt-elements-textSecondary">Loading more tasks...</p>
                   </div>
                 )}
 
                 {/* End of list indicator */}
                 {!hasMore && issues.length > 0 && (
                   <div className="text-center py-8">
-                    <p className="text-sm text-bolt-elements-textTertiary">No more issues to load</p>
+                    <p className="text-sm text-bolt-elements-textTertiary">No more tasks to load</p>
                   </div>
                 )}
               </>

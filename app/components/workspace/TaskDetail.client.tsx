@@ -1,5 +1,7 @@
 import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 
+const AGENTIC_LABEL = 'agentic';
+
 interface TaskDetailProps {
   issue: GitlabIssue;
   onBack: () => void;
@@ -9,7 +11,7 @@ export function TaskDetail({ issue, onBack }: TaskDetailProps) {
   const getLabelColor = (label: string) => {
     // Define specific colors for common label types
     const labelColors: Record<string, string> = {
-      TODO: '#6B7280', // Gray - not started
+      TODO: '#F59E0B', // Orange/Amber - warning color
       WIP: '#10B981', // Green - in progress
       'CONFIRM NEEDED': '#3B82F6', // Blue - needs confirmation
       DONE: '#6B7280', // Gray - completed
@@ -21,7 +23,7 @@ export function TaskDetail({ issue, onBack }: TaskDetailProps) {
   };
 
   const getStatusColor = (issue: GitlabIssue) => {
-    const filteredLabels = issue.labels?.filter((label) => label !== 'auto-container') || [];
+    const filteredLabels = issue.labels?.filter((label) => label !== AGENTIC_LABEL) || [];
 
     // No labels or TODO: Gray
     if (filteredLabels.length === 0 || filteredLabels.includes('TODO')) {
@@ -81,11 +83,11 @@ export function TaskDetail({ issue, onBack }: TaskDetailProps) {
         </div>
         <h1 className="text-xl font-semibold text-bolt-elements-textPrimary mb-4">{issue.title}</h1>
 
-        {/* Labels */}
-        {issue.labels && issue.labels.filter((label) => label !== 'auto-container').length > 0 && (
+        {/* Status */}
+        {issue.labels && issue.labels.filter((label) => label !== AGENTIC_LABEL).length > 0 && (
           <div className="flex gap-2 flex-wrap">
             {issue.labels
-              .filter((label) => label !== 'auto-container')
+              .filter((label) => label !== AGENTIC_LABEL)
               .map((label) => (
                 <span
                   key={label}

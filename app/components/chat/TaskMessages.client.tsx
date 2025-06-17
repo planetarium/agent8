@@ -268,7 +268,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                           const currentBranch = repoStore.get().taskBranch;
                           await mergeTaskBranch(repoStore.get().path, currentBranch);
 
-                          // Update issue labels if this is an issue branch
+                          // Update task status if this is an issue branch
                           const issueIid = extractIssueIidFromBranch(currentBranch);
 
                           if (issueIid && currentBranch.startsWith('issue-')) {
@@ -290,17 +290,17 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                                   ); // Remove duplicates
 
                                 await updateIssueLabels(projectPath, issueIid, newLabels, true);
-                                toast.success('Issue completed: DONE added, CONFIRM NEEDED removed, and issue closed');
+                                toast.success('Task completed: Status updated to DONE and task closed');
                               } else {
                                 // Fallback to basic labels if we can't get current issue
                                 const newLabels = ['agentic', 'DONE'];
 
                                 await updateIssueLabels(projectPath, issueIid, newLabels, true);
-                                toast.success('Issue completed with basic labels and closed');
+                                toast.success('Task completed and closed');
                               }
                             } catch (labelError) {
-                              console.error('Failed to update issue labels:', labelError);
-                              toast.warn('Merge successful, but failed to update issue labels');
+                              console.error('Failed to update task status:', labelError);
+                              toast.warn('Merge successful, but failed to update task status');
                             }
                           }
 

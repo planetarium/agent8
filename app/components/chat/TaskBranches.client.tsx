@@ -33,31 +33,14 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
     });
   };
 
-  // Determine branch type and label
-  const getBranchTypeInfo = (branchName: string) => {
-    if (branchName.startsWith('task-')) {
-      return { label: 'Task', color: 'bg-[rgba(63,210,232,0.5)]' };
-    } else if (branchName.startsWith('issue-')) {
-      return { label: 'Issue', color: 'bg-[rgba(34,197,94,0.5)]' }; // Green for issues
-    }
-
-    return { label: 'Branch', color: 'bg-[rgba(156,163,175,0.5)]' }; // Gray for others
-  };
-
-  const branchTypeInfo = getBranchTypeInfo(branch.name);
-
   return (
     <div className="flex w-full flex-1 max-w-chat mx-auto max-h-22 mb-2 rounded-lg border border-[#3FD2E8] bg-[var(--color-bg-primary,#111315)] p-4 transition-all hover:border-[#3FD2E8] hover:shadow-lg">
       <div className="flex flex-col flex-grow overflow-hidden">
         <div className="flex items-center mb-1 w-full">
-          <span
-            className={`inline-block px-2 py-0.5 text-xs font-semibold text-white ${branchTypeInfo.color} rounded-full mr-2 flex-shrink-0`}
-          >
-            {branchTypeInfo.label}
+          <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-[rgba(63,210,232,0.5)] rounded-full mr-2 flex-shrink-0">
+            Task
           </span>
-          <h3 className="font-medium text-white truncate max-w-full">
-            {branch?.firstCommit?.title || `New ${branchTypeInfo.label}`}
-          </h3>
+          <h3 className="font-medium text-white truncate max-w-full">{branch?.firstCommit?.title || 'New Task'}</h3>
         </div>
         <p className="text-[rgba(63,210,232,0.8)] text-xs truncate opacity-80 w-full">
           {branch?.lastCommit?.message ? `Last commit: ${branch?.lastCommit.message.split('\n')[0]}` : ''}
