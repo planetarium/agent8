@@ -1370,6 +1370,55 @@ export class GitlabService {
     }
   }
 
+  async closeIssue(projectPath: string, issueIid: number): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          state_event: 'close',
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to close issue: ${errorMessage}`);
+    }
+  }
+
+  async updateIssueLabelsAndClose(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          labels: labels.join(','),
+          state_event: 'close',
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update issue labels and close: ${errorMessage}`);
+    }
+  }
+
   /**
    * Find branch associated with an issue
    * Looks for branches that contain the issue number in their name or merge requests that reference the issue

@@ -390,11 +390,17 @@ export const getIssue = async (projectPath: string, issueIid: number) => {
   return response.data;
 };
 
-export const updateIssueLabels = async (projectPath: string, issueIid: number, labels: string[]) => {
+export const updateIssueLabels = async (
+  projectPath: string,
+  issueIid: number,
+  labels: string[],
+  closeIssue?: boolean,
+) => {
   const response = await axios.put('/api/gitlab/issues', {
     projectPath,
     issueIid,
     labels,
+    closeIssue,
   });
 
   return response.data;

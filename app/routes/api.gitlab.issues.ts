@@ -63,10 +63,11 @@ async function issuesAction({ context, request }: ActionFunctionArgs) {
     return json({ success: false, message: 'Method not allowed' }, { status: 405 });
   }
 
-  const { projectPath, issueIid, labels } = (await request.json()) as {
+  const { projectPath, issueIid, labels, closeIssue } = (await request.json()) as {
     projectPath: string;
     issueIid: number;
     labels: string[];
+    closeIssue?: boolean;
   };
 
   if (!projectPath || !issueIid || !labels) {
@@ -76,17 +77,25 @@ async function issuesAction({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
-    const updatedIssue = await gitlabService.updateIssueLabels(projectPath, issueIid, labels);
+    let updatedIssue;
+
+    if (closeIssue) {
+      // Update labels and close issue in one API call
+      updatedIssue = await gitlabService.updateIssueLabelsAndClose(projectPath, issueIid, labels);
+    } else {
+      // Only update labels
+      updatedIssue = await gitlabService.updateIssueLabels(projectPath, issueIid, labels);
+    }
 
     return json({
       success: true,
       data: updatedIssue,
     });
   } catch (error) {
-    logger.error('Failed to update issue labels:', error);
+    logger.error('Failed to update issue:', error);
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    return json({ success: false, message: `Failed to update issue labels: ${errorMessage}` }, { status: 500 });
+    return json({ success: false, message: `Failed to update issue: ${errorMessage}` }, { status: 500 });
   }
 }

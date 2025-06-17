@@ -289,14 +289,14 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                                     (label: string, index: number, arr: string[]) => arr.indexOf(label) === index,
                                   ); // Remove duplicates
 
-                                await updateIssueLabels(projectPath, issueIid, newLabels);
-                                toast.success('Issue labels updated: DONE added, CONFIRM NEEDED removed');
+                                await updateIssueLabels(projectPath, issueIid, newLabels, true);
+                                toast.success('Issue completed: DONE added, CONFIRM NEEDED removed, and issue closed');
                               } else {
                                 // Fallback to basic labels if we can't get current issue
                                 const newLabels = ['agentic', 'DONE'];
 
-                                await updateIssueLabels(projectPath, issueIid, newLabels);
-                                toast.success('Issue labels updated with basic labels');
+                                await updateIssueLabels(projectPath, issueIid, newLabels, true);
+                                toast.success('Issue completed with basic labels and closed');
                               }
                             } catch (labelError) {
                               console.error('Failed to update issue labels:', labelError);
