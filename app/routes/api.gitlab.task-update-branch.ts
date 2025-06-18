@@ -141,22 +141,35 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
   }
 }
 
-// Helper function to format MCP metadata for internal notes
+const MCP_SERVERS: Record<string, string> = {
+  'All-in-one': 'https://mcp.verse8.io/mcp',
+  Image: 'https://mcp-image.verse8.io/mcp',
+  Cinematic: 'https://mcp-cinematic.verse8.io/mcp',
+  Audio: 'https://mcp-audio.verse8.io/mcp',
+  Skybox: 'https://mcp-skybox.verse8.io/mcp',
+  UI: 'https://mcp-ui.verse8.io/mcp',
+};
+
 function formatMcpMetadataNote(recommendedMcpTools: string[]): string {
-  const METADATA_MARKER = '<!-- MCP_METADATA -->';
+  const serverPrefixes = new Set(
+    recommendedMcpTools
+      .map((toolName) => {
+        const prefix = toolName.split('_')[0];
+        return prefix;
+      })
+      .filter((prefix) => MCP_SERVERS[prefix]),
+  );
 
-  // Create MCP metadata structure according to the specification
-  const mcpMetadata = {
-    servers: recommendedMcpTools.map((toolName) => ({
-      name: toolName,
-      url: `http://${toolName}-server:3001/mcp`,
-    })),
-  };
+  const servers = Array.from(serverPrefixes).map((serverName) => ({
+    name: serverName,
+    url: MCP_SERVERS[serverName],
+  }));
 
-  // Format the internal note with MCP metadata according to Korean specification
-  return `${METADATA_MARKER}
+  const mcpMetadata = { servers };
+
+  return `<!-- MCP_METADATA -->
 ${JSON.stringify(mcpMetadata, null, 2)}
-${METADATA_MARKER}`;
+<!-- MCP_METADATA -->`;
 }
 
 // Helper function to create GitLab issues from tasks
