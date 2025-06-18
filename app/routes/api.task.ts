@@ -30,8 +30,6 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
     contextOptimization: boolean;
   }>();
 
-  console.log('messages ===>', messages);
-
   const cookieHeader = request.headers.get('Cookie');
 
   const stream = new SwitchableStream();

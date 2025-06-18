@@ -35,7 +35,8 @@ import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import {
   commitChanges,
-  createTaskBranch,
+  createTaskBranchSimple,
+  updateTaskBranch,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
@@ -404,6 +405,20 @@ export const ChatImpl = memo(
           workbenchStore.offArtifactClose(message.id);
         });
 
+        if (repoStore.get().taskBranch === 'task') {
+          try {
+            const promptAnnotation = message.annotations?.find(
+              (annotation: any) => annotation.type === 'prompt',
+            ) as any;
+            const userInput = promptAnnotation?.prompt || '';
+
+            await updateTaskBranch(repoStore.get().path, userInput, message.content);
+            logger.info('Task branch updated successfully');
+          } catch (error) {
+            logger.warn('Failed to update task branch:', error);
+          }
+        }
+
         setFakeLoading(false);
 
         logger.debug('Finished streaming');
@@ -648,14 +663,14 @@ export const ChatImpl = memo(
             let branchName = 'develop';
 
             if (enabledTaskMode) {
-              const { success, message, data } = await createTaskBranch(projectPath);
+              const { success, message } = await createTaskBranchSimple(projectPath);
 
               if (!success) {
                 toast.error(message);
                 return;
               }
 
-              branchName = data.branchName;
+              branchName = 'task';
             }
 
             repoStore.set({
@@ -744,7 +759,7 @@ export const ChatImpl = memo(
           }
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
-            const { success, message, data } = await createTaskBranch(repoStore.get().path);
+            const { success, message } = await createTaskBranchSimple(repoStore.get().path);
 
             if (!success) {
               toast.error(message);
@@ -753,7 +768,7 @@ export const ChatImpl = memo(
 
             repoStore.set({
               ...repoStore.get(),
-              taskBranch: data.branchName,
+              taskBranch: 'task',
             });
 
             setMessages(() => []);

@@ -355,3 +355,37 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
 
   return response.data;
 };
+
+export const createTaskBranchSimple = async (projectPath: string) => {
+  try {
+    const response = await axios.post('/api/gitlab/task-create-branch', {
+      projectPath,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    logger.error('Error creating task branch:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Failed to create task branch',
+    };
+  }
+};
+
+export const updateTaskBranch = async (projectPath: string, userInput: string, llmResponse: string) => {
+  try {
+    const response = await axios.post('/api/gitlab/task-update-branch', {
+      projectPath,
+      userInput,
+      llmResponse,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    logger.error('Error updating task branch:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Failed to update task branch',
+    };
+  }
+};
