@@ -322,13 +322,10 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
 
 // Build advanced system prompt for task breakdown
 function getTaskBreakdownPrompt(availableMcpTools: string[]): string {
-  console.log('🔥 availableMcpTools ===>', availableMcpTools);
-
   const toolsList =
     availableMcpTools.length > 0
       ? `\n\n**Available MCP Tools:**\n${availableMcpTools.map((tool) => `- ${tool}`).join('\n')}`
       : '\n\n**Note:** No MCP tools are currently available.';
-  console.log('🔥 toolsList ===>', toolsList);
 
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
@@ -353,7 +350,7 @@ Analyze the provided requirement content and generate a concise list of top-leve
 10. Always provide the most direct path to implementation, avoiding over-engineering or roundabout approaches
 11. Include specific, actionable guidance for each task
 12. Set reasonable estimated time and acceptance criteria
-13. **For each task, recommend relevant MCP tools from the available list that could help with implementation**${toolsList}
+13. **For each task, recommend ONLY relevant MCP tools from the available list that could help with implementation. Do NOT recommend any tools that are not in the available list. If no relevant MCP tools are available for a task, set "recommendedMcpTools" to an empty array [].**${toolsList}
 
 **Output Format:**
 First, provide your thinking process and analysis in natural language.

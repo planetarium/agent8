@@ -150,9 +150,27 @@ const MCP_SERVERS: Record<string, string> = {
   UI: 'https://mcp-ui.verse8.io/mcp',
 };
 
-function formatMcpMetadataNote(recommendedMcpTools: string[]): string {
+function formatMcpMetadataNote(recommendedMcpTools: string[]): string | null {
+  const validMcpTools = recommendedMcpTools.filter((toolName) => {
+    const hasUnderscore = toolName.includes('_');
+    const prefix = toolName.split('_')[0];
+    const isValidPrefix = MCP_SERVERS[prefix];
+
+    if (!hasUnderscore || !isValidPrefix) {
+      logger.warn(`Invalid MCP tool name filtered out: ${toolName}`);
+      return false;
+    }
+
+    return true;
+  });
+
+  if (validMcpTools.length === 0) {
+    logger.info('No valid MCP tools found, skipping internal note creation');
+    return null;
+  }
+
   const serverPrefixes = new Set(
-    recommendedMcpTools
+    validMcpTools
       .map((toolName) => {
         const prefix = toolName.split('_')[0];
         return prefix;
@@ -197,10 +215,13 @@ async function createGitlabIssuesFromTasks(gitlabService: GitlabService, project
         // Only create internal note if there are recommended MCP tools
         if (task.recommendedMcpTools && task.recommendedMcpTools.length > 0) {
           const mcpToolsNote = formatMcpMetadataNote(task.recommendedMcpTools);
-          await gitlabService.createIssueInternalNote(projectPath, issue.iid, mcpToolsNote);
-          logger.info(
-            `Added internal note to issue #${issue.iid} with MCP tools: ${task.recommendedMcpTools.join(', ')}`,
-          );
+
+          if (mcpToolsNote) {
+            await gitlabService.createIssueInternalNote(projectPath, issue.iid, mcpToolsNote);
+            logger.info(
+              `Added internal note to issue #${issue.iid} with MCP tools: ${task.recommendedMcpTools.join(', ')}`,
+            );
+          }
         } else {
           logger.info(`No MCP tools recommended for issue #${issue.iid}, skipping internal note creation`);
         }
