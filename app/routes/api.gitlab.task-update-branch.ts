@@ -56,7 +56,7 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
     logger.info(`LLM response preview: ${llmResponse.substring(0, 500)}...`);
 
     // Extract JSON from the LLM response
-    const jsonMatch = llmResponse.match(/<div class="__boltThought__">(.*?)<\/div>/s);
+    const jsonMatch = llmResponse.match(/<div class="__taskBreakdown__">(.*?)<\/div>/s);
     let taskBreakdown = null;
 
     if (jsonMatch) {
@@ -70,7 +70,7 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
         logger.error('Raw JSON content:', jsonMatch[1]);
       }
     } else {
-      logger.warn('No __boltThought__ div found in response');
+      logger.warn('No __taskBreakdown__ div found in response');
       logger.info('Full response for debugging:', llmResponse);
     }
 

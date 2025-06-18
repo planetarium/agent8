@@ -10,6 +10,7 @@ import { ToolResult } from './ToolResult';
 
 import styles from './Markdown.module.scss';
 import ThoughtBox from './ThoughtBox';
+import TaskBox from './TaskBox';
 
 const logger = createScopedLogger('MarkdownComponent');
 
@@ -37,6 +38,10 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
 
         if (className?.includes('__boltThought__')) {
           return <ThoughtBox title="Thought process">{children}</ThoughtBox>;
+        }
+
+        if (className?.includes('__taskBreakdown__')) {
+          return <TaskBox title="Task box">{children}</TaskBox>;
         }
 
         if (className?.includes('__toolCall__')) {

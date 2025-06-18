@@ -237,7 +237,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
 
           if (typeof chunk === 'string') {
             if (chunk.startsWith(REASONING_PART_PREFIX) && !lastChunk.startsWith(REASONING_PART_PREFIX)) {
-              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"<div class=\\"__boltThought__\\">"\n`));
+              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"<div class=\\"__taskBreakdown__\\">"\n`));
             }
 
             if (lastChunk.startsWith(REASONING_PART_PREFIX) && !chunk.startsWith(REASONING_PART_PREFIX)) {
@@ -351,7 +351,7 @@ First, provide your thinking process and analysis in natural language.
 
 Then, when you're ready to provide the structured result, wrap it in this div:
 
-<div class="__boltThought__">
+<div class="__taskBreakdown__">
 {
   "summary": "Task breakdown summary description",
   "tasks": [
