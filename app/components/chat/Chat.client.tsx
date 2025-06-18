@@ -603,9 +603,21 @@ export const ChatImpl = memo(
 
       if (!chatStarted) {
         try {
-          const { template, title, projectRepo } = await selectStarterTemplate({
-            message: messageContent,
-          });
+          let isProductionPage = false;
+
+          try {
+            const currentHostname = typeof window !== 'undefined' ? window.location?.hostname : '';
+
+            isProductionPage = currentHostname ? currentHostname.startsWith('vibe.verse8.io') : false;
+          } catch (error) {
+            console.warn('Failed to check hostname:', error);
+            isProductionPage = false;
+          }
+
+          const { template, title, projectRepo } = await selectStarterTemplate(
+            { message: messageContent },
+            isProductionPage,
+          );
 
           if (!template) {
             throw new Error('Not Found Template');

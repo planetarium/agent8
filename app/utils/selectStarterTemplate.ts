@@ -114,9 +114,12 @@ const parseSelectedTemplate = (
   }
 };
 
-export const selectStarterTemplate = async (options: { message: string }) => {
+export const selectStarterTemplate = async (options: { message: string }, isProduction: boolean) => {
   try {
-    const response = await fetch('https://raw.githubusercontent.com/planetarium/agent8-templates/main/templates.json');
+    const branch = isProduction ? 'production' : 'main';
+    const response = await fetch(
+      `https://raw.githubusercontent.com/planetarium/agent8-templates/${branch}/templates.json`,
+    );
     templates = await response.json();
   } catch {
     console.log('Failed to fetch templates, using local fallback');
