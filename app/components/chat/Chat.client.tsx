@@ -362,7 +362,7 @@ export const ChatImpl = memo(
       data: chatData,
       setData,
     } = useChat({
-      api: '/api/chat',
+      api: '/api/task',
       body: {
         apiKeys,
         files,

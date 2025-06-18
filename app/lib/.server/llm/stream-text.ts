@@ -29,6 +29,7 @@ export async function streamText(props: {
   files?: FileMap;
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
+  systemPrompt?: string;
 }) {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
@@ -89,7 +90,7 @@ export async function streamText(props: {
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
 
-  const systemPrompt = getAgent8Prompt(WORK_DIR);
+  const systemPrompt = props.systemPrompt || getAgent8Prompt(WORK_DIR);
 
   const docTools = await createDocTools(serverEnv as Env);
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
