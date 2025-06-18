@@ -141,6 +141,24 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
   }
 }
 
+// Helper function to format MCP metadata for internal notes
+function formatMcpMetadataNote(recommendedMcpTools: string[]): string {
+  const METADATA_MARKER = '<!-- MCP_METADATA -->';
+
+  // Create MCP metadata structure according to the specification
+  const mcpMetadata = {
+    servers: recommendedMcpTools.map((toolName) => ({
+      name: toolName,
+      url: `http://${toolName}-server:3001/mcp`,
+    })),
+  };
+
+  // Format the internal note with MCP metadata according to Korean specification
+  return `${METADATA_MARKER}
+${JSON.stringify(mcpMetadata, null, 2)}
+${METADATA_MARKER}`;
+}
+
 // Helper function to create GitLab issues from tasks
 async function createGitlabIssuesFromTasks(gitlabService: GitlabService, projectPath: string, tasks: any[]) {
   const issues: any[] = [];
@@ -160,6 +178,22 @@ async function createGitlabIssuesFromTasks(gitlabService: GitlabService, project
         description: issueData.description,
         labels: issueData.labels.join(','),
       });
+
+      // Add internal note with MCP tools information
+      try {
+        // Only create internal note if there are recommended MCP tools
+        if (task.recommendedMcpTools && task.recommendedMcpTools.length > 0) {
+          const mcpToolsNote = formatMcpMetadataNote(task.recommendedMcpTools);
+          await gitlabService.createIssueInternalNote(projectPath, issue.iid, mcpToolsNote);
+          logger.info(
+            `Added internal note to issue #${issue.iid} with MCP tools: ${task.recommendedMcpTools.join(', ')}`,
+          );
+        } else {
+          logger.info(`No MCP tools recommended for issue #${issue.iid}, skipping internal note creation`);
+        }
+      } catch (noteError: any) {
+        logger.error(`Failed to add internal note to issue #${issue.iid}:`, noteError);
+      }
 
       issues.push(issue);
       issueIdMap.set(task.id, issue.iid);

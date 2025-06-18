@@ -199,7 +199,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
               files,
               tools: mcpTools,
               abortSignal: request.signal,
-              systemPrompt: getTaskBreakdownPrompt(),
+              systemPrompt: getTaskBreakdownPrompt(Object.keys(mcpTools)),
             });
 
             result.mergeIntoDataStream(dataStream);
@@ -223,7 +223,7 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
           files,
           tools: mcpTools,
           abortSignal: request.signal,
-          systemPrompt: getTaskBreakdownPrompt(),
+          systemPrompt: getTaskBreakdownPrompt(Object.keys(mcpTools)),
         });
         result.mergeIntoDataStream(dataStream);
       },
@@ -321,7 +321,15 @@ async function taskAction({ context, request }: ActionFunctionArgs) {
 }
 
 // Build advanced system prompt for task breakdown
-function getTaskBreakdownPrompt(): string {
+function getTaskBreakdownPrompt(availableMcpTools: string[]): string {
+  console.log('🔥 availableMcpTools ===>', availableMcpTools);
+
+  const toolsList =
+    availableMcpTools.length > 0
+      ? `\n\n**Available MCP Tools:**\n${availableMcpTools.map((tool) => `- ${tool}`).join('\n')}`
+      : '\n\n**Note:** No MCP tools are currently available.';
+  console.log('🔥 toolsList ===>', toolsList);
+
   return `You are an AI project task breakdown expert specialized in analyzing Product Requirements Documents (PRDs) or user requirements and breaking them down into structured development tasks.
 
 **Your Response Process:**
@@ -345,6 +353,7 @@ Analyze the provided requirement content and generate a concise list of top-leve
 10. Always provide the most direct path to implementation, avoiding over-engineering or roundabout approaches
 11. Include specific, actionable guidance for each task
 12. Set reasonable estimated time and acceptance criteria
+13. **For each task, recommend relevant MCP tools from the available list that could help with implementation**${toolsList}
 
 **Output Format:**
 First, provide your thinking process and analysis in natural language.
@@ -362,7 +371,8 @@ Then, when you're ready to provide the structured result, wrap it in this div:
       "details": "Detailed implementation guidance and technical details",
       "testStrategy": "Validation and testing approach",
       "priority": "high|medium|low",
-      "dependencies": ["Dependent task IDs"]
+      "dependencies": ["Dependent task IDs"],
+      "recommendedMcpTools": ["tool1", "tool2"]
     }
   ],
   "totalTasks": number_of_tasks,

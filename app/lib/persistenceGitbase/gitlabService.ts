@@ -1264,4 +1264,16 @@ export class GitlabService {
       throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
     }
   }
+
+  async createIssueInternalNote(projectId: string, issueIid: number, body: string): Promise<any> {
+    try {
+      const response = await this.gitlab.IssueNotes.create(projectId, issueIid, body, {
+        internal: true,
+      });
+      return response;
+    } catch (error) {
+      console.error('Error creating issue internal note:', error);
+      throw error;
+    }
+  }
 }
