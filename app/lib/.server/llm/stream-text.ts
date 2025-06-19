@@ -12,6 +12,7 @@ import {
   getProjectMdPrompt,
   getProjectPackagesPrompt,
   getAgent8Prompt,
+  getVibeStarter3dDocsPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
@@ -92,7 +93,8 @@ export async function streamText(props: {
 
   const systemPrompt = props.systemPrompt || getAgent8Prompt(WORK_DIR);
 
-  const docTools = await createDocTools(serverEnv as Env);
+  const docTools = await createDocTools(serverEnv as Env, files);
+
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
   let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
@@ -106,11 +108,14 @@ export async function streamText(props: {
     };
   }
 
+  const vibeStarter3dDocsPrompt = await getVibeStarter3dDocsPrompt(files);
+
   const coreMessages = [
     ...[
       systemPrompt,
       getProjectFilesPrompt(files),
       getProjectDocsPrompt(files),
+      vibeStarter3dDocsPrompt,
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
     ]

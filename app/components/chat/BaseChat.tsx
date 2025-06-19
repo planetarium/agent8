@@ -89,7 +89,9 @@ interface BaseChatProps {
   handleFork?: (message: Message) => void;
   handleRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
-
+  hasMore?: boolean;
+  loadBefore?: () => Promise<void>;
+  loadingBefore?: boolean;
   // Task-related props
   selectedTask?: GitlabIssue | null;
   onTaskChange?: (task: GitlabIssue | null) => void;
@@ -135,7 +137,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleFork,
       handleRevert,
       onViewDiff,
-
+      hasMore,
+      loadBefore,
+      loadingBefore,
       // Task-related props
       selectedTask,
       onTaskChange,
@@ -620,6 +624,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onFork={handleFork}
                           onRevert={handleRevert}
                           onViewDiff={onViewDiff}
+                          hasMore={hasMore}
+                          loadBefore={loadBefore}
+                          loadingBefore={loadingBefore}
                         />
                       ) : (
                         <Messages
@@ -631,6 +638,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onFork={handleFork}
                           onRevert={handleRevert}
                           onViewDiff={onViewDiff}
+                          hasMore={hasMore}
+                          loadBefore={loadBefore}
+                          loadingBefore={loadingBefore}
                         />
                       )}
                     </>

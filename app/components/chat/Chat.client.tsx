@@ -126,6 +126,9 @@ export function Chat() {
     setEnabledTaskMode,
     reloadTaskBranches,
     revertTo,
+    hasMore,
+    loadBefore,
+    loadingBefore,
   } = useGitbaseChatHistory();
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
@@ -213,6 +216,9 @@ export function Chat() {
           taskBranches={taskBranches}
           reloadTaskBranches={reloadTaskBranches}
           revertTo={revertTo}
+          hasMore={hasMore}
+          loadBefore={loadBefore}
+          loadingBefore={loadingBefore}
         />
       )}
       <ToastContainer
@@ -306,6 +312,9 @@ interface ChatProps {
   setEnabledTaskMode: (enabled: boolean) => void;
   reloadTaskBranches: (projectPath: string) => Promise<void>;
   revertTo: (hash: string) => void;
+  hasMore: boolean;
+  loadBefore: () => Promise<void>;
+  loadingBefore: boolean;
 }
 
 export const ChatImpl = memo(
@@ -319,6 +328,9 @@ export const ChatImpl = memo(
     setEnabledTaskMode,
     reloadTaskBranches,
     revertTo,
+    hasMore,
+    loadBefore,
+    loadingBefore,
   }: ChatProps) => {
     useShortcuts();
 
@@ -1065,6 +1077,9 @@ export const ChatImpl = memo(
         clearAlert={() => workbenchStore.clearAlert()}
         data={chatData}
         onProjectZipImport={handleProjectZipImport}
+        hasMore={hasMore}
+        loadBefore={loadBefore}
+        loadingBefore={loadingBefore}
       />
     );
   },

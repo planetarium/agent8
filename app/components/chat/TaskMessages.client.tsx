@@ -24,11 +24,23 @@ interface TaskMessagesProps {
   onFork?: (message: Message) => void;
   onRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
+  hasMore?: boolean;
+  loadingBefore?: boolean;
+  loadBefore?: () => Promise<void>;
 }
 
 export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
   (props: TaskMessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
-    const { className, taskBranches, reloadTaskBranches, isStreaming, ...otherProps } = props;
+    const {
+      className,
+      taskBranches,
+      reloadTaskBranches,
+      isStreaming,
+      hasMore,
+      loadBefore,
+      loadingBefore,
+      ...otherProps
+    } = props;
     const [isLoading, setIsLoading] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [reloadCount, setReloadCount] = useState(0);
@@ -235,7 +247,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
 
         <div className="px-1 pb-4 -mt-4 relative">
           <div className="relative z-1 pl-2 border-l border-cyan-400/70 ml-1 pt-4">
-            <Messages {...otherProps} ref={ref} />
+            <Messages {...otherProps} ref={ref} hasMore={hasMore} loadBefore={loadBefore} />
           </div>
           {!isStreaming && (
             <AnimatePresence>

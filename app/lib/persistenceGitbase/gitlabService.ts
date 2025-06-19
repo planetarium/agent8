@@ -567,7 +567,6 @@ export class GitlabService {
       description: string;
     };
     commits: GitlabCommit[];
-    total: number;
     hasMore: boolean;
   }> {
     try {
@@ -607,9 +606,7 @@ export class GitlabService {
           params,
         },
       );
-
-      const totalCommits = parseInt(commitsResponse.headers['x-total'] || '0', 10);
-      const hasMore = page * perPage < totalCommits;
+      const hasMore = !!commitsResponse.headers['x-next-page'];
 
       let commitsData = commitsResponse.data as GitlabCommit[];
 
@@ -637,7 +634,6 @@ export class GitlabService {
           description: project.description,
         },
         commits,
-        total: totalCommits,
         hasMore,
       };
     } catch (error) {

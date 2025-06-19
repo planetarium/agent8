@@ -2,6 +2,11 @@ import { stripIndents } from '~/utils/stripIndent';
 import { WORK_DIR } from '~/utils/constants';
 import { IGNORE_PATTERNS } from '~/utils/fileUtils';
 import ignore from 'ignore';
+import path from 'path';
+import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
+
+const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
+const vibeStarter3dDocs: Record<string, Record<string, string>> = {};
 
 export const getAgent8Prompt = (
   cwd: string = WORK_DIR,
@@ -363,6 +368,80 @@ export function getProjectDocsPrompt(files: any) {
     .map(
       ({ path, name, content }) => `
       <doc_file name="${name}" path="${path}">
+        ${content}
+      </doc_file>`,
+    )
+    .join('\n');
+
+  return `
+<PROJECT_DESCRIPTION>
+    These files contain essential information that must be understood before performing any work on the project. Please always familiarize yourself with the contents of these files before starting any task.
+    <docs_files>
+      ${docsContent}
+    </docs_files>
+</PROJECT_DESCRIPTION>
+`;
+}
+
+function is3dProject(files: any): boolean {
+  const packageJson = files[`${WORK_DIR}/package.json`];
+
+  if (packageJson?.type === 'file' && packageJson?.content?.length > 0) {
+    const packageContent = JSON.parse(packageJson.content);
+
+    if (packageContent.dependencies?.hasOwnProperty(VIBE_STARTER_3D_PACKAGE_NAME)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
+  let version: string | undefined;
+
+  try {
+    if (!is3dProject(files)) {
+      return '';
+    }
+
+    version = await resolvePackageVersion(VIBE_STARTER_3D_PACKAGE_NAME, files);
+
+    if (!version) {
+      return '';
+    }
+
+    if (!vibeStarter3dDocs[version]) {
+      vibeStarter3dDocs[version] = {};
+
+      const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/files/docs`;
+      const docsResponse = await fetchWithCache(docsUrl);
+      const html = await docsResponse.text();
+
+      const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
+
+      for (const markdownFileName of markdownFileNames) {
+        const markdownUrl = `https://unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/docs/${markdownFileName}`;
+        const markdownResponse = await fetchWithCache(markdownUrl);
+        const markdown = await markdownResponse.text();
+        const keyName = path.basename(markdownFileName, '.md');
+        vibeStarter3dDocs[version][keyName] = markdown;
+      }
+    }
+  } catch {
+    // Delete the object for this version if an error occurs and version is defined
+    if (version && vibeStarter3dDocs[version]) {
+      delete vibeStarter3dDocs[version];
+    }
+
+    return '';
+  }
+
+  const currentVibeStarter3dDocs = vibeStarter3dDocs[version];
+  const docsContent = Object.entries(currentVibeStarter3dDocs)
+    .map(
+      ([key, content]) => `
+      <doc_file name="${key}">
         ${content}
       </doc_file>`,
     )

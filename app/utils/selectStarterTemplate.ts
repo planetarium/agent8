@@ -116,7 +116,10 @@ const parseSelectedTemplate = (
 
 export const selectStarterTemplate = async (options: { message: string }) => {
   try {
-    const response = await fetch('https://raw.githubusercontent.com/planetarium/agent8-templates/main/templates.json');
+    const branch = import.meta.env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
+    const response = await fetch(
+      `https://raw.githubusercontent.com/planetarium/agent8-templates/${branch}/templates.json`,
+    );
     templates = await response.json();
   } catch {
     console.log('Failed to fetch templates, using local fallback');
@@ -176,7 +179,7 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
       headers.Authorization = 'token ' + token;
     }
 
-    const ref = env?.USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
+    const ref = env?.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
 
     // Fetch contents of the path
     const response = await fetch(`${baseUrl}/repos/${repoName}/contents/${path}?ref=${ref}`, {
