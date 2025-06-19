@@ -7,38 +7,14 @@ export interface PreviewInfo {
   baseUrl: string;
 }
 
-// Create a broadcast channel for preview updates
-const PREVIEW_CHANNEL = 'preview-updates';
-
 export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
   #container: Promise<Container>;
-  #broadcastChannel: BroadcastChannel;
-  #lastUpdate = new Map<string, number>();
-  #refreshTimeouts = new Map<string, NodeJS.Timeout>();
-  #REFRESH_DELAY = 300;
 
   previews = atom<PreviewInfo[]>([]);
 
   constructor(containerPromise: Promise<Container>) {
     this.#container = containerPromise;
-    this.#broadcastChannel = new BroadcastChannel(PREVIEW_CHANNEL);
-
-    // Listen for preview updates from other tabs
-    this.#broadcastChannel.onmessage = (event) => {
-      const { type, previewId } = event.data;
-
-      if (type === 'file-change') {
-        const timestamp = event.data.timestamp;
-        const lastUpdate = this.#lastUpdate.get(previewId) || 0;
-
-        if (timestamp > lastUpdate) {
-          this.#lastUpdate.set(previewId, timestamp);
-          this.refreshPreview(previewId);
-        }
-      }
-    };
-
     this.#init();
   }
 
@@ -48,7 +24,6 @@ export class PreviewsStore {
     // Listen for server ready events
     container.on('server-ready', (port, url) => {
       console.log('[Preview] Server ready on port:', port, url);
-      this.broadcastUpdate(url);
     });
 
     try {
@@ -60,15 +35,7 @@ export class PreviewsStore {
           includeContent: false,
         },
         async () => {
-          const previews = this.previews.get();
-
-          for (const preview of previews) {
-            const previewId = this.getPreviewId(preview.baseUrl);
-
-            if (previewId) {
-              this.broadcastFileChange(previewId);
-            }
-          }
+          console.log('[Preview] Files changed, manual refresh available');
         },
       );
     } catch (error) {
@@ -97,94 +64,10 @@ export class PreviewsStore {
       previewInfo.baseUrl = url;
 
       this.previews.set([previewInfo]);
-
-      if (type === 'open') {
-        this.broadcastUpdate(url);
-      }
     });
   }
 
-  // Helper to extract preview ID from URL
-  getPreviewId(_url: string): string | null {
-    /*
-     * RemoteContainer uses different URL patterns (fly.dev, verse8.io)
-     * For now, return null as preview ID extraction needs to be implemented
-     * for RemoteContainer's actual URL structure
-     */
-    return null;
-  }
-
-  // Broadcast state change to all tabs
-  broadcastStateChange(previewId: string) {
-    const timestamp = Date.now();
-    this.#lastUpdate.set(previewId, timestamp);
-
-    this.#broadcastChannel.postMessage({
-      type: 'state-change',
-      previewId,
-      timestamp,
-    });
-  }
-
-  // Broadcast file change to all tabs
-  broadcastFileChange(previewId: string) {
-    const timestamp = Date.now();
-    this.#lastUpdate.set(previewId, timestamp);
-
-    this.#broadcastChannel.postMessage({
-      type: 'file-change',
-      previewId,
-      timestamp,
-    });
-  }
-
-  // Broadcast update to all tabs
-  broadcastUpdate(url: string) {
-    const previewId = this.getPreviewId(url);
-
-    if (previewId) {
-      const timestamp = Date.now();
-      this.#lastUpdate.set(previewId, timestamp);
-
-      this.#broadcastChannel.postMessage({
-        type: 'file-change',
-        previewId,
-        timestamp,
-      });
-    }
-  }
-
-  // Method to refresh a specific preview
-  refreshPreview(previewId: string) {
-    // Clear any pending refresh for this preview
-    const existingTimeout = this.#refreshTimeouts.get(previewId);
-
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-
-    // Set a new timeout for this refresh
-    const timeout = setTimeout(() => {
-      const previews = this.previews.get();
-      const preview = previews.find((p) => this.getPreviewId(p.baseUrl) === previewId);
-
-      if (preview) {
-        preview.ready = false;
-        this.previews.set([...previews]);
-
-        requestAnimationFrame(() => {
-          preview.ready = true;
-          this.previews.set([...previews]);
-        });
-      }
-
-      this.#refreshTimeouts.delete(previewId);
-    }, this.#REFRESH_DELAY);
-
-    this.#refreshTimeouts.set(previewId, timeout);
-  }
-
-  // 퍼블리시된 URL 설정 메서드 추가
+  // 퍼블리시된 URL 설정 메서드
   setPublishedUrl(url: string) {
     const port = 80;
     let previewInfo = this.#availablePreviews.get(port);
@@ -198,8 +81,6 @@ export class PreviewsStore {
     previewInfo.ready = true;
 
     this.previews.set([previewInfo]);
-
-    this.broadcastUpdate(url);
   }
 }
 
