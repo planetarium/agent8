@@ -42,7 +42,7 @@ function AccessControlledChat() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
-  const [loadedWebcontainer, setLoadedWebcontainer] = useState(false);
+  const [loadedContainer, setLoadedContainer] = useState(false);
 
   useEffect(() => {
     if (accessToken) {
@@ -68,7 +68,7 @@ function AccessControlledChat() {
 
   useEffect(() => {
     // RemoteContainer는 항상 사용 가능
-    setLoadedWebcontainer(true);
+    setLoadedContainer(true);
   }, []);
 
   useEffect(() => {
@@ -123,8 +123,8 @@ function AccessControlledChat() {
     </div>
   );
 
-  // 웹컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
-  const NotLoadedWebcontainer = () => {
+  // 컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
+  const NotLoadedContainer = () => {
     const [countdown, setCountdown] = useState(5);
     const [showMessage, setShowMessage] = useState(false);
 
@@ -190,8 +190,8 @@ function AccessControlledChat() {
         <LoadingScreen />
       ) : isActivated === false ? (
         <AccessRestricted />
-      ) : !loadedWebcontainer ? (
-        <NotLoadedWebcontainer />
+      ) : !loadedContainer ? (
+        <NotLoadedContainer />
       ) : (
         <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
       )}

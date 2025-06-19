@@ -105,9 +105,13 @@ export class PreviewsStore {
   }
 
   // Helper to extract preview ID from URL
-  getPreviewId(url: string): string | null {
-    const match = url.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
-    return match ? match[1] : null;
+  getPreviewId(_url: string): string | null {
+    /*
+     * RemoteContainer uses different URL patterns (fly.dev, verse8.io)
+     * For now, return null as preview ID extraction needs to be implemented
+     * for RemoteContainer's actual URL structure
+     */
+    return null;
   }
 
   // Broadcast state change to all tabs

@@ -242,7 +242,7 @@ const getFs = (container: Container, record: MutableRefObject<Record<string, { d
     },
     symlink: async (target: string, path: string) => {
       /*
-       * Since WebContainer doesn't support symlinks,
+       * Since RemoteContainer doesn't support symlinks,
        * we'll throw a "operation not supported" error
        */
       throw new Error(`EPERM: operation not permitted, symlink '${target}' -> '${path}'`);
@@ -250,7 +250,7 @@ const getFs = (container: Container, record: MutableRefObject<Record<string, { d
 
     chmod: async (_path: string, _mode: number) => {
       /*
-       * WebContainer doesn't support changing permissions,
+       * RemoteContainer doesn't support changing permissions,
        * but we can pretend it succeeded for compatibility
        */
       return await Promise.resolve();
