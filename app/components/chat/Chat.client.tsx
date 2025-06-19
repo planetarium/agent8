@@ -687,7 +687,6 @@ export const ChatImpl = memo(
               path: projectPath,
               title,
               taskBranch: branchName,
-              refreshTaskList: repoStore.get().refreshTaskList || 0,
             });
 
             changeChatUrl(projectPath, { replace: true });
