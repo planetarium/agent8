@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { repoStore } from '~/lib/stores/repo';
+import { taskStore } from '~/lib/stores/task';
 import { getProjectIssues, updateIssueLabels } from '~/lib/persistenceGitbase/api.client';
 import type { GitlabIssue } from '~/lib/persistenceGitbase/types';
 
@@ -31,6 +32,7 @@ const FILTER_LABELS: Record<FilterType, string | undefined> = {
 
 export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
   const repo = useStore(repoStore);
+  const task = useStore(taskStore);
   const [issues, setIssues] = useState<GitlabIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -146,12 +148,12 @@ export function TaskList({ selectedTaskId, onTaskSelect }: TaskListProps) {
     return undefined;
   }, [issues, loading, checkAndLoadIfNeeded]);
 
-  // Reset and fetch when repo or filter changes
+  // Reset and fetch when repo or filter changes or when refresh is triggered
   useEffect(() => {
     setCurrentPage(1);
     setHasMore(true);
     fetchIssues(activeFilter, 1, false);
-  }, [repo.path, activeFilter]);
+  }, [repo.path, activeFilter, task.refreshTrigger]);
 
   const handleFilterChange = (filter: FilterType) => {
     setActiveFilter(filter);

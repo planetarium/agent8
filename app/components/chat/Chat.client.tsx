@@ -43,6 +43,7 @@ import {
 } from '~/lib/persistenceGitbase/api.client';
 import { container } from '~/lib/container';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { triggerTaskRefresh } from '~/lib/stores/task';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
@@ -415,6 +416,8 @@ export const ChatImpl = memo(
 
             await updateTaskBranch(repoStore.get().path, userInput, message.content);
             logger.info('Task branch updated successfully');
+
+            triggerTaskRefresh();
           } catch (error) {
             logger.warn('Failed to update task branch:', error);
           }
@@ -493,7 +496,12 @@ export const ChatImpl = memo(
 
             return newMessages;
           });
+
+          // Refresh branch list
           reloadTaskBranches(repoStore.get().path);
+
+          // Trigger TaskList refresh
+          triggerTaskRefresh();
         });
       } catch (e) {
         toast.error('The code commit has failed. You can download the code and restore it.');
@@ -679,6 +687,7 @@ export const ChatImpl = memo(
               path: projectPath,
               title,
               taskBranch: branchName,
+              refreshTaskList: repoStore.get().refreshTaskList || 0,
             });
 
             changeChatUrl(projectPath, { replace: true });
