@@ -398,10 +398,12 @@ export const ChatImpl = memo(
         }
 
         workbenchStore.onArtifactClose(message.id, async () => {
-          await runAndPreview(message);
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          await handleCommit(message);
-          workbenchStore.offArtifactClose(message.id);
+          if (repoStore.get().taskBranch !== 'task') {
+            await runAndPreview(message);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await handleCommit(message);
+            workbenchStore.offArtifactClose(message.id);
+          }
         });
 
         if (repoStore.get().taskBranch === 'task') {

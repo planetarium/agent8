@@ -1,6 +1,6 @@
 import { map } from 'nanostores';
 
-export const DEFAULT_TASK_BRANCH = 'develop';
+export const DEFAULT_TASK_BRANCH = 'task';
 
 export const repoStore = map({
   name: '',

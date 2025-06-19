@@ -614,7 +614,7 @@ export class GitlabService {
       let commitsData = commitsResponse.data as GitlabCommit[];
 
       // Filter commits to only include those with the branch name in the message for task branches
-      if (branch && branch.startsWith('task-')) {
+      if (branch && (branch.startsWith('task-') || branch === 'task')) {
         commitsData = commitsData.filter((commit) => commit.message.includes(branch));
       }
 
