@@ -8,7 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { container, containerType, initializeContainer } from '~/lib/container';
+import { initializeContainer } from '~/lib/container';
 import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
@@ -67,16 +67,9 @@ function AccessControlledChat() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (containerType === 'webcontainer') {
-      container.then((wc) => {
-        if (wc?.workdir) {
-          setLoadedWebcontainer(true);
-        }
-      });
-    } else {
-      setLoadedWebcontainer(true);
-    }
-  }, [container]);
+    // RemoteContainer는 항상 사용 가능
+    setLoadedWebcontainer(true);
+  }, []);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
