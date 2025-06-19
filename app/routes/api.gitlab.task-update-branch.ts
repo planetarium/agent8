@@ -9,8 +9,8 @@ const logger = createScopedLogger('api.gitlab.task-update-branch');
 
 interface RequestBody {
   projectPath: string;
-  userInput: string; // 用户的原始输入
-  llmResponse: string; // 完整的LLM回复内容
+  userInput: string;
+  llmResponse: string;
 }
 
 async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) {
