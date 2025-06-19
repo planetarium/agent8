@@ -1,27 +1,11 @@
 /**
- * Cleans webcontainer URLs from stack traces to show relative paths instead
+ * Cleans stack traces to show relative paths instead of full URLs
+ * RemoteContainer uses fly.dev and verse8.io domains, not webcontainer-api.io
  */
 export function cleanStackTrace(stackTrace: string): string {
-  // Function to clean a single URL
-  const cleanUrl = (url: string): string => {
-    const regex = /^https?:\/\/[^\/]+\.webcontainer-api\.io(\/.*)?$/;
-
-    if (!regex.test(url)) {
-      return url;
-    }
-
-    const pathRegex = /^https?:\/\/[^\/]+\.webcontainer-api\.io\/(.*?)$/;
-    const match = url.match(pathRegex);
-
-    return match?.[1] || '';
-  };
-
-  // Split the stack trace into lines and process each line
-  return stackTrace
-    .split('\n')
-    .map((line) => {
-      // Match any URL in the line that contains webcontainer-api.io
-      return line.replace(/(https?:\/\/[^\/]+\.webcontainer-api\.io\/[^\s\)]+)/g, (match) => cleanUrl(match));
-    })
-    .join('\n');
+  /*
+   * RemoteContainer doesn't use webcontainer-api.io, so we can simply return the stack trace
+   * In the future, this could be enhanced to clean fly.dev or verse8.io URLs if needed
+   */
+  return stackTrace;
 }

@@ -8,7 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { container, containerType, initializeContainer } from '~/lib/container';
+import { initializeContainer } from '~/lib/container';
 import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
@@ -42,7 +42,7 @@ function AccessControlledChat() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
-  const [loadedWebcontainer, setLoadedWebcontainer] = useState(false);
+  const [loadedContainer, setLoadedContainer] = useState(false);
 
   useEffect(() => {
     if (accessToken) {
@@ -67,16 +67,9 @@ function AccessControlledChat() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (containerType === 'webcontainer') {
-      container.then((wc) => {
-        if (wc?.workdir) {
-          setLoadedWebcontainer(true);
-        }
-      });
-    } else {
-      setLoadedWebcontainer(true);
-    }
-  }, [container]);
+    // RemoteContainer는 항상 사용 가능
+    setLoadedContainer(true);
+  }, []);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -130,8 +123,8 @@ function AccessControlledChat() {
     </div>
   );
 
-  // 웹컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
-  const NotLoadedWebcontainer = () => {
+  // 컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
+  const NotLoadedContainer = () => {
     const [countdown, setCountdown] = useState(5);
     const [showMessage, setShowMessage] = useState(false);
 
@@ -197,8 +190,8 @@ function AccessControlledChat() {
         <LoadingScreen />
       ) : isActivated === false ? (
         <AccessRestricted />
-      ) : !loadedWebcontainer ? (
-        <NotLoadedWebcontainer />
+      ) : !loadedContainer ? (
+        <NotLoadedContainer />
       ) : (
         <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
       )}

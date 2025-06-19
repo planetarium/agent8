@@ -26,8 +26,6 @@ export let container: Promise<Container> = new Promise((resolve) => {
   containerResolver = resolve as (container: Container | null) => void;
 });
 
-export const containerType = import.meta.env.VITE_CONTAINER_TYPE || 'remotecontainer';
-
 /**
  * Initialize the container with the provided access token
  * This allows delayed initialization after authentication
@@ -41,7 +39,6 @@ export function initializeContainer(
   forceReinitialization = false,
 ): Promise<Container | null> {
   logger.info('Initializing container...', {
-    containerType,
     hasToken: !!accessToken,
     isSSR: import.meta.env.SSR,
     forceReinitialization,
@@ -67,8 +64,8 @@ export function initializeContainer(
 
   const containerPromise = Promise.resolve()
     .then(() => {
-      logger.info('Creating container instance...');
-      return ContainerFactory.create(containerType, {
+      logger.info('Creating remote container instance...');
+      return ContainerFactory.create({
         coep: 'credentialless',
         workdirName: WORK_DIR_NAME,
         forwardPreviewErrors: true,
@@ -76,7 +73,7 @@ export function initializeContainer(
       });
     })
     .then(async (containerInstance) => {
-      logger.info('Container instance created successfully');
+      logger.info('Remote container instance created successfully');
       containerContext.loaded = true;
 
       const { workbenchStore } = await import('~/lib/stores/workbench');
@@ -119,7 +116,7 @@ export function initializeContainer(
         // Log to central error store for persistence
         const { logStore } = await import('~/lib/stores/logs');
         logStore.logError(errorMsg, error, {
-          componentType: containerType,
+          componentType: 'remotecontainer',
           hasAccessToken: !!accessToken,
         });
       } catch (logError) {
