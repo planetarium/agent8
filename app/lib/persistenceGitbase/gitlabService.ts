@@ -7,6 +7,7 @@ import type {
   GitlabProtectedBranch,
   CommitAction,
   FileContent,
+  GitlabIssue,
 } from './types';
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
@@ -830,16 +831,29 @@ export class GitlabService {
     try {
       const projectId = encodeURIComponent(projectPath);
 
-      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
-        headers: {
-          'PRIVATE-TOKEN': this.gitlabToken,
-        },
-        params: {
-          search: '^task-',
-          per_page: 100,
-        },
-      });
-      const branches = response.data;
+      // Get both task- and issue- branches
+      const [taskBranchesResponse, issueBranchesResponse] = await Promise.all([
+        axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            search: 'task-',
+            per_page: 100,
+          },
+        }),
+        axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+          params: {
+            search: 'issue-',
+            per_page: 100,
+          },
+        }),
+      ]);
+
+      const branches = [...taskBranchesResponse.data, ...issueBranchesResponse.data];
 
       // Get merge requests for this project using gitlab-api
       const openMergeRequestsResponse = await axios.get(
@@ -923,6 +937,72 @@ export class GitlabService {
     }
   }
 
+  /**
+   * Mark a draft merge request as ready for review
+   */
+  async markMergeRequestReady(
+    projectPath: string,
+    mergeRequestIid: number,
+  ): Promise<{
+    message: string;
+    mergeRequestIid: number;
+  }> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // First, get the current merge request to check its title and status
+      const mrResponse = await axios.get(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}`,
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        },
+      );
+
+      const currentMR = mrResponse.data;
+      const updateData: any = {};
+
+      // Remove work_in_progress flag
+      if (currentMR.work_in_progress) {
+        updateData.work_in_progress = false;
+      }
+
+      // Remove "Draft:" or "WIP:" prefix from title if present
+      let newTitle = currentMR.title;
+
+      if (newTitle.startsWith('Draft: ') || newTitle.startsWith('draft: ')) {
+        newTitle = newTitle.replace(/^[Dd]raft: /, '');
+        updateData.title = newTitle;
+      } else if (newTitle.startsWith('WIP: ') || newTitle.startsWith('wip: ')) {
+        newTitle = newTitle.replace(/^[Ww][Ii][Pp]: /, '');
+        updateData.title = newTitle;
+      }
+
+      // Only make the API call if there's something to update
+      if (Object.keys(updateData).length > 0) {
+        await axios.put(
+          `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}`,
+          updateData,
+          {
+            headers: {
+              'PRIVATE-TOKEN': this.gitlabToken,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+
+      return {
+        message: `Successfully marked merge request #${mergeRequestIid} as ready`,
+        mergeRequestIid,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to mark merge request as ready: ${errorMessage}`);
+    }
+  }
+
   async mergeTaskBranch(
     projectPath: string,
     fromBranch: string,
@@ -951,6 +1031,21 @@ export class GitlabService {
       }
 
       const mergeRequest = mrs[0];
+
+      // Check if MR is in draft state and mark it as ready if needed
+      if (mergeRequest.draft || mergeRequest.work_in_progress) {
+        try {
+          await this.markMergeRequestReady(projectPath, mergeRequest.iid);
+          logger.info(`Marked merge request #${mergeRequest.iid} as ready`);
+
+          // Wait a moment for the status to update
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+          logger.warn(`Failed to mark merge request as ready: ${error}`);
+
+          // Continue with merge attempt even if marking as ready fails
+        }
+      }
 
       if (!mergeRequest.merge_status || mergeRequest.merge_status === 'cannot_be_merged') {
         throw new Error(`Branch cannot be merged automatically (status: ${mergeRequest.merge_status})`);
@@ -1265,6 +1360,7 @@ export class GitlabService {
     }
   }
 
+  // Method from offical/task branch
   async createIssueInternalNote(projectId: string, issueIid: number, body: string): Promise<any> {
     try {
       const response = await this.gitlab.IssueNotes.create(projectId, issueIid, body, {
@@ -1274,6 +1370,220 @@ export class GitlabService {
     } catch (error) {
       console.error('Error creating issue internal note:', error);
       throw error;
+    }
+  }
+
+  // Methods from task-board branch
+  async getProjectIssues(
+    projectPath: string,
+    page: number = 1,
+    perPage: number = 20,
+    state: 'opened' | 'closed' | 'all' = 'opened',
+    additionalLabel?: string,
+  ): Promise<{
+    issues: GitlabIssue[];
+    total: number;
+    hasMore: boolean;
+  }> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // Build labels parameter - always include agentic
+      let labels = 'agentic';
+
+      if (additionalLabel) {
+        labels += `,${additionalLabel}`;
+      }
+
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/issues`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          state,
+          page,
+          per_page: perPage,
+          order_by: 'created_at',
+          sort: 'asc', // Change to ascending order (oldest first)
+          labels, // Use the constructed labels string
+        },
+      });
+
+      const issues = response.data as GitlabIssue[];
+      const totalIssues = parseInt(response.headers['x-total'] || '0', 10);
+      const hasMore = page * perPage < totalIssues;
+
+      return {
+        issues,
+        total: totalIssues,
+        hasMore,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get project issues: ${errorMessage}`);
+    }
+  }
+
+  async getIssue(projectPath: string, issueIid: number): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+      });
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get issue: ${errorMessage}`);
+    }
+  }
+
+  async updateIssueLabels(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          labels: labels.join(','),
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update issue labels: ${errorMessage}`);
+    }
+  }
+
+  async closeIssue(projectPath: string, issueIid: number): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          state_event: 'close',
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to close issue: ${errorMessage}`);
+    }
+  }
+
+  async updateIssueLabelsAndClose(projectPath: string, issueIid: number, labels: string[]): Promise<GitlabIssue> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      const response = await axios.put(
+        `${this.gitlabUrl}/api/v4/projects/${projectId}/issues/${issueIid}`,
+        {
+          labels: labels.join(','),
+          state_event: 'close',
+        },
+        {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      return response.data as GitlabIssue;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update issue labels and close: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Find branch associated with an issue
+   * Looks for branches that contain the issue number in their name or merge requests that reference the issue
+   */
+  async getIssueBranch(projectPath: string, issueIid: number): Promise<string | null> {
+    try {
+      const projectId = encodeURIComponent(projectPath);
+
+      // First, try to find branches that contain the issue number
+      const branchesResponse = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          per_page: 100,
+        },
+      });
+
+      const branches = branchesResponse.data;
+
+      // Look for branches that contain the issue number
+      const issueBranches = branches.filter((branch: any) => {
+        const branchName = branch.name.toLowerCase();
+        return (
+          branchName.includes(`issue-${issueIid}`) ||
+          branchName.includes(`${issueIid}-`) ||
+          branchName.includes(`-${issueIid}`) ||
+          branchName.includes(`#${issueIid}`)
+        );
+      });
+
+      if (issueBranches.length > 0) {
+        // Return the most recently created branch
+        return issueBranches[0].name;
+      }
+
+      // If no branch found by name, look for merge requests that reference this issue
+      const mergeRequestsResponse = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+        params: {
+          state: 'opened',
+          per_page: 100,
+        },
+      });
+
+      const mergeRequests = mergeRequestsResponse.data;
+
+      // Look for merge requests that mention this issue in title or description
+      const issueMR = mergeRequests.find((mr: any) => {
+        const title = mr.title.toLowerCase();
+        const description = (mr.description || '').toLowerCase();
+
+        return (
+          title.includes(`#${issueIid}`) ||
+          title.includes(`issue ${issueIid}`) ||
+          description.includes(`#${issueIid}`) ||
+          description.includes(`issue ${issueIid}`)
+        );
+      });
+
+      if (issueMR) {
+        return issueMR.source_branch;
+      }
+
+      return null;
+    } catch (error) {
+      logger.error('Failed to find issue branch:', error);
+      return null;
     }
   }
 }

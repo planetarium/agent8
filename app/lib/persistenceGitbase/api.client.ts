@@ -389,3 +389,76 @@ export const updateTaskBranch = async (projectPath: string, userInput: string, l
     };
   }
 };
+
+export const getProjectIssues = async (
+  projectPath: string,
+  options: {
+    page?: number;
+    perPage?: number;
+    state?: 'opened' | 'closed' | 'all';
+    additionalLabel?: string;
+  } = {},
+) => {
+  const queryParams = new URLSearchParams({
+    projectPath,
+  });
+
+  if (options.page) {
+    queryParams.append('page', options.page.toString());
+  }
+
+  if (options.perPage) {
+    queryParams.append('perPage', options.perPage.toString());
+  }
+
+  if (options.state) {
+    queryParams.append('state', options.state);
+  }
+
+  if (options.additionalLabel) {
+    queryParams.append('additionalLabel', options.additionalLabel);
+  }
+
+  const response = await axios.get(`/api/gitlab/issues`, {
+    params: Object.fromEntries(queryParams),
+  });
+
+  return response.data;
+};
+
+export const getIssue = async (projectPath: string, issueIid: number) => {
+  const response = await axios.get(`/api/gitlab/issue/${issueIid}`, {
+    params: {
+      projectPath,
+    },
+  });
+
+  return response.data;
+};
+
+export const updateIssueLabels = async (
+  projectPath: string,
+  issueIid: number,
+  labels: string[],
+  closeIssue?: boolean,
+) => {
+  const response = await axios.put('/api/gitlab/issues', {
+    projectPath,
+    issueIid,
+    labels,
+    closeIssue,
+  });
+
+  return response.data;
+};
+
+export const getIssueBranch = async (projectPath: string, issueIid: number) => {
+  const response = await axios.get('/api/gitlab/issue-branch', {
+    params: {
+      projectPath,
+      issueIid,
+    },
+  });
+
+  return response.data;
+};

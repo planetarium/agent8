@@ -6,7 +6,9 @@ import type { JSONValue, Message } from 'ai';
 import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
+import { Workspace } from '~/components/workspace/Workspace.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import type { GitlabIssue } from '~/components/workspace/TaskList.client';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -31,7 +33,7 @@ import McpServerManager from '~/components/chat/McpServerManager';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
 import { TaskMessages } from './TaskMessages.client';
-import { TaskBranches } from './TaskBranches.client';
+
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
@@ -87,6 +89,10 @@ interface BaseChatProps {
   handleFork?: (message: Message) => void;
   handleRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
+
+  // Task-related props
+  selectedTask?: GitlabIssue | null;
+  onTaskChange?: (task: GitlabIssue | null) => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -129,6 +135,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleFork,
       handleRevert,
       onViewDiff,
+
+      // Task-related props
+      selectedTask,
+      onTaskChange,
     },
     ref,
   ) => {
@@ -143,6 +153,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
+
+    // Task selection state
+    const [internalSelectedTask, setInternalSelectedTask] = useState<GitlabIssue | null>(selectedTask || null);
 
     const prompts = [
       'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.',
@@ -191,6 +204,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     useEffect(() => {
       onStreamingChange?.(isStreaming);
     }, [isStreaming, onStreamingChange]);
+
+    // Handle task selection changes
+    useEffect(() => {
+      if (selectedTask !== internalSelectedTask) {
+        setInternalSelectedTask(selectedTask || null);
+      }
+    }, [selectedTask]);
+
+    const handleTaskSelect = useCallback(
+      (task: GitlabIssue | null) => {
+        console.log('Task selected in BaseChat:', task);
+        setInternalSelectedTask(task);
+        onTaskChange?.(task);
+      },
+      [onTaskChange],
+    );
 
     // State to store scroll container ref
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
@@ -603,11 +632,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onRevert={handleRevert}
                           onViewDiff={onViewDiff}
                         />
-                      )}
-                      {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
-                        <div className="mb-5">
-                          <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
-                        </div>
                       )}
                     </>
                   ) : null;
@@ -1065,13 +1089,26 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             </div>
           </div>
           <ClientOnly>
-            {() => (
-              <Workbench
-                actionRunner={actionRunner ?? ({} as ActionRunner)}
-                chatStarted={chatStarted}
-                isStreaming={isStreaming}
-              />
-            )}
+            {() => {
+              const currentBranch = useStore(repoStore).taskBranch;
+              const isDefaultBranch = currentBranch === DEFAULT_TASK_BRANCH;
+
+              return isDefaultBranch ? (
+                <Workspace
+                  actionRunner={actionRunner ?? ({} as ActionRunner)}
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                  selectedTaskId={internalSelectedTask?.id.toString()}
+                  onTaskSelect={handleTaskSelect}
+                />
+              ) : (
+                <Workbench
+                  actionRunner={actionRunner ?? ({} as ActionRunner)}
+                  chatStarted={chatStarted}
+                  isStreaming={isStreaming}
+                />
+              );
+            }}
           </ClientOnly>
         </div>
       </div>
