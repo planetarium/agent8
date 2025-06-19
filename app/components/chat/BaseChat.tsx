@@ -92,6 +92,7 @@ interface BaseChatProps {
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
+
   // Task-related props
   selectedTask?: GitlabIssue | null;
   onTaskChange?: (task: GitlabIssue | null) => void;
@@ -140,6 +141,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       hasMore,
       loadBefore,
       loadingBefore,
+
       // Task-related props
       selectedTask,
       onTaskChange,
