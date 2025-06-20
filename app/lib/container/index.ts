@@ -72,6 +72,21 @@ export async function initializeContainer(
     return result;
   } catch (error) {
     logger.error('Container initialization failed:', error);
+
+    try {
+      const { toast } = await import('react-toastify');
+      toast.error('Container initialization failed: ' + (error instanceof Error ? error.message : String(error)), {
+        position: 'top-center',
+        autoClose: 8000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } catch (toastError) {
+      console.error('Failed to show container error notification:', toastError);
+    }
+
     containerResolver(null);
 
     return null;
