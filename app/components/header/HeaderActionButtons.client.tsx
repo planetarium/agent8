@@ -4,7 +4,6 @@ import useViewport from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
 import { netlifyConnection } from '~/lib/stores/netlify';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { container } from '~/lib/container';
 import { classNames } from '~/utils/classNames';
 import { path } from '~/utils/path';
 import { useEffect, useRef, useState } from 'react';
@@ -83,7 +82,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
       }
 
       // Get the build files
-      const containerInstance = await container;
+      const containerInstance = await workbenchStore.container;
 
       // Remove /home/project from buildPath if it exists
       const buildPath = artifact.runner.buildOutput.path.replace('/home/project', '');
