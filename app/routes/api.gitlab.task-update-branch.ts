@@ -2,6 +2,7 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 
 export const action = withV8AuthUser(updateTaskBranchAction);
 
@@ -82,7 +83,15 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
     };
 
     if (taskBreakdown?.tasks) {
-      taskResults = await createGitlabIssuesFromTasks(gitlabService, project.path_with_namespace, taskBreakdown.tasks);
+      const cookieHeader = request.headers.get('Cookie');
+      const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+
+      taskResults = await createGitlabIssuesFromTasks(
+        gitlabService,
+        project.path_with_namespace,
+        taskBreakdown.tasks,
+        mcpConfig,
+      );
       logger.info(`Created ${taskResults.issues.length} GitLab issues, ${taskResults.errors.length} errors`);
     }
 
@@ -141,20 +150,12 @@ async function updateTaskBranchAction({ context, request }: ActionFunctionArgs) 
   }
 }
 
-const MCP_SERVERS: Record<string, string> = {
-  'All-in-one': 'https://mcp.verse8.io/mcp',
-  Image: 'https://mcp-image.verse8.io/mcp',
-  Cinematic: 'https://mcp-cinematic.verse8.io/mcp',
-  Audio: 'https://mcp-audio.verse8.io/mcp',
-  Skybox: 'https://mcp-skybox.verse8.io/mcp',
-  UI: 'https://mcp-ui.verse8.io/mcp',
-};
-
-function formatMcpMetadataNote(recommendedMcpTools: string[]): string | null {
+function formatMcpMetadataNote(recommendedMcpTools: string[], mcpConfig: any): string | null {
   const validMcpTools = recommendedMcpTools.filter((toolName) => {
     const hasUnderscore = toolName.includes('_');
     const prefix = toolName.split('_')[0];
-    const isValidPrefix = MCP_SERVERS[prefix];
+    const serverConfig = mcpConfig.servers[prefix];
+    const isValidPrefix = serverConfig && serverConfig.enabled;
 
     if (!hasUnderscore || !isValidPrefix) {
       logger.warn(`Invalid MCP tool name filtered out: ${toolName}`);
@@ -175,12 +176,12 @@ function formatMcpMetadataNote(recommendedMcpTools: string[]): string | null {
         const prefix = toolName.split('_')[0];
         return prefix;
       })
-      .filter((prefix) => MCP_SERVERS[prefix]),
+      .filter((prefix) => mcpConfig.servers[prefix] && mcpConfig.servers[prefix].enabled),
   );
 
   const servers = Array.from(serverPrefixes).map((serverName) => ({
     name: serverName,
-    url: MCP_SERVERS[serverName],
+    url: mcpConfig.servers[serverName].url,
   }));
 
   const mcpMetadata = { servers };
@@ -191,7 +192,12 @@ ${JSON.stringify(mcpMetadata, null, 2)}
 }
 
 // Helper function to create GitLab issues from tasks
-async function createGitlabIssuesFromTasks(gitlabService: GitlabService, projectPath: string, tasks: any[]) {
+async function createGitlabIssuesFromTasks(
+  gitlabService: GitlabService,
+  projectPath: string,
+  tasks: any[],
+  mcpConfig: any,
+) {
   const issues: any[] = [];
   const errors: any[] = [];
   const issueIdMap = new Map();
@@ -214,7 +220,7 @@ async function createGitlabIssuesFromTasks(gitlabService: GitlabService, project
       try {
         // Only create internal note if there are recommended MCP tools
         if (task.recommendedMcpTools && task.recommendedMcpTools.length > 0) {
-          const mcpToolsNote = formatMcpMetadataNote(task.recommendedMcpTools);
+          const mcpToolsNote = formatMcpMetadataNote(task.recommendedMcpTools, mcpConfig);
 
           if (mcpToolsNote) {
             await gitlabService.createIssueInternalNote(projectPath, issue.iid, mcpToolsNote);
