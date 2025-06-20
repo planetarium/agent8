@@ -78,11 +78,6 @@ export class WorkbenchStore {
       this.#containerRejecter = reject;
     });
 
-    this.#previewsStore = new PreviewsStore(this.#currentContainer);
-    this.#filesStore = new FilesStore(this.#currentContainer);
-    this.#editorStore = new EditorStore(this.#filesStore);
-    this.#terminalStore = new TerminalStore(this.#currentContainer);
-
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
@@ -91,7 +86,24 @@ export class WorkbenchStore {
       import.meta.hot.data.actionAlert = this.actionAlert;
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
+
+      if (import.meta.hot.data.workbenchContainer) {
+        this.#currentContainer = import.meta.hot.data.workbenchContainer;
+        this.#containerInitialized = true;
+        logger.info('HMR: Container restored from hot data');
+      } else {
+        this.#currentContainer.then((container) => {
+          if (import.meta.hot) {
+            import.meta.hot.data.workbenchContainer = Promise.resolve(container);
+          }
+        });
+      }
     }
+
+    this.#previewsStore = new PreviewsStore(this.#currentContainer);
+    this.#filesStore = new FilesStore(this.#currentContainer);
+    this.#editorStore = new EditorStore(this.#filesStore);
+    this.#terminalStore = new TerminalStore(this.#currentContainer);
   }
 
   async initializeContainer(accessToken: string): Promise<Container | null> {
@@ -169,17 +181,6 @@ export class WorkbenchStore {
 
   get container(): Promise<Container> {
     return this.#currentContainer;
-  }
-
-  async setHMRContainer(containerPromise: Promise<Container>) {
-    const containerInstance = await containerPromise;
-
-    try {
-      this.#containerResolver(containerInstance);
-      this.#containerInitialized = true;
-    } catch (error) {
-      this.#containerRejecter(error);
-    }
   }
 
   #setupContainerErrorHandling(container: Container): void {
