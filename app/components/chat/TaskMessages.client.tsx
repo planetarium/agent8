@@ -3,13 +3,14 @@ import { forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import { Messages } from './Messages.client';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { mergeTaskBranch, removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
+import { mergeTaskBranch, removeTaskBranch, getIssue, updateIssueLabels } from '~/lib/persistenceGitbase/api.client';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
 import { AnimatePresence, motion } from 'framer-motion';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { extractIssueIidFromBranch } from '~/lib/persistenceGitbase/utils';
 
 interface TaskMessagesProps {
   id?: string;
@@ -43,6 +44,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     const [isLoading, setIsLoading] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [reloadCount, setReloadCount] = useState(0);
+    const [issueTitle, setIssueTitle] = useState<string | null>(null);
 
     const repo = useStore(repoStore);
     const currentTaskBranch = repo.taskBranch;
@@ -50,6 +52,33 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     // Find the current branch info
     const branch = taskBranches?.find((branch) => branch.name === currentTaskBranch);
     const mergeStatus = branch?.mergeStatus;
+
+    // Load issue title if this is an issue branch
+    useEffect(() => {
+      const loadIssueTitle = async () => {
+        if (currentTaskBranch.startsWith('issue-')) {
+          const issueIid = extractIssueIidFromBranch(currentTaskBranch);
+
+          if (issueIid) {
+            try {
+              const projectPath = repo.path;
+              const issueResponse = await getIssue(projectPath, issueIid);
+
+              if (issueResponse.success) {
+                setIssueTitle(issueResponse.data.title);
+              }
+            } catch (error) {
+              console.error('Failed to load issue title:', error);
+              setIssueTitle(null);
+            }
+          }
+        } else {
+          setIssueTitle(null);
+        }
+      };
+
+      loadIssueTitle();
+    }, [currentTaskBranch, repo.path]);
 
     useEffect(() => {
       let intervalId: NodeJS.Timeout;
@@ -82,6 +111,21 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     }, [mergeStatus, reloadTaskBranches, repo.path, reloadCount, isStreaming]);
 
     const isProcessing = isLoading || isStreaming;
+
+    // Get display title
+    const getDisplayTitle = () => {
+      if (currentTaskBranch.startsWith('issue-') && issueTitle) {
+        // Truncate long titles with ellipsis
+        return issueTitle.length > 50 ? `${issueTitle.substring(0, 50)}...` : issueTitle;
+      }
+
+      return (
+        branch?.firstCommit?.title ||
+        `New ${
+          currentTaskBranch.startsWith('task-') ? 'Task' : currentTaskBranch.startsWith('issue-') ? 'Issue' : 'Branch'
+        }`
+      );
+    };
 
     return (
       <div
@@ -156,11 +200,13 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               <div
                 className={classNames('flex items-center w-full', branch?.lastCommit?.message ? 'mb-1' : 'mt-[2px]')}
               >
-                <span className="inline-block px-2 py-0.5 text-xs font-semibold text-white bg-cyan-600 rounded-full mr-2 flex-shrink-0">
+                <span
+                  className={`inline-block px-2 py-0.5 text-xs font-semibold text-white rounded-full mr-2 flex-shrink-0 bg-cyan-600`}
+                >
                   Task
                 </span>
-                <h3 className="font-medium text-white truncate max-w-full">
-                  {branch?.firstCommit?.title || 'New Task'}
+                <h3 className="font-medium text-white truncate max-w-full" title={issueTitle || undefined}>
+                  {getDisplayTitle()}
                 </h3>
               </div>
               {branch?.lastCommit?.message && (
@@ -231,7 +277,45 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                             await new Promise((resolve) => setTimeout(resolve, 2000));
                           }
 
-                          await mergeTaskBranch(repoStore.get().path, repoStore.get().taskBranch);
+                          const currentBranch = repoStore.get().taskBranch;
+                          await mergeTaskBranch(repoStore.get().path, currentBranch);
+
+                          // Update task status if this is an issue branch
+                          const issueIid = extractIssueIidFromBranch(currentBranch);
+
+                          if (issueIid && currentBranch.startsWith('issue-')) {
+                            try {
+                              const projectPath = repoStore.get().path;
+
+                              // Get current issue to preserve existing labels
+                              const issueResponse = await getIssue(projectPath, issueIid);
+
+                              if (issueResponse.success) {
+                                const currentLabels = issueResponse.data.labels || [];
+
+                                // Create new labels array: remove "CONFIRM NEEDED" and add "DONE"
+                                const newLabels = currentLabels
+                                  .filter((label: string) => label !== 'CONFIRM NEEDED')
+                                  .concat('DONE')
+                                  .filter(
+                                    (label: string, index: number, arr: string[]) => arr.indexOf(label) === index,
+                                  ); // Remove duplicates
+
+                                await updateIssueLabels(projectPath, issueIid, newLabels, true);
+                                toast.success('Task completed: Status updated to DONE and task closed');
+                              } else {
+                                // Fallback to basic labels if we can't get current issue
+                                const newLabels = ['agentic', 'DONE'];
+
+                                await updateIssueLabels(projectPath, issueIid, newLabels, true);
+                                toast.success('Task completed and closed');
+                              }
+                            } catch (labelError) {
+                              console.error('Failed to update task status:', labelError);
+                              toast.warn('Merge successful, but failed to update task status');
+                            }
+                          }
+
                           lastActionStore.set({ action: 'LOAD' });
                           repoStore.set({
                             ...repoStore.get(),

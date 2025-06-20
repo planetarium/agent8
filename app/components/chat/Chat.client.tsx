@@ -35,13 +35,15 @@ import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import {
   commitChanges,
-  createTaskBranch,
+  createTaskBranchSimple,
+  updateTaskBranch,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
 import { container } from '~/lib/container';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { triggerTaskRefresh } from '~/lib/stores/task';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
@@ -136,9 +138,8 @@ export function Chat() {
   useEffect(() => {
     if (repoStore.get().path) {
       sendEventToParent('EVENT', { name: 'START_EDITING' });
+      changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
     }
-
-    changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
   }, []);
 
   useEffect(() => {
@@ -374,7 +375,7 @@ export const ChatImpl = memo(
       data: chatData,
       setData,
     } = useChat({
-      api: '/api/chat',
+      api: '/api/task',
       body: {
         apiKeys,
         files,
@@ -410,11 +411,29 @@ export const ChatImpl = memo(
         }
 
         workbenchStore.onArtifactClose(message.id, async () => {
-          await runAndPreview(message);
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          await handleCommit(message);
-          workbenchStore.offArtifactClose(message.id);
+          if (repoStore.get().taskBranch !== 'task') {
+            await runAndPreview(message);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await handleCommit(message);
+            workbenchStore.offArtifactClose(message.id);
+          }
         });
+
+        if (repoStore.get().taskBranch === 'task') {
+          try {
+            const promptAnnotation = message.annotations?.find(
+              (annotation: any) => annotation.type === 'prompt',
+            ) as any;
+            const userInput = promptAnnotation?.prompt || '';
+
+            await updateTaskBranch(repoStore.get().path, userInput, message.content);
+            logger.info('Task branch updated successfully');
+
+            triggerTaskRefresh();
+          } catch (error) {
+            logger.warn('Failed to update task branch:', error);
+          }
+        }
 
         setFakeLoading(false);
 
@@ -489,7 +508,12 @@ export const ChatImpl = memo(
 
             return newMessages;
           });
+
+          // Refresh branch list
           reloadTaskBranches(repoStore.get().path);
+
+          // Trigger TaskList refresh
+          triggerTaskRefresh();
         });
       } catch (e) {
         toast.error('The code commit has failed. You can download the code and restore it.');
@@ -660,14 +684,14 @@ export const ChatImpl = memo(
             let branchName = 'develop';
 
             if (enabledTaskMode) {
-              const { success, message, data } = await createTaskBranch(projectPath);
+              const { success, message } = await createTaskBranchSimple(projectPath);
 
               if (!success) {
                 toast.error(message);
                 return;
               }
 
-              branchName = data.branchName;
+              branchName = 'task';
             }
 
             repoStore.set({
@@ -741,22 +765,22 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
+        const commit = await workbenchStore.commitModifiedFiles();
+
+        if (commit) {
+          setMessages((prev: Message[]) => [
+            ...prev,
+            {
+              id: commit.id,
+              role: 'assistant',
+              content: commit.message || 'The user changed the files.',
+            },
+          ]);
+        }
+
         if (repoStore.get().path) {
-          const commit = await workbenchStore.commitModifiedFiles();
-
-          if (commit) {
-            setMessages((prev: Message[]) => [
-              ...prev,
-              {
-                id: commit.id,
-                role: 'assistant',
-                content: commit.message || 'The user changed the files.',
-              },
-            ]);
-          }
-
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
-            const { success, message, data } = await createTaskBranch(repoStore.get().path);
+            const { success, message } = await createTaskBranchSimple(repoStore.get().path);
 
             if (!success) {
               toast.error(message);
@@ -765,7 +789,7 @@ export const ChatImpl = memo(
 
             repoStore.set({
               ...repoStore.get(),
-              taskBranch: data.branchName,
+              taskBranch: 'task',
             });
 
             setMessages(() => []);
@@ -851,11 +875,6 @@ export const ChatImpl = memo(
             title: source.title,
             taskBranch: DEFAULT_TASK_BRANCH,
           });
-
-          // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
-          if (!isEnabledGitbasePersistence) {
-            changeChatUrl(source.title, { replace: true });
-          }
 
           const messages = [
             {
