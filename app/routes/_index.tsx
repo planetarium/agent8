@@ -8,7 +8,7 @@ import { Header } from '~/components/header/Header';
 import BackgroundRays from '~/components/ui/BackgroundRays';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
-import { initializeContainer } from '~/lib/container';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
 
 export const meta: MetaFunction = () => {
@@ -23,7 +23,11 @@ export const loader = () => json({});
 function DirectChatAccess() {
   useEffect(() => {
     // we don't await here because we want to wait in the workbench
-    initializeContainer(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
+    const token = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+    if (token) {
+      workbenchStore.initializeContainer(token);
+    }
   }, []);
 
   return (
@@ -82,7 +86,7 @@ function AccessControlledChat() {
 
           // Reinitialize container with the new token to recover from potential failures
           try {
-            await initializeContainer(token, true);
+            await workbenchStore.reinitializeContainer(token);
           } catch (error) {
             console.error('Failed to reinitialize container:', error);
           }

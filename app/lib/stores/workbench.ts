@@ -171,21 +171,22 @@ export class WorkbenchStore {
     return this.#currentContainer;
   }
 
-  setHMRContainer(containerPromise: Promise<Container>) {
-    containerPromise.then((containerInstance) => {
+  async setHMRContainer(containerPromise: Promise<Container>) {
+    const containerInstance = await containerPromise;
+
+    try {
       this.#containerResolver(containerInstance);
       this.#containerInitialized = true;
-    }).catch((error) => {
+    } catch (error) {
       this.#containerRejecter(error);
-    });
+    }
   }
 
   #setupContainerErrorHandling(container: Container): void {
     container.on('preview-message', (message) => {
       logger.info('Preview message:', message);
 
-      if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' ||
-          message.type === 'PREVIEW_UNHANDLED_REJECTION') {
+      if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {
         const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
 
         this.actionAlert.set({
@@ -243,7 +244,7 @@ export class WorkbenchStore {
     this.actionAlert.set(undefined);
   }
 
-    toggleTerminal(value?: boolean) {
+  toggleTerminal(value?: boolean) {
     this.#terminalStore.toggleTerminal(value);
   }
 
