@@ -1,6 +1,6 @@
 import type { Container } from '~/lib/container/interfaces';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { container as containerPromise } from '~/lib/container';
+import { workbenchStore } from '~/lib/stores/workbench';
 import git, { type GitAuth, type PromiseFsClient } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import Cookies from 'js-cookie';
@@ -34,12 +34,16 @@ export function useGit() {
   const [fs, setFs] = useState<PromiseFsClient>();
   const fileData = useRef<Record<string, { data: any; encoding?: string }>>({});
   useEffect(() => {
-    containerPromise.then((containerInstance) => {
-      fileData.current = {};
-      setContainer(containerInstance);
-      setFs(getFs(containerInstance, fileData));
-      setReady(true);
-    });
+    const initializeGit = async () => {
+      if (workbenchStore.containerReady && workbenchStore.container) {
+        const containerInstance = await workbenchStore.container;
+        fileData.current = {};
+        setContainer(containerInstance);
+        setFs(getFs(containerInstance, fileData));
+        setReady(true);
+      }
+    };
+    initializeGit();
   }, []);
 
   const gitClone = useCallback(
@@ -242,7 +246,7 @@ const getFs = (container: Container, record: MutableRefObject<Record<string, { d
     },
     symlink: async (target: string, path: string) => {
       /*
-       * Since WebContainer doesn't support symlinks,
+       * Since RemoteContainer doesn't support symlinks,
        * we'll throw a "operation not supported" error
        */
       throw new Error(`EPERM: operation not permitted, symlink '${target}' -> '${path}'`);
@@ -250,7 +254,7 @@ const getFs = (container: Container, record: MutableRefObject<Record<string, { d
 
     chmod: async (_path: string, _mode: number) => {
       /*
-       * WebContainer doesn't support changing permissions,
+       * RemoteContainer doesn't support changing permissions,
        * but we can pretend it succeeded for compatibility
        */
       return await Promise.resolve();

@@ -380,7 +380,6 @@ export class ActionRunner {
   }
 
   async saveFileHistory(filePath: string, history: FileHistory) {
-    // const webcontainer = await this.#webcontainer;
     const historyPath = this.#getHistoryPath(filePath);
 
     await this.#runFileAction({

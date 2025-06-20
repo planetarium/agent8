@@ -41,7 +41,6 @@ import {
   getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
-import { container } from '~/lib/container';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { triggerTaskRefresh } from '~/lib/stores/task';
 import type { FileMap } from '~/lib/.server/llm/constants';
@@ -155,15 +154,7 @@ export function Chat() {
       }
 
       if (Object.keys(files).length > 0) {
-        container.then(async (containerInstance) => {
-          /*
-           * try {
-           *                 await containerInstance.fs.rm('/src', { recursive: true, force: true });
-           *           } catch {
-           *               logger.warn('Failed to remove /src directory');
-           * }
-           */
-
+        workbenchStore.container.then(async (containerInstance) => {
           try {
             const previews = workbenchStore.previews.get();
             const currentPreview = previews.find((p) => p.ready);
@@ -188,8 +179,9 @@ export function Chat() {
           } catch (error) {
             logger.error('Error mounting container:', error);
           }
+
+          workbenchStore.showWorkbench.set(true);
         });
-        workbenchStore.showWorkbench.set(true);
       }
 
       if (project.description) {
@@ -673,7 +665,7 @@ export const ChatImpl = memo(
           );
           workbenchStore.files.set(processedFileMap);
 
-          const containerInstance = await container;
+          const containerInstance = await workbenchStore.container;
           await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
 
           if (isEnabledGitbasePersistence) {
@@ -865,7 +857,7 @@ export const ChatImpl = memo(
         setFakeLoading(true);
         runAnimation();
 
-        const containerInstance = await container;
+        const containerInstance = await workbenchStore.container;
         await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
         if (!chatStarted) {

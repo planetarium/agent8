@@ -568,6 +568,7 @@ export class GitlabService {
     };
     commits: GitlabCommit[];
     hasMore: boolean;
+    total: number;
   }> {
     try {
       const project = await this.gitlab.Projects.show(projectPath);
@@ -635,6 +636,7 @@ export class GitlabService {
         },
         commits,
         hasMore,
+        total: commitsData.length,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

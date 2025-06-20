@@ -12,7 +12,6 @@ import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
-import { container as containerPromise } from '~/lib/container';
 
 const logger = createScopedLogger('persistenceGitbase');
 
@@ -70,7 +69,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/bolt/g; // Sometimes, file tags do not close.
 
     const matches = [...content.matchAll(regex)];
-    const container = await containerPromise;
+    const container = await workbenchStore.container;
 
     const envFile = await container.fs.readFile(`.env`, 'utf-8');
 
