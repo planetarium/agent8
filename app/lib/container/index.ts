@@ -1,14 +1,22 @@
 import type { Container, ContainerContext } from './interfaces';
-import { ContainerFactory } from './factory';
-import { WORK_DIR_NAME } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
-import { cleanStackTrace } from '~/utils/stacktrace';
 
 const logger = createScopedLogger('container');
 
-/**
- * Container context - maintains state for hot module reloading
- */
+// ✅ 호환성 레이어: 기존 코드 보호를 위한 전역 API 유지
+let workbenchStore: any = null;
+
+// 지연 로딩으로 순환 참조 방지
+async function getWorkbenchStore() {
+  if (!workbenchStore) {
+    const { workbenchStore: store } = await import('~/lib/stores/workbench');
+    workbenchStore = store;
+  }
+
+  return workbenchStore;
+}
+
+// ✅ 호환성 레이어: 전역 containerContext (deprecated)
 export const containerContext: ContainerContext = import.meta.hot?.data.containerContext ?? {
   loaded: false,
 };
@@ -17,131 +25,70 @@ if (import.meta.hot) {
   import.meta.hot.data.containerContext = containerContext;
 }
 
-/**
- * Container promise instance
- * Will not execute in SSR
- */
+// ✅ 호환성 레이어: 전역 container (deprecated) - 기존 동작 재현
 let containerResolver: (container: Container | null) => void;
-export let container: Promise<Container> = new Promise((resolve) => {
+export const container: Promise<Container> = new Promise((resolve) => {
   containerResolver = resolve as (container: Container | null) => void;
 });
 
-/**
- * Initialize the container with the provided access token
- * This allows delayed initialization after authentication
- *
- * @param accessToken V8 access token for authentication
- * @param forceReinitialization If true, forces creation of a new container even if one exists
- * @returns Promise resolving to the container instance
- */
-export function initializeContainer(
+// ✅ 호환성 레이어: initializeContainer 함수 (deprecated)
+export async function initializeContainer(
   accessToken?: string | null,
   forceReinitialization = false,
 ): Promise<Container | null> {
-  logger.info('Initializing container...', {
-    hasToken: !!accessToken,
-    isSSR: import.meta.env.SSR,
-    forceReinitialization,
-  });
+  logger.warn('initializeContainer() is deprecated. Consider using WorkbenchStore.initializeContainer() directly.');
+
+  if (!accessToken) {
+    containerResolver(null);
+
+    return Promise.resolve(null);
+  }
 
   if (import.meta.env.SSR) {
     logger.info('Skipping initialization in SSR');
-    return new Promise(() => {
-      // noop for SSR
-    });
+    containerResolver(null);
+
+    return Promise.resolve(null);
   }
 
-  // Skip HMR data check if forced reinitialization
-  if (!forceReinitialization && import.meta.hot?.data.container) {
-    container = import.meta.hot.data.container;
-    return container;
-  }
+  try {
+    const store = await getWorkbenchStore();
 
-  // Reset HMR data if forcing reinitialization
-  if (forceReinitialization && import.meta.hot) {
-    import.meta.hot.data.container = null;
-  }
+    let result: Container | null;
 
-  const containerPromise = Promise.resolve()
-    .then(() => {
-      logger.info('Creating remote container instance...');
-      return ContainerFactory.create({
-        coep: 'credentialless',
-        workdirName: WORK_DIR_NAME,
-        forwardPreviewErrors: true,
-        v8AccessToken: accessToken || undefined,
-      });
-    })
-    .then(async (containerInstance) => {
-      logger.info('Remote container instance created successfully');
+    if (forceReinitialization) {
+      result = await store.reinitializeContainer(accessToken);
+    } else {
+      result = await store.initializeContainer(accessToken);
+    }
+
+    if (result) {
       containerContext.loaded = true;
+      containerResolver(result);
+    } else {
+      containerResolver(null);
+    }
 
-      const { workbenchStore } = await import('~/lib/stores/workbench');
+    return result;
+  } catch (error) {
+    logger.error('Container initialization failed:', error);
+    containerResolver(null);
 
-      // Handle preview errors
-      containerInstance.on('preview-message', (message) => {
-        logger.info('Preview message:', message);
-
-        // Handle uncaught exceptions and promise rejections
-        if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {
-          const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
-          workbenchStore.actionAlert.set({
-            type: 'preview',
-            title: isPromise ? 'Unhandled Promise Rejection' : 'Uncaught Exception',
-            description: message.message || 'An error occurred in the preview',
-            content: `Error occurred at ${message.pathname}${message.search}${message.hash}\nPort: ${message.port}\n\nStack trace:\n${cleanStackTrace(message.stack || '')}`,
-            source: 'preview',
-          });
-        }
-      });
-
-      return containerInstance;
-    })
-    .catch(async (error) => {
-      const errorMsg = forceReinitialization ? 'Container reinitialization failed' : 'Container initialization failed';
-      logger.error(`${errorMsg}:`, error);
-
-      try {
-        // Use toast notification for immediate visual feedback
-        const { toast } = await import('react-toastify');
-        toast.error(`${errorMsg}: ` + (error instanceof Error ? error.message : String(error)), {
-          position: 'top-center',
-          autoClose: 8000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-
-        // Log to central error store for persistence
-        const { logStore } = await import('~/lib/stores/logs');
-        logStore.logError(errorMsg, error, {
-          componentType: 'remotecontainer',
-          hasAccessToken: !!accessToken,
-        });
-      } catch (logError) {
-        // Fallback logging if imports fail
-        console.error(`Failed to show container error notification:`, logError);
-      }
-
-      return null;
-    });
-
-  // Resolve the original container promise
-  containerPromise.then(containerResolver);
-
-  if (import.meta.hot) {
-    import.meta.hot.data.container = containerPromise;
+    return null;
   }
-
-  return containerPromise;
 }
 
-/*
- * Container initialization is now delayed until access token is available
- * The container should be initialized by calling initializeContainer with the access token
- * This is typically done after user authentication or when the token is retrieved
- */
+// HMR 지원 (기존 코드 유지)
 if (!import.meta.env.SSR && import.meta.hot?.data.container) {
-  container = import.meta.hot.data.container;
+  // HMR 데이터가 있으면 WorkbenchStore에 전달
+  getWorkbenchStore().then((store) => {
+    if (import.meta.hot?.data.container) {
+      store.setHMRContainer(import.meta.hot.data.container);
+
+      import.meta.hot.data.container.then((containerInstance: Container) => {
+        containerContext.loaded = true;
+        containerResolver(containerInstance);
+      });
+    }
+  });
 }

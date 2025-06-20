@@ -3,6 +3,11 @@ import type { EditorDocument, ScrollPosition } from '~/components/editor/codemir
 import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
 import { container } from '~/lib/container';
+import type { Container } from '~/lib/container/interfaces';
+import { ContainerFactory } from '~/lib/container/factory';
+import { WORK_DIR_NAME } from '~/utils/constants';
+import { cleanStackTrace } from '~/utils/stacktrace';
+import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
@@ -19,12 +24,13 @@ import { repoStore } from './repo';
 import { isEnabledGitbasePersistence, commitUserChanged } from '~/lib/persistenceGitbase/api.client';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken, type V8User } from '~/lib/verse8/userAuth';
 import type { BoltShell } from '~/utils/shell';
-import { logger } from '~/utils/logger';
 import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 
 const { saveAs } = fileSaver;
+
+const logger = createScopedLogger('workbench');
 
 export interface ArtifactState {
   id: string;
@@ -41,10 +47,15 @@ type Artifacts = MapStore<Record<string, ArtifactState>>;
 export type WorkbenchViewType = 'code' | 'diff' | 'preview' | 'resource';
 
 export class WorkbenchStore {
-  #previewsStore = new PreviewsStore(container);
-  #filesStore = new FilesStore(container);
-  #editorStore = new EditorStore(this.#filesStore);
-  #terminalStore = new TerminalStore(container);
+  #currentContainer: Promise<Container>;
+  #containerResolver!: (container: Container) => void;
+  #containerRejecter!: (error: any) => void;
+  #containerInitialized = false;
+
+  #previewsStore: PreviewsStore;
+  #filesStore: FilesStore;
+  #editorStore: EditorStore;
+  #terminalStore: TerminalStore;
   #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
@@ -61,7 +72,18 @@ export class WorkbenchStore {
   #globalExecutionQueue = Promise.resolve();
   #shellActionRunning = false;
   #shellActionPromise: Promise<void> | null = null;
+
   constructor() {
+    this.#currentContainer = new Promise<Container>((resolve, reject) => {
+      this.#containerResolver = resolve;
+      this.#containerRejecter = reject;
+    });
+
+    this.#previewsStore = new PreviewsStore(this.#currentContainer);
+    this.#filesStore = new FilesStore(this.#currentContainer);
+    this.#editorStore = new EditorStore(this.#filesStore);
+    this.#terminalStore = new TerminalStore(this.#currentContainer);
+
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
@@ -71,6 +93,111 @@ export class WorkbenchStore {
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
     }
+  }
+
+  async initializeContainer(accessToken: string): Promise<Container | null> {
+    try {
+      const containerPromise = ContainerFactory.create({
+        coep: 'credentialless',
+        workdirName: WORK_DIR_NAME,
+        forwardPreviewErrors: true,
+        v8AccessToken: accessToken,
+      });
+
+      const containerInstance = await containerPromise;
+
+      this.#containerResolver(containerInstance);
+
+      this.#setupContainerErrorHandling(containerInstance);
+      this.#containerInitialized = true;
+
+      return containerInstance;
+    } catch (error) {
+      logger.error('Container initialization failed:', error);
+
+      this.#containerRejecter(error);
+
+      this.actionAlert.set({
+        type: 'preview',
+        title: 'Container Initialization Failed',
+        description: error instanceof Error ? error.message : String(error),
+        content: `Failed to initialize container\n\nError: ${error instanceof Error ? error.stack : error}`,
+        source: 'preview',
+      });
+
+      return null;
+    }
+  }
+
+  async reinitializeContainer(accessToken: string): Promise<Container | null> {
+    const isPromisePending = async (promise: Promise<any>): Promise<boolean> => {
+      const pending = Symbol('pending');
+      const result = await Promise.race([
+        promise.then(
+          () => false,
+          () => false,
+        ),
+        Promise.resolve(pending),
+      ]);
+
+      return result === pending;
+    };
+
+    const isPending = await isPromisePending(this.#currentContainer);
+
+    if (isPending) {
+      return this.initializeContainer(accessToken);
+    } else {
+      this.#currentContainer = new Promise<Container>((resolve, reject) => {
+        this.#containerResolver = resolve;
+        this.#containerRejecter = reject;
+      });
+
+      this.#previewsStore = new PreviewsStore(this.#currentContainer);
+      this.#filesStore = new FilesStore(this.#currentContainer);
+      this.#editorStore = new EditorStore(this.#filesStore);
+      this.#terminalStore = new TerminalStore(this.#currentContainer);
+
+      this.#containerInitialized = false;
+
+      return this.initializeContainer(accessToken);
+    }
+  }
+
+  get containerReady(): boolean {
+    return this.#containerInitialized;
+  }
+
+  get container(): Promise<Container> {
+    return this.#currentContainer;
+  }
+
+  setHMRContainer(containerPromise: Promise<Container>) {
+    containerPromise.then((containerInstance) => {
+      this.#containerResolver(containerInstance);
+      this.#containerInitialized = true;
+    }).catch((error) => {
+      this.#containerRejecter(error);
+    });
+  }
+
+  #setupContainerErrorHandling(container: Container): void {
+    container.on('preview-message', (message) => {
+      logger.info('Preview message:', message);
+
+      if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' ||
+          message.type === 'PREVIEW_UNHANDLED_REJECTION') {
+        const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
+
+        this.actionAlert.set({
+          type: 'preview',
+          title: isPromise ? 'Unhandled Promise Rejection' : 'Uncaught Exception',
+          description: message.message || 'An error occurred in the preview',
+          content: `Error occurred at ${message.pathname}${message.search}${message.hash}\nPort: ${message.port}\n\nStack trace:\n${cleanStackTrace(message.stack || '')}`,
+          source: 'preview',
+        });
+      }
+    });
   }
 
   addToExecutionQueue(callback: () => Promise<void>) {
@@ -104,23 +231,27 @@ export class WorkbenchStore {
   get showTerminal() {
     return this.#terminalStore.showTerminal;
   }
+
   get boltTerminal() {
     return this.#terminalStore.boltTerminal;
   }
+
   get alert() {
     return this.actionAlert;
   }
+
   clearAlert() {
     this.actionAlert.set(undefined);
   }
 
-  toggleTerminal(value?: boolean) {
+    toggleTerminal(value?: boolean) {
     this.#terminalStore.toggleTerminal(value);
   }
 
   attachTerminal(terminal: ITerminal) {
     this.#terminalStore.attachTerminal(terminal);
   }
+
   attachBoltTerminal(terminal: ITerminal) {
     this.#terminalStore.attachBoltTerminal(terminal);
   }
