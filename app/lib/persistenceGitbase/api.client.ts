@@ -69,11 +69,6 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     const regex = /<boltAction[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/bolt/g; // Sometimes, file tags do not close.
 
     const matches = [...content.matchAll(regex)];
-
-    if (!workbenchStore.containerReady || !workbenchStore.container) {
-      throw new Error('Container not ready');
-    }
-
     const container = await workbenchStore.container;
 
     const envFile = await container.fs.readFile(`.env`, 'utf-8');

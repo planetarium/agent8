@@ -82,10 +82,6 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
       }
 
       // Get the build files
-      if (!workbenchStore.containerReady || !workbenchStore.container) {
-        throw new Error('Container not ready');
-      }
-
       const containerInstance = await workbenchStore.container;
 
       // Remove /home/project from buildPath if it exists
