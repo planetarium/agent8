@@ -28,6 +28,7 @@ import type {
 } from '~/lib/shared/agent8-container-protocol/src';
 import { v4 } from 'uuid';
 import { createScopedLogger } from '~/utils/logger';
+import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
 
 // Constants for OSC parsing
 const OSC_PATTERNS = {
@@ -48,6 +49,24 @@ const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const logger = createScopedLogger('remote-container');
 
+// Connection state enum
+enum ConnectionState {
+  DISCONNECTED = 'disconnected',
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  RECONNECTING = 'reconnecting',
+  FAILED = 'failed',
+}
+
+// Connection configuration interface
+interface ConnectionConfig {
+  maxReconnectAttempts: number;
+  initialReconnectDelay: number;
+  maxReconnectDelay: number;
+  heartbeatInterval: number;
+  queueCapacity: number;
+}
+
 function base64ToUint8Array(base64: string) {
   if (typeof Buffer !== 'undefined') {
     return new Uint8Array(Buffer.from(base64, 'base64'));
@@ -64,15 +83,20 @@ function base64ToUint8Array(base64: string) {
 }
 
 /**
- * Class to manage remote WebSocket connection and communication
+ * Class to manage remote WebSocket connection and communication with auto-reconnect
  */
 class RemoteContainerConnection {
-  private _ws: WebSocket | null = null;
-  private _requestMap = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void }>();
-  private _connected = false;
+  private _ws: Websocket | null = null;
+  private _state: ConnectionState = ConnectionState.DISCONNECTED;
+  private _requestMap = new Map<
+    string,
+    { resolve: (value: any) => void; reject: (reason: any) => void; timestamp: number }
+  >();
   private _connectionPromise: Promise<void> | null = null;
   private _lastRequestTime = Date.now();
   private _heartbeatInterval: NodeJS.Timeout | null = null;
+  private _lastHeartbeatResponse: number = 0;
+  private _stateListeners = new Set<(state: ConnectionState, prev: ConnectionState) => void>();
   private _listeners: EventListeners = {
     port: new Set(),
     'server-ready': new Set(),
@@ -81,193 +105,136 @@ class RemoteContainerConnection {
     'file-change': new Set(),
   };
   private _processListeners = new Map<string, Set<(data: any) => void>>();
+  private _config: ConnectionConfig;
 
   constructor(
     private _serverUrl: string,
     private _token: string,
-  ) {}
-
-  private _startHeartbeat(interval: number = 10000) {
-    if (this._heartbeatInterval) {
-      clearInterval(this._heartbeatInterval);
-    }
-
-    this._heartbeatInterval = setInterval(() => {
-      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
-        const timeSinceLastRequest = Date.now() - this._lastRequestTime;
-
-        if (timeSinceLastRequest >= interval) {
-          this.sendRequest({
-            id: `heartbeat-${v4()}`,
-            operation: {
-              type: 'heartbeat',
-            },
-          });
-        }
-      }
-    }, interval);
+    config?: Partial<ConnectionConfig>,
+  ) {
+    this._config = {
+      maxReconnectAttempts: 10,
+      initialReconnectDelay: 1000,
+      maxReconnectDelay: 30000,
+      heartbeatInterval: 15000,
+      queueCapacity: 50,
+      ...config,
+    };
   }
 
-  private _stopHeartbeat() {
-    if (this._heartbeatInterval) {
-      clearInterval(this._heartbeatInterval);
-      this._heartbeatInterval = null;
-    }
+  private _getWebSocketUrl(): string {
+    const protocol = this._serverUrl.startsWith('https') ? 'wss' : 'ws';
+    const baseUrl = this._serverUrl.replace(/^https?/, protocol);
+
+    return baseUrl;
   }
 
-  async connect(): Promise<void> {
-    if (this._connected) {
-      return;
-    }
+  private _initializeWebSocket(): void {
+    this._ws = new WebsocketBuilder(this._getWebSocketUrl())
+      .withBuffer(new RingQueue(this._config.queueCapacity))
+      .withBackoff(
+        new ExponentialBackoff(
+          this._config.initialReconnectDelay,
+          6, // 6 doublings: 1s → 2s → 4s → 8s → 16s → 32s → 64s
+        ),
+      )
+      .withProtocols([CONTAINER_AGENT_PROTOCOL])
+      .onOpen((_ws, _ev) => this._handleOpen())
+      .onClose((_ws, ev) => this._handleClose(ev))
+      .onError((_ws, ev) => this._handleError(ev))
+      .onMessage((_ws, ev) => this._handleMessage(ev.data))
+      .onRetry((_ws, _ev) => this._handleRetry())
+      .onReconnect((_ws, _ev) => this._handleReconnect())
+      .build();
+  }
 
-    if (this._connectionPromise) {
-      await this._connectionPromise;
-      return;
-    }
+  private _setState(newState: ConnectionState): void {
+    const prevState = this._state;
 
-    const { promise, resolve, reject } = withResolvers<void>();
-    this._connectionPromise = promise;
-
-    const maxRetries = 3;
-    const retryDelay = 1_000;
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        if (attempt > 0) {
-          logger.info(`WebSocket connection retry (${attempt}/${maxRetries - 1})...`);
-
-          // Delay before retry
-          await new Promise((r) => setTimeout(r, retryDelay));
+    if (prevState !== newState) {
+      this._state = newState;
+      logger.info(`Connection state: ${prevState} → ${newState}`);
+      this._stateListeners.forEach((listener) => {
+        try {
+          listener(newState, prevState);
+        } catch (error) {
+          logger.error('State listener error:', error);
         }
-
-        this._ws = new WebSocket(this._serverUrl, [CONTAINER_AGENT_PROTOCOL]);
-
-        this._ws.onopen = () => {
-          this._connected = true;
-          this._startHeartbeat();
-
-          // Send authentication token if available
-          if (this._token) {
-            this.sendRequest({
-              id: 'auth-' + v4(),
-              operation: {
-                type: 'auth',
-                token: this._token,
-              },
-            });
-          }
-
-          resolve();
-        };
-
-        this._ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            this._handleMessage(data);
-          } catch (err) {
-            logger.error('Remote container message parsing error:', err);
-          }
-        };
-
-        this._ws.onerror = (error) => {
-          const err = new Error(`WebSocket connection error: ${error}`);
-          lastError = err;
-
-          // Don't reject from event handler unless it's the last attempt
-          if (attempt === maxRetries - 1) {
-            this._notifyError(err);
-            reject(err);
-          } else {
-            logger.warn(`WebSocket connection failed (${attempt + 1}/${maxRetries}), will retry...`);
-          }
-        };
-
-        this._ws.onclose = () => {
-          this._connected = false;
-          this._connectionPromise = null;
-          this._stopHeartbeat();
-          logger.warn('Remote container connection closed');
-        };
-
-        /*
-         * Wait for successful connection
-         * Set timeout for each attempt
-         */
-        const connectionTimeout = 10_000; // 10 seconds timeout
-        const timeoutPromise = new Promise<void>((_, timeoutReject) => {
-          const timer = setTimeout(() => {
-            if (!this._connected && attempt < maxRetries - 1) {
-              this._ws?.close();
-              timeoutReject(new Error('Connection timeout'));
-            }
-          }, connectionTimeout);
-
-          // Cancel timer if promise resolves
-          promise.then(() => clearTimeout(timer));
-        });
-
-        await Promise.race([promise, timeoutPromise]);
-
-        // Break loop on successful connection
-        if (this._connected) {
-          break;
-        }
-      } catch (error) {
-        lastError = error as Error;
-
-        // Continue unless it's the last attempt
-        if (attempt === maxRetries - 1) {
-          this._connectionPromise = null;
-          reject(error);
-        }
-      }
-    }
-
-    // Handle failure after all attempts
-    if (!this._connected && lastError) {
-      this._connectionPromise = null;
-      throw lastError;
+      });
     }
   }
 
-  async sendRequest<T>(request: ContainerRequest): Promise<ContainerResponse<T>> {
-    await this.connect();
+  private _handleOpen(): void {
+    logger.info('Container WebSocket connected');
+    this._setState(ConnectionState.CONNECTED);
+    this._startHeartbeat();
 
-    return new Promise((resolve, reject) => {
-      if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket connection is not open'));
-        return;
-      }
-
-      this._requestMap.set(request.id, { resolve, reject });
-      this._ws.send(JSON.stringify(request));
-      this._lastRequestTime = Date.now();
-    });
+    // Send authentication token if available
+    if (this._token) {
+      this.sendRequest({
+        id: 'auth-' + v4(),
+        operation: {
+          type: 'auth',
+          token: this._token,
+        },
+      }).catch((error) => {
+        logger.error('Authentication failed:', error);
+      });
+    }
   }
 
-  private _handleMessage(message: any) {
-    if (message.data?.data?.type) {
-      const { data } = message.data.data;
+  private _handleClose(event: CloseEvent): void {
+    logger.warn('Container WebSocket closed:', event.code, event.reason);
+    this._setState(ConnectionState.DISCONNECTED);
+    this._stopHeartbeat();
+    this._rejectPendingRequests('Connection closed');
+  }
 
-      switch (message.data.data.type) {
-        case 'port':
-          this._listeners.port.forEach((listener) => listener(data.port, data.type, data.url));
-          break;
+  private _handleError(event: Event): void {
+    logger.error('Container WebSocket error:', event);
 
-        case 'server-ready':
-          this._listeners['server-ready'].forEach((listener) => listener(data.port, data.url));
-          break;
-
-        case 'preview-message':
-          this._listeners['preview-message'].forEach((listener) => listener(message.data));
-          break;
-      }
-
-      return;
+    if (this._state === ConnectionState.CONNECTING) {
+      this._setState(ConnectionState.FAILED);
     }
+  }
 
+  private _handleRetry(): void {
+    logger.info('Container WebSocket retrying connection...');
+    this._setState(ConnectionState.RECONNECTING);
+  }
+
+  private _handleReconnect(): void {
+    logger.info('Container WebSocket reconnected successfully');
+    this._setState(ConnectionState.CONNECTED);
+    this._startHeartbeat();
+  }
+
+  private _handleMessage(data: string): void {
+    try {
+      const message = JSON.parse(data);
+
+      if (message.id && this._requestMap.has(message.id)) {
+        const { resolve, reject } = this._requestMap.get(message.id)!;
+        this._requestMap.delete(message.id);
+
+        if (message.success) {
+          resolve(message);
+        } else {
+          reject(new Error(message.error?.message || 'Error processing request'));
+        }
+      } else if (message.type === 'heartbeat-response') {
+        // Handle heartbeat response
+        this._lastHeartbeatResponse = Date.now();
+      } else {
+        // Handle other message types (events, process data, etc.)
+        this._handleEventMessage(message);
+      }
+    } catch (error) {
+      logger.error('Failed to parse container message:', error);
+    }
+  }
+
+  private _handleEventMessage(message: any): void {
     // Handle server events
     if (message.event) {
       switch (message.event) {
@@ -296,20 +263,214 @@ class RemoteContainerConnection {
       return;
     }
 
-    // Handle request/response
-    if (message.id && this._requestMap.has(message.id)) {
-      const { resolve, reject } = this._requestMap.get(message.id)!;
+    // Handle data type messages
+    if (message.data?.data?.type) {
+      const { data } = message.data.data;
 
-      this._requestMap.delete(message.id);
+      switch (message.data.data.type) {
+        case 'port':
+          this._listeners.port.forEach((listener) => listener(data.port, data.type, data.url));
+          break;
 
-      if (message.success) {
-        resolve(message);
-      } else {
-        reject(new Error(message.error?.message || 'Error processing request'));
+        case 'server-ready':
+          this._listeners['server-ready'].forEach((listener) => listener(data.port, data.url));
+          break;
+
+        case 'preview-message':
+          this._listeners['preview-message'].forEach((listener) => listener(message.data));
+          break;
+      }
+
+      return;
+    }
+
+    // Handle process messages
+    if (message.type === 'process' && message.pid) {
+      const channel = `process:${message.pid}`;
+      const listeners = this._processListeners.get(channel);
+
+      if (listeners) {
+        listeners.forEach((listener) => listener(message));
+      }
+    } else if (message.type && this._listeners[message.type as keyof EventListeners]) {
+      const listeners = this._listeners[message.type as keyof EventListeners];
+
+      for (const listener of listeners) {
+        try {
+          (listener as any)(message);
+        } catch (error) {
+          logger.error('Event listener error:', error);
+        }
       }
     }
   }
 
+  private _startHeartbeat(): void {
+    this._stopHeartbeat();
+    this._heartbeatInterval = setInterval(() => {
+      this._sendHeartbeat();
+    }, this._config.heartbeatInterval);
+  }
+
+  private _stopHeartbeat(): void {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+    }
+  }
+
+  private _sendHeartbeat(): void {
+    if (this._state === ConnectionState.CONNECTED && this._ws) {
+      const timeSinceLastRequest = Date.now() - this._lastRequestTime;
+
+      if (timeSinceLastRequest >= this._config.heartbeatInterval) {
+        const heartbeat = {
+          id: `heartbeat-${Date.now()}`,
+          type: 'heartbeat',
+          timestamp: Date.now(),
+        };
+
+        try {
+          this._ws.send(JSON.stringify(heartbeat));
+        } catch (error) {
+          logger.error('Failed to send heartbeat:', error);
+        }
+      }
+    }
+  }
+
+  private _rejectPendingRequests(reason: string): void {
+    this._requestMap.forEach(({ reject }) => {
+      reject(new Error(reason));
+    });
+    this._requestMap.clear();
+  }
+
+  private _cleanupExpiredRequests(): void {
+    const now = Date.now();
+    const expiredIds: string[] = [];
+
+    this._requestMap.forEach(({ timestamp }, id) => {
+      if (now - timestamp > 30000) {
+        // 30 second timeout
+        expiredIds.push(id);
+      }
+    });
+
+    for (const id of expiredIds) {
+      const request = this._requestMap.get(id);
+
+      if (request) {
+        request.reject(new Error('Request expired'));
+        this._requestMap.delete(id);
+      }
+    }
+  }
+
+  async connect(): Promise<void> {
+    if (this._state === ConnectionState.CONNECTING || this._state === ConnectionState.CONNECTED) {
+      return;
+    }
+
+    if (this._connectionPromise) {
+      await this._connectionPromise;
+      return;
+    }
+
+    this._setState(ConnectionState.CONNECTING);
+    this._initializeWebSocket();
+
+    // Wait until connection is complete
+    const { promise, resolve, reject } = withResolvers<void>();
+    this._connectionPromise = promise;
+
+    const timeout = setTimeout(() => {
+      reject(new Error('Connection timeout'));
+    }, 10000);
+
+    const unsubscribe = this.onStateChange((state) => {
+      if (state === ConnectionState.CONNECTED) {
+        clearTimeout(timeout);
+        unsubscribe();
+        this._connectionPromise = null;
+        resolve();
+      } else if (state === ConnectionState.FAILED) {
+        clearTimeout(timeout);
+        unsubscribe();
+        this._connectionPromise = null;
+        reject(new Error('Connection failed'));
+      }
+    });
+  }
+
+  async sendRequest<T>(request: ContainerRequest): Promise<ContainerResponse<T>> {
+    if (!this._ws) {
+      throw new Error('WebSocket not initialized');
+    }
+
+    return new Promise((resolve, reject) => {
+      const requestWithId = { ...request, id: request.id || v4() };
+
+      // Store request in map (for response waiting)
+      this._requestMap.set(requestWithId.id, {
+        resolve,
+        reject,
+        timestamp: Date.now(),
+      });
+
+      try {
+        // websocket-ts automatically checks connection state and handles queuing
+        this._ws!.send(JSON.stringify(requestWithId));
+        this._lastRequestTime = Date.now();
+      } catch (error) {
+        this._requestMap.delete(requestWithId.id);
+        reject(error);
+      }
+
+      // Set request timeout
+      setTimeout(() => {
+        if (this._requestMap.has(requestWithId.id)) {
+          this._requestMap.delete(requestWithId.id);
+          reject(new Error('Request timeout'));
+        }
+      }, 30000);
+    });
+  }
+
+  // Public API methods
+  onStateChange(listener: (state: ConnectionState, prev: ConnectionState) => void): () => void {
+    this._stateListeners.add(listener);
+    return () => this._stateListeners.delete(listener);
+  }
+
+  get connectionState(): ConnectionState {
+    return this._state;
+  }
+
+  get isConnected(): boolean {
+    return this._state === ConnectionState.CONNECTED;
+  }
+
+  reconnect(): void {
+    if (this._ws) {
+      // Call websocket-ts's built-in reconnection feature
+      this._ws.close();
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this._stopHeartbeat();
+
+    if (this._ws) {
+      this._ws.close();
+      this._ws = null;
+    }
+
+    this._setState(ConnectionState.DISCONNECTED);
+    this._rejectPendingRequests('Disconnected by user');
+  }
+
+  // Legacy API compatibility methods
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
     if (this._listeners[event]) {
       this._listeners[event].add(listener as any);
@@ -351,18 +512,7 @@ class RemoteContainerConnection {
   }
 
   close() {
-    if (this._ws) {
-      this._ws.close();
-      this._ws = null;
-      this._connected = false;
-      this._connectionPromise = null;
-    }
-
-    // Clean up request map
-    for (const [id, { reject }] of this._requestMap) {
-      reject(new Error('Connection closed'));
-      this._requestMap.delete(id);
-    }
+    this.disconnect();
 
     // Clean up process listeners
     this._processListeners.clear();
@@ -893,7 +1043,7 @@ export class RemoteContainer implements Container {
   }
 
   close() {
-    this._connection.close();
+    this._connection.disconnect();
   }
 }
 
