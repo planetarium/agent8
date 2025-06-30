@@ -314,7 +314,7 @@ The 3D template basically provides player, camera, keyboard and mouse settings. 
 
 In the given template, your task is to decorate the map.
 
-For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment)
+For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment_*)
 For Flight games, set the skybox to be diverse and place tree-like objects on the ground. if you want to use terrain system, make terrain width and height 10 times bigger
 For Top-down view, top view, or MOBA like games, decorate the map first using stage (see \`read_vibe_starter_3d_environment_stage\`), and choose objects theme and place objects after searching resources from vectordb (see \`search_resources_vectordb_items\`), (Please set the objects well so that the map does not look too empty. <Stage cellSize={5} ...>, and maintain an appropriate density.)
 For Other 3D games with map, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment\`
