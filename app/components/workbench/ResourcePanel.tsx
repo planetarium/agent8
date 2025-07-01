@@ -311,6 +311,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
    * Resource Pool 아이템 편집 핸들러 (editedResourceItem을 사용하는 함수)
    * 참고: 이 함수는 UI에서 리소스 아이템 편집 시 사용됩니다
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleResourceItemEdit = (field: keyof ResourcePoolItem, value: any) => {
     if (!editedResourceItem) {
       return;
@@ -423,6 +424,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       searchAsync();
     }, 300); // 300ms 디바운싱
 
+    // eslint-disable-next-line consistent-return
     return () => clearTimeout(timeoutId);
   }, [resourcePoolKeyword, selectedResourceCategory, isResourcePoolMode]);
 
@@ -2047,7 +2049,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                         >
                           <div
                             className={`
-                          mr-2 
+                          mr-2
                           ${!isResourcePoolMode && selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
                         `}
                           />
@@ -2065,7 +2067,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                           )}
                           <span
                             className={`
-                          ml-auto text-xs 
+                          ml-auto text-xs
                           ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
                         `}
                           >

@@ -158,7 +158,7 @@ export function Chat() {
         workbenchStore.container.then(async (containerInstance) => {
           try {
             const previews = workbenchStore.previews.get();
-            const currentPreview = previews.find((p) => p.ready);
+            const currentPreview = previews.find((p: any) => p.ready);
 
             if (currentPreview) {
               workbenchStore.previews.set([]);
@@ -168,7 +168,7 @@ export function Chat() {
 
             if (currentPreview) {
               workbenchStore.previews.set(
-                previews.map((p) => {
+                previews.map((p: any) => {
                   if (p.baseUrl === currentPreview.baseUrl) {
                     return { ...p, refreshAt: Date.now() };
                   }
@@ -272,7 +272,7 @@ async function runAndPreview(message: Message) {
 
   const previews = workbenchStore.previews.get();
 
-  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready)) {
+  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p: any) => p.ready)) {
     workbenchStore.currentView.set('preview');
     return;
   }
