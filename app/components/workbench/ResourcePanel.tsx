@@ -27,6 +27,70 @@ interface Asset {
 
 type Categories = Record<string, Record<string, Asset>>;
 
+// Resource Pool types
+interface ResourcePoolItem {
+  id: string;
+  url: string;
+  description: string;
+  metadata: {
+    tags?: string[];
+    [key: string]: any;
+  };
+}
+
+interface ResourceCategory {
+  label: string;
+  tags: string[];
+  children?: ResourceCategory[];
+}
+
+const RESOURCE_CATEGORIES: ResourceCategory[] = [
+  {
+    label: '2D',
+    tags: ['2d'],
+    children: [
+      {
+        label: 'SpriteCharacters',
+        tags: ['2d', 'sprite_characters'],
+      },
+    ],
+  },
+  {
+    label: '3D',
+    tags: ['3d'],
+    children: [
+      {
+        label: 'Characters',
+        tags: ['3d', 'characters'],
+      },
+      {
+        label: 'Objects',
+        tags: ['3d', 'objects'],
+      },
+      {
+        label: 'Monsters',
+        tags: ['3d', 'monsters'],
+      },
+      {
+        label: 'Polyhaven',
+        tags: ['3d', 'polyhaven'],
+      },
+      {
+        label: 'Vehicles',
+        tags: ['3d', 'vehicles'],
+      },
+      {
+        label: 'Weapons',
+        tags: ['3d', 'weapons'],
+      },
+      {
+        label: 'Textures',
+        tags: ['3d', 'textures'],
+      },
+    ],
+  },
+];
+
 interface ResourcePanelProps {
   files?: FileMap;
   unsavedFiles?: Set<string>;
@@ -79,13 +143,281 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   const [, setDraggedAssets] = useState<string[]>([]);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
+  // Resource Pool states
+  const [isResourcePoolMode, setIsResourcePoolMode] = useState(false);
+  const [selectedResourceCategory, setSelectedResourceCategory] = useState<ResourceCategory | null>(null);
+  const [resourcePoolItems, setResourcePoolItems] = useState<ResourcePoolItem[]>([]);
+  const [isLoadingResourcePool, setIsLoadingResourcePool] = useState(false);
+  const [resourcePoolPage, setResourcePoolPage] = useState(1);
+  const [hasMoreResources, setHasMoreResources] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [resourcePoolKeyword, setResourcePoolKeyword] = useState('');
+  const [selectedResourceItems, setSelectedResourceItems] = useState<Set<string>>(new Set());
+  const [selectedResourceItem, setSelectedResourceItem] = useState<ResourcePoolItem | null>(null);
+  const [editedResourceItem, setEditedResourceItem] = useState<ResourcePoolItem | null>(null);
+  const [showCategorySelector, setShowCategorySelector] = useState(false);
+
   // 허용되는 파일 확장자 목록
   const allowedFileExtensions = ATTACHMENT_EXTS;
+
+  // Resource Pool API functions
+  const fetchResourcePoolItems = async (
+    category: ResourceCategory,
+    page: number = 1,
+    append: boolean = false,
+    keyword: string = '',
+  ) => {
+    setIsLoadingResourcePool(true);
+
+    try {
+      const params = new URLSearchParams({
+        tags: category.tags.join(','),
+        page: page.toString(),
+        limit: '20',
+      });
+
+      if (keyword.trim()) {
+        params.append('keyword', keyword.trim());
+      }
+
+      const response = await fetch(`/api/resources?${params}`);
+      const data = (await response.json()) as any;
+
+      if (data.success) {
+        const newItems = data.data.map((item: any) => ({
+          id: item.id,
+          url: item.url,
+          description: item.description,
+          metadata: item.metadata || {},
+        }));
+
+        if (append) {
+          setResourcePoolItems((prev) => [...prev, ...newItems]);
+        } else {
+          setResourcePoolItems(newItems);
+        }
+
+        setHasMoreResources(data.pagination.hasNext);
+        setResourcePoolPage(page);
+      } else {
+        console.error('Failed to fetch resource pool items:', data.error);
+        toast.error('Failed to load resources');
+      }
+    } catch (error) {
+      console.error('Error fetching resource pool items:', error);
+      toast.error('Error loading resources');
+    } finally {
+      setIsLoadingResourcePool(false);
+    }
+  };
+
+  const handleResourceCategorySelect = async (category: ResourceCategory) => {
+    setSelectedResourceCategory(category);
+    setIsResourcePoolMode(true);
+    setResourcePoolPage(1);
+    setHasMoreResources(true);
+    setResourcePoolKeyword(''); // 카테고리 변경시 검색어 초기화
+    setSelectedResourceItems(new Set()); // 선택된 아이템 초기화
+    setSelectedResourceItem(null);
+    setEditedResourceItem(null);
+    await fetchResourcePoolItems(category, 1, false, '');
+  };
+
+  // Resource Pool 아이템 선택 핸들러
+  const handleResourceItemSelect = (item: ResourcePoolItem, isShiftKey: boolean = false) => {
+    if (!isShiftKey) {
+      // 이미 선택된 아이템을 다시 클릭한 경우 선택 해제
+      if (selectedResourceItems.size === 1 && selectedResourceItems.has(item.id)) {
+        setSelectedResourceItems(new Set());
+        setSelectedResourceItem(null);
+        setEditedResourceItem(null);
+      } else {
+        // 새 아이템 선택
+        setSelectedResourceItems(new Set([item.id]));
+        setSelectedResourceItem(item);
+        setEditedResourceItem({ ...item });
+      }
+    } else {
+      const newSelectedItems = new Set(selectedResourceItems);
+
+      if (newSelectedItems.has(item.id)) {
+        newSelectedItems.delete(item.id);
+
+        if (newSelectedItems.size === 0) {
+          setSelectedResourceItem(null);
+          setEditedResourceItem(null);
+        } else if (selectedResourceItem?.id === item.id) {
+          const nextId = Array.from(newSelectedItems)[0];
+          const nextItem = resourcePoolItems.find((i) => i.id === nextId);
+
+          if (nextItem) {
+            setSelectedResourceItem(nextItem);
+            setEditedResourceItem({ ...nextItem });
+          }
+        }
+      } else {
+        newSelectedItems.add(item.id);
+
+        if (newSelectedItems.size === 1 || selectedResourceItem === null) {
+          setSelectedResourceItem(item);
+          setEditedResourceItem({ ...item });
+        }
+      }
+
+      setSelectedResourceItems(newSelectedItems);
+    }
+  };
+
+  const loadMoreResources = async () => {
+    if (selectedResourceCategory && hasMoreResources && !isLoadingResourcePool) {
+      await fetchResourcePoolItems(selectedResourceCategory, resourcePoolPage + 1, true, resourcePoolKeyword);
+    }
+  };
+
+  // 검색어 변경 핸들러 (디바운싱 적용)
+  const handleResourcePoolKeywordChange = (keyword: string) => {
+    setResourcePoolKeyword(keyword);
+  };
+
+  // 선택된 리소스를 local assets에 추가하는 함수
+  const addSelectedResourcesToLocalAssets = async (targetCategory: string) => {
+    if (selectedResourceItems.size === 0) {
+      return;
+    }
+
+    const selectedItems = resourcePoolItems.filter((item) => selectedResourceItems.has(item.id));
+    const updatedCategories = { ...categoriesRef.current };
+
+    // 타겟 카테고리가 없으면 생성
+    if (!updatedCategories[targetCategory]) {
+      updatedCategories[targetCategory] = {};
+    }
+
+    // 각 선택된 리소스를 local assets에 추가
+    selectedItems.forEach((item) => {
+      // 파일명에서 asset key 생성
+      let fileName = getFileNameFromUrl(item.url);
+
+      if (!fileName) {
+        fileName = item.description || item.id;
+      }
+
+      // 파일 확장자 제거하고 안전한 key 이름으로 변환
+      let baseKey = fileName
+        .replace(/\.[^/.]+$/, '') // 확장자 제거
+        .replace(/[^a-zA-Z0-9_-]/g, '_') // 특수문자를 언더스코어로 변환
+        .replace(/_{2,}/g, '_') // 연속된 언더스코어를 하나로
+        .replace(/^_+|_+$/g, '') // 앞뒤 언더스코어 제거
+        .toLowerCase();
+
+      if (!baseKey) {
+        baseKey = 'resource';
+      }
+
+      // 중복 확인하고 필요시 타임스탬프 추가
+      let assetKey = baseKey;
+      let counter = 1;
+
+      while (updatedCategories[targetCategory][assetKey]) {
+        const timestamp = Date.now();
+        assetKey = `${baseKey}_${timestamp}_${counter}`;
+        counter++;
+      }
+
+      const asset: Asset = {
+        url: item.url,
+        description: item.description,
+        metadata: {
+          ...item.metadata,
+          source: 'resource_pool',
+          imported_at: new Date().toISOString(),
+          original_id: item.id,
+          original_filename: fileName,
+        },
+      };
+      updatedCategories[targetCategory][assetKey] = asset;
+    });
+
+    // 상태 업데이트
+    categoriesRef.current = updatedCategories;
+    setCategories(updatedCategories);
+
+    // 변경사항 저장
+    await saveAssets();
+
+    // 선택 상태 초기화
+    setSelectedResourceItems(new Set());
+    setSelectedResourceItem(null);
+    setEditedResourceItem(null);
+    setShowCategorySelector(false);
+
+    // 로컬 에셋 모드로 전환하고 해당 카테고리 선택
+    setIsResourcePoolMode(false);
+    setSelectedCategory(targetCategory);
+
+    toast.success(`${selectedItems.length} resources added to ${targetCategory}`);
+  };
+
+  // 디바운싱된 검색 실행
+  useEffect(() => {
+    if (!isResourcePoolMode || !selectedResourceCategory) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      const searchAsync = async () => {
+        setResourcePoolPage(1);
+        setHasMoreResources(true);
+        await fetchResourcePoolItems(selectedResourceCategory, 1, false, resourcePoolKeyword);
+      };
+      searchAsync();
+    }, 300); // 300ms 디바운싱
+
+    return () => clearTimeout(timeoutId);
+  }, [resourcePoolKeyword, selectedResourceCategory, isResourcePoolMode]);
+
+  // Infinite scroll for resource pool
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!isResourcePoolMode || !hasMoreResources || isLoadingResourcePool) {
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    const threshold = 100; // Load more when 100px from bottom
+
+    if (scrollHeight - scrollTop - clientHeight < threshold) {
+      loadMoreResources();
+    }
+  };
 
   // categories 변경 시 ref에도 업데이트
   useEffect(() => {
     categoriesRef.current = categories;
   }, [categories]);
+
+  // Category selector ref for outside click detection
+  const categorySelectorRef = useRef<HTMLDivElement>(null);
+
+  // 배경 클릭 시 popover 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCategorySelector && categorySelectorRef.current) {
+        const target = event.target as HTMLElement;
+
+        if (!categorySelectorRef.current.contains(target)) {
+          setShowCategorySelector(false);
+        }
+      }
+    };
+
+    if (showCategorySelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCategorySelector]);
 
   useEffect(() => {
     if (!isSaving) {
@@ -319,7 +651,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
   };
 
-  const getPreviewUrl = (asset: Asset) => {
+  const getPreviewUrl = (asset: Asset | ResourcePoolItem) => {
     if (!asset.url) {
       return null;
     }
@@ -343,7 +675,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     return null;
   };
 
-  const getAssetType = (asset: Asset) => {
+  const getAssetType = (asset: Asset | ResourcePoolItem) => {
     if (!asset.url) {
       return 'unknown';
     }
@@ -1209,6 +1541,127 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
 
   // 에셋 목록 렌더링 부분 수정
   const renderAssetGrid = () => {
+    // Resource Pool Mode
+    if (isResourcePoolMode) {
+      if (isLoadingResourcePool && resourcePoolItems.length === 0) {
+        return (
+          <div className="text-center p-4">
+            <div className="i-ph:spinner-gap animate-spin text-3xl mx-auto mb-2"></div>
+            <div>Loading resources...</div>
+          </div>
+        );
+      }
+
+      if (!selectedResourceCategory) {
+        return (
+          <div className="text-center text-bolt-elements-textSecondary p-4">
+            Select a resource category to view items
+          </div>
+        );
+      }
+
+      const hasItems = resourcePoolItems.length > 0;
+
+      if (!hasItems) {
+        return (
+          <div className="text-center text-bolt-elements-textSecondary p-4">
+            <div className="mb-4">No resources found in this category</div>
+          </div>
+        );
+      }
+
+      // 리소스 풀 아이템 배경 클릭 핸들러
+      const handleResourcePoolBackgroundClick = (e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+          setSelectedResourceItems(new Set());
+          setSelectedResourceItem(null);
+          setEditedResourceItem(null);
+        }
+      };
+
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4" onClick={handleResourcePoolBackgroundClick}>
+          {resourcePoolItems.map((item) => {
+            const isSelected = selectedResourceItems.has(item.id);
+
+            return (
+              <div
+                key={item.id}
+                className={`
+                  border rounded p-2 cursor-pointer select-none transition-colors
+                  ${
+                    isSelected
+                      ? 'border-bolt-elements-item-borderActive bg-bolt-elements-item-backgroundActive'
+                      : 'border-bolt-elements-borderColor hover:bg-bolt-elements-hoverColor'
+                  }
+                `}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleResourceItemSelect(item, e.shiftKey);
+                }}
+              >
+                <div className="aspect-video bg-bolt-elements-bgSecondary rounded flex items-center justify-center mb-2 overflow-hidden relative">
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <div className="i-ph:check-circle-fill text-green-500 text-xl"></div>
+                    </div>
+                  )}
+                  {getPreviewUrl(item) ? (
+                    <img
+                      src={getPreviewUrl(item) || ''}
+                      alt={item.description}
+                      className="max-w-full max-h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = '';
+                        e.currentTarget.classList.add('hidden');
+                      }}
+                    />
+                  ) : getAssetType(item) === '3d' && item.url ? (
+                    <div className="w-full h-full">
+                      <ModelViewer url={item.url} width="100%" height="100%" />
+                    </div>
+                  ) : getAssetType(item) === '3d' ? (
+                    <div className="text-center">
+                      <div className="i-ph:cube-duotone text-4xl opacity-70 mx-auto mb-1 text-bolt-elements-textHighlight" />
+                      <div className="text-xs text-bolt-elements-textSecondary">3D Model</div>
+                    </div>
+                  ) : (
+                    <div className="i-ph:link-duotone text-3xl opacity-30" />
+                  )}
+                </div>
+                <div
+                  className={`truncate text-sm font-medium ${
+                    isSelected ? 'text-bolt-elements-item-contentActive' : 'text-bolt-elements-textPrimary'
+                  }`}
+                >
+                  {getFileNameFromUrl(item.url) || item.id}
+                </div>
+                <div className="truncate text-xs text-bolt-elements-textSecondary">{item.description}</div>
+              </div>
+            );
+          })}
+
+          {/* Loading more indicator */}
+          {isLoadingResourcePool && resourcePoolItems.length > 0 && (
+            <div className="col-span-full text-center p-4">
+              <div className="i-ph:spinner-gap animate-spin text-xl mx-auto mb-2"></div>
+              <div className="text-sm text-bolt-elements-textSecondary">Loading more...</div>
+            </div>
+          )}
+
+          {/* Load more trigger */}
+          {hasMoreResources && !isLoadingResourcePool && (
+            <div className="col-span-full text-center p-4">
+              <Button onClick={loadMoreResources} variant="secondary" size="sm">
+                Load More
+              </Button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Local Assets Mode
     if (isLoading) {
       return (
         <div className="text-center p-4">
@@ -1474,225 +1927,485 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   };
 
   return (
-    <PanelGroup direction="horizontal">
-      <Panel defaultSize={20} minSize={15} maxSize={30}>
-        <div className="flex flex-col h-full border-r border-bolt-elements-borderColor">
-          <PanelHeader>
-            <div className="i-ph:folders-duotone shrink-0" />
-            Resources
-            <div className="ml-auto">
-              <PanelHeaderButton onClick={handleAddCategory}>
-                <div className="i-ph:plus-circle-duotone" />
-              </PanelHeaderButton>
-            </div>
-          </PanelHeader>
-          <div className="flex-1 overflow-auto">
-            {isLoading ? (
-              <div className="p-4 text-center">Loading...</div>
-            ) : (
-              <ul className="p-2">
-                {Object.keys(categories).map((category) => (
-                  <li
-                    key={category}
-                    className={`
-                      p-2 mb-1 rounded cursor-pointer flex items-center
-                      ${
-                        selectedCategory === category
-                          ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
-                          : isDraggingAssets && hoveredCategory === category
-                            ? 'text-bolt-elements-textPrimary bg-bolt-elements-bgActive/50'
-                            : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
-                      }
-                      transition-colors duration-100
-                    `}
-                    onClick={() => handleCategorySelect(category)}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-
-                      if (isDraggingAssets) {
-                        setHoveredCategory(category);
-                      }
-                    }}
-                    onDragEnter={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-
-                      if (isDraggingAssets) {
-                        setHoveredCategory(category);
-                      }
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-
-                      if (hoveredCategory === category) {
-                        setHoveredCategory(null);
-                      }
-                    }}
-                    onDrop={(e) => {
-                      handleCategoryDrop(e, category);
-                      setHoveredCategory(null);
-                    }}
-                  >
-                    <div
-                      className={`
-                      mr-2 
-                      ${selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
-                    `}
-                    />
-                    {category}
-                    <span
-                      className={`
-                      ml-auto text-xs 
-                      ${selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
-                    `}
-                    >
-                      {Object.keys(categories[category] || {}).length}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {selectedCategory && (
-            <div className="p-2 border-t border-bolt-elements-borderColor">
-              <Button className="w-full justify-center" onClick={handleDeleteCategory} variant="destructive" size="sm">
-                Delete Category
-              </Button>
-            </div>
-          )}
-        </div>
-      </Panel>
-
-      <PanelResizeHandle />
-
-      <Panel defaultSize={40} minSize={20}>
-        <div className="flex flex-col h-full border-r border-bolt-elements-borderColor">
-          <PanelHeader>
-            <div className="i-ph:image-duotone shrink-0" />
-            {selectedCategory ? `${selectedCategory} Assets` : 'Assets'}
-            {selectedCategory && (
-              <div className="ml-auto flex">
-                {selectedAssets.size > 0 && (
-                  <PanelHeaderButton onClick={handleDeleteSelectedAssets} className="text-red-400 hover:text-red-300">
-                    <div className="i-ph:trash-duotone" />
-                    Delete {selectedAssets.size > 1 ? `${selectedAssets.size} Assets` : 'Asset'}
-                  </PanelHeaderButton>
-                )}
-                <UploadButton />
-              </div>
-            )}
-          </PanelHeader>
-          <div
-            className={`flex-1 overflow-auto ${isDragging ? 'bg-bolt-elements-bgActive/10' : ''}`}
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {renderAssetGrid()}
-          </div>
-        </div>
-      </Panel>
-
-      <PanelResizeHandle />
-
-      <Panel defaultSize={40} minSize={30}>
-        <div className="flex flex-col h-full">
-          <PanelHeader>
-            <div className="i-ph:pencil-duotone shrink-0" />
-            {selectedAsset ? 'Edit Asset' : 'Asset Details'}
-            {selectedAsset && editedAsset && (
-              <div className="ml-auto flex gap-1">
-                <PanelHeaderButton onClick={handleAssetUpdate} disabled={isSaving}>
-                  <div className="i-ph:floppy-disk-duotone" />
-                  Save
+    <>
+      <PanelGroup direction="horizontal">
+        <Panel defaultSize={20} minSize={15} maxSize={30}>
+          <div className="flex flex-col h-full border-r border-bolt-elements-borderColor">
+            <PanelHeader>
+              <div className="i-ph:folders-duotone shrink-0" />
+              Resources
+              <div className="ml-auto">
+                <PanelHeaderButton onClick={handleAddCategory}>
+                  <div className="i-ph:plus-circle-duotone" />
                 </PanelHeaderButton>
               </div>
+            </PanelHeader>
+            <div className="flex-1 overflow-auto">
+              {/* Local Assets Section */}
+              <div className="border-b border-bolt-elements-borderColor">
+                <div className="p-2 text-xs font-medium text-bolt-elements-textSecondary bg-bolt-elements-bgSecondary">
+                  PROJECT ASSETS
+                </div>
+                {isLoading ? (
+                  <div className="p-4 text-center">Loading...</div>
+                ) : (
+                  <ul className="p-2">
+                    {Object.keys(categories).map((category) => (
+                      <li
+                        key={category}
+                        className={`
+                        p-2 mb-1 rounded cursor-pointer flex items-center
+                        ${
+                          !isResourcePoolMode && selectedCategory === category
+                            ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
+                            : isDraggingAssets && hoveredCategory === category
+                              ? 'text-bolt-elements-textPrimary bg-bolt-elements-bgActive/50'
+                              : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
+                        }
+                        transition-colors duration-100
+                      `}
+                        onClick={() => {
+                          setIsResourcePoolMode(false);
+                          handleCategorySelect(category);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          if (isDraggingAssets) {
+                            setHoveredCategory(category);
+                          }
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          if (isDraggingAssets) {
+                            setHoveredCategory(category);
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          if (hoveredCategory === category) {
+                            setHoveredCategory(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          handleCategoryDrop(e, category);
+                          setHoveredCategory(null);
+                        }}
+                      >
+                        <div
+                          className={`
+                        mr-2 
+                        ${!isResourcePoolMode && selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
+                      `}
+                        />
+                        {category}
+                        <span
+                          className={`
+                        ml-auto text-xs 
+                        ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
+                      `}
+                        >
+                          {Object.keys(categories[category] || {}).length}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Resource Pool Section */}
+              <div>
+                <div className="p-2 text-xs font-medium text-bolt-elements-textSecondary bg-bolt-elements-bgSecondary">
+                  RESOURCE POOL
+                </div>
+                <ul className="p-2">
+                  {RESOURCE_CATEGORIES.map((category) => (
+                    <div key={category.label}>
+                      <li
+                        className={`
+                        p-2 mb-1 rounded cursor-pointer flex items-center
+                        ${
+                          isResourcePoolMode &&
+                          selectedResourceCategory?.label === category.label &&
+                          selectedResourceCategory?.tags.join(',') === category.tags.join(',')
+                            ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
+                            : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
+                        }
+                        transition-colors duration-100
+                      `}
+                        onClick={() => {
+                          if (category.children) {
+                            const isExpanded = expandedCategories.has(category.label);
+                            const newExpanded = new Set(expandedCategories);
+
+                            if (isExpanded) {
+                              newExpanded.delete(category.label);
+                            } else {
+                              newExpanded.add(category.label);
+                            }
+
+                            setExpandedCategories(newExpanded);
+                          } else {
+                            handleResourceCategorySelect(category);
+                          }
+                        }}
+                      >
+                        {category.children && (
+                          <div
+                            className={`
+                            mr-1 text-xs
+                            ${expandedCategories.has(category.label) ? 'i-ph:caret-down' : 'i-ph:caret-right'}
+                          `}
+                          />
+                        )}
+                        <div className="i-ph:globe-duotone mr-2" />
+                        {category.label}
+                      </li>
+
+                      {/* Children categories */}
+                      {category.children && expandedCategories.has(category.label) && (
+                        <div className="ml-4">
+                          {category.children.map((child) => (
+                            <li
+                              key={child.label}
+                              className={`
+                              p-2 mb-1 rounded cursor-pointer flex items-center
+                              ${
+                                isResourcePoolMode &&
+                                selectedResourceCategory?.label === child.label &&
+                                selectedResourceCategory?.tags.join(',') === child.tags.join(',')
+                                  ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
+                                  : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
+                              }
+                              transition-colors duration-100
+                            `}
+                              onClick={() => handleResourceCategorySelect(child)}
+                            >
+                              <div className="i-ph:tag-duotone mr-2 text-sm" />
+                              {child.label}
+                            </li>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            {selectedCategory && (
+              <div className="p-2 border-t border-bolt-elements-borderColor">
+                <Button
+                  className="w-full justify-center"
+                  onClick={handleDeleteCategory}
+                  variant="destructive"
+                  size="sm"
+                >
+                  Delete Category
+                </Button>
+              </div>
             )}
-          </PanelHeader>
+          </div>
+        </Panel>
 
-          <div className="flex-1 overflow-auto p-4">
-            {!selectedAsset || !editedAsset ? (
-              <div className="text-center text-bolt-elements-textSecondary">Select an asset to edit</div>
-            ) : (
-              <div className="space-y-4 text-bolt-elements-textPrimary">
-                <div className="bg-bolt-elements-bgSecondary rounded-lg p-4 flex items-center justify-center">
-                  {getPreviewUrl(editedAsset) ? (
-                    <img
-                      src={getPreviewUrl(editedAsset) || ''}
-                      alt={editedAsset.description}
-                      className="max-w-full max-h-48 object-contain"
-                    />
-                  ) : getAssetType(editedAsset) === '3d' && editedAsset.url ? (
-                    <div className="w-full h-48">
-                      <ModelViewer url={editedAsset.url} height="100%" width="100%" />
-                    </div>
-                  ) : getAssetType(editedAsset) === '3d' ? (
-                    <div className="text-center">
-                      <div className="i-ph:cube-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
-                      <div className="text-sm text-bolt-elements-textSecondary">3D Model (.glb/.gltf/.vrm)</div>
-                    </div>
-                  ) : getAssetType(editedAsset) === 'audio' ? (
-                    <div className="text-center">
-                      <div className="i-ph:speaker-high-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
-                      <div className="text-sm text-bolt-elements-textSecondary">Audio File</div>
-                    </div>
-                  ) : getAssetType(editedAsset) === 'video' ? (
-                    <div className="text-center">
-                      <div className="i-ph:video-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
-                      <div className="text-sm text-bolt-elements-textSecondary">Video File</div>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <div className="i-ph:link-duotone text-5xl opacity-30 mx-auto mb-2" />
-                      <div className="text-sm text-bolt-elements-textSecondary">No preview available</div>
-                    </div>
-                  )}
-                </div>
+        <PanelResizeHandle />
 
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Asset Key</label>
-                  <Input value={selectedAsset.key} readOnly className="w-full  bg-gray-700 border-gray-600" />
-                </div>
+        <Panel defaultSize={40} minSize={20}>
+          <div className="flex flex-col h-full border-r border-bolt-elements-borderColor">
+            <PanelHeader>
+              <div className={isResourcePoolMode ? 'i-ph:globe-duotone shrink-0' : 'i-ph:image-duotone shrink-0'} />
+              {isResourcePoolMode
+                ? selectedResourceCategory
+                  ? `${selectedResourceCategory.label} Resources`
+                  : 'Resource Pool'
+                : selectedCategory
+                  ? `${selectedCategory} Assets`
+                  : 'Assets'}
+              <div className="ml-auto flex">
+                {isResourcePoolMode && selectedResourceItems.size > 0 ? (
+                  <div className="relative" ref={categorySelectorRef}>
+                    <PanelHeaderButton
+                      onClick={() => setShowCategorySelector(!showCategorySelector)}
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      <div className="i-ph:download-simple-duotone" />
+                      Use {selectedResourceItems.size > 1 ? `${selectedResourceItems.size} Assets` : 'Asset'}
+                      <div className="i-ph:caret-down ml-1" />
+                    </PanelHeaderButton>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">URL</label>
+                    {/* Category Selector Popover */}
+                    {showCategorySelector && (
+                      <div
+                        className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-600 rounded-md shadow-xl z-50 min-w-[200px]"
+                        style={{ backgroundColor: '#1f2937', borderColor: '#4b5563' }}
+                      >
+                        <div className="p-2">
+                          <div
+                            className="text-xs text-gray-400 px-2 py-1 border-b border-gray-600 mb-1"
+                            style={{ borderBottomColor: '#4b5563', color: '#9ca3af' }}
+                          >
+                            Add to category:
+                          </div>
+                          <div className="max-h-48 overflow-auto">
+                            {Object.keys(categories).map((category) => (
+                              <button
+                                key={category}
+                                onClick={() => addSelectedResourcesToLocalAssets(category)}
+                                className="w-full text-left px-2 py-2 text-sm rounded flex items-center justify-between transition-colors"
+                                style={{
+                                  color: '#ffffff',
+                                  backgroundColor: 'transparent',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#374151';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                              >
+                                <div className="flex items-center">
+                                  <div className="i-ph:folder-duotone mr-2" style={{ color: '#9ca3af' }} />
+                                  <span>{category}</span>
+                                </div>
+                                <span className="text-xs" style={{ color: '#6b7280' }}>
+                                  {Object.keys(categories[category] || {}).length}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : selectedCategory && !isResourcePoolMode ? (
+                  <>
+                    {selectedAssets.size > 0 && (
+                      <PanelHeaderButton
+                        onClick={handleDeleteSelectedAssets}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <div className="i-ph:trash-duotone" />
+                        Delete {selectedAssets.size > 1 ? `${selectedAssets.size} Assets` : 'Asset'}
+                      </PanelHeaderButton>
+                    )}
+                    <UploadButton />
+                  </>
+                ) : null}
+              </div>
+            </PanelHeader>
+
+            {/* Resource Pool Search Bar */}
+            {isResourcePoolMode && selectedResourceCategory && (
+              <div className="border-b border-gray-600 p-3 bg-gray-800">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <div className="i-ph:magnifying-glass-duotone text-gray-400 text-lg" />
+                  </div>
                   <Input
-                    value={editedAsset.url}
-                    onChange={(e) => handleAssetChange('url', e.target.value)}
-                    className="w-full bg-gray-700 border-gray-600"
-                    placeholder="Enter asset URL"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Description</label>
-                  <Input
-                    value={editedAsset.description}
-                    onChange={(e) => handleAssetChange('description', e.target.value)}
-                    className="w-full bg-gray-700 border-gray-600"
-                    placeholder="Enter asset description"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">
-                    Metadata (JSON)
-                  </label>
-                  <Input
-                    value={JSON.stringify(editedAsset.metadata, null, 2)}
-                    onChange={(e) => handleAssetChange('metadata', e.target.value)}
-                    className="w-full bg-gray-700 border-gray-600 font-mono text-sm"
-                    placeholder="{}"
+                    placeholder={`Search ${selectedResourceCategory.label.toLowerCase()}...`}
+                    value={resourcePoolKeyword}
+                    onChange={(e) => handleResourcePoolKeywordChange(e.target.value)}
+                    className="w-full pl-10 bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 rounded-md"
                   />
                 </div>
               </div>
             )}
+
+            <div
+              className={`flex-1 overflow-auto ${isDragging ? 'bg-bolt-elements-bgActive/10' : ''}`}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onScroll={handleScroll}
+            >
+              {renderAssetGrid()}
+            </div>
           </div>
-        </div>
-      </Panel>
-    </PanelGroup>
+        </Panel>
+
+        <PanelResizeHandle />
+
+        <Panel defaultSize={40} minSize={30}>
+          <div className="flex flex-col h-full">
+            <PanelHeader>
+              <div className="i-ph:pencil-duotone shrink-0" />
+              {isResourcePoolMode
+                ? selectedResourceItem
+                  ? 'Resource Details'
+                  : 'Resource Details'
+                : selectedAsset
+                  ? 'Edit Asset'
+                  : 'Asset Details'}
+              {selectedAsset && editedAsset && !isResourcePoolMode && (
+                <div className="ml-auto flex gap-1">
+                  <PanelHeaderButton onClick={handleAssetUpdate} disabled={isSaving}>
+                    <div className="i-ph:floppy-disk-duotone" />
+                    Save
+                  </PanelHeaderButton>
+                </div>
+              )}
+            </PanelHeader>
+
+            <div className="flex-1 overflow-auto p-4">
+              {isResourcePoolMode ? (
+                !selectedResourceItem ? (
+                  <div className="text-center text-bolt-elements-textSecondary">Select a resource to view details</div>
+                ) : (
+                  <div className="space-y-4 text-bolt-elements-textPrimary">
+                    <div className="bg-bolt-elements-bgSecondary rounded-lg p-4 flex items-center justify-center">
+                      {getPreviewUrl(selectedResourceItem) ? (
+                        <img
+                          src={getPreviewUrl(selectedResourceItem) || ''}
+                          alt={selectedResourceItem.description}
+                          className="max-w-full max-h-48 object-contain"
+                        />
+                      ) : getAssetType(selectedResourceItem) === '3d' && selectedResourceItem.url ? (
+                        <div className="w-full h-48">
+                          <ModelViewer url={selectedResourceItem.url} height="100%" width="100%" />
+                        </div>
+                      ) : getAssetType(selectedResourceItem) === '3d' ? (
+                        <div className="text-center">
+                          <div className="i-ph:cube-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                          <div className="text-sm text-bolt-elements-textSecondary">3D Model</div>
+                        </div>
+                      ) : getAssetType(selectedResourceItem) === 'audio' ? (
+                        <div className="text-center">
+                          <div className="i-ph:speaker-high-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                          <div className="text-sm text-bolt-elements-textSecondary">Audio File</div>
+                        </div>
+                      ) : getAssetType(selectedResourceItem) === 'video' ? (
+                        <div className="text-center">
+                          <div className="i-ph:video-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                          <div className="text-sm text-bolt-elements-textSecondary">Video File</div>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <div className="i-ph:link-duotone text-5xl opacity-30 mx-auto mb-2" />
+                          <div className="text-sm text-bolt-elements-textSecondary">No preview available</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">
+                        Resource ID
+                      </label>
+                      <Input value={selectedResourceItem.id} readOnly className="w-full bg-gray-700 border-gray-600" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">URL</label>
+                      <Input value={selectedResourceItem.url} readOnly className="w-full bg-gray-700 border-gray-600" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">
+                        Description
+                      </label>
+                      <Input
+                        value={selectedResourceItem.description}
+                        readOnly
+                        className="w-full bg-gray-700 border-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">
+                        Metadata (JSON)
+                      </label>
+                      <Input
+                        value={JSON.stringify(selectedResourceItem.metadata, null, 2)}
+                        readOnly
+                        className="w-full bg-gray-700 border-gray-600 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                )
+              ) : !selectedAsset || !editedAsset ? (
+                <div className="text-center text-bolt-elements-textSecondary">Select an asset to edit</div>
+              ) : (
+                <div className="space-y-4 text-bolt-elements-textPrimary">
+                  <div className="bg-bolt-elements-bgSecondary rounded-lg p-4 flex items-center justify-center">
+                    {getPreviewUrl(editedAsset) ? (
+                      <img
+                        src={getPreviewUrl(editedAsset) || ''}
+                        alt={editedAsset.description}
+                        className="max-w-full max-h-48 object-contain"
+                      />
+                    ) : getAssetType(editedAsset) === '3d' && editedAsset.url ? (
+                      <div className="w-full h-48">
+                        <ModelViewer url={editedAsset.url} height="100%" width="100%" />
+                      </div>
+                    ) : getAssetType(editedAsset) === '3d' ? (
+                      <div className="text-center">
+                        <div className="i-ph:cube-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                        <div className="text-sm text-bolt-elements-textSecondary">3D Model (.glb/.gltf/.vrm)</div>
+                      </div>
+                    ) : getAssetType(editedAsset) === 'audio' ? (
+                      <div className="text-center">
+                        <div className="i-ph:speaker-high-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                        <div className="text-sm text-bolt-elements-textSecondary">Audio File</div>
+                      </div>
+                    ) : getAssetType(editedAsset) === 'video' ? (
+                      <div className="text-center">
+                        <div className="i-ph:video-duotone text-6xl opacity-70 mx-auto mb-2 text-bolt-elements-textHighlight" />
+                        <div className="text-sm text-bolt-elements-textSecondary">Video File</div>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <div className="i-ph:link-duotone text-5xl opacity-30 mx-auto mb-2" />
+                        <div className="text-sm text-bolt-elements-textSecondary">No preview available</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Asset Key</label>
+                    <Input value={selectedAsset.key} readOnly className="w-full  bg-gray-700 border-gray-600" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">URL</label>
+                    <Input
+                      value={editedAsset.url}
+                      onChange={(e) => handleAssetChange('url', e.target.value)}
+                      className="w-full bg-gray-700 border-gray-600"
+                      placeholder="Enter asset URL"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Description</label>
+                    <Input
+                      value={editedAsset.description}
+                      onChange={(e) => handleAssetChange('description', e.target.value)}
+                      className="w-full bg-gray-700 border-gray-600"
+                      placeholder="Enter asset description"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">
+                      Metadata (JSON)
+                    </label>
+                    <Input
+                      value={JSON.stringify(editedAsset.metadata, null, 2)}
+                      onChange={(e) => handleAssetChange('metadata', e.target.value)}
+                      className="w-full bg-gray-700 border-gray-600 font-mono text-sm"
+                      placeholder="{}"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </Panel>
+      </PanelGroup>
+    </>
   );
 });
