@@ -4,7 +4,7 @@ import { Panel, type ImperativePanelHandle } from 'react-resizable-panels';
 import { IconButton } from '~/components/ui/IconButton';
 import { shortcutEventEmitter } from '~/lib/hooks';
 import { themeStore } from '~/lib/stores/theme';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { useWorkbenchStore } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { Terminal, type TerminalRef } from './Terminal';
 import { createScopedLogger } from '~/utils/logger';
@@ -15,7 +15,7 @@ const MAX_TERMINALS = 3;
 export const DEFAULT_TERMINAL_SIZE = 25;
 
 export const TerminalTabs = memo(() => {
-  const showTerminal = useStore(workbenchStore.showTerminal);
+  const workbenchStore = useWorkbenchStore();
   const theme = useStore(themeStore);
 
   const terminalRefs = useRef<Array<TerminalRef | null>>([]);
@@ -41,14 +41,14 @@ export const TerminalTabs = memo(() => {
 
     const isCollapsed = terminal.isCollapsed();
 
-    if (!showTerminal && !isCollapsed) {
+    if (!workbenchStore.showTerminal && !isCollapsed) {
       terminal.collapse();
-    } else if (showTerminal && isCollapsed) {
+    } else if (workbenchStore.showTerminal && isCollapsed) {
       terminal.resize(DEFAULT_TERMINAL_SIZE);
     }
 
     terminalToggledByShortcut.current = false;
-  }, [showTerminal]);
+  }, [workbenchStore]);
 
   useEffect(() => {
     const unsubscribeFromEventEmitter = shortcutEventEmitter.on('toggleTerminal', () => {
@@ -70,7 +70,7 @@ export const TerminalTabs = memo(() => {
   return (
     <Panel
       ref={terminalPanelRef}
-      defaultSize={showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
+      defaultSize={workbenchStore.showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
       minSize={10}
       collapsible
       onExpand={() => {

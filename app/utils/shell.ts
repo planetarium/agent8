@@ -2,11 +2,6 @@ import type { Container, ExecutionResult, ShellSession } from '~/lib/container/i
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 
-export async function newShellProcess(container: Container, terminal: ITerminal) {
-  const shellSession = await container.spawnShell(terminal);
-  return shellSession.process;
-}
-
 export class BoltShell {
   #initialized: (() => void) | undefined;
   #readyPromise: Promise<void>;
@@ -97,6 +92,12 @@ export class BoltShell {
       return await this.#shellSession.waitTillOscCode(waitCode);
     } else {
       throw new Error('BoltShell does not support waitTillOscCode');
+    }
+  }
+
+  detachTerminal() {
+    if (this.#shellSession && this.#shellSession.detachTerminal) {
+      this.#shellSession.detachTerminal();
     }
   }
 }

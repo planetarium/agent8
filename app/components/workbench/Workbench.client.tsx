@@ -1,6 +1,4 @@
-import { useStore } from '@nanostores/react';
 import { motion, type HTMLMotionProps, type Variants } from 'framer-motion';
-import { computed } from 'nanostores';
 import { memo, useCallback, useEffect, useState, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { Popover, Transition } from '@headlessui/react';
@@ -16,7 +14,19 @@ import {
 import { IconButton } from '~/components/ui/IconButton';
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
 import { Slider } from '~/components/ui/Slider';
-import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
+import { type WorkbenchViewType } from '~/lib/stores/workbench';
+import {
+  useWorkbenchShowWorkbench,
+  useWorkbenchSelectedFile,
+  useWorkbenchCurrentDocument,
+  useWorkbenchUnsavedFiles,
+  useWorkbenchFiles,
+  useWorkbenchCurrentView,
+  useWorkbenchDiffEnabled,
+  useWorkbenchDiffCommitHash,
+  useWorkbenchPreviews,
+  useWorkbenchStore,
+} from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
@@ -297,7 +307,7 @@ const DiffViewWithCommitHash = memo(
     setFileHistory: React.Dispatch<React.SetStateAction<Record<string, FileHistory>>>;
     actionRunner: ActionRunner;
   }) => {
-    const diffCommitHash = useStore(workbenchStore.diffCommitHash);
+    const diffCommitHash = useWorkbenchDiffCommitHash();
 
     return (
       <DiffView
@@ -316,16 +326,18 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);
 
-  // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
+  // const modifiedFiles = Array.from(useWorkbenchUnsavedFiles().keys());
 
-  const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
-  const showWorkbench = useStore(workbenchStore.showWorkbench);
-  const selectedFile = useStore(workbenchStore.selectedFile);
-  const currentDocument = useStore(workbenchStore.currentDocument);
-  const unsavedFiles = useStore(workbenchStore.unsavedFiles);
-  const files = useStore(workbenchStore.files);
-  const selectedView = useStore(workbenchStore.currentView);
-  const diffEnabled = useStore(workbenchStore.diffEnabled);
+  const previews = useWorkbenchPreviews();
+  const hasPreview = previews.length > 0;
+  const showWorkbench = useWorkbenchShowWorkbench();
+  const selectedFile = useWorkbenchSelectedFile();
+  const currentDocument = useWorkbenchCurrentDocument();
+  const unsavedFiles = useWorkbenchUnsavedFiles();
+  const files = useWorkbenchFiles();
+  const selectedView = useWorkbenchCurrentView();
+  const diffEnabled = useWorkbenchDiffEnabled();
+  const workbench = useWorkbenchStore();
 
   const isSmallViewport = useViewport(1024);
 
@@ -340,7 +352,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [diffEnabled]);
 
   const setSelectedView = (view: WorkbenchViewType) => {
-    workbenchStore.currentView.set(view);
+    workbench.currentView.set(view);
   };
 
   useEffect(() => {
@@ -356,13 +368,13 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [diffEnabled, selectedView]);
 
   useEffect(() => {
-    workbenchStore.setDocuments(files);
+    workbench.setDocuments(files);
   }, [files]);
 
   useEffect(() => {
     if (chatStarted) {
       const initializeTerminal = async () => {
-        const shell = workbenchStore.boltTerminal;
+        const shell = workbench.boltTerminal;
 
         await shell.ready;
         setTerminalReady(true);
@@ -370,12 +382,12 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
       initializeTerminal();
     }
-  }, [chatStarted]);
+  }, [chatStarted, workbench.boltTerminal]);
 
   const onRun = useCallback(async () => {
     setSelectedView('code');
 
-    const shell = workbenchStore.boltTerminal;
+    const shell = workbench.boltTerminal;
 
     await shell.ready;
 
@@ -387,29 +399,32 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
       );
     }
-  }, []);
+  }, [workbench.boltTerminal]);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
-    workbenchStore.setCurrentDocumentContent(update.content);
+    workbench.setCurrentDocumentContent(update.content);
   }, []);
 
   const onEditorScroll = useCallback<OnEditorScroll>((position) => {
-    workbenchStore.setCurrentDocumentScrollPosition(position);
+    workbench.setCurrentDocumentScrollPosition(position);
   }, []);
 
-  const onFileSelect = useCallback((filePath: string | undefined) => {
-    workbenchStore.setSelectedFile(filePath);
-  }, []);
+  const onFileSelect = useCallback(
+    (filePath: string | undefined) => {
+      workbench.setSelectedFile(filePath);
+    },
+    [workbench],
+  );
 
   const onFileSave = useCallback(() => {
-    workbenchStore.saveCurrentDocument().catch(() => {
+    workbench.saveCurrentDocument().catch(() => {
       toast.error('Failed to update file content');
     });
-  }, []);
+  }, [workbench]);
 
   const onFileReset = useCallback(() => {
-    workbenchStore.resetCurrentDocument();
-  }, []);
+    workbench.resetCurrentDocument();
+  }, [workbench]);
 
   return (
     chatStarted && (
@@ -468,7 +483,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                     <PanelHeaderButton
                       className="mr-1 text-sm"
                       onClick={() => {
-                        workbenchStore.downloadZip();
+                        workbench.downloadZip();
                       }}
                     >
                       <div className="i-ph:download" />
@@ -484,7 +499,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   className="-mr-1"
                   size="xl"
                   onClick={() => {
-                    workbenchStore.showWorkbench.set(false);
+                    workbench.setShowWorkbench(false);
                   }}
                 />
               </div>

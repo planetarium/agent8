@@ -26,6 +26,7 @@ import type { BoltShell } from '~/utils/shell';
 import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
+import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 
 const { saveAs } = fileSaver;
 
@@ -57,6 +58,9 @@ export class WorkbenchStore {
   #terminalStore: TerminalStore;
   #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
+  #reinitCounter = atom(0);
+  #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
+
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
@@ -77,6 +81,11 @@ export class WorkbenchStore {
       this.#containerResolver = resolve;
       this.#containerRejecter = reject;
     });
+
+    this.#previewsStore = new PreviewsStore(this.#currentContainer);
+    this.#filesStore = new FilesStore(this.#currentContainer);
+    this.#editorStore = new EditorStore(this.#filesStore);
+    this.#terminalStore = new TerminalStore(this.#currentContainer);
 
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
@@ -99,11 +108,6 @@ export class WorkbenchStore {
         });
       }
     }
-
-    this.#previewsStore = new PreviewsStore(this.#currentContainer);
-    this.#filesStore = new FilesStore(this.#currentContainer);
-    this.#editorStore = new EditorStore(this.#filesStore);
-    this.#terminalStore = new TerminalStore(this.#currentContainer);
   }
 
   async initializeContainer(accessToken: string): Promise<Container | null> {
@@ -121,6 +125,8 @@ export class WorkbenchStore {
 
       this.#setupContainerErrorHandling(containerInstance);
       this.#containerInitialized = true;
+
+      this.#currentContainerAtom.set(containerInstance);
 
       return containerInstance;
     } catch (error) {
@@ -156,13 +162,17 @@ export class WorkbenchStore {
 
     const isPending = await isPromisePending(this.#currentContainer);
 
-    if (isPending) {
+    if (isPending && !this.#containerInitialized) {
       return this.initializeContainer(accessToken);
     } else {
+      logger.info('Forcing container reinitialization...');
+
       this.#currentContainer = new Promise<Container>((resolve, reject) => {
         this.#containerResolver = resolve;
         this.#containerRejecter = reject;
       });
+
+      this.#terminalStore.detachTerminals();
 
       this.#previewsStore = new PreviewsStore(this.#currentContainer);
       this.#filesStore = new FilesStore(this.#currentContainer);
@@ -171,7 +181,26 @@ export class WorkbenchStore {
 
       this.#containerInitialized = false;
 
-      return this.initializeContainer(accessToken);
+      this.#reinitCounter.set(this.#reinitCounter.get() + 1);
+      logger.info(`ReinitCounter increased to: ${this.#reinitCounter.get()}`);
+
+      const containerResult = await this.initializeContainer(accessToken);
+
+      if (containerResult) {
+        try {
+          const currentFiles = this.#filesStore.files.get();
+
+          if (Object.keys(currentFiles).length > 0) {
+            logger.info('Mounting current file system to new container...');
+            await containerResult.mount(convertFileMapToFileSystemTree(currentFiles));
+            logger.info('File system successfully mounted to new container');
+          }
+        } catch (error) {
+          logger.error('Failed to mount file system to new container:', error);
+        }
+      }
+
+      return containerResult;
     }
   }
 
@@ -181,6 +210,14 @@ export class WorkbenchStore {
 
   get container(): Promise<Container> {
     return this.#currentContainer;
+  }
+
+  get reinitCounter() {
+    return this.#reinitCounter;
+  }
+
+  get containerAtom() {
+    return this.#currentContainerAtom;
   }
 
   #setupContainerErrorHandling(container: Container): void {
@@ -885,3 +922,5 @@ export class WorkbenchStore {
 }
 
 export const workbenchStore = new WorkbenchStore();
+export const reinitCounterAtom = workbenchStore.reinitCounter;
+export const containerAtom = workbenchStore.containerAtom;

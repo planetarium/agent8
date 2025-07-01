@@ -10,7 +10,7 @@ import type {
   PathWatcherEvent,
   ShellSession,
 } from './interfaces';
-import type { ITerminal } from '~/types/terminal';
+import type { ITerminal, IDisposable } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
 import { cleanTerminalOutput } from '~/utils/shell';
 import type {
@@ -1065,8 +1065,10 @@ export class RemoteContainer implements Container {
       }),
     );
 
-    // Handle terminal input
-    terminal.onData(async (data) => {
+    // Handle terminal input - store the disposable for later cleanup
+    let terminalDataDisposable: IDisposable | null = null;
+
+    terminalDataDisposable = terminal.onData(async (data) => {
       if (input.locked) {
         logger.error('input stream is locked, skipping data');
         return;
@@ -1084,6 +1086,14 @@ export class RemoteContainer implements Container {
       }
     });
 
+    const detachTerminal = () => {
+      if (terminalDataDisposable) {
+        terminalDataDisposable.dispose();
+        terminalDataDisposable = null;
+        logger.debug('Terminal detached from shell session');
+      }
+    };
+
     // Return basic shell session
     const session: ShellSession = {
       process,
@@ -1093,6 +1103,7 @@ export class RemoteContainer implements Container {
       ready: shellReady.promise,
       executeCommand,
       waitTillOscCode,
+      detachTerminal,
     };
 
     return session;

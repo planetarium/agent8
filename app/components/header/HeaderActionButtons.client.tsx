@@ -4,6 +4,7 @@ import useViewport from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
 import { netlifyConnection } from '~/lib/stores/netlify';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { useWorkbenchShowWorkbench, useWorkbenchPreviews } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { path } from '~/utils/path';
 import { useEffect, useRef, useState } from 'react';
@@ -14,11 +15,11 @@ import { repoStore } from '~/lib/stores/repo';
 interface HeaderActionButtonsProps {}
 
 export function HeaderActionButtons({}: HeaderActionButtonsProps) {
-  const showWorkbench = useStore(workbenchStore.showWorkbench);
+  const showWorkbench = useWorkbenchShowWorkbench();
   const { showChat } = useStore(chatStore);
   const connection = useStore(netlifyConnection);
   const [activePreviewIndex] = useState(0);
-  const previews = useStore(workbenchStore.previews);
+  const previews = useWorkbenchPreviews();
   const activePreview = previews[activePreviewIndex];
   const [isDeploying, setIsDeploying] = useState(false);
   const isSmallViewport = useViewport(1024);
