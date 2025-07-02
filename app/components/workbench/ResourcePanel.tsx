@@ -2061,17 +2061,15 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                             {Object.keys(categories[category] || {}).length}
                           </span>
                           {!isResourcePoolMode && selectedCategory === category && (
-                            <Button
-                              className="ml-2 p-1"
+                            <div
+                              className="ml-2 text-bolt-elements-textSecondary hover:text-red-400 cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteCategory();
                               }}
-                              variant="destructive"
-                              size="sm"
                             >
                               <div className="i-ph:trash-duotone text-xs" />
-                            </Button>
+                            </div>
                           )}
                         </li>
                       ))}
