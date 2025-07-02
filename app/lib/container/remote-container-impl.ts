@@ -107,13 +107,16 @@ class RemoteContainerConnection {
   private _processListeners = new Map<string, Set<(data: any) => void>>();
   private _config: ConnectionConfig;
 
+  private _reconnectAttempts: number = 0;
+  private _maxAttemptsReached: boolean = false;
+
   constructor(
     private _serverUrl: string,
     private _token: string,
     config?: Partial<ConnectionConfig>,
   ) {
     this._config = {
-      maxReconnectAttempts: 10,
+      maxReconnectAttempts: 5,
       initialReconnectDelay: 1000,
       maxReconnectDelay: 30000,
       heartbeatInterval: 15000,
@@ -135,7 +138,7 @@ class RemoteContainerConnection {
       .withBackoff(
         new ExponentialBackoff(
           this._config.initialReconnectDelay,
-          6, // 6 doublings: 1s → 2s → 4s → 8s → 16s → 32s → 64s
+          4, // 4 doublings for 5 total attempts: 1s → 2s → 4s → 8s → 16s
         ),
       )
       .withProtocols([CONTAINER_AGENT_PROTOCOL])
@@ -169,6 +172,9 @@ class RemoteContainerConnection {
     this._setState(ConnectionState.CONNECTED);
     this._startHeartbeat();
 
+    this._reconnectAttempts = 0;
+    this._maxAttemptsReached = false;
+
     // Send authentication token if available
     if (this._token) {
       this.sendRequest({
@@ -199,7 +205,29 @@ class RemoteContainerConnection {
   }
 
   private _handleRetry(): void {
-    logger.info('Container WebSocket retrying connection...');
+    this._reconnectAttempts++;
+    logger.info(
+      `Container WebSocket retrying connection... (attempt ${this._reconnectAttempts}/${this._config.maxReconnectAttempts})`,
+    );
+
+    if (this._reconnectAttempts >= this._config.maxReconnectAttempts) {
+      logger.error(
+        `Maximum reconnection attempts (${this._config.maxReconnectAttempts}) reached. Stopping reconnection.`,
+      );
+      this._maxAttemptsReached = true;
+      this._setState(ConnectionState.FAILED);
+
+      if (this._ws) {
+        this._ws.close();
+        this._ws = null;
+      }
+
+      this._rejectPendingRequests('Maximum reconnection attempts reached');
+      this._notifyError(new Error(`Connection failed after ${this._config.maxReconnectAttempts} attempts`));
+
+      return;
+    }
+
     this._setState(ConnectionState.RECONNECTING);
   }
 
@@ -207,6 +235,9 @@ class RemoteContainerConnection {
     logger.info('Container WebSocket reconnected successfully');
     this._setState(ConnectionState.CONNECTED);
     this._startHeartbeat();
+
+    this._reconnectAttempts = 0;
+    this._maxAttemptsReached = false;
   }
 
   private _handleMessage(data: string): void {
@@ -372,6 +403,9 @@ class RemoteContainerConnection {
       return;
     }
 
+    this._reconnectAttempts = 0;
+    this._maxAttemptsReached = false;
+
     if (this._connectionPromise) {
       await this._connectionPromise;
       return;
@@ -451,15 +485,23 @@ class RemoteContainerConnection {
     return this._state === ConnectionState.CONNECTED;
   }
 
-  reconnect(): void {
-    if (this._ws) {
-      // Call websocket-ts's built-in reconnection feature
-      this._ws.close();
-    }
+  get reconnectAttempts(): number {
+    return this._reconnectAttempts;
+  }
+
+  get maxReconnectAttempts(): number {
+    return this._config.maxReconnectAttempts;
+  }
+
+  get maxAttemptsReached(): boolean {
+    return this._maxAttemptsReached;
   }
 
   async disconnect(): Promise<void> {
     this._stopHeartbeat();
+
+    this._reconnectAttempts = 0;
+    this._maxAttemptsReached = false;
 
     if (this._ws) {
       this._ws.close();
@@ -1056,6 +1098,10 @@ export class RemoteContainer implements Container {
     return session;
   }
 
+  async connect() {
+    await this._connection.connect();
+  }
+
   close() {
     this._connection.disconnect();
   }
@@ -1096,7 +1142,7 @@ export class RemoteContainerFactory implements ContainerFactory {
 
       // Initialize connection
       try {
-        await (container as any)._connection.connect();
+        await container.connect();
         logger.info('Successfully connected to remote container');
 
         return container;
