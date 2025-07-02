@@ -590,7 +590,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           taskBranches={taskBranches}
                           currentTaskBranch={currentTaskBranch}
                           reloadTaskBranches={reloadTaskBranches}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-10 mx-auto z-1"
+                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
@@ -604,7 +604,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       ) : (
                         <Messages
                           ref={messageRef}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-10 mx-auto z-1"
+                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
@@ -628,7 +628,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
               <div
                 className={classNames('flex flex-col gap-3 w-full mx-auto z-prompt', {
-                  'sticky bottom-8': chatStarted,
+                  'sticky bottom-4': chatStarted,
                   'max-w-chat': chatStarted,
                   'max-w-chat-before-start': !chatStarted,
                 })}
@@ -665,15 +665,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
                 <div
-                  className={classNames(
-                    'flex flex-col self-stretch p-5 relative w-full mx-auto z-prompt relative min-h-53',
-                    {
-                      'max-w-chat': chatStarted,
-                      'max-w-chat-before-start': !chatStarted,
-                      'bg-primary': !chatStarted,
-                      [styles.promptInputActive]: chatStarted,
-                    },
-                  )}
+                  className={classNames('flex flex-col self-stretch p-5 relative w-full mx-auto z-prompt relative', {
+                    'max-w-chat': chatStarted,
+                    'max-w-chat-before-start': !chatStarted,
+                    'bg-primary': !chatStarted,
+                    [styles.promptInputActive]: chatStarted,
+                  })}
                   style={
                     !chatStarted
                       ? {
