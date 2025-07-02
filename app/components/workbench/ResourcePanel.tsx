@@ -2052,17 +2052,9 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                         `}
                           />
                           {category}
-                          <span
-                            className={`
-                          ml-auto text-xs 
-                          ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
-                        `}
-                          >
-                            {Object.keys(categories[category] || {}).length}
-                          </span>
                           {!isResourcePoolMode && selectedCategory === category && (
                             <div
-                              className="ml-2 text-bolt-elements-textSecondary hover:text-red-400 cursor-pointer"
+                              className="ml-1.5 mt-0.5 text-bolt-elements-textSecondary hover:text-red-400 cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteCategory();
@@ -2071,6 +2063,14 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                               <div className="i-ph:trash-duotone text-xs" />
                             </div>
                           )}
+                          <span
+                            className={`
+                          ml-auto text-xs 
+                          ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
+                        `}
+                          >
+                            {Object.keys(categories[category] || {}).length}
+                          </span>
                         </li>
                       ))}
                     </ul>
