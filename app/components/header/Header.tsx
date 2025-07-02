@@ -1,10 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { chatStore } from '~/lib/stores/chat';
+import { repoStore } from '~/lib/stores/repo';
 import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { useSearchParams } from '@remix-run/react';
 import { HeaderDeployButton } from './HeaderDeployButton.client';
+import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import WithTooltip from '~/components/ui/Tooltip';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
@@ -12,6 +14,7 @@ import { IframeLink } from '~/components/ui/IframeLink';
 
 export function Header() {
   const chat = useStore(chatStore);
+  const repo = useStore(repoStore);
   const [searchParams] = useSearchParams();
   const isEmbedMode = searchParams.get('mode') === 'embed';
   const isMenuOpen = useStore(menuStore);
@@ -55,6 +58,7 @@ export function Header() {
           >
             <ClientOnly>{() => <ChatDescription />}</ClientOnly>
           </span>
+          {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
           <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
         </>
       )}
