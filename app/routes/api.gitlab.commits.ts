@@ -12,6 +12,7 @@ export const loader = withV8AuthUser(commitsLoader, { checkCredit: true });
  */
 async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
+  const user = context?.user as { email: string; isActivated: boolean };
 
   const url = new URL(request.url);
   const projectPath = url.searchParams.get('projectPath');
@@ -33,6 +34,13 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
+    // Check project access permission
+    const accessCheck = await gitlabService.checkProjectAccess(user.email, projectPath);
+
+    if (!accessCheck.hasAccess) {
+      return json({ success: false, message: accessCheck.reason || 'Project not found' }, { status: 404 });
+    }
+
     const result = await gitlabService.getProjectCommits(
       projectPath,
       parsedPage,
