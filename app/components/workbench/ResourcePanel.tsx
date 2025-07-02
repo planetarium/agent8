@@ -1986,11 +1986,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
             <PanelHeader>
               <div className="i-ph:folders-duotone shrink-0" />
               Resources
-              <div className="ml-auto">
-                <PanelHeaderButton onClick={handleAddCategory}>
-                  <div className="i-ph:plus-circle-duotone" />
-                </PanelHeaderButton>
-              </div>
             </PanelHeader>
             <div className="flex-1 overflow-auto">
               {/* Local Assets Section */}
@@ -2001,72 +1996,98 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                 {isLoading ? (
                   <div className="p-4 text-center">Loading...</div>
                 ) : (
-                  <ul className="p-2">
-                    {Object.keys(categories).map((category) => (
-                      <li
-                        key={category}
-                        className={`
-                        p-2 mb-1 rounded cursor-pointer flex items-center
-                        ${
-                          !isResourcePoolMode && selectedCategory === category
-                            ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
-                            : isDraggingAssets && hoveredCategory === category
-                              ? 'text-bolt-elements-textPrimary bg-bolt-elements-bgActive/50'
-                              : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
-                        }
-                        transition-colors duration-100
-                      `}
-                        onClick={() => {
-                          setIsResourcePoolMode(false);
-                          handleCategorySelect(category);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-
-                          if (isDraggingAssets) {
-                            setHoveredCategory(category);
+                  <>
+                    <ul className="p-2">
+                      {Object.keys(categories).map((category) => (
+                        <li
+                          key={category}
+                          className={`
+                          p-2 mb-1 rounded cursor-pointer flex items-center
+                          ${
+                            !isResourcePoolMode && selectedCategory === category
+                              ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
+                              : isDraggingAssets && hoveredCategory === category
+                                ? 'text-bolt-elements-textPrimary bg-bolt-elements-bgActive/50'
+                                : 'text-bolt-elements-textPrimary hover:bg-bolt-elements-hoverColor'
                           }
-                        }}
-                        onDragEnter={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                          transition-colors duration-100
+                        `}
+                          onClick={() => {
+                            setIsResourcePoolMode(false);
+                            handleCategorySelect(category);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
 
-                          if (isDraggingAssets) {
-                            setHoveredCategory(category);
-                          }
-                        }}
-                        onDragLeave={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                            if (isDraggingAssets) {
+                              setHoveredCategory(category);
+                            }
+                          }}
+                          onDragEnter={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
 
-                          if (hoveredCategory === category) {
+                            if (isDraggingAssets) {
+                              setHoveredCategory(category);
+                            }
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            if (hoveredCategory === category) {
+                              setHoveredCategory(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            handleCategoryDrop(e, category);
                             setHoveredCategory(null);
-                          }
-                        }}
-                        onDrop={(e) => {
-                          handleCategoryDrop(e, category);
-                          setHoveredCategory(null);
-                        }}
-                      >
-                        <div
-                          className={`
-                        mr-2 
-                        ${!isResourcePoolMode && selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
-                      `}
-                        />
-                        {category}
-                        <span
-                          className={`
-                        ml-auto text-xs 
-                        ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
-                      `}
+                          }}
                         >
-                          {Object.keys(categories[category] || {}).length}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                          <div
+                            className={`
+                          mr-2 
+                          ${!isResourcePoolMode && selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
+                        `}
+                          />
+                          {category}
+                          <span
+                            className={`
+                          ml-auto text-xs 
+                          ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
+                        `}
+                          >
+                            {Object.keys(categories[category] || {}).length}
+                          </span>
+                          {!isResourcePoolMode && selectedCategory === category && (
+                            <Button
+                              className="ml-2 p-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCategory();
+                              }}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <div className="i-ph:trash-duotone text-xs" />
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="px-2 pb-2">
+                      <Button
+                        className="w-full justify-center"
+                        onClick={handleAddCategory}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        <div className="i-ph:plus-circle-duotone mr-1" />
+                        Add Category
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -2149,18 +2170,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                 </ul>
               </div>
             </div>
-            {selectedCategory && (
-              <div className="p-2 border-t border-bolt-elements-borderColor">
-                <Button
-                  className="w-full justify-center"
-                  onClick={handleDeleteCategory}
-                  variant="destructive"
-                  size="sm"
-                >
-                  Delete Category
-                </Button>
-              </div>
-            )}
           </div>
         </Panel>
 
