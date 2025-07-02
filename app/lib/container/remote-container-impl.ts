@@ -683,6 +683,7 @@ export class RemoteContainerFileSystem implements FileSystem {
 export class RemoteContainer implements Container {
   readonly fs: FileSystem;
   readonly workdir: string;
+  readonly serverUrl: string;
 
   private _connection: RemoteContainerConnection;
 
@@ -690,6 +691,7 @@ export class RemoteContainer implements Container {
     this._connection = new RemoteContainerConnection(serverUrl, token);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
+    this.serverUrl = serverUrl;
   }
 
   on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
@@ -1022,10 +1024,22 @@ export class RemoteContainer implements Container {
     );
 
     // Handle terminal input
-    terminal.onData((data) => {
+    terminal.onData(async (data) => {
+      if (input.locked) {
+        logger.error('input stream is locked, skipping data');
+        return;
+      }
+
       const writer = input.getWriter();
-      writer.write(data);
-      writer.releaseLock();
+
+      try {
+        await writer.ready;
+        await writer.write(data);
+      } catch (e) {
+        logger.error(`Failed to write to input stream, ${this.serverUrl}`, e);
+      } finally {
+        writer.releaseLock();
+      }
     });
 
     // Return basic shell session
