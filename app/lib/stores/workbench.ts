@@ -32,6 +32,22 @@ const { saveAs } = fileSaver;
 
 const logger = createScopedLogger('workbench');
 
+function ensureUnsavedFilesSet(value: any): Set<string> {
+  if (value instanceof Set) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return new Set(value);
+  }
+
+  if (value && typeof value === 'object' && value.constructor === Object) {
+    return new Set<string>();
+  }
+
+  return new Set<string>();
+}
+
 export interface ArtifactState {
   id: string;
   title: string;
@@ -65,16 +81,22 @@ export class WorkbenchStore {
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
-  unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
+  unsavedFiles: WritableAtom<Set<string>> = atom(
+    ensureUnsavedFilesSet(import.meta.hot?.data.unsavedFiles?.get?.() ?? import.meta.hot?.data.unsavedFiles),
+  );
   actionAlert: WritableAtom<ActionAlert | undefined> =
-    import.meta.hot?.data.unsavedFiles ?? atom<ActionAlert | undefined>(undefined);
+    import.meta.hot?.data.actionAlert ?? atom<ActionAlert | undefined>(undefined);
   diffCommitHash: WritableAtom<string | null> = import.meta.hot?.data.diffCommitHash ?? atom<string | null>(null);
   diffEnabled: WritableAtom<boolean> = import.meta.hot?.data.diffEnabled ?? atom(false);
+  connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
+    import.meta.hot?.data.connectionState ??
+    atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
   #shellActionRunning = false;
   #shellActionPromise: Promise<void> | null = null;
+  #connectionLostNotified = false;
 
   constructor() {
     this.#currentContainer = new Promise<Container>((resolve, reject) => {
@@ -95,6 +117,7 @@ export class WorkbenchStore {
       import.meta.hot.data.actionAlert = this.actionAlert;
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
+      import.meta.hot.data.connectionState = this.connectionState;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -124,6 +147,7 @@ export class WorkbenchStore {
       this.#containerResolver(containerInstance);
 
       this.#setupContainerErrorHandling(containerInstance);
+      this.#setupConnectionStateHandling(containerInstance);
       this.#containerInitialized = true;
 
       this.#currentContainerAtom.set(containerInstance);
@@ -178,6 +202,13 @@ export class WorkbenchStore {
       this.#filesStore = new FilesStore(this.#currentContainer);
       this.#editorStore = new EditorStore(this.#filesStore);
       this.#terminalStore = new TerminalStore(this.#currentContainer);
+
+      const currentUnsavedFiles = this.unsavedFiles.get();
+
+      if (!(currentUnsavedFiles instanceof Set)) {
+        logger.warn('unsavedFiles is not a Set during reinit, converting to Set');
+        this.unsavedFiles.set(ensureUnsavedFilesSet(currentUnsavedFiles));
+      }
 
       this.#containerInitialized = false;
 
@@ -236,6 +267,43 @@ export class WorkbenchStore {
         });
       }
     });
+  }
+
+  #setupConnectionStateHandling(container: Container): void {
+    container.on('connection-state', (state, prevState) => {
+      logger.info(`Container connection state: ${prevState} → ${state}`);
+      this.connectionState.set(state);
+
+      if (state === 'disconnected' || state === 'failed') {
+        this.#handleConnectionLost(state);
+      } else if (state === 'connected') {
+        this.#handleConnectionRestored();
+      } else if (state === 'reconnecting') {
+        this.#handleReconnecting();
+      }
+    });
+  }
+
+  #handleConnectionLost(state: string): void {
+    if (this.#connectionLostNotified) {
+      return;
+    }
+
+    this.#connectionLostNotified = true;
+    logger.error('Connection lost:', state);
+  }
+
+  #handleConnectionRestored(): void {
+    if (this.#connectionLostNotified) {
+      this.#connectionLostNotified = false;
+      toast.success('Connection restored');
+    }
+  }
+
+  #handleReconnecting(): void {
+    if (!this.#connectionLostNotified) {
+      toast.info('Reconnecting...');
+    }
   }
 
   addToExecutionQueue(callback: () => Promise<void>) {
@@ -924,3 +992,4 @@ export class WorkbenchStore {
 export const workbenchStore = new WorkbenchStore();
 export const reinitCounterAtom = workbenchStore.reinitCounter;
 export const containerAtom = workbenchStore.containerAtom;
+export const connectionStateAtom = workbenchStore.connectionState;

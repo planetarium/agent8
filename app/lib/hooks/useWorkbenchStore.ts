@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { workbenchStore, reinitCounterAtom } from '~/lib/stores/workbench';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 export function useWorkbenchFiles() {
   useStore(reinitCounterAtom);
@@ -38,7 +39,16 @@ export function useWorkbenchCurrentView() {
 
 export function useWorkbenchUnsavedFiles() {
   useStore(reinitCounterAtom);
-  return useStore(workbenchStore.unsavedFiles);
+
+  const unsavedFiles = useStore(workbenchStore.unsavedFiles);
+
+  if (!(unsavedFiles instanceof Set)) {
+    console.warn('unsavedFiles is not a Set in useWorkbenchUnsavedFiles, returning empty Set');
+
+    return new Set<string>();
+  }
+
+  return unsavedFiles;
 }
 
 export function useWorkbenchActionAlert() {
@@ -61,6 +71,11 @@ export function useWorkbenchDiffEnabled() {
   return useStore(workbenchStore.diffEnabled);
 }
 
+export function useWorkbenchConnectionState() {
+  useStore(reinitCounterAtom);
+  return useStore(workbenchStore.connectionState);
+}
+
 export function useWorkbenchContainer() {
   useStore(reinitCounterAtom);
   return useStore(workbenchStore.containerAtom);
@@ -75,7 +90,7 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
   (window as any).__workbenchDebug = {
     reinitialize: async (accessToken?: string) => {
       try {
-        const token = accessToken || localStorage.getItem('v8_access_token') || '';
+        const token = accessToken || localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
 
         console.log('🔄 Reinitializing workbench container...');
 

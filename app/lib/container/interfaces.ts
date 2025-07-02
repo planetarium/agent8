@@ -10,6 +10,10 @@ export type PortListener = (port: number, type: string, url: string) => void;
 export type ServerReadyListener = (port: number, url: string) => void;
 export type PreviewMessageListener = (message: PreviewMessage) => void;
 export type ErrorListener = (error: Error) => void;
+export type ConnectionStateListener = (
+  state: 'connected' | 'disconnected' | 'reconnecting' | 'failed',
+  prevState?: string,
+) => void;
 
 export interface FileEntry {
   name: string;
@@ -141,6 +145,7 @@ export interface Container {
   on(event: 'server-ready', listener: ServerReadyListener): Unsubscribe;
   on(event: 'preview-message', listener: PreviewMessageListener): Unsubscribe;
   on(event: 'error', listener: ErrorListener): Unsubscribe;
+  on(event: 'connection-state', listener: ConnectionStateListener): Unsubscribe;
   mount(data: FileSystemTree): Promise<void>;
   spawn(command: string, args?: string[], options?: SpawnOptions): Promise<ContainerProcess>;
 

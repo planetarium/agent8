@@ -9,6 +9,7 @@ import type {
   ContainerProcess,
   PathWatcherEvent,
   ShellSession,
+  ConnectionStateListener,
 } from './interfaces';
 import type { ITerminal, IDisposable } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
@@ -191,7 +192,12 @@ class RemoteContainerConnection {
 
   private _handleClose(event: CloseEvent): void {
     logger.warn('Container WebSocket closed:', event.code, event.reason);
-    this._setState(ConnectionState.DISCONNECTED);
+
+    // Don't change state if we've already reached max attempts (keep FAILED state)
+    if (!this._maxAttemptsReached && this._state !== ConnectionState.FAILED) {
+      this._setState(ConnectionState.DISCONNECTED);
+    }
+
     this._stopHeartbeat();
     this._rejectPendingRequests('Connection closed');
   }
@@ -728,16 +734,52 @@ export class RemoteContainer implements Container {
   readonly serverUrl: string;
 
   private _connection: RemoteContainerConnection;
+  private _connectionStateListeners = new Set<ConnectionStateListener>();
 
   constructor(serverUrl: string, workdir: string, token: string) {
     this._connection = new RemoteContainerConnection(serverUrl, token);
     this.fs = new RemoteContainerFileSystem(this._connection);
     this.workdir = workdir;
     this.serverUrl = serverUrl;
+
+    // Listen to connection state changes and forward them
+    this._connection.onStateChange((newState, prevState) => {
+      // Map ConnectionState enum to string values
+      const stateMap = {
+        [ConnectionState.CONNECTED]: 'connected',
+        [ConnectionState.DISCONNECTED]: 'disconnected',
+        [ConnectionState.RECONNECTING]: 'reconnecting',
+        [ConnectionState.FAILED]: 'failed',
+        [ConnectionState.CONNECTING]: 'reconnecting',
+      } as const;
+
+      const mappedState = stateMap[newState] || 'disconnected';
+      const mappedPrevState = prevState ? stateMap[prevState] : undefined;
+
+      // Notify connection state listeners
+      this._connectionStateListeners.forEach((listener) => {
+        try {
+          listener(mappedState, mappedPrevState);
+        } catch (error) {
+          logger.error('Connection state listener error:', error);
+        }
+      });
+    });
   }
 
-  on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe {
-    return this._connection.on(event, listener);
+  on<E extends keyof EventListenerMap>(event: E, listener: EventListenerMap[E]): Unsubscribe;
+  on(event: 'connection-state', listener: ConnectionStateListener): Unsubscribe;
+
+  on(event: string, listener: any): Unsubscribe {
+    if (event === 'connection-state') {
+      this._connectionStateListeners.add(listener as ConnectionStateListener);
+
+      return () => {
+        this._connectionStateListeners.delete(listener as ConnectionStateListener);
+      };
+    }
+
+    return this._connection.on(event as any, listener);
   }
 
   async mount(data: FileSystemTree): Promise<void> {

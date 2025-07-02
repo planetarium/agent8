@@ -26,6 +26,7 @@ import {
   useWorkbenchDiffCommitHash,
   useWorkbenchPreviews,
   useWorkbenchStore,
+  useWorkbenchConnectionState,
 } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
@@ -35,6 +36,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -47,6 +49,8 @@ interface WorkspaceProps {
 }
 
 const logger = createScopedLogger('Workbench');
+
+type WorkbenchState = 'disconnected' | 'failed' | 'reconnecting' | 'preparing' | 'ready';
 
 const viewTransition = { ease: cubicEasingFn };
 
@@ -325,9 +329,33 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);
+  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState(false);
 
-  // const modifiedFiles = Array.from(useWorkbenchUnsavedFiles().keys());
+  const connectionState = useWorkbenchConnectionState();
 
+  const workbenchState: WorkbenchState = useMemo(() => {
+    if (isManuallyReconnecting) {
+      return 'preparing';
+    }
+
+    if (connectionState === 'reconnecting') {
+      return 'reconnecting';
+    }
+
+    if (connectionState === 'failed') {
+      return 'failed';
+    }
+
+    if (connectionState === 'disconnected') {
+      return 'disconnected';
+    }
+
+    if (connectionState === 'connected' && !terminalReady) {
+      return 'preparing';
+    }
+
+    return 'ready';
+  }, [connectionState, terminalReady, isManuallyReconnecting]);
   const previews = useWorkbenchPreviews();
   const hasPreview = previews.length > 0;
   const showWorkbench = useWorkbenchShowWorkbench();
@@ -378,11 +406,18 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
         await shell.ready;
         setTerminalReady(true);
+        setIsManuallyReconnecting(false);
       };
 
       initializeTerminal();
     }
   }, [chatStarted, workbench.boltTerminal]);
+
+  useEffect(() => {
+    if (connectionState === 'connected' && terminalReady) {
+      setIsManuallyReconnecting(false);
+    }
+  }, [connectionState, terminalReady]);
 
   const onRun = useCallback(async () => {
     setSelectedView('code');
@@ -434,7 +469,52 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         variants={workbenchVariants}
         className="z-workbench"
       >
-        {showWorkbench && !terminalReady && (
+        {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
+          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+            <div className="absolute inset-0 px-2 lg:px-6">
+              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
+                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
+                    {connectionState === 'reconnecting' ? (
+                      <>
+                        <div className="animate-spin w-6 h-6 mb-2 mx-auto">
+                          <div className="i-ph:spinner" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">Reconnecting to Server...</div>
+                      </>
+                    ) : connectionState === 'failed' ? (
+                      <>
+                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
+                          <div className="i-ph:warning-circle" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary mb-3">Connection Failed</div>
+                        <button
+                          onClick={async () => {
+                            const token = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+                            setIsManuallyReconnecting(true);
+                            setTerminalReady(false);
+                            await workbench.reinitializeContainer(token);
+                          }}
+                          className="px-3 py-1.5 text-sm rounded bg-accent-500 hover:bg-accent-600 text-white transition-colors mx-auto block"
+                        >
+                          Reconnect
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
+                          <div className="i-ph:wifi-slash" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">Server Disconnected</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
           <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 px-2 lg:px-6">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
@@ -469,9 +549,13 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   onClick={() => {
                     onRun();
                   }}
+                  disabled={connectionState !== 'connected'}
                   className={classNames(
                     'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
                     'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
+                    {
+                      'opacity-50 cursor-not-allowed': connectionState !== 'connected',
+                    },
                   )}
                 >
                   <div className="i-ph:play" />
