@@ -19,6 +19,15 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { ModelViewer } from '~/components/ui/ModelViewer';
 import { v4 as uuidv4 } from 'uuid';
 
+// Helper function for deep equality check of arrays
+const areArraysEqual = <T,>(arr1: T[], arr2: T[]): boolean => {
+  if (arr1.length !== arr2.length) {
+    return false;
+  }
+
+  return arr1.every((item, index) => item === arr2[index]);
+};
+
 interface Asset {
   url: string;
   description: string;
@@ -122,6 +131,27 @@ type UploadResult = {
   fileExt: string;
 } | null;
 
+// Helper function to generate a safe asset key from a filename
+const generateAssetKeyFromFileName = (
+  fileName: string,
+  timestamp: number = Date.now(),
+  counter: number = 1,
+): string => {
+  // 파일 확장자 제거하고 안전한 key 이름으로 변환
+  let baseKey = fileName
+    .replace(/\.[^/.]+$/, '') // 확장자 제거
+    .replace(/[^a-zA-Z0-9_-]/g, '_') // 특수문자를 언더스코어로 변환
+    .replace(/_{2,}/g, '_') // 연속된 언더스코어를 하나로
+    .replace(/^_+|_+$/g, '') // 앞뒤 언더스코어 제거
+    .toLowerCase();
+
+  if (!baseKey) {
+    baseKey = 'resource';
+  }
+
+  return `${baseKey}_${timestamp}_${counter}`;
+};
+
 export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   renderLogger.trace('ResourcePanel');
 
@@ -154,6 +184,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   const [resourcePoolKeyword, setResourcePoolKeyword] = useState('');
   const [selectedResourceItems, setSelectedResourceItems] = useState<Set<string>>(new Set());
   const [selectedResourceItem, setSelectedResourceItem] = useState<ResourcePoolItem | null>(null);
+
+  // editedResourceItem은 선택된 리소스 아이템의 편집 가능한 복사본으로 사용됨
   const [editedResourceItem, setEditedResourceItem] = useState<ResourcePoolItem | null>(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
 
@@ -211,7 +243,12 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
   };
 
-  const handleResourceCategorySelect = async (category: ResourceCategory) => {
+  const handleResourceCategorySelect = (category: ResourceCategory) => {
+    // 이미 선택된 카테고리인지 확인 (깊은 동등성 검사 사용)
+    if (selectedResourceCategory && areArraysEqual(selectedResourceCategory.tags, category.tags)) {
+      return;
+    }
+
     setSelectedResourceCategory(category);
     setIsResourcePoolMode(true);
     setResourcePoolPage(1);
@@ -220,7 +257,9 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     setSelectedResourceItems(new Set()); // 선택된 아이템 초기화
     setSelectedResourceItem(null);
     setEditedResourceItem(null);
-    await fetchResourcePoolItems(category, 1, false, '');
+
+    // 비동기 함수를 즉시 호출하고 결과를 무시 (void 연산자 사용)
+    void fetchResourcePoolItems(category, 1, false, '');
   };
 
   // Resource Pool 아이템 선택 핸들러
@@ -268,9 +307,32 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
   };
 
-  const loadMoreResources = async () => {
+  /*
+   * Resource Pool 아이템 편집 핸들러 (editedResourceItem을 사용하는 함수)
+   * 참고: 이 함수는 UI에서 리소스 아이템 편집 시 사용됩니다
+   */
+  const handleResourceItemEdit = (field: keyof ResourcePoolItem, value: any) => {
+    if (!editedResourceItem) {
+      return;
+    }
+
+    if (field === 'metadata') {
+      try {
+        const parsedMetadata = typeof value === 'string' ? JSON.parse(value) : value;
+        setEditedResourceItem({ ...editedResourceItem, metadata: parsedMetadata });
+      } catch {
+        setEditedResourceItem({ ...editedResourceItem, [field]: value });
+      }
+    } else {
+      setEditedResourceItem({ ...editedResourceItem, [field]: value });
+    }
+  };
+
+  // 리소스 풀에서 더 많은 아이템을 로드하는 함수
+  const loadMoreResources = () => {
     if (selectedResourceCategory && hasMoreResources && !isLoadingResourcePool) {
-      await fetchResourcePoolItems(selectedResourceCategory, resourcePoolPage + 1, true, resourcePoolKeyword);
+      // 비동기 함수를 호출하고 결과를 무시 (void 연산자 사용)
+      void fetchResourcePoolItems(selectedResourceCategory, resourcePoolPage + 1, true, resourcePoolKeyword);
     }
   };
 
@@ -303,25 +365,13 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       }
 
       // 파일 확장자 제거하고 안전한 key 이름으로 변환
-      let baseKey = fileName
-        .replace(/\.[^/.]+$/, '') // 확장자 제거
-        .replace(/[^a-zA-Z0-9_-]/g, '_') // 특수문자를 언더스코어로 변환
-        .replace(/_{2,}/g, '_') // 연속된 언더스코어를 하나로
-        .replace(/^_+|_+$/g, '') // 앞뒤 언더스코어 제거
-        .toLowerCase();
-
-      if (!baseKey) {
-        baseKey = 'resource';
-      }
-
-      // 중복 확인하고 필요시 타임스탬프 추가
-      let assetKey = baseKey;
+      const timestamp = Date.now();
+      let assetKey = generateAssetKeyFromFileName(fileName, timestamp);
       let counter = 1;
 
+      // 중복 확인하고 필요시 카운터 증가
       while (updatedCategories[targetCategory][assetKey]) {
-        const timestamp = Date.now();
-        assetKey = `${baseKey}_${timestamp}_${counter}`;
-        counter++;
+        assetKey = generateAssetKeyFromFileName(fileName, timestamp, ++counter);
       }
 
       const asset: Asset = {
@@ -1092,7 +1142,9 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       fileNameToUploadId[file.name] = uploadId;
 
       // 플레이스홀더 에셋 추가
-      const assetKey = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${file.name.replace(/\.[^/.]+$/, '')}`;
+      const timestamp = Date.now();
+      const assetKey = generateAssetKeyFromFileName(file.name, timestamp);
+
       const placeholderAsset: Asset = {
         url: '', // 초기 URL은 빈 값
         description: file.name,

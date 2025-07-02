@@ -18,6 +18,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // Tag filtering
     if (tags.length > 0) {
       const tagsJsonb = JSON.stringify(tags);
+
+      // 'cs' operator means 'contains' for jsonb array - checks if the tags array contains all specified tags
       query = query.filter('metadata->tags', 'cs', tagsJsonb);
     }
 
