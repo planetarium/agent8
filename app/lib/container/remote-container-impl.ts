@@ -456,8 +456,8 @@ class RemoteContainerConnection {
 
   private _startHeartbeat(): void {
     this._stopHeartbeat();
-    this._heartbeatInterval = setInterval(() => {
-      this._sendHeartbeat();
+    this._heartbeatInterval = setInterval(async () => {
+      await this._sendHeartbeat();
     }, this._config.heartbeatInterval);
   }
 
@@ -473,7 +473,7 @@ class RemoteContainerConnection {
     }
   }
 
-  private _sendHeartbeat(): void {
+  private async _sendHeartbeat(): Promise<void> {
     if (this._state === ConnectionState.CONNECTED) {
       if (this._heartbeatTimeout) {
         logger.debug('💓 Heartbeat timeout already pending, skipping');
@@ -487,31 +487,31 @@ class RemoteContainerConnection {
         return;
       }
 
-      this.sendRequest({
-        id: `heartbeat-${Date.now()}`,
-        operation: {
-          type: 'heartbeat',
-        },
-      })
-        .then(() => {
-          logger.debug('💓 Heartbeat response received');
-
-          if (this._heartbeatTimeout) {
-            clearTimeout(this._heartbeatTimeout);
-            this._heartbeatTimeout = null;
-          }
-        })
-        .catch((error) => {
-          logger.error('💓 Heartbeat request failed:', error);
-          this._handleHeartbeatError();
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          this._heartbeatTimeout = setTimeout(() => {
+            reject(new Error('Heartbeat timeout'));
+          }, this._config.heartbeatTimeout);
         });
 
-      logger.debug('💓 Heartbeat sent');
-
-      this._heartbeatTimeout = setTimeout(() => {
-        logger.warn('💓 Heartbeat timeout - no response received');
-        this._handleHeartbeatTimeout();
-      }, this._config.heartbeatTimeout);
+        const heartbeatPromise = this.sendRequest({
+          id: `heartbeat-${v4()}`,
+          operation: {
+            type: 'heartbeat',
+          },
+        });
+        logger.debug('💓 Heartbeat sent');
+        await Promise.race([heartbeatPromise, timeoutPromise]);
+        logger.debug('💓 Heartbeat response received');
+      } catch (error) {
+        logger.error('💓 Heartbeat send failed:', error);
+        this._handleHeartbeatError();
+      } finally {
+        if (this._heartbeatTimeout) {
+          clearTimeout(this._heartbeatTimeout);
+          this._heartbeatTimeout = null;
+        }
+      }
     }
   }
 
