@@ -319,19 +319,18 @@ class RemoteContainerConnection {
     }
   }
 
-  private _sendHeartbeat(): void {
+  private async _sendHeartbeat(): Promise<void> {
     if (this._state === ConnectionState.CONNECTED && this._ws) {
       const timeSinceLastRequest = Date.now() - this._lastRequestTime;
 
       if (timeSinceLastRequest >= this._config.heartbeatInterval) {
-        const heartbeat = {
-          id: `heartbeat-${Date.now()}`,
-          type: 'heartbeat',
-          timestamp: Date.now(),
-        };
-
         try {
-          this._ws.send(JSON.stringify(heartbeat));
+          await this.sendRequest({
+            id: `heartbeat-${v4()}`,
+            operation: {
+              type: 'heartbeat',
+            },
+          });
         } catch (error) {
           logger.error('Failed to send heartbeat:', error);
         }
