@@ -259,6 +259,14 @@ export const getProjects = async () => {
   return response.data;
 };
 
+export const getPublicProject = async (projectPath: string) => {
+  const response = await axios.get('/api/gitlab/public-project', {
+    params: { projectPath },
+  });
+
+  return response.data;
+};
+
 export const deleteProject = async (projectId: string) => {
   const response = await axios.delete(`/api/gitlab/projects`, {
     params: {
@@ -278,7 +286,12 @@ export const updateProjectDescription = async (projectPath: string, description:
   return response.data;
 };
 
-export const forkProject = async (projectPath: string, projectName: string, commitSha: string, description: string) => {
+export const forkProject = async (
+  projectPath: string,
+  projectName: string,
+  commitSha: string | undefined,
+  description: string,
+) => {
   const response = await axios.post('/api/gitlab/fork', {
     projectPath,
     projectName,
