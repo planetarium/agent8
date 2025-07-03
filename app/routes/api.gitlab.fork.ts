@@ -13,7 +13,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
     projectPath: string;
     projectName: string;
     description: string;
-    commitSha: string;
+    commitSha?: string;
   };
 
   const email = user.email;
@@ -25,8 +25,26 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
+    let actualCommitSha = commitSha;
+
+    // If no commitSha provided, get the latest commit from develop branch
+    if (!actualCommitSha) {
+      const project = await gitlabService.gitlab.Projects.show(projectPath);
+      const defaultBranch = (project as any).default_branch || 'develop';
+      const commits = await gitlabService.gitlab.Commits.all(projectPath, {
+        refName: defaultBranch,
+        perPage: 1,
+      });
+
+      if (commits.length > 0) {
+        actualCommitSha = commits[0].id;
+      } else {
+        return json({ success: false, message: 'No commits found in the repository' }, { status: 400 });
+      }
+    }
+
     // 1. 원본 레포지토리에서 특정 커밋 기준으로 코드 다운로드
-    const codeBuffer = await gitlabService.downloadCode(projectPath, commitSha!);
+    const codeBuffer = await gitlabService.downloadCode(projectPath, actualCommitSha);
 
     // 2. 임시 디렉토리에 압축 해제 (서버 측 구현 필요)
     const extractedFiles = await unzipCode(codeBuffer); // 별도 구현 필요

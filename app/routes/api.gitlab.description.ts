@@ -33,6 +33,15 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
   const gitlabService = new GitlabService(env);
 
   try {
+    const hasPermission = await gitlabService.isProjectOwner(user.email, projectPath);
+
+    if (!hasPermission) {
+      return json(
+        { success: false, message: 'You do not have permission to revert branches in this project' },
+        { status: 403 },
+      );
+    }
+
     const updatedProject = await gitlabService.updateProjectDescription(email, projectPath, description);
 
     return json({
