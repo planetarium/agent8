@@ -104,7 +104,7 @@ export default function Spin() {
       const forkedProject = await forkProject(
         projectPath,
         newRepoName,
-        undefined, // Let the API use the latest commit from develop branch
+        'develop',
         `Spin from ${projectData.name}${projectData.description ? `: ${projectData.description}` : ''}`,
       );
 
