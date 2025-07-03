@@ -65,6 +65,7 @@ interface ConnectionConfig {
   initialReconnectDelay: number;
   maxReconnectDelay: number;
   heartbeatInterval: number;
+  heartbeatTimeout: number;
   queueCapacity: number;
 }
 
@@ -94,9 +95,8 @@ class RemoteContainerConnection {
     { resolve: (value: any) => void; reject: (reason: any) => void; timestamp: number }
   >();
   private _connectionPromise: Promise<void> | null = null;
-  private _lastRequestTime = Date.now();
   private _heartbeatInterval: NodeJS.Timeout | null = null;
-  private _lastHeartbeatResponse: number = 0;
+  private _heartbeatTimeout: NodeJS.Timeout | null = null;
   private _stateListeners = new Set<(state: ConnectionState, prev: ConnectionState) => void>();
   private _listeners: EventListeners = {
     port: new Set(),
@@ -110,6 +110,16 @@ class RemoteContainerConnection {
 
   private _reconnectAttempts: number = 0;
   private _maxAttemptsReached: boolean = false;
+  private _networkStateListener: ((event: Event) => void) | null = null;
+
+  // Fields for tracking state transitions
+  private _stateChangeHistory: Array<{
+    source: string;
+    from: ConnectionState;
+    to: ConnectionState;
+    timestamp: number;
+  }> = [];
+  private _stateChangeFrequency = new Map<string, number>();
 
   constructor(
     private _serverUrl: string,
@@ -120,10 +130,13 @@ class RemoteContainerConnection {
       maxReconnectAttempts: 5,
       initialReconnectDelay: 1000,
       maxReconnectDelay: 30000,
-      heartbeatInterval: 15000,
+      heartbeatInterval: 5000,
+      heartbeatTimeout: 10000,
       queueCapacity: 50,
       ...config,
     };
+
+    this._setupNetworkStateListener();
   }
 
   private _getWebSocketUrl(): string {
@@ -152,25 +165,127 @@ class RemoteContainerConnection {
       .build();
   }
 
-  private _setState(newState: ConnectionState): void {
+  private _setState(newState: ConnectionState, source: string = 'unknown'): void {
     const prevState = this._state;
 
     if (prevState !== newState) {
       this._state = newState;
-      logger.info(`Connection state: ${prevState} → ${newState}`);
+
+      const timestamp = Date.now();
+
+      // Record state transition history
+      this._stateChangeHistory.push({
+        source,
+        from: prevState,
+        to: newState,
+        timestamp,
+      });
+
+      // Clean up old history (keep only last 5 minutes)
+      const fiveMinutesAgo = timestamp - 5 * 60 * 1000;
+      this._stateChangeHistory = this._stateChangeHistory.filter((entry) => entry.timestamp > fiveMinutesAgo);
+
+      // Analyze frequency
+      this._analyzeStateChangeFrequency(source, timestamp);
+
+      logger.info(`🔄 Connection state: ${prevState} → ${newState} (source: ${source})`);
+
+      // Additional logging for frequent transition detection
+      if (source === 'network-offline' || source === 'network-online' || source === 'heartbeat-timeout') {
+        logger.warn(`⚠️  Frequent state change detected: ${source}`);
+      }
+
       this._stateListeners.forEach((listener) => {
         try {
           listener(newState, prevState);
         } catch (error) {
-          logger.error('State listener error:', error);
+          logger.error(`State listener error (source: ${source}):`, error);
         }
       });
     }
   }
 
+  private _analyzeStateChangeFrequency(source: string, timestamp: number): void {
+    const oneMinuteAgo = timestamp - 60 * 1000;
+
+    // Calculate state transitions from the same source in the last minute
+    const recentChanges = this._stateChangeHistory.filter(
+      (entry) => entry.source === source && entry.timestamp > oneMinuteAgo,
+    );
+
+    if (recentChanges.length > 3) {
+      logger.warn(`🚨 Excessive state changes detected!`);
+      logger.warn(`📊 Source: ${source}, Count: ${recentChanges.length} in last minute`);
+      logger.warn(
+        `📝 Recent changes:`,
+        recentChanges.map((entry) => `${entry.from} → ${entry.to} (${new Date(entry.timestamp).toLocaleTimeString()})`),
+      );
+    }
+
+    // Analyze network state change patterns
+    if (source === 'network-offline' || source === 'network-online') {
+      const networkChanges = this._stateChangeHistory.filter(
+        (entry) =>
+          (entry.source === 'network-offline' || entry.source === 'network-online') && entry.timestamp > oneMinuteAgo,
+      );
+
+      if (networkChanges.length > 5) {
+        logger.error(`🌐 Network instability detected! ${networkChanges.length} network state changes in last minute`);
+        logger.error(
+          `📊 Network change pattern:`,
+          networkChanges.map((entry) => `${entry.source} at ${new Date(entry.timestamp).toLocaleTimeString()}`),
+        );
+      }
+    }
+
+    // Analyze heartbeat timeout patterns
+    if (source === 'heartbeat-timeout') {
+      const heartbeatTimeouts = this._stateChangeHistory.filter(
+        (entry) => entry.source === 'heartbeat-timeout' && entry.timestamp > oneMinuteAgo,
+      );
+
+      if (heartbeatTimeouts.length > 2) {
+        logger.error(`💓 Heartbeat timeout pattern detected! ${heartbeatTimeouts.length} timeouts in last minute`);
+        logger.error(`📊 This may indicate server issues or unstable network connection`);
+      }
+    }
+  }
+
+  // Public method to query state transition history
+  getStateChangeHistory(): Array<{
+    source: string;
+    from: ConnectionState;
+    to: ConnectionState;
+    timestamp: number;
+  }> {
+    return [...this._stateChangeHistory];
+  }
+
+  // Public method to query state transition statistics
+  getStateChangeStats(): {
+    totalChanges: number;
+    sourceBreakdown: Record<string, number>;
+    recentChanges: number;
+  } {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60 * 1000;
+    const recentChanges = this._stateChangeHistory.filter((entry) => entry.timestamp > oneMinuteAgo);
+
+    const sourceBreakdown: Record<string, number> = {};
+    this._stateChangeHistory.forEach((entry) => {
+      sourceBreakdown[entry.source] = (sourceBreakdown[entry.source] || 0) + 1;
+    });
+
+    return {
+      totalChanges: this._stateChangeHistory.length,
+      sourceBreakdown,
+      recentChanges: recentChanges.length,
+    };
+  }
+
   private _handleOpen(): void {
-    logger.info('Container WebSocket connected');
-    this._setState(ConnectionState.CONNECTED);
+    logger.info('📡 Container WebSocket connected');
+    this._setState(ConnectionState.CONNECTED, 'websocket-open');
     this._startHeartbeat();
 
     this._reconnectAttempts = 0;
@@ -191,11 +306,11 @@ class RemoteContainerConnection {
   }
 
   private _handleClose(event: CloseEvent): void {
-    logger.warn('Container WebSocket closed:', event.code, event.reason);
+    logger.warn(`📡 Container WebSocket closed: ${event.code} - ${event.reason}`);
 
     // Don't change state if we've already reached max attempts (keep FAILED state)
     if (!this._maxAttemptsReached && this._state !== ConnectionState.FAILED) {
-      this._setState(ConnectionState.DISCONNECTED);
+      this._setState(ConnectionState.DISCONNECTED, 'websocket-close');
     }
 
     this._stopHeartbeat();
@@ -203,25 +318,25 @@ class RemoteContainerConnection {
   }
 
   private _handleError(event: Event): void {
-    logger.error('Container WebSocket error:', event);
+    logger.error('📡 Container WebSocket error:', event);
 
     if (this._state === ConnectionState.CONNECTING) {
-      this._setState(ConnectionState.FAILED);
+      this._setState(ConnectionState.FAILED, 'websocket-error');
     }
   }
 
   private _handleRetry(): void {
     this._reconnectAttempts++;
     logger.info(
-      `Container WebSocket retrying connection... (attempt ${this._reconnectAttempts}/${this._config.maxReconnectAttempts})`,
+      `🔄 Container WebSocket retrying connection... (attempt ${this._reconnectAttempts}/${this._config.maxReconnectAttempts})`,
     );
 
     if (this._reconnectAttempts >= this._config.maxReconnectAttempts) {
       logger.error(
-        `Maximum reconnection attempts (${this._config.maxReconnectAttempts}) reached. Stopping reconnection.`,
+        `❌ Maximum reconnection attempts (${this._config.maxReconnectAttempts}) reached. Stopping reconnection.`,
       );
       this._maxAttemptsReached = true;
-      this._setState(ConnectionState.FAILED);
+      this._setState(ConnectionState.FAILED, 'max-retries-reached');
 
       if (this._ws) {
         this._ws.close();
@@ -234,12 +349,12 @@ class RemoteContainerConnection {
       return;
     }
 
-    this._setState(ConnectionState.RECONNECTING);
+    this._setState(ConnectionState.RECONNECTING, 'websocket-retry');
   }
 
   private _handleReconnect(): void {
-    logger.info('Container WebSocket reconnected successfully');
-    this._setState(ConnectionState.CONNECTED);
+    logger.info('✅ Container WebSocket reconnected successfully');
+    this._setState(ConnectionState.CONNECTED, 'websocket-reconnect');
     this._startHeartbeat();
 
     this._reconnectAttempts = 0;
@@ -259,9 +374,6 @@ class RemoteContainerConnection {
         } else {
           reject(new Error(message.error?.message || 'Error processing request'));
         }
-      } else if (message.type === 'heartbeat-response') {
-        // Handle heartbeat response
-        this._lastHeartbeatResponse = Date.now();
       } else {
         // Handle other message types (events, process data, etc.)
         this._handleEventMessage(message);
@@ -354,26 +466,74 @@ class RemoteContainerConnection {
       clearInterval(this._heartbeatInterval);
       this._heartbeatInterval = null;
     }
+
+    if (this._heartbeatTimeout) {
+      clearTimeout(this._heartbeatTimeout);
+      this._heartbeatTimeout = null;
+    }
   }
 
   private _sendHeartbeat(): void {
-    if (this._state === ConnectionState.CONNECTED && this._ws) {
-      const timeSinceLastRequest = Date.now() - this._lastRequestTime;
+    if (this._state === ConnectionState.CONNECTED) {
+      if (this._heartbeatTimeout) {
+        logger.debug('💓 Heartbeat timeout already pending, skipping');
+        return;
+      }
 
-      if (timeSinceLastRequest >= this._config.heartbeatInterval) {
-        const heartbeat = {
-          id: `heartbeat-${Date.now()}`,
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        logger.warn('🌐 Network is offline, skipping heartbeat');
+        this._handleNetworkOffline();
+
+        return;
+      }
+
+      this.sendRequest({
+        id: `heartbeat-${Date.now()}`,
+        operation: {
           type: 'heartbeat',
-          timestamp: Date.now(),
-        };
+        },
+      })
+        .then(() => {
+          logger.debug('💓 Heartbeat response received');
 
-        try {
-          this._ws.send(JSON.stringify(heartbeat));
-        } catch (error) {
-          logger.error('Failed to send heartbeat:', error);
-        }
+          if (this._heartbeatTimeout) {
+            clearTimeout(this._heartbeatTimeout);
+            this._heartbeatTimeout = null;
+          }
+        })
+        .catch((error) => {
+          logger.error('💓 Heartbeat request failed:', error);
+          this._handleHeartbeatError();
+        });
+
+      logger.debug('💓 Heartbeat sent');
+
+      this._heartbeatTimeout = setTimeout(() => {
+        logger.warn('💓 Heartbeat timeout - no response received');
+        this._handleHeartbeatTimeout();
+      }, this._config.heartbeatTimeout);
+    }
+  }
+
+  private _handleHeartbeatTimeout(): void {
+    logger.warn('💓 Heartbeat timeout detected, connection may be lost');
+
+    if (this._state === ConnectionState.CONNECTED) {
+      this._setState(ConnectionState.DISCONNECTED, 'heartbeat-timeout');
+      this._stopHeartbeat();
+      this._rejectPendingRequests('Heartbeat timeout');
+
+      if (!this._maxAttemptsReached) {
+        this.connect().catch((error) => {
+          logger.error('Failed to reconnect after heartbeat timeout:', error);
+        });
       }
     }
+  }
+
+  private _handleHeartbeatError(): void {
+    logger.error('💓 Heartbeat send failed, connection may be lost');
+    this._handleHeartbeatTimeout();
   }
 
   private _rejectPendingRequests(reason: string): void {
@@ -417,7 +577,7 @@ class RemoteContainerConnection {
       return;
     }
 
-    this._setState(ConnectionState.CONNECTING);
+    this._setState(ConnectionState.CONNECTING, 'manual-connect');
     this._initializeWebSocket();
 
     // Wait until connection is complete
@@ -461,7 +621,6 @@ class RemoteContainerConnection {
       try {
         // websocket-ts automatically checks connection state and handles queuing
         this._ws!.send(JSON.stringify(requestWithId));
-        this._lastRequestTime = Date.now();
       } catch (error) {
         this._requestMap.delete(requestWithId.id);
         reject(error);
@@ -505,6 +664,7 @@ class RemoteContainerConnection {
 
   async disconnect(): Promise<void> {
     this._stopHeartbeat();
+    this._cleanupNetworkStateListener();
 
     this._reconnectAttempts = 0;
     this._maxAttemptsReached = false;
@@ -514,7 +674,7 @@ class RemoteContainerConnection {
       this._ws = null;
     }
 
-    this._setState(ConnectionState.DISCONNECTED);
+    this._setState(ConnectionState.DISCONNECTED, 'manual-disconnect');
     this._rejectPendingRequests('Disconnected by user');
   }
 
@@ -561,9 +721,67 @@ class RemoteContainerConnection {
 
   close() {
     this.disconnect();
+    this._cleanupNetworkStateListener();
+
+    // Output state transition statistics on shutdown
+    const stats = this.getStateChangeStats();
+    logger.info(`📊 Final connection stats:`, stats);
 
     // Clean up process listeners
     this._processListeners.clear();
+
+    // Clean up history
+    this._stateChangeHistory = [];
+    this._stateChangeFrequency.clear();
+  }
+
+  private _setupNetworkStateListener(): void {
+    if (typeof window !== 'undefined' && 'navigator' in window) {
+      this._networkStateListener = (_event: Event) => {
+        const isOnline = navigator.onLine;
+        logger.info(`🌐 Network state changed: ${isOnline ? 'online' : 'offline'}`);
+
+        if (!isOnline) {
+          this._handleNetworkOffline();
+        } else {
+          this._handleNetworkOnline();
+        }
+      };
+
+      window.addEventListener('online', this._networkStateListener);
+      window.addEventListener('offline', this._networkStateListener);
+
+      // Log initial network state
+      logger.info(`🌐 Initial network state: ${navigator.onLine ? 'online' : 'offline'}`);
+    }
+  }
+
+  private _handleNetworkOffline(): void {
+    logger.warn('🌐 Network went offline - forcing disconnection');
+
+    if (this._state === ConnectionState.CONNECTED) {
+      this._setState(ConnectionState.DISCONNECTED, 'network-offline');
+      this._stopHeartbeat();
+      this._rejectPendingRequests('Network went offline');
+    }
+  }
+
+  private _handleNetworkOnline(): void {
+    logger.info('🌐 Network came back online - attempting reconnection');
+
+    if (this._state === ConnectionState.DISCONNECTED && !this._maxAttemptsReached) {
+      this.connect().catch((error) => {
+        logger.error('Failed to reconnect after network restoration:', error);
+      });
+    }
+  }
+
+  private _cleanupNetworkStateListener(): void {
+    if (this._networkStateListener && typeof window !== 'undefined') {
+      window.removeEventListener('online', this._networkStateListener);
+      window.removeEventListener('offline', this._networkStateListener);
+      this._networkStateListener = null;
+    }
   }
 }
 
@@ -780,6 +998,45 @@ export class RemoteContainer implements Container {
     }
 
     return this._connection.on(event as any, listener);
+  }
+
+  // Methods for debugging
+  getConnectionStats() {
+    return {
+      serverUrl: this.serverUrl,
+      connectionState: this._connection.connectionState,
+      reconnectAttempts: this._connection.reconnectAttempts,
+      maxReconnectAttempts: this._connection.maxReconnectAttempts,
+      maxAttemptsReached: this._connection.maxAttemptsReached,
+      stateChangeHistory: this._connection.getStateChangeHistory(),
+      stateChangeStats: this._connection.getStateChangeStats(),
+    };
+  }
+
+  logConnectionStats() {
+    const stats = this.getConnectionStats();
+    logger.info('📊 Connection Statistics:', stats);
+
+    // Analyze recent state transition patterns
+    const recentChanges = stats.stateChangeHistory.filter(
+      (entry) => entry.timestamp > Date.now() - 5 * 60 * 1000, // Last 5 minutes
+    );
+
+    if (recentChanges.length > 0) {
+      logger.info('📈 Recent State Changes (last 5 minutes):');
+      recentChanges.forEach((entry, index) => {
+        logger.info(
+          `  ${index + 1}. ${entry.from} → ${entry.to} (${entry.source}) at ${new Date(entry.timestamp).toLocaleTimeString()}`,
+        );
+      });
+    }
+
+    // Pattern analysis
+    const sources = [...new Set(recentChanges.map((entry) => entry.source))];
+
+    if (sources.length > 0) {
+      logger.info('📋 Active Sources:', sources);
+    }
   }
 
   async mount(data: FileSystemTree): Promise<void> {
