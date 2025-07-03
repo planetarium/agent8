@@ -22,6 +22,7 @@ import {
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
+import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -126,6 +127,7 @@ export function Chat() {
     hasMore,
     loadBefore,
     loadingBefore,
+    error,
   } = useGitbaseChatHistory();
 
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
@@ -193,6 +195,11 @@ export function Chat() {
       setInitialMessages([]);
     }
   }, [loaded, files, chats, project]);
+
+  // Check for 404 error (project not found or access denied)
+  if (error && typeof error === 'object' && (error as any).status === 404) {
+    return <NotFoundPage />;
+  }
 
   return (
     <>

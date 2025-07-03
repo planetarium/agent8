@@ -18,27 +18,27 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-flash',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'models/gemini-2.5-flash-preview-04-17',
+    model: 'models/gemini-2.5-flash',
     provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
   },
 };

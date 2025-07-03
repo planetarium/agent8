@@ -668,22 +668,6 @@ export class GitlabService {
         return false;
       }
 
-      try {
-        const currentUserResponse = await axios.get(`${this.gitlabUrl}/api/v4/user`, {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-        });
-
-        const currentUser = currentUserResponse.data as GitlabUser;
-
-        if (currentUser && currentUser.is_admin) {
-          return true;
-        }
-      } catch (adminCheckError) {
-        logger.error(adminCheckError);
-      }
-
       if (project.namespace && user.namespace_id) {
         const projectNamespaceId = project.namespace.id;
         const userNamespaceId = user.namespace_id;
@@ -1260,6 +1244,66 @@ export class GitlabService {
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to revert branch to commit: ${errorMessage}`);
+    }
+  }
+
+  async getProjectVisibility(projectPath: string): Promise<string> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      return (project as any).visibility || 'private';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get project visibility: ${errorMessage}`);
+    }
+  }
+
+  async updateProjectVisibility(
+    email: string,
+    projectPath: string,
+    visibility: 'public' | 'private',
+  ): Promise<GitlabProject> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      const hasPermission = await this.isProjectOwner(email, project.id);
+
+      if (!hasPermission) {
+        throw new Error('You do not have permission to update this project visibility');
+      }
+
+      const updatedProject = await this.gitlab.Projects.edit(projectPath, {
+        visibility,
+      });
+
+      return updatedProject as unknown as GitlabProject;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update project visibility: ${errorMessage}`);
+    }
+  }
+
+  async checkProjectAccess(email: string, projectPath: string): Promise<{ hasAccess: boolean; reason?: string }> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const visibility = (project as any).visibility || 'private';
+
+      // Public projects are accessible to everyone
+      if (visibility === 'public') {
+        return { hasAccess: true };
+      }
+
+      // For private projects, check if user is the owner
+      const isOwner = await this.isProjectOwner(email, project.id);
+
+      if (!isOwner) {
+        return { hasAccess: false, reason: 'Project not found' }; // Don't reveal it's private
+      }
+
+      return { hasAccess: true };
+    } catch {
+      // If project doesn't exist or any other error, return not found
+      return { hasAccess: false, reason: 'Project not found' };
     }
   }
 }

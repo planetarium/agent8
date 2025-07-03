@@ -68,7 +68,7 @@ export function useGitbaseChatHistory() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
   const prevRequestParams = useRef<{ [key: string]: any }>({});
 
   const loadTaskBranches = useCallback(async (projectPath: string) => {
@@ -186,7 +186,14 @@ export function useGitbaseChatHistory() {
         })) as CommitResponse;
 
         if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch commit history');
+          const error = new Error(data.error || 'Failed to fetch commit history');
+
+          // Check if it's a 404 error (project not found or access denied)
+          if (data.error?.includes('Project not found')) {
+            (error as any).status = 404;
+          }
+
+          throw error;
         }
 
         setProject(data.data.project);
@@ -203,7 +210,27 @@ export function useGitbaseChatHistory() {
         setCurrentPage(page);
         setHasMore(data.data.pagination.hasMore);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error fetching commit history');
+        // Handle axios errors specifically
+        if (err && typeof err === 'object' && 'response' in err) {
+          const axiosError = err as any;
+
+          if (axiosError.response?.status === 404) {
+            setError({
+              message: axiosError.response?.data?.message || 'Project not found',
+              status: 404,
+            });
+          } else {
+            setError({
+              message:
+                axiosError.response?.data?.message || axiosError.message || 'Unknown error fetching commit history',
+            });
+          }
+        } else {
+          setError({
+            message: err instanceof Error ? err.message : 'Unknown error fetching commit history',
+          });
+        }
+
         logger.error('Error fetching commit history:', err);
       } finally {
         setLoaded(true);
