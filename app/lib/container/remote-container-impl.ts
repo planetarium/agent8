@@ -1111,11 +1111,6 @@ export class RemoteContainer implements Container {
     let terminalDataDisposable: IDisposable | null = null;
 
     terminalDataDisposable = terminal.onData(async (data) => {
-      if (input.locked) {
-        logger.error('input stream is locked, skipping data');
-        return;
-      }
-
       const writer = input.getWriter();
 
       try {
