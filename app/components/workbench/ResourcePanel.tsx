@@ -185,8 +185,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   const [selectedResourceItems, setSelectedResourceItems] = useState<Set<string>>(new Set());
   const [selectedResourceItem, setSelectedResourceItem] = useState<ResourcePoolItem | null>(null);
 
-  // editedResourceItem은 선택된 리소스 아이템의 편집 가능한 복사본으로 사용됨
-  const [editedResourceItem, setEditedResourceItem] = useState<ResourcePoolItem | null>(null);
+  const [, setEditedResourceItem] = useState<ResourcePoolItem | null>(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
 
   // 허용되는 파일 확장자 목록
@@ -307,28 +306,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     }
   };
 
-  /*
-   * Resource Pool 아이템 편집 핸들러 (editedResourceItem을 사용하는 함수)
-   * 참고: 이 함수는 UI에서 리소스 아이템 편집 시 사용됩니다
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleResourceItemEdit = (field: keyof ResourcePoolItem, value: any) => {
-    if (!editedResourceItem) {
-      return;
-    }
-
-    if (field === 'metadata') {
-      try {
-        const parsedMetadata = typeof value === 'string' ? JSON.parse(value) : value;
-        setEditedResourceItem({ ...editedResourceItem, metadata: parsedMetadata });
-      } catch {
-        setEditedResourceItem({ ...editedResourceItem, [field]: value });
-      }
-    } else {
-      setEditedResourceItem({ ...editedResourceItem, [field]: value });
-    }
-  };
-
   // 리소스 풀에서 더 많은 아이템을 로드하는 함수
   const loadMoreResources = () => {
     if (selectedResourceCategory && hasMoreResources && !isLoadingResourcePool) {
@@ -412,7 +389,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   // 디바운싱된 검색 실행
   useEffect(() => {
     if (!isResourcePoolMode || !selectedResourceCategory) {
-      return;
+      return undefined;
     }
 
     const timeoutId = setTimeout(() => {
