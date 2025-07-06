@@ -64,13 +64,13 @@ We already have a working React codebase. Our goal is to modify or add new featu
 2. Collect relevant information
 - Read the information in <project_description> to understand the overall structure of the project.
 - Read the necessary files to perform the tasks.(Use the read_files tool to read all the necessary files at once. If there are any additional files that need to be read sequentially, please read those files as well. However, since reading files is a very expensive task, you must operate very efficiently.)
-- PROJECT.md, package.json, src/assets.json are always latest version provided in the <project_description>, <resource_constraints>. so you don't need to read them again.
+- PROJECT/*.md, package.json, src/assets.json are always latest version provided in the <project_description>, <resource_constraints>. so you don't need to read them again.
 - If the tasks to be performed are complex, you can use the provided tools to receive assistance in generating code samples, resources, images, etc.
 - IMPORTANT: Searching on vectordb is allowed only once. If you can't find a good example within the first attempt, resolve it independently.
 - ULTRA IMPORTANT: For assets, you must use the address in src/assets.json and only additional assets from tools can be added and used in the code.
 
 3. Generate the response
-- Please refer to the <project_documentation> and update the PROJECT.md. (You must do this.)
+- Please refer to the <project_documentation> and update the PROJECT/*.md. (You must do this.)
 - Please refer to the <resource_constraints> and update the src/assets.json file. (Only if there are changes in resources)
 - Reply with the entire content of the file, modified according to <artifact_instructions> and <response_format>.
 - Finally, if there are any tasks that could not be completed from the user's request, include recommendations for the next steps in your response.
@@ -92,69 +92,95 @@ The flow you need to proceed is as follows.
   if (options.projectMd !== false) {
     systemPrompt += `
 <project_documentation>
-CRITICAL: You MUST maintain a PROJECT.md file in the root directory of every project. This file serves as the central documentation for the entire project and must be kept up-to-date with every change.
+CRITICAL: You MUST maintain a PROJECT/*.md file in the root directory of every project. This file serves as the central documentation for the entire project and must be kept up-to-date with every change.
 
 Please only use the following format to generate the summary:
 ---
-# Project Overview
+<boltAction type="file" filePath="PROJECT/Context.md">
+# Project Context
+## Overview
 - **Project**: {project_name} - {brief_description}
-- **Current Phase**: {phase}
 - **Tech Stack**: {languages}, {frameworks}, {key_dependencies}
 - **Environment**: {critical_env_details}
 
+## User Context
+- **Technical Level**: {expertise_level}
+- **Preferences**: {coding_style_preferences}
+- **Communication**: {preferred_explanation_style}
+
+## Critical Memory
+- **Must Preserve**: {crucial_technical_context}
+- **Core Architecture**: {fundamental_design_decisions}
+</boltAction>
+
+<boltAction type="file" filePath="PROJECT/Structure.md">
 # File Structure
+## Core Files
 - src/main.tsx : Entry point for the application, Sets up React rendering and global providers
 - src/components/Game.tsx : Main game component, Handles game state and rendering logic, Implements [specific functionality]
 - src/utils/physics.ts : Contains utility functions for game physics calculations, Implements collision detection algorithms
-  
-# Conversation Context
-- **Last Topic**: {main_discussion_point}
-- **Key Decisions**: {important_decisions_made}
-- **User Context**:
-  - Technical Level: {expertise_level}
-  - Preferences: {coding_style_preferences}
-  - Communication: {preferred_explanation_style}
 
-# Implementation Status
-## Current State
-- **Active Feature**: {feature_in_development}
-- **Progress**: {what_works_and_what_doesn't}
-- **Blockers**: {current_challenges}
+## Architecture Notes
+- **Component Structure**: {component_organization}
+- **Data Flow**: {state_management_pattern}
+- **Key Dependencies**: {important_libraries_and_their_roles}
+- **Integration Points**: {how_components_connect}
+</boltAction>
 
-## Code Evolution
-- **Recent Changes**: {latest_modifications}
-- **Working Patterns**: {successful_approaches}
-- **Failed Approaches**: {attempted_solutions_that_failed}
-
-# Requirements
+<boltAction type="file" filePath="PROJECT/Requirements.md">
+# Requirements & Patterns
+## Requirements
 - **Implemented**: {completed_features}
 - **In Progress**: {current_focus}
 - **Pending**: {upcoming_features}
 - **Technical Constraints**: {critical_constraints}
 
-# Critical Memory
-- **Must Preserve**: {crucial_technical_context}
-- **User Requirements**: {specific_user_needs}
-- **Known Issues**: {documented_problems}
+## Known Issues
+- **Documented Problems**: {documented_problems}
+- **Workarounds**: {current_solutions}
 
-# Next Actions
+## Patterns
+- **Working Approaches**: {successful_approaches}
+- **Failed Approaches**: {attempted_solutions_that_failed}
+</boltAction>
+
+<boltAction type="file" filePath="PROJECT/Status.md">
+# Current Status
+## Active Work
+- **Current Feature**: {feature_in_development}
+- **Progress**: {what_works_and_what_doesn't}
+- **Blockers**: {current_challenges}
+
+## Recent Activity
+- **Last Topic**: {main_discussion_point}
+- **Key Decisions**: {important_decisions_made}
+- **Latest Changes**: {recent_code_changes}
+- **Impact**: {effects_of_changes}
+
+## Next Steps
 - **Immediate**: {next_steps}
 - **Open Questions**: {unresolved_issues}
+</boltAction>
 ---
 Note:
-* Keep entries concise and focused on information needed for continuity
-* File Structure is important. After looking at this, you should decide which file to open and edit in the next task.
-
+* Context.md and Structure.md rarely change - only update when fundamental changes occur
+* Requirements.md changes when new features are added or issues are discovered
+* Status.md changes with every interaction - contains all dynamic information
+* Focus updates on the files that actually changed
+* **MISSING FILES**: If any PROJECT/*.md files are missing, create them immediately before proceeding with the task
+* **MIGRATION**: If an old PROJECT.md file exists, extract relevant information and distribute it across the new file structure
 ---
   
 RULES:
 
-1. You MUST update PROJECT.md whenever you make changes to the codebase (There is no need for an update when fixing bugs.)
+1. You MUST update PROJECT/*.md whenever you make changes to the codebase (There is no need for an update when fixing bugs.)
 2. The documentation MUST stay synchronized with the actual code
 3. This file serves as a handoff document for any AI that works on the project in the future
 4. The documentation should be detailed enough that anyone can understand the project structure by reading only this file
 5. When listing files, focus on explaining their purpose and functionality, not just listing them
 6. Do not write any thing other that the summary with with the provided structure
+7. **EFFICIENCY**: Only update the files that actually changed - don't regenerate static information
+8. **INITIALIZATION**: If PROJECT/*.md files don't exist, create ALL required files (Context.md, Structure.md, Requirements.md, Status.md) with appropriate content based on the current project state. If an old version PROJECT.md file exists, read and reference it to migrate the information to the new structure.
 
 Remember: Proper documentation is as important as the code itself. It enables effective collaboration and maintenance.
 </project_documentation>
@@ -268,7 +294,7 @@ Please consider the following instructions:
 
 A template is provided.
 Your first task is to verify whether the template aligns with what the user wants.
-You can confirm the content by reviewing the provided PROJECT.md file.
+You can confirm the content by reviewing the provided PROJECT/*.md file.
 
 `;
 }
@@ -460,14 +486,24 @@ export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
 }
 
 export function getProjectMdPrompt(files: any) {
-  const projectMd = files[`${WORK_DIR}/PROJECT.md`];
+  const projectFiles = Object.entries(files)
+    .filter(([path]) => path.startsWith(`${WORK_DIR}/PROJECT/`) && path.endsWith('.md'))
+    .map(([path, file]: [string, any]) => ({
+      path: path.replace(`${WORK_DIR}/PROJECT/`, ''),
+      content: file?.type === 'file' ? file.content : '',
+    }));
 
   return `
 <PROJECT_DESCRIPTION>
-    This is a PROJECT.md file that describes the project. The contents are always up-to-date, so please do not read this file through tools.
-    <boltAction type="file" filePath="PROJECT.md">
-      ${projectMd?.type === 'file' ? projectMd.content : ''}
-    </boltAction>
+    These are PROJECT/*.md files that describe the project. The contents are always up-to-date, so please do not read these files through tools.
+    ${projectFiles
+      .map(
+        (file) => `
+    <boltAction type="file" filePath="PROJECT/${file.path}">
+      ${file.content}
+    </boltAction>`,
+      )
+      .join('\n')}
 </PROJECT_DESCRIPTION>
 `;
 }
