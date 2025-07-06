@@ -63,6 +63,12 @@ function CurrentDateTime() {
 }
 
 export const Menu = () => {
+  const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
+
+  if (isSideMenuDisabled) {
+    return null;
+  }
+
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<RepositoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
