@@ -33,6 +33,7 @@ export default function Spin() {
   const [isSpinning, setIsSpinning] = useState(false);
 
   const projectPath = searchParams.get('from');
+  const sha = searchParams.get('sha') || 'develop';
 
   useEffect(() => {
     if (!projectPath) {
@@ -100,12 +101,16 @@ export default function Spin() {
       const randomSuffix = Math.random().toString(36).slice(-3);
       newRepoName = `${newRepoName}-spin-${timestamp}${randomSuffix}`;
 
-      // Fork the project from develop branch
+      // Fork the project with source information for tag creation
       const forkedProject = await forkProject(
         projectPath,
         newRepoName,
-        'develop',
+        sha,
         `Spin from ${projectData.name}${projectData.description ? `: ${projectData.description}` : ''}`,
+        {
+          sourceProjectPath: projectPath,
+          sourceSha: sha,
+        },
       );
 
       if (forkedProject && forkedProject.success) {
