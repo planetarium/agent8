@@ -90,6 +90,7 @@ interface BaseChatProps {
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
+  customProgressAnnotations?: ProgressAnnotation[];
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -135,6 +136,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       hasMore,
       loadBefore,
       loadingBefore,
+      customProgressAnnotations = [],
     },
     ref,
   ) => {
@@ -183,13 +185,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     }, [chatStarted, prompts.length]);
 
     useEffect(() => {
-      if (data) {
-        const progressList = data.filter(
-          (x) => typeof x === 'object' && (x as any).type === 'progress',
-        ) as ProgressAnnotation[];
-        setProgressAnnotations(progressList);
-      }
-    }, [data]);
+      const progressFromData = data
+        ? (data.filter((x) => typeof x === 'object' && (x as any).type === 'progress') as ProgressAnnotation[])
+        : [];
+
+      // Merge custom progress annotations with data progress annotations
+      const allProgressAnnotations = [...customProgressAnnotations, ...progressFromData];
+      setProgressAnnotations(allProgressAnnotations);
+    }, [data, customProgressAnnotations]);
     useEffect(() => {
       console.log(transcript);
     }, [transcript]);
