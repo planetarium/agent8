@@ -50,6 +50,7 @@ import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 import { stripMetadata } from './UserMessage';
+import type { ProgressAnnotation } from '~/types/context';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -340,6 +341,7 @@ export const ChatImpl = memo(
     const [searchParams, setSearchParams] = useSearchParams();
     const [fakeLoading, setFakeLoading] = useState(false);
     const [installNpm, setInstallNpm] = useState(false);
+    const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const files = useStore(workbenchStore.files);
     const actionAlert = useStore(workbenchStore.alert);
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -614,6 +616,17 @@ export const ChatImpl = memo(
 
       if (!chatStarted) {
         try {
+          // Set progress annotation for analyzing request
+          setCustomProgressAnnotations([
+            {
+              type: 'progress',
+              label: 'analyze',
+              status: 'in-progress',
+              order: 1,
+              message: 'Analyzing your request...',
+            },
+          ]);
+
           const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
@@ -621,6 +634,24 @@ export const ChatImpl = memo(
           if (!template) {
             throw new Error('Not Found Template');
           }
+
+          // Update progress annotation for selecting template
+          setCustomProgressAnnotations([
+            {
+              type: 'progress',
+              label: 'analyze',
+              status: 'complete',
+              order: 1,
+              message: 'Request analyzed',
+            },
+            {
+              type: 'progress',
+              label: 'template',
+              status: 'in-progress',
+              order: 2,
+              message: 'Setting up base project...',
+            },
+          ]);
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
             if (e.message.includes('rate limit')) {
@@ -699,6 +730,29 @@ export const ChatImpl = memo(
 
           const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
 
+          // Complete template selection
+          setCustomProgressAnnotations([
+            {
+              type: 'progress',
+              label: 'analyze',
+              status: 'complete',
+              order: 1,
+              message: 'Request analyzed',
+            },
+            {
+              type: 'progress',
+              label: 'template',
+              status: 'complete',
+              order: 2,
+              message: 'Template selected',
+            },
+          ]);
+
+          // Clear progress annotations after a short delay
+          setTimeout(() => {
+            setCustomProgressAnnotations([]);
+          }, 1000);
+
           setMessages([
             {
               id: `1-${new Date().getTime()}`,
@@ -723,6 +777,9 @@ export const ChatImpl = memo(
 
           return;
         } catch (error) {
+          // Clear progress annotations on error
+          setCustomProgressAnnotations([]);
+
           toast.warning(
             `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
           );
@@ -1060,6 +1117,7 @@ export const ChatImpl = memo(
         hasMore={hasMore}
         loadBefore={loadBefore}
         loadingBefore={loadingBefore}
+        customProgressAnnotations={customProgressAnnotations}
       />
     );
   },
