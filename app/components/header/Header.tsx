@@ -17,6 +17,7 @@ export function Header() {
   const [searchParams] = useSearchParams();
   const isEmbedMode = searchParams.get('mode') === 'embed';
   const isMenuOpen = useStore(menuStore);
+  const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
 
   return (
     <header
@@ -29,17 +30,19 @@ export function Header() {
     >
       {/* Logo and menu button - hidden in embed mode */}
       <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
-        <TooltipProvider>
-          <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMenu();
-              }}
-              className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
-            />
-          </WithTooltip>
-        </TooltipProvider>
+        {!isSideMenuDisabled && (
+          <TooltipProvider>
+            <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMenu();
+                }}
+                className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
+              />
+            </WithTooltip>
+          </TooltipProvider>
+        )}
       </div>
 
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
