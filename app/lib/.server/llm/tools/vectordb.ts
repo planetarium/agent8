@@ -94,7 +94,7 @@ export async function createSearchCodebase(env: Env): Promise<Record<string, any
       description:
         "Retrieve the full content of specific 3D game code examples from the vector database using their IDs. This tool should only be called once after you've identified relevant code examples using search_codebase_vectordb_items. Use this to get the complete implementation details for 3D game features.",
       parameters: z.object({
-        ids: z.array(z.string()).describe('Array of 3D game code example IDs to retrieve content for'),
+        ids: z.array(z.coerce.string()).describe('Array of 3D game code example IDs to retrieve content for'),
       }),
       execute: async ({ ids }) => {
         try {
