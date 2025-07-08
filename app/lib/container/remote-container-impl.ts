@@ -29,6 +29,7 @@ import type {
 } from '~/lib/shared/agent8-container-protocol/src';
 import { v4 } from 'uuid';
 import { createScopedLogger } from '~/utils/logger';
+import { debounce } from '~/utils/debounce';
 import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
 
 // Constants for OSC parsing
@@ -1366,17 +1367,59 @@ export class RemoteContainer implements Container {
 
     // Handle terminal input - store the disposable for later cleanup
     let terminalDataDisposable: IDisposable | null = null;
+    const pendingBuffer: string[] = [];
+    let isProcessingBuffer = false;
 
-    terminalDataDisposable = terminal.onData(async (data) => {
-      const writer = input.getWriter();
+    // Process buffer in FIFO order to guarantee input sequence
+    const processBuffer = async (): Promise<void> => {
+      if (isProcessingBuffer || input.locked || pendingBuffer.length === 0) {
+        return;
+      }
+
+      isProcessingBuffer = true;
 
       try {
-        await writer.ready;
-        await writer.write(data);
-      } catch (e) {
-        logger.error(`Failed to write to input stream, ${this.serverUrl}`, e);
+        while (pendingBuffer.length > 0 && !input.locked) {
+          const data = pendingBuffer.shift()!;
+          const writer = input.getWriter();
+
+          try {
+            await writer.ready;
+            await writer.write(data);
+          } catch (e) {
+            logger.error(`Failed to write to input stream, ${this.serverUrl}`, e);
+
+            // Re-add to front of buffer on error to maintain order
+            pendingBuffer.unshift(data);
+            break;
+          } finally {
+            writer.releaseLock();
+          }
+        }
       } finally {
-        writer.releaseLock();
+        isProcessingBuffer = false;
+      }
+    };
+
+    // Add data to buffer and trigger processing
+    const addToBuffer = (data: string): void => {
+      pendingBuffer.push(data);
+      processBuffer();
+    };
+
+    // Create debounced write function for regular text input
+    const debouncedWrite = debounce(addToBuffer, 16);
+
+    // Helper function to check if data should be sent immediately
+    const shouldSendImmediately = (data: string): boolean => {
+      return /[\x03\x04\x1b\r\n\t]/.test(data) || data.length > 1;
+    };
+
+    terminalDataDisposable = terminal.onData(async (data) => {
+      if (shouldSendImmediately(data)) {
+        addToBuffer(data);
+      } else {
+        debouncedWrite(data);
       }
     });
 
