@@ -6,7 +6,7 @@ import path from 'path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
 
 const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
-const vibeStarter3dDocs: Record<string, Record<string, string>> = {};
+const vibeStarter3dSpec: Record<string, Record<string, string>> = {};
 
 export const getAgent8Prompt = (
   cwd: string = WORK_DIR,
@@ -220,17 +220,15 @@ Remember: Proper documentation is as important as the code itself. It enables ef
 
   if (options.toolCalling !== false) {
     systemPrompt += `
-
 <tool_calling>
 There are tools available to resolve coding tasks. Please follow these guidelines for using the tools.
-1. Only call tools when absolutely necessary. If the user's task is common or you already know the answer, respond without calling a tool. Never make duplicate tool calls. This is very expensive.
-2. Always follow the tool calling schema exactly and provide all necessary parameters.
-3. You may reference in the conversation that tools may no longer be available. Never call tools that are not provided.
-4. **Do not mention tool names when talking to the user.** For example, instead of saying 'I need to use the edit_file tool to edit the file', just say 'I will edit the file'.
-5. Only call tools when needed. If the user's task is common or you already know the answer, respond without calling a tool.
-6. Before calling each tool, first explain to the user why you are calling that tool.
-7. Tool requests are limited. Please make requests fewer than five times per chat. If many tool calls are needed, you must either reduce the number or the size of the tasks you are trying to perform.
-8. If you call the tools more than five times, I WILL KILL YOU.
+
+1. **CRITICAL USAGE PROTOCOL: After identifying a potentially useful tool from its description, you MUST ALWAYS call that tool to retrieve its detailed usage instructions, such as component names or function signatures. NEVER assume or guess the usage from the description or the tool's name alone. This is a non-negotiable step to ensure accuracy.**
+2. Only call tools when you cannot proceed with existing knowledge. Do not make duplicate tool calls for information you already have. Tool calls are expensive.
+3. Before calling a tool, briefly explain to the user what information you are trying to obtain by using it.
+4. Always follow the tool calling schema exactly and provide all necessary parameters.
+5. Do not mention tool names when talking to the user. For example, instead of saying 'I will use the read_file tool', just say 'I will read the file'.
+6. Tool requests are limited. If a task requires many tool calls, consider breaking it down into smaller, more manageable sub-tasks.
 </tool_calling>
 `;
   }
@@ -246,7 +244,7 @@ CRITICAL: This is a reminder of the important guidelines to prevent the worst-ca
 - If you need to install a new package, do not edit the \`package.json\` file directly. Always use the \`pnpm add <pkg>\` command. Do not use this for other purposes (e.g. \`npm run dev\`, \`pnpm run build\`, etc).
 - **You must read the files you want to modify before responding.** If you respond without reading the file, the project will likely break.
 - Please be careful not to modify areas of the existing code other than those requested by the user for amendment.
-- The file you are trying to edit uses the following library (@agent8/gameserver, vibe-starter-3d, @react-three/drei), and if you need to modify it, please read the documentation through the tool first.
+- The file you are trying to edit uses the following library (@agent8/gameserver, vibe-starter-3d, vibe-starter-3d-environment, @react-three/drei), and if you need to modify it, please read the documentation through the tool first. **Never assume component usage or APIs without direct verification via tools.**
 
 </IMPORTANT_INSTRUCTIONS>
 
@@ -314,16 +312,14 @@ The 3D template basically provides player, camera, keyboard and mouse settings. 
 
 In the given template, your task is to decorate the map.
 
-For FPS games, you can build a maze using available tools (see read_vibe_starter_3d_environment_*)
-For Flight games, set the skybox to be diverse and place tree-like objects on the ground. if you want to use terrain system, make terrain width and height 10 times bigger
-For Top-down view, top view, or MOBA like games, decorate the map first using stage (see \`read_vibe_starter_3d_environment_stage\`, , \`read_vibe_starter_3d_environment_terrain\'), and choose objects theme and place objects after searching resources from vectordb (see \`search_resources_vectordb_items\`), (Please set the objects well so that the map does not look too empty. <Stage cellSize={5} ...>, and maintain an appropriate density.)
-For Other 3D games with map, decorate the map first using \`search_resources_vectordb_items\`, \`read_vibe_starter_3d_environment_*\`
-Apply the following two: 
-a) Map texture and terrain (use Procedural Mesh Generation Terrain System in open world genre) 
-you can choose after reading the documents from read_vibe_starter_3d_environment_terrain
-b) place 3D objects on the map
-you can choose after reading the documents from read_vibe_starter_3d_environment_model_placer
-
+- **For FPS games,** the goal is to create a complex, navigable environment. You should explore available tools like \`read_vibe_starter_3d_environment_*\` to find solutions for building structures like a maze.
+- **For Flight games,** the goal is to create an expansive and immersive sky and ground. You can diversify the skybox and place objects like trees on the ground. If a terrain system is chosen, consider making it significantly larger (e.g., 10x) to suit the flight scale.
+- **For Top-down, top-view, or MOBA-like games,** the priority is to create a detailed and engaging map.
+    - **First, generate the foundational map layout.** You should use the available environment tools for this, such as \`read_vibe_starter_3d_environment_stage\` or \`read_vibe_starter_3d_environment_terrain\`. You MUST call these tools to get the specific component names and usage patterns.
+    - **Next, populate the map with objects.** Use \`search_resources_vectordb_items\` to find suitable objects and place them thoughtfully to ensure the map does not look empty and maintains an appropriate density.
+- **For other 3D games with a map,** apply a two-step map decoration process:
+    a) **Establish the terrain and texture.** Use tools like \`read_vibe_starter_3d_environment_terrain\` to understand and implement procedural terrain generation.
+    b) **Place 3D objects.** Use tools like \`read_vibe_starter_3d_environment_model_placer\` to learn how to position objects effectively on the map.
 
 ⸻
 
@@ -399,7 +395,7 @@ function is3dProject(files: any): boolean {
   return false;
 }
 
-export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
+export async function getVibeStarter3dSpecPrompt(files: any): Promise<string> {
   let version: string | undefined;
 
   try {
@@ -413,34 +409,34 @@ export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
       return '';
     }
 
-    if (!vibeStarter3dDocs[version]) {
-      vibeStarter3dDocs[version] = {};
+    if (!vibeStarter3dSpec[version]) {
+      vibeStarter3dSpec[version] = {};
 
-      const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/files/docs`;
-      const docsResponse = await fetchWithCache(docsUrl);
-      const html = await docsResponse.text();
+      const specUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/files/spec`;
+      const specResponse = await fetchWithCache(specUrl);
+      const html = await specResponse.text();
 
       const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
 
       for (const markdownFileName of markdownFileNames) {
-        const markdownUrl = `https://unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/docs/${markdownFileName}`;
+        const markdownUrl = `https://unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/spec/${markdownFileName}`;
         const markdownResponse = await fetchWithCache(markdownUrl);
         const markdown = await markdownResponse.text();
         const keyName = path.basename(markdownFileName, '.md');
-        vibeStarter3dDocs[version][keyName] = markdown;
+        vibeStarter3dSpec[version][keyName] = markdown;
       }
     }
   } catch {
     // Delete the object for this version if an error occurs and version is defined
-    if (version && vibeStarter3dDocs[version]) {
-      delete vibeStarter3dDocs[version];
+    if (version && vibeStarter3dSpec[version]) {
+      delete vibeStarter3dSpec[version];
     }
 
     return '';
   }
 
-  const currentVibeStarter3dDocs = vibeStarter3dDocs[version];
-  const docsContent = Object.entries(currentVibeStarter3dDocs)
+  const currentVibeStarter3dSpec = vibeStarter3dSpec[version];
+  const specContent = Object.entries(currentVibeStarter3dSpec)
     .map(
       ([key, content]) => `
       <doc_file name="${key}">
@@ -453,7 +449,7 @@ export async function getVibeStarter3dDocsPrompt(files: any): Promise<string> {
 <PROJECT_DESCRIPTION>
     These files contain essential information that must be understood before performing any work on the project. Please always familiarize yourself with the contents of these files before starting any task.
     <docs_files>
-      ${docsContent}
+      ${specContent}
     </docs_files>
 </PROJECT_DESCRIPTION>
 `;
