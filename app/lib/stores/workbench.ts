@@ -815,6 +815,9 @@ export class WorkbenchStore {
       const { verseId } = await this.setupDeployConfig(shell);
       await this.commitModifiedFiles();
 
+      const container = await this.container;
+      await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+
       // Build project
       const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
 
