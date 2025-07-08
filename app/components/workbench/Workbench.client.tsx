@@ -379,6 +379,9 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     await shell.ready;
 
+    const container = await workbenchStore.container;
+    await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
       await shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
     } else {

@@ -1266,13 +1266,13 @@ export class GitlabService {
     try {
       const project = await this.gitlab.Projects.show(projectPath);
 
-      const hasPermission = await this.isProjectOwner(email, project.id);
+      const isOwner = await this.isProjectOwner(email, project.id);
 
-      if (!hasPermission) {
-        throw new Error('You do not have permission to update this project visibility');
+      if (!isOwner) {
+        throw new Error('You are not authorized to update this project');
       }
 
-      const updatedProject = await this.gitlab.Projects.edit(projectPath, {
+      const updatedProject = await this.gitlab.Projects.edit(project.id, {
         visibility,
       });
 
@@ -1304,6 +1304,33 @@ export class GitlabService {
     } catch {
       // If project doesn't exist or any other error, return not found
       return { hasAccess: false, reason: 'Project not found' };
+    }
+  }
+
+  async createTag(projectId: number, tagName: string, ref: string = 'develop', message?: string): Promise<any> {
+    try {
+      const tag = await this.gitlab.Tags.create(projectId, tagName, ref, { message });
+      return tag;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to create tag: ${errorMessage}`);
+    }
+  }
+
+  async getFileContent(projectPath: string, filePath: string, ref: string = 'develop'): Promise<string | null> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const file = await this.gitlab.RepositoryFiles.show(project.id, filePath, ref);
+
+      if (file && file.content) {
+        // GitLab API returns base64 encoded content
+        return Buffer.from(file.content, 'base64').toString('utf-8');
+      }
+
+      return null;
+    } catch {
+      // File might not exist, return null
+      return null;
     }
   }
 }

@@ -85,6 +85,10 @@ const RESOURCE_CATEGORIES: ResourceCategory[] = [
         tags: ['3d', 'polyhaven'],
       },
       {
+        label: 'Polyperfect',
+        tags: ['3d', 'polyperfect'],
+      },
+      {
         label: 'Vehicles',
         tags: ['3d', 'vehicles'],
       },

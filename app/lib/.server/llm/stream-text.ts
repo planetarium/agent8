@@ -148,7 +148,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxTokens: dynamicMaxTokens,
-    maxSteps: 10,
+    maxSteps: 20,
     messages: coreMessages,
     tools: combinedTools,
     ...options,
