@@ -71,7 +71,7 @@ export const TerminalTabs = memo(() => {
   return (
     <Panel
       ref={terminalPanelRef}
-      defaultSize={workbenchStore.showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
+      defaultSize={showTerminal ? DEFAULT_TERMINAL_SIZE : 0}
       minSize={10}
       collapsible
       onExpand={() => {
