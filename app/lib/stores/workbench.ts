@@ -42,7 +42,7 @@ function ensureUnsavedFilesSet(value: any): Set<string> {
   }
 
   if (value && typeof value === 'object' && value.constructor === Object) {
-    return new Set<string>();
+    return new Set<string>(Object.keys(value));
   }
 
   return new Set<string>();
