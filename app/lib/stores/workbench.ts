@@ -816,7 +816,7 @@ export class WorkbenchStore {
       await this.commitModifiedFiles();
 
       const container = await this.container;
-      await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+      await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
       const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
