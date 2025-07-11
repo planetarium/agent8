@@ -12,9 +12,7 @@ export default class XAIProvider extends BaseProvider {
     apiTokenKey: 'XAI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    { name: 'grok-4-0709', label: 'Grok4', provider: 'xAI', maxTokenAllowed: 256000 },
-  ];
+  staticModels: ModelInfo[] = [{ name: 'grok-4-0709', label: 'Grok4', provider: 'xAI', maxTokenAllowed: 256000 }];
 
   getModelInstance(options: {
     model: string;
