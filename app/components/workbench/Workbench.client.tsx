@@ -438,6 +438,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
       );
     }
+
     await shell.waitTillOscCode('prompt');
   }, [workbench.boltTerminal]);
 
