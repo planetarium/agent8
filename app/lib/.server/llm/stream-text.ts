@@ -129,17 +129,15 @@ export async function streamText(props: {
     {
       role: 'system',
       content: getProjectMdPrompt(files),
-
-      providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-      },
     } as CoreSystemMessage,
     ...convertToCoreMessages(processedMessages).slice(-3),
   ];
 
-  coreMessages[coreMessages.length - 1].providerOptions = {
-    anthropic: { cacheControl: { type: 'ephemeral' } },
-  };
+  if (modelDetails.name.includes('anthropic')) {
+    coreMessages[coreMessages.length - 1].providerOptions = {
+      anthropic: { cacheControl: { type: 'ephemeral' } },
+    };
+  }
 
   const result = await _streamText({
     model: provider.getModelInstance({

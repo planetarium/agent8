@@ -92,29 +92,30 @@ export default class OpenRouterProvider extends BaseProvider {
            * See: https://openrouter.ai/docs/features/prompt-caching#anthropic-claude
            */
 
-          if (body.messages?.length > 0) {
-            body.messages = body.messages.map((message: any) => {
-              if (message.cache_control) {
-                return {
-                  role: message.role,
-                  content: [
-                    {
-                      type: 'text',
-                      text: message.content,
-                      cache_control: message.cache_control,
-                    },
-                  ],
-                };
-              }
+          if (body.model.includes('anthropic')) {
+            if (body.messages?.length > 0) {
+              body.messages = body.messages.map((message: any) => {
+                if (message.cache_control) {
+                  return {
+                    role: message.role,
+                    content: [
+                      {
+                        type: 'text',
+                        text: message.content,
+                        cache_control: message.cache_control,
+                      },
+                    ],
+                  };
+                }
 
-              return message;
-            });
+                return message;
+              });
 
-            body.provider = {
-              order: ['Anthropic'],
-            };
-
-            options.body = JSON.stringify(body);
+              body.provider = {
+                order: ['Anthropic'],
+              };
+              options.body = JSON.stringify(body);
+            }
           }
         } catch {
           logger.error('Error parsing OpenRouter request body', { url, options });

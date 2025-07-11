@@ -293,6 +293,7 @@ async function runAndPreview(message: Message) {
 
     const container = await workbenchStore.container;
     await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+    await shell.waitTillOscCode('prompt');
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
       shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
