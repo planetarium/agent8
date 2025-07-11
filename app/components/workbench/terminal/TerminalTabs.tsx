@@ -4,7 +4,7 @@ import { Panel, type ImperativePanelHandle } from 'react-resizable-panels';
 import { IconButton } from '~/components/ui/IconButton';
 import { shortcutEventEmitter } from '~/lib/hooks';
 import { themeStore } from '~/lib/stores/theme';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { useWorkbenchShowTerminal, useWorkbenchStore } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { Terminal, type TerminalRef } from './Terminal';
 import { createScopedLogger } from '~/utils/logger';
@@ -15,7 +15,8 @@ const MAX_TERMINALS = 3;
 export const DEFAULT_TERMINAL_SIZE = 25;
 
 export const TerminalTabs = memo(() => {
-  const showTerminal = useStore(workbenchStore.showTerminal);
+  const workbenchStore = useWorkbenchStore();
+  const showTerminal = useWorkbenchShowTerminal();
   const theme = useStore(themeStore);
 
   const terminalRefs = useRef<Array<TerminalRef | null>>([]);

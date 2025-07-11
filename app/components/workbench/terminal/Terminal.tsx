@@ -130,7 +130,7 @@ export const Terminal = memo(
           terminal.dispose();
           onWriteParsedDisposable.dispose();
         };
-      }, []);
+      }, [onTerminalReady]);
 
       useEffect(() => {
         const terminal = terminalRef.current!;

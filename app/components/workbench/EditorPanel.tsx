@@ -20,7 +20,7 @@ import { isMobile } from '~/utils/mobile';
 import { FileBreadcrumb } from './FileBreadcrumb';
 import { FileTree } from './FileTree';
 import { DEFAULT_TERMINAL_SIZE, TerminalTabs } from './terminal/TerminalTabs';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { useWorkbenchShowTerminal } from '~/lib/hooks/useWorkbenchStore';
 
 interface EditorPanelProps {
   files?: FileMap;
@@ -57,7 +57,7 @@ export const EditorPanel = memo(
     renderLogger.trace('EditorPanel');
 
     const theme = useStore(themeStore);
-    const showTerminal = useStore(workbenchStore.showTerminal);
+    const showTerminal = useWorkbenchShowTerminal();
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {

@@ -405,6 +405,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       searchAsync();
     }, 300); // 300ms 디바운싱
 
+    // eslint-disable-next-line consistent-return
     return () => clearTimeout(timeoutId);
   }, [resourcePoolKeyword, selectedResourceCategory, isResourcePoolMode]);
 
@@ -2029,7 +2030,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                         >
                           <div
                             className={`
-                          mr-2 
+                          mr-2
                           ${!isResourcePoolMode && selectedCategory === category ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
                         `}
                           />
@@ -2047,7 +2048,7 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                           )}
                           <span
                             className={`
-                          ml-auto text-xs 
+                          ml-auto text-xs
                           ${!isResourcePoolMode && selectedCategory === category ? 'text-bolt-elements-textHighlight' : 'text-bolt-elements-textSecondary'}
                         `}
                           >

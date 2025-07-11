@@ -10,7 +10,12 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
-import { workbenchStore } from '~/lib/stores/workbench';
+import {
+  useWorkbenchFiles,
+  useWorkbenchActionAlert,
+  useWorkbenchStore,
+  useWorkbenchContainer,
+} from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -134,6 +139,7 @@ export function Chat() {
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
+  const workbench = useWorkbenchStore();
 
   useEffect(() => {
     if (repoStore.get().path) {
@@ -156,20 +162,20 @@ export function Chat() {
       }
 
       if (Object.keys(files).length > 0) {
-        workbenchStore.container.then(async (containerInstance) => {
+        workbench.container.then(async (containerInstance) => {
           try {
-            const previews = workbenchStore.previews.get();
-            const currentPreview = previews.find((p) => p.ready);
+            const previews = workbench.previews.get();
+            const currentPreview = previews.find((p: any) => p.ready);
 
             if (currentPreview) {
-              workbenchStore.previews.set([]);
+              workbench.previews.set([]);
             }
 
             await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
             if (currentPreview) {
-              workbenchStore.previews.set(
-                previews.map((p) => {
+              workbench.previews.set(
+                previews.map((p: any) => {
                   if (p.baseUrl === currentPreview.baseUrl) {
                     return { ...p, refreshAt: Date.now() };
                   }
@@ -182,7 +188,7 @@ export function Chat() {
             logger.error('Error mounting container:', error);
           }
 
-          workbenchStore.showWorkbench.set(true);
+          workbench.showWorkbench.set(true);
         });
       }
 
@@ -195,7 +201,7 @@ export function Chat() {
     } else {
       setInitialMessages([]);
     }
-  }, [loaded, files, chats, project]);
+  }, [loaded, files, chats, project, workbench]);
 
   // Check for 404 error (project not found or access denied)
   if (error && typeof error === 'object' && (error as any).status === 404) {
@@ -263,48 +269,6 @@ const processSampledMessages = createSampler(
   50,
 );
 
-async function runAndPreview(message: Message) {
-  workbenchStore.clearAlert();
-
-  const content = extractTextContent(message);
-
-  const isServerUpdated = /<boltAction[^>]*filePath="server.js"[^>]*>/g.test(content);
-  const isPackageJsonUpdated = /<boltAction[^>]*filePath="package.json"[^>]*>/g.test(content);
-
-  const previews = workbenchStore.previews.get();
-
-  if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p) => p.ready)) {
-    workbenchStore.currentView.set('preview');
-    return;
-  }
-
-  const shell = workbenchStore.boltTerminal;
-  await shell.ready;
-
-  for (let retry = 0; retry < 60; retry++) {
-    const state = await shell.executionState.get();
-
-    if (state?.active) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      continue;
-    }
-
-    await workbenchStore.setupDeployConfig(shell);
-
-    const container = await workbenchStore.container;
-    await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
-    await shell.waitTillOscCode('prompt');
-
-    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
-    } else {
-      shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
-    }
-
-    break;
-  }
-}
-
 interface ChatProps {
   loading: boolean;
   initialMessages: Message[];
@@ -337,7 +301,51 @@ export const ChatImpl = memo(
   }: ChatProps) => {
     useShortcuts();
 
+    const workbench = useWorkbenchStore();
+    const container = useWorkbenchContainer(); // Container 인스턴스 구독
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const runAndPreview = async (message: Message) => {
+      workbench.clearAlert();
+
+      const content = extractTextContent(message);
+
+      const isServerUpdated = /<boltAction[^>]*filePath="server.js"[^>]*>/g.test(content);
+      const isPackageJsonUpdated = /<boltAction[^>]*filePath="package.json"[^>]*>/g.test(content);
+
+      const previews = workbench.previews.get();
+
+      if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p: any) => p.ready)) {
+        workbench.currentView.set('preview');
+        return;
+      }
+
+      const shell = workbench.boltTerminal;
+      await shell.ready;
+
+      for (let retry = 0; retry < 60; retry++) {
+        const state = await shell.executionState.get();
+
+        if (state?.active) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        await workbench.setupDeployConfig(shell);
+
+        const container = await workbench.container;
+        await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+        await shell.waitTillOscCode('prompt');
+
+        if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+          shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+        } else {
+          shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
+        }
+
+        break;
+      }
+    };
 
     const lastSendMessageTime = useRef(0);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
@@ -346,8 +354,8 @@ export const ChatImpl = memo(
     const [fakeLoading, setFakeLoading] = useState(false);
     const [installNpm, setInstallNpm] = useState(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
-    const files = useStore(workbenchStore.files);
-    const actionAlert = useStore(workbenchStore.alert);
+    const files = useWorkbenchFiles();
+    const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
@@ -414,11 +422,11 @@ export const ChatImpl = memo(
           });
         }
 
-        workbenchStore.onArtifactClose(message.id, async () => {
+        workbench.onArtifactClose(message.id, async () => {
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
-          workbenchStore.offArtifactClose(message.id);
+          workbench.offArtifactClose(message.id);
         });
 
         setFakeLoading(false);
@@ -463,12 +471,16 @@ export const ChatImpl = memo(
     }, [messages, isLoading, parseMessages]);
 
     useEffect(() => {
+      setInstallNpm(false);
+    }, [container]); // Container 변경 시 트리거
+
+    useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
         setInstallNpm(true);
 
-        const boltShell = workbenchStore.boltTerminal;
+        const boltShell = workbench.boltTerminal;
         boltShell.ready.then(async () => {
-          await workbenchStore.setupDeployConfig(boltShell);
+          await workbench.setupDeployConfig(boltShell);
         });
       }
     }, [files, installNpm]);
@@ -514,7 +526,7 @@ export const ChatImpl = memo(
       stop();
       setFakeLoading(false);
       chatStore.setKey('aborted', true);
-      workbenchStore.abortAllActions();
+      workbench.abortAllActions();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -577,7 +589,7 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
-      workbenchStore.currentView.set('code');
+      workbench.currentView.set('code');
 
       if (attachmentList.length > 0) {
         const imageAttachments = attachmentList.filter((item) =>
@@ -668,7 +680,7 @@ export const ChatImpl = memo(
           const projectPath = temResp?.project?.path;
           const projectName = temResp?.project?.name;
           const templateCommitId = temResp?.commit?.id;
-          workbenchStore.showWorkbench.set(true);
+          workbench.showWorkbench.set(true);
 
           if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
             throw new Error('Not Found Template Data');
@@ -681,9 +693,9 @@ export const ChatImpl = memo(
             },
             {} as Record<string, any>,
           );
-          workbenchStore.files.set(processedFileMap);
+          workbench.files.set(processedFileMap);
 
-          const containerInstance = await workbenchStore.container;
+          const containerInstance = await workbench.container;
           await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
 
           if (isEnabledGitbasePersistence) {
@@ -802,7 +814,7 @@ export const ChatImpl = memo(
         chatStore.setKey('aborted', false);
 
         if (repoStore.get().path) {
-          const commit = await workbenchStore.commitModifiedFiles();
+          const commit = await workbench.commitModifiedFiles();
 
           if (commit) {
             setMessages((prev: Message[]) => [
@@ -901,7 +913,7 @@ export const ChatImpl = memo(
         setFakeLoading(true);
         runAnimation();
 
-        const containerInstance = await workbenchStore.container;
+        const containerInstance = await workbench.container;
         await containerInstance.mount(convertFileMapToFileSystemTree(files));
 
         if (!chatStarted) {
@@ -935,7 +947,7 @@ export const ChatImpl = memo(
           setInitialMessages(messages);
 
           setChatStarted(true);
-          workbenchStore.showWorkbench.set(true);
+          workbench.showWorkbench.set(true);
           sendEventToParent('EVENT', { name: 'START_EDITING' });
         }
 
@@ -954,7 +966,7 @@ export const ChatImpl = memo(
     };
 
     const handleFork = async (message: Message) => {
-      workbenchStore.currentView.set('code');
+      workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
@@ -998,7 +1010,7 @@ export const ChatImpl = memo(
     };
 
     const handleRevert = async (message: Message) => {
-      workbenchStore.currentView.set('code');
+      workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
@@ -1012,7 +1024,7 @@ export const ChatImpl = memo(
     };
 
     const handleRetry = async (message: Message) => {
-      workbenchStore.currentView.set('code');
+      workbench.currentView.set('code');
 
       const messageIndex = messages.findIndex((m) => m.id === message.id);
 
@@ -1043,10 +1055,10 @@ export const ChatImpl = memo(
           return;
         }
 
-        workbenchStore.currentView.set('diff');
-        workbenchStore.showWorkbench.set(true);
-        workbenchStore.diffEnabled.set(true);
-        workbenchStore.diffCommitHash.set(commitHash);
+        workbench.currentView.set('diff');
+        workbench.showWorkbench.set(true);
+        workbench.diffEnabled.set(true);
+        workbench.diffCommitHash.set(commitHash);
       } catch (error) {
         console.error('Diff view error:', error);
         toast.error('Error displaying diff view');
@@ -1115,7 +1127,7 @@ export const ChatImpl = memo(
         attachmentList={attachmentList}
         setAttachmentList={setAttachmentList}
         actionAlert={actionAlert}
-        clearAlert={() => workbenchStore.clearAlert()}
+        clearAlert={() => workbench.clearAlert()}
         data={chatData}
         onProjectZipImport={handleProjectZipImport}
         hasMore={hasMore}

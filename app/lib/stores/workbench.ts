@@ -26,10 +26,27 @@ import type { BoltShell } from '~/utils/shell';
 import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
+import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 
 const { saveAs } = fileSaver;
 
 const logger = createScopedLogger('workbench');
+
+function ensureUnsavedFilesSet(value: any): Set<string> {
+  if (value instanceof Set) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return new Set(value);
+  }
+
+  if (value && typeof value === 'object' && value.constructor === Object) {
+    return new Set<string>(Object.keys(value));
+  }
+
+  return new Set<string>();
+}
 
 export interface ArtifactState {
   id: string;
@@ -57,26 +74,40 @@ export class WorkbenchStore {
   #terminalStore: TerminalStore;
   #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
+  #reinitCounter = atom(0);
+  #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
+
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
-  unsavedFiles: WritableAtom<Set<string>> = import.meta.hot?.data.unsavedFiles ?? atom(new Set<string>());
+  unsavedFiles: WritableAtom<Set<string>> = atom(
+    ensureUnsavedFilesSet(import.meta.hot?.data.unsavedFiles?.get?.() ?? import.meta.hot?.data.unsavedFiles),
+  );
   actionAlert: WritableAtom<ActionAlert | undefined> =
-    import.meta.hot?.data.unsavedFiles ?? atom<ActionAlert | undefined>(undefined);
+    import.meta.hot?.data.actionAlert ?? atom<ActionAlert | undefined>(undefined);
   diffCommitHash: WritableAtom<string | null> = import.meta.hot?.data.diffCommitHash ?? atom<string | null>(null);
   diffEnabled: WritableAtom<boolean> = import.meta.hot?.data.diffEnabled ?? atom(false);
+  connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
+    import.meta.hot?.data.connectionState ??
+    atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
   #shellActionRunning = false;
   #shellActionPromise: Promise<void> | null = null;
+  #connectionLostNotified = false;
 
   constructor() {
     this.#currentContainer = new Promise<Container>((resolve, reject) => {
       this.#containerResolver = resolve;
       this.#containerRejecter = reject;
     });
+
+    this.#previewsStore = new PreviewsStore(this.#currentContainer);
+    this.#filesStore = new FilesStore(this.#currentContainer);
+    this.#editorStore = new EditorStore(this.#filesStore);
+    this.#terminalStore = new TerminalStore(this.#currentContainer);
 
     if (import.meta.hot) {
       import.meta.hot.data.artifacts = this.artifacts;
@@ -86,6 +117,7 @@ export class WorkbenchStore {
       import.meta.hot.data.actionAlert = this.actionAlert;
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
+      import.meta.hot.data.connectionState = this.connectionState;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -99,11 +131,6 @@ export class WorkbenchStore {
         });
       }
     }
-
-    this.#previewsStore = new PreviewsStore(this.#currentContainer);
-    this.#filesStore = new FilesStore(this.#currentContainer);
-    this.#editorStore = new EditorStore(this.#filesStore);
-    this.#terminalStore = new TerminalStore(this.#currentContainer);
   }
 
   async initializeContainer(accessToken: string): Promise<Container | null> {
@@ -120,7 +147,10 @@ export class WorkbenchStore {
       this.#containerResolver(containerInstance);
 
       this.#setupContainerErrorHandling(containerInstance);
+      this.#setupConnectionStateHandling(containerInstance);
       this.#containerInitialized = true;
+
+      this.#currentContainerAtom.set(containerInstance);
 
       return containerInstance;
     } catch (error) {
@@ -156,22 +186,52 @@ export class WorkbenchStore {
 
     const isPending = await isPromisePending(this.#currentContainer);
 
-    if (isPending) {
+    if (isPending && !this.#containerInitialized) {
       return this.initializeContainer(accessToken);
     } else {
+      logger.info('Forcing container reinitialization...');
+
       this.#currentContainer = new Promise<Container>((resolve, reject) => {
         this.#containerResolver = resolve;
         this.#containerRejecter = reject;
       });
+
+      this.#terminalStore.detachTerminals();
 
       this.#previewsStore = new PreviewsStore(this.#currentContainer);
       this.#filesStore = new FilesStore(this.#currentContainer);
       this.#editorStore = new EditorStore(this.#filesStore);
       this.#terminalStore = new TerminalStore(this.#currentContainer);
 
+      const currentUnsavedFiles = this.unsavedFiles.get();
+
+      if (!(currentUnsavedFiles instanceof Set)) {
+        logger.warn('unsavedFiles is not a Set during reinit, converting to Set');
+        this.unsavedFiles.set(ensureUnsavedFilesSet(currentUnsavedFiles));
+      }
+
       this.#containerInitialized = false;
 
-      return this.initializeContainer(accessToken);
+      this.#reinitCounter.set(this.#reinitCounter.get() + 1);
+      logger.info(`ReinitCounter increased to: ${this.#reinitCounter.get()}`);
+
+      const containerResult = await this.initializeContainer(accessToken);
+
+      if (containerResult) {
+        try {
+          const currentFiles = this.#filesStore.files.get();
+
+          if (Object.keys(currentFiles).length > 0) {
+            logger.info('Mounting current file system to new container...');
+            await containerResult.mount(convertFileMapToFileSystemTree(currentFiles));
+            logger.info('File system successfully mounted to new container');
+          }
+        } catch (error) {
+          logger.error('Failed to mount file system to new container:', error);
+        }
+      }
+
+      return containerResult;
     }
   }
 
@@ -181,6 +241,14 @@ export class WorkbenchStore {
 
   get container(): Promise<Container> {
     return this.#currentContainer;
+  }
+
+  get reinitCounter() {
+    return this.#reinitCounter;
+  }
+
+  get containerAtom() {
+    return this.#currentContainerAtom;
   }
 
   #setupContainerErrorHandling(container: Container): void {
@@ -199,6 +267,43 @@ export class WorkbenchStore {
         });
       }
     });
+  }
+
+  #setupConnectionStateHandling(container: Container): void {
+    container.on('connection-state', (state, prevState) => {
+      logger.info(`Container connection state: ${prevState} → ${state}`);
+      this.connectionState.set(state);
+
+      if (state === 'disconnected' || state === 'failed') {
+        this.#handleConnectionLost(state);
+      } else if (state === 'connected') {
+        this.#handleConnectionRestored();
+      } else if (state === 'reconnecting') {
+        this.#handleReconnecting();
+      }
+    });
+  }
+
+  #handleConnectionLost(state: string): void {
+    if (this.#connectionLostNotified) {
+      return;
+    }
+
+    this.#connectionLostNotified = true;
+    logger.error('Connection lost:', state);
+  }
+
+  #handleConnectionRestored(): void {
+    if (this.#connectionLostNotified) {
+      this.#connectionLostNotified = false;
+      toast.success('Connection restored');
+    }
+  }
+
+  #handleReconnecting(): void {
+    if (!this.#connectionLostNotified) {
+      toast.info('Reconnecting...');
+    }
   }
 
   addToExecutionQueue(callback: () => Promise<void>) {
@@ -888,3 +993,6 @@ export class WorkbenchStore {
 }
 
 export const workbenchStore = new WorkbenchStore();
+export const reinitCounterAtom = workbenchStore.reinitCounter;
+export const containerAtom = workbenchStore.containerAtom;
+export const connectionStateAtom = workbenchStore.connectionState;

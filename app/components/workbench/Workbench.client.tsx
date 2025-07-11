@@ -1,6 +1,4 @@
-import { useStore } from '@nanostores/react';
 import { motion, type HTMLMotionProps, type Variants } from 'framer-motion';
-import { computed } from 'nanostores';
 import { memo, useCallback, useEffect, useState, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { Popover, Transition } from '@headlessui/react';
@@ -16,7 +14,20 @@ import {
 import { IconButton } from '~/components/ui/IconButton';
 import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
 import { Slider } from '~/components/ui/Slider';
-import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
+import { type WorkbenchViewType } from '~/lib/stores/workbench';
+import {
+  useWorkbenchShowWorkbench,
+  useWorkbenchSelectedFile,
+  useWorkbenchCurrentDocument,
+  useWorkbenchUnsavedFiles,
+  useWorkbenchFiles,
+  useWorkbenchCurrentView,
+  useWorkbenchDiffEnabled,
+  useWorkbenchDiffCommitHash,
+  useWorkbenchPreviews,
+  useWorkbenchStore,
+  useWorkbenchConnectionState,
+} from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger } from '~/utils/logger';
@@ -25,6 +36,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -37,6 +49,8 @@ interface WorkspaceProps {
 }
 
 const logger = createScopedLogger('Workbench');
+
+type WorkbenchState = 'disconnected' | 'failed' | 'reconnecting' | 'preparing' | 'ready';
 
 const viewTransition = { ease: cubicEasingFn };
 
@@ -297,7 +311,7 @@ const DiffViewWithCommitHash = memo(
     setFileHistory: React.Dispatch<React.SetStateAction<Record<string, FileHistory>>>;
     actionRunner: ActionRunner;
   }) => {
-    const diffCommitHash = useStore(workbenchStore.diffCommitHash);
+    const diffCommitHash = useWorkbenchDiffCommitHash();
 
     return (
       <DiffView
@@ -315,17 +329,43 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
   const [terminalReady, setTerminalReady] = useState(false);
+  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState(false);
 
-  // const modifiedFiles = Array.from(useStore(workbenchStore.unsavedFiles).keys());
+  const connectionState = useWorkbenchConnectionState();
 
-  const hasPreview = useStore(computed(workbenchStore.previews, (previews) => previews.length > 0));
-  const showWorkbench = useStore(workbenchStore.showWorkbench);
-  const selectedFile = useStore(workbenchStore.selectedFile);
-  const currentDocument = useStore(workbenchStore.currentDocument);
-  const unsavedFiles = useStore(workbenchStore.unsavedFiles);
-  const files = useStore(workbenchStore.files);
-  const selectedView = useStore(workbenchStore.currentView);
-  const diffEnabled = useStore(workbenchStore.diffEnabled);
+  const workbenchState: WorkbenchState = useMemo(() => {
+    if (isManuallyReconnecting) {
+      return 'preparing';
+    }
+
+    if (connectionState === 'reconnecting') {
+      return 'reconnecting';
+    }
+
+    if (connectionState === 'failed') {
+      return 'failed';
+    }
+
+    if (connectionState === 'disconnected') {
+      return 'disconnected';
+    }
+
+    if (connectionState === 'connected' && !terminalReady) {
+      return 'preparing';
+    }
+
+    return 'ready';
+  }, [connectionState, terminalReady, isManuallyReconnecting]);
+  const previews = useWorkbenchPreviews();
+  const hasPreview = previews.length > 0;
+  const showWorkbench = useWorkbenchShowWorkbench();
+  const selectedFile = useWorkbenchSelectedFile();
+  const currentDocument = useWorkbenchCurrentDocument();
+  const unsavedFiles = useWorkbenchUnsavedFiles();
+  const files = useWorkbenchFiles();
+  const selectedView = useWorkbenchCurrentView();
+  const diffEnabled = useWorkbenchDiffEnabled();
+  const workbench = useWorkbenchStore();
 
   const isSmallViewport = useViewport(1024);
 
@@ -340,7 +380,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [diffEnabled]);
 
   const setSelectedView = (view: WorkbenchViewType) => {
-    workbenchStore.currentView.set(view);
+    workbench.currentView.set(view);
   };
 
   useEffect(() => {
@@ -356,30 +396,37 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [diffEnabled, selectedView]);
 
   useEffect(() => {
-    workbenchStore.setDocuments(files);
+    workbench.setDocuments(files);
   }, [files]);
 
   useEffect(() => {
     if (chatStarted) {
       const initializeTerminal = async () => {
-        const shell = workbenchStore.boltTerminal;
+        const shell = workbench.boltTerminal;
 
         await shell.ready;
         setTerminalReady(true);
+        setIsManuallyReconnecting(false);
       };
 
       initializeTerminal();
     }
-  }, [chatStarted]);
+  }, [chatStarted, workbench.boltTerminal]);
+
+  useEffect(() => {
+    if (connectionState === 'connected' && terminalReady) {
+      setIsManuallyReconnecting(false);
+    }
+  }, [connectionState, terminalReady]);
 
   const onRun = useCallback(async () => {
     setSelectedView('code');
 
-    const shell = workbenchStore.boltTerminal;
+    const shell = workbench.boltTerminal;
 
     await shell.ready;
 
-    const container = await workbenchStore.container;
+    const container = await workbench.container;
     await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
     await shell.waitTillOscCode('prompt');
 
@@ -391,31 +438,33 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
       );
     }
-
     await shell.waitTillOscCode('prompt');
-  }, []);
+  }, [workbench.boltTerminal]);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
-    workbenchStore.setCurrentDocumentContent(update.content);
+    workbench.setCurrentDocumentContent(update.content);
   }, []);
 
   const onEditorScroll = useCallback<OnEditorScroll>((position) => {
-    workbenchStore.setCurrentDocumentScrollPosition(position);
+    workbench.setCurrentDocumentScrollPosition(position);
   }, []);
 
-  const onFileSelect = useCallback((filePath: string | undefined) => {
-    workbenchStore.setSelectedFile(filePath);
-  }, []);
+  const onFileSelect = useCallback(
+    (filePath: string | undefined) => {
+      workbench.setSelectedFile(filePath);
+    },
+    [workbench],
+  );
 
   const onFileSave = useCallback(() => {
-    workbenchStore.saveCurrentDocument().catch(() => {
+    workbench.saveCurrentDocument().catch(() => {
       toast.error('Failed to update file content');
     });
-  }, []);
+  }, [workbench]);
 
   const onFileReset = useCallback(() => {
-    workbenchStore.resetCurrentDocument();
-  }, []);
+    workbench.resetCurrentDocument();
+  }, [workbench]);
 
   return (
     chatStarted && (
@@ -425,7 +474,52 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         variants={workbenchVariants}
         className="z-workbench"
       >
-        {showWorkbench && !terminalReady && (
+        {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
+          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+            <div className="absolute inset-0 px-2 lg:px-6">
+              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
+                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
+                    {connectionState === 'reconnecting' ? (
+                      <>
+                        <div className="animate-spin w-6 h-6 mb-2 mx-auto">
+                          <div className="i-ph:spinner" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">Reconnecting to Server...</div>
+                      </>
+                    ) : connectionState === 'failed' ? (
+                      <>
+                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
+                          <div className="i-ph:warning-circle" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary mb-3">Connection Failed</div>
+                        <button
+                          onClick={async () => {
+                            const token = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+                            setIsManuallyReconnecting(true);
+                            setTerminalReady(false);
+                            await workbench.reinitializeContainer(token);
+                          }}
+                          className="px-3 py-1.5 text-sm rounded bg-accent-500 hover:bg-accent-600 text-white transition-colors mx-auto block"
+                        >
+                          Reconnect
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
+                          <div className="i-ph:wifi-slash" />
+                        </div>
+                        <div className="text-sm text-bolt-elements-textPrimary">Server Disconnected</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
           <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 px-2 lg:px-6">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
@@ -460,9 +554,13 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   onClick={() => {
                     onRun();
                   }}
+                  disabled={connectionState !== 'connected'}
                   className={classNames(
                     'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
                     'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
+                    {
+                      'opacity-50 cursor-not-allowed': connectionState !== 'connected',
+                    },
                   )}
                 >
                   <div className="i-ph:play" />
@@ -474,7 +572,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                     <PanelHeaderButton
                       className="mr-1 text-sm"
                       onClick={() => {
-                        workbenchStore.downloadZip();
+                        workbench.downloadZip();
                       }}
                     >
                       <div className="i-ph:download" />
@@ -490,7 +588,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   className="-mr-1"
                   size="xl"
                   onClick={() => {
-                    workbenchStore.showWorkbench.set(false);
+                    workbench.setShowWorkbench(false);
                   }}
                 />
               </div>

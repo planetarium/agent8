@@ -1,9 +1,14 @@
 import { memo, useMemo, useState, useEffect, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
-import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import type { FileMap } from '~/lib/stores/files';
 import type { EditorDocument } from '~/components/editor/codemirror/CodeMirrorEditor';
+import {
+  useWorkbenchFiles,
+  useWorkbenchSelectedFile,
+  useWorkbenchCurrentDocument,
+  useWorkbenchUnsavedFiles,
+} from '~/lib/hooks/useWorkbenchStore';
 import { diffLines, type Change } from 'diff';
 import { getHighlighter } from 'shiki';
 import '~/styles/diff-view.css';
@@ -754,10 +759,10 @@ const FileHeader = memo(({ path, isNew, isDeleted }: FileHeaderProps) => (
 ));
 
 export const DiffView = memo(({ fileHistory, setFileHistory, initialCommitHash }: DiffViewProps) => {
-  const files = useStore(workbenchStore.files) as FileMap;
-  const selectedFile = useStore(workbenchStore.selectedFile);
-  const currentDocument = useStore(workbenchStore.currentDocument) as EditorDocument;
-  const unsavedFiles = useStore(workbenchStore.unsavedFiles);
+  const files = useWorkbenchFiles() as FileMap;
+  const selectedFile = useWorkbenchSelectedFile();
+  const currentDocument = useWorkbenchCurrentDocument() as EditorDocument;
+  const unsavedFiles = useWorkbenchUnsavedFiles();
 
   const [gitlabDiffs, setGitlabDiffs] = useState<GitlabDiff[]>([]);
   const [isLoadingDiff, setIsLoadingDiff] = useState<boolean>(false);
@@ -984,7 +989,7 @@ export const DiffView = memo(({ fileHistory, setFileHistory, initialCommitHash }
             {headerProps.showToggleButton && (
               <button
                 onClick={toggleShowAllDiffs}
-                className="px-3 py-1 text-sm 
+                className="px-3 py-1 text-sm
                   bg-blue-500/20 text-blue-600/80 dark:text-blue-400/80 hover:text-blue-600 dark:hover:text-blue-400
                   rounded transition-colors"
               >
