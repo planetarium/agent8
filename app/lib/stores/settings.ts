@@ -81,7 +81,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
       ...provider,
       settings: {
         // Only enable by default, disable all others
-        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'Google'].includes(provider.name),
+        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'Google', 'xAI'].includes(provider.name),
       },
     };
   });
@@ -96,7 +96,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
         Object.entries(parsed).forEach(([key, value]) => {
           if (initialSettings[key]) {
             const providerSettings = (value as IProviderConfig).settings;
-            const mandatoryProviders = ['Anthropic', 'OpenRouter', 'OpenAI', 'Google'];
+            const mandatoryProviders = ['Anthropic', 'OpenRouter', 'OpenAI', 'Google', 'xAI'];
 
             initialSettings[key].settings = {
               ...providerSettings,
