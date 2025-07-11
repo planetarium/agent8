@@ -12,7 +12,7 @@ import {
   getProjectMdPrompt,
   getProjectPackagesPrompt,
   getAgent8Prompt,
-  getVibeStarter3dDocsPrompt,
+  getVibeStarter3dSpecPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
@@ -107,14 +107,14 @@ export async function streamText(props: {
     };
   }
 
-  const vibeStarter3dDocsPrompt = await getVibeStarter3dDocsPrompt(files);
+  const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
   const coreMessages = [
     ...[
       systemPrompt,
       getProjectFilesPrompt(files),
       getProjectDocsPrompt(files),
-      vibeStarter3dDocsPrompt,
+      vibeStarter3dSpecPrompt,
       getProjectPackagesPrompt(files),
       getResourceSystemPrompt(files),
     ]
@@ -129,17 +129,15 @@ export async function streamText(props: {
     {
       role: 'system',
       content: getProjectMdPrompt(files),
-
-      providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-      },
     } as CoreSystemMessage,
     ...convertToCoreMessages(processedMessages).slice(-3),
   ];
 
-  coreMessages[coreMessages.length - 1].providerOptions = {
-    anthropic: { cacheControl: { type: 'ephemeral' } },
-  };
+  if (modelDetails.name.includes('anthropic')) {
+    coreMessages[coreMessages.length - 1].providerOptions = {
+      anthropic: { cacheControl: { type: 'ephemeral' } },
+    };
+  }
 
   const result = await _streamText({
     model: provider.getModelInstance({

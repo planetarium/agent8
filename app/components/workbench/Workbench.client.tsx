@@ -428,6 +428,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
     const container = await workbench.container;
     await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+    await shell.waitTillOscCode('prompt');
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
       await shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
@@ -437,6 +438,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
       );
     }
+    await shell.waitTillOscCode('prompt');
   }, [workbench.boltTerminal]);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {

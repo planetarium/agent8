@@ -6,7 +6,9 @@ import path from 'path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
 
 const logger = createScopedLogger('docs-tools');
+const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
 const VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME = 'vibe-starter-3d-environment';
+const vibeStarter3dDocs: Record<string, Record<string, string>> = {};
 const vibeStarter3dEnvironmentDocs: Record<string, Record<string, string>> = {};
 
 interface DocTool {
@@ -58,31 +60,37 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
       }
     }
 
-    // Get vibe-starter-3d-environment docs
-    const currentVibeStarter3dEnvironmentDocs = await getVibeLibrariesDocs(files);
+    // Get vibe-starter-3d docs
+    const currentVibeStarter3dDocs = await getVibeLibraryDocs(files, VIBE_STARTER_3D_PACKAGE_NAME, vibeStarter3dDocs);
 
-    if (currentVibeStarter3dEnvironmentDocs) {
-      const keysToRemove: string[] = [];
-      const checkToolName = 'vibe_starter_3d_environment';
+    if (currentVibeStarter3dDocs) {
       Object.keys(tools).forEach((key) => {
-        if (key.includes(checkToolName)) {
-          logger.debug(`Found docTools key containing '${checkToolName}': ${key}`);
+        if (currentVibeStarter3dDocs.hasOwnProperty(key)) {
+          logger.debug(`Found vibe-starter-3d docTools key: ${key}`);
 
-          if (currentVibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
-            tools[key].execute = async () => {
-              return { content: currentVibeStarter3dEnvironmentDocs[key] };
-            };
-          } else {
-            keysToRemove.push(key);
-          }
+          tools[key].execute = async () => {
+            return { content: currentVibeStarter3dDocs[key] };
+          };
         }
       });
+    }
 
-      keysToRemove.forEach((key) => {
-        delete tools[key];
-        logger.debug(
-          `Removed docTools key '${key}' as it's not found in ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}:docs`,
-        );
+    // Get vibe-starter-3d-environment docs
+    const currentVibeStarter3dEnvironmentDocs = await getVibeLibraryDocs(
+      files,
+      VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME,
+      vibeStarter3dEnvironmentDocs,
+    );
+
+    if (currentVibeStarter3dEnvironmentDocs) {
+      Object.keys(tools).forEach((key) => {
+        if (currentVibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
+          logger.debug(`Found vibe-starter-3d-environment docTools key: ${key}`);
+
+          tools[key].execute = async () => {
+            return { content: currentVibeStarter3dEnvironmentDocs[key] };
+          };
+        }
       });
     }
 
@@ -93,25 +101,29 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
   }
 }
 
-async function getVibeLibrariesDocs(files: any): Promise<Record<string, string> | undefined> {
+async function getVibeLibraryDocs(
+  files: any,
+  packageName: string,
+  savedDocs: Record<string, Record<string, string>>,
+): Promise<Record<string, string> | undefined> {
   let version: string | undefined;
 
   try {
-    version = await resolvePackageVersion(VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME, files);
+    version = await resolvePackageVersion(packageName, files);
 
     if (!version) {
       return undefined;
     }
 
     // If the documentation for this version is already loaded, return the existing object
-    if (vibeStarter3dEnvironmentDocs[version]) {
-      return vibeStarter3dEnvironmentDocs[version];
+    if (savedDocs[version]) {
+      return savedDocs[version];
     }
 
     // Initialize an object for the new version of documentation
-    vibeStarter3dEnvironmentDocs[version] = {};
+    savedDocs[version] = {};
 
-    const docsUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}@${version}/files/docs`;
+    const docsUrl = `https://app.unpkg.com/${packageName}@${version}/files/docs`;
 
     const docsResponse = await fetchWithCache(docsUrl);
     const html = await docsResponse.text();
@@ -119,20 +131,20 @@ async function getVibeLibrariesDocs(files: any): Promise<Record<string, string> 
     const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
 
     for (const markdownFileName of markdownFileNames) {
-      const markdownUrl = `https://unpkg.com/${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME}@${version}/docs/${markdownFileName}`;
+      const markdownUrl = `https://unpkg.com/${packageName}@${version}/docs/${markdownFileName}`;
       const markdownResponse = await fetchWithCache(markdownUrl);
       const markdown = await markdownResponse.text();
       const keyName = path.basename(markdownFileName, '.md');
-      vibeStarter3dEnvironmentDocs[version][keyName] = markdown;
+      savedDocs[version][keyName] = markdown;
     }
 
-    return vibeStarter3dEnvironmentDocs[version];
+    return savedDocs[version];
   } catch (error) {
-    logger.error(`getVibeLibrariesDocs: ${VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME} error: ${error}`);
+    logger.error(`getVibeLibraryDocs: ${packageName} error: ${error}`);
 
     // Delete the object for this version if an error occurs and version is defined
-    if (version && vibeStarter3dEnvironmentDocs[version]) {
-      delete vibeStarter3dEnvironmentDocs[version];
+    if (version && savedDocs[version]) {
+      delete savedDocs[version];
     }
 
     return undefined;

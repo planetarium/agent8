@@ -335,6 +335,7 @@ export const ChatImpl = memo(
 
         const container = await workbench.container;
         await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+        await shell.waitTillOscCode('prompt');
 
         if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
           shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');

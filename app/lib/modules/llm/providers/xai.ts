@@ -2,7 +2,7 @@ import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModelV1 } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { createXai } from '@ai-sdk/xai';
 
 export default class XAIProvider extends BaseProvider {
   name = 'xAI';
@@ -12,10 +12,7 @@ export default class XAIProvider extends BaseProvider {
     apiTokenKey: 'XAI_API_KEY',
   };
 
-  staticModels: ModelInfo[] = [
-    { name: 'grok-beta', label: 'xAI Grok Beta', provider: 'xAI', maxTokenAllowed: 8000 },
-    { name: 'grok-2-1212', label: 'xAI Grok2 1212', provider: 'xAI', maxTokenAllowed: 8000 },
-  ];
+  staticModels: ModelInfo[] = [{ name: 'grok-4-0709', label: 'Grok4', provider: 'xAI', maxTokenAllowed: 256000 }];
 
   getModelInstance(options: {
     model: string;
@@ -37,11 +34,11 @@ export default class XAIProvider extends BaseProvider {
       throw new Error(`Missing API key for ${this.name} provider`);
     }
 
-    const openai = createOpenAI({
+    const xai = createXai({
       baseURL: 'https://api.x.ai/v1',
       apiKey,
     });
 
-    return openai(model);
+    return xai(model);
   }
 }
