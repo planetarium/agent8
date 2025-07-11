@@ -5,9 +5,13 @@ import { RemoteContainer } from './remote-container';
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const logger = createScopedLogger('remote-container');
 
-/**
- * Remote container factory
- */
+class MachineDestroyedException extends Error {
+  constructor(machineId: string) {
+    super(`Machine ${machineId} is destroyed`);
+    this.name = 'MachineDestroyedException';
+  }
+}
+
 export class RemoteContainerFactory implements ContainerFactory {
   constructor(
     private _serverUrl: string,
@@ -15,49 +19,54 @@ export class RemoteContainerFactory implements ContainerFactory {
   ) {}
 
   async boot(options: ContainerOptions): Promise<Container> {
-    try {
-      // For webcontainer compatibility
-      const workdir = `/home/${options.workdirName}`;
-      const v8AccessToken = options.v8AccessToken;
+    const maxMachineRetries = 3;
 
-      if (!v8AccessToken) {
-        throw new Error('No V8 access token given');
-      }
-
-      // Request machineId with retry logic
-      const machineId = await this._requestMachineId(v8AccessToken);
-
-      logger.info('Waiting for machine to be ready...');
-      await this._waitForMachineReady(machineId, v8AccessToken);
-      logger.info('Machine is ready');
-
-      // Create remote container instance
-      const container = new RemoteContainer(
-        `wss://${this._appName}-${machineId}.${ROUTER_DOMAIN}`,
-        workdir,
-        v8AccessToken,
-      );
-
-      // Initialize connection
+    for (let machineAttempt = 0; machineAttempt < maxMachineRetries; machineAttempt++) {
       try {
-        await container.connect();
-        logger.info('Successfully connected to remote container');
+        const workdir = `/home/${options.workdirName}`;
+        const v8AccessToken = options.v8AccessToken;
 
-        return container;
+        if (!v8AccessToken) {
+          throw new Error('No V8 access token given');
+        }
+
+        const machineId = await this._requestMachineId(v8AccessToken);
+
+        logger.info('Waiting for machine to be ready...');
+        await this._waitForMachineReady(machineId, v8AccessToken);
+        logger.info('Machine is ready');
+
+        const container = new RemoteContainer(
+          `wss://${this._appName}-${machineId}.${ROUTER_DOMAIN}`,
+          workdir,
+          v8AccessToken,
+        );
+
+        try {
+          await container.connect();
+          logger.info('Successfully connected to remote container');
+
+          return container;
+        } catch (error) {
+          throw new Error(`Failed to connect to remote container: ${error}`);
+        }
       } catch (error) {
-        throw new Error(`Failed to connect to remote container: ${error}`);
+        if (error instanceof MachineDestroyedException) {
+          logger.warn(`Machine destroyed, requesting new machine (attempt ${machineAttempt + 1}/${maxMachineRetries})`);
+
+          if (machineAttempt < maxMachineRetries - 1) {
+            continue;
+          }
+        }
+
+        logger.error('Failed to boot remote container:', error);
+        throw error;
       }
-    } catch (error) {
-      logger.error('Failed to boot remote container:', error);
-      throw error;
     }
+
+    throw new Error('Failed to boot remote container after all machine retry attempts');
   }
 
-  /**
-   * Request a machine ID from the API with retry logic
-   * @param token - The authentication token
-   * @returns The machine ID
-   */
   private async _requestMachineId(token: string): Promise<string> {
     try {
       const response = await fetch(`https://${this._serverUrl}/api/machine`, {
@@ -101,8 +110,8 @@ export class RemoteContainerFactory implements ContainerFactory {
   }
 
   private async _waitForMachineReady(machineId: string, token: string): Promise<void> {
-    const maxRetries = 30; // Maximum 30 attempts
-    const delayMs = 2000; // Check every 2 seconds
+    const maxRetries = 30;
+    const delayMs = 2000;
 
     interface MachineResponse {
       success: boolean;
@@ -127,16 +136,28 @@ export class RemoteContainerFactory implements ContainerFactory {
 
         const data = (await response.json()) as MachineResponse;
 
-        if (data.success && data.machine && data.machine.state === 'started') {
-          return; // Machine is ready
+        if (data.success && data.machine) {
+          const machineState = data.machine.state;
+
+          if (machineState === 'started') {
+            return;
+          }
+
+          if (machineState === 'destroyed') {
+            logger.warn(`Machine ${machineId} is destroyed, need to request new machine`);
+            throw new MachineDestroyedException(machineId);
+          }
         }
 
         logger.info(`Machine state: ${data.machine?.state || 'unknown'}, retrying...`);
       } catch (error) {
+        if (error instanceof MachineDestroyedException) {
+          throw error;
+        }
+
         logger.error(`Error checking machine status: ${error}`);
       }
 
-      // Wait before next attempt
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
