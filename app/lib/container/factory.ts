@@ -1,5 +1,5 @@
 import type { Container, ContainerOptions } from './interfaces';
-import { RemoteContainerFactory } from './remote-container-impl';
+import { RemoteContainerFactory } from './remote-container-factory';
 
 /**
  * Container factory class
