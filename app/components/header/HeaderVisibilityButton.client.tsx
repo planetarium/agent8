@@ -107,7 +107,7 @@ export function HeaderVisibilityButton() {
             {visibility === 'public' && <div className="i-ph:check text-accent ml-auto" />}
           </div>
           <div className="text-xs text-bolt-elements-textSecondary text-left w-full">
-            Code is publicly accessible, history is viewable, remix is enabled
+            Code is publicly accessible, history is viewable, spin is enabled
           </div>
         </DropdownItem>
 

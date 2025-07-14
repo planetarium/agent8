@@ -253,6 +253,26 @@ export const getProjectCommits = async (
   return response.data;
 };
 
+export const getTags = async (projectPath: string) => {
+  const response = await axios.get(`/api/gitlab/tags`, {
+    params: { projectPath },
+  });
+
+  return response.data;
+};
+
+export const getLastCommitHash = async (projectPath: string, branch?: string): Promise<string> => {
+  const {
+    data: { commits },
+  } = await getProjectCommits(projectPath, { branch, page: 1 });
+
+  if (!commits || commits.length === 0) {
+    throw new Error('No commits found in the specified branch');
+  }
+
+  return commits[0].id;
+};
+
 export const getProjects = async () => {
   const response = await axios.get('/api/gitlab/projects');
 

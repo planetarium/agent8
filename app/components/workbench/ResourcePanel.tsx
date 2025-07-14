@@ -17,7 +17,6 @@ import { renderLogger } from '~/utils/logger';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { ModelViewer } from '~/components/ui/ModelViewer';
-import { v4 as uuidv4 } from 'uuid';
 
 // Helper function for deep equality check of arrays
 const areArraysEqual = <T,>(arr1: T[], arr2: T[]): boolean => {
@@ -83,10 +82,6 @@ const RESOURCE_CATEGORIES: ResourceCategory[] = [
       {
         label: 'Polyhaven',
         tags: ['3d', 'polyhaven'],
-      },
-      {
-        label: 'Polyperfect',
-        tags: ['3d', 'polyperfect'],
       },
       {
         label: 'Vehicles',
@@ -405,7 +400,6 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
       searchAsync();
     }, 300); // 300ms 디바운싱
 
-    // eslint-disable-next-line consistent-return
     return () => clearTimeout(timeoutId);
   }, [resourcePoolKeyword, selectedResourceCategory, isResourcePoolMode]);
 
@@ -819,40 +813,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
 
       if (matches && matches[1]) {
         setVerse(matches[1]);
-      } else {
-        // VITE_AGENT8_VERSE 값이 없으면 새로 생성
-        await createOrUpdateVerseInEnv();
       }
-    } else {
-      // .env 파일이 없는 경우 생성
-      await createOrUpdateVerseInEnv();
     }
-  };
-
-  // verse 값 생성 또는 업데이트
-  const createOrUpdateVerseInEnv = async () => {
-    const newVerse = uuidv4();
-    setVerse(newVerse);
-
-    const envFilePath = `${WORK_DIR}/.env`;
-    const envFile = files?.[envFilePath];
-
-    let envContent = '';
-
-    if (envFile && envFile.type === 'file') {
-      envContent = envFile.content;
-
-      // 기존 VITE_AGENT8_VERSE 라인 제거
-      envContent = envContent.replace(/VITE_AGENT8_VERSE=([^\n]*)\n?/g, '');
-    }
-
-    // 새 VITE_AGENT8_VERSE 값 추가
-    envContent = `${envContent}\nVITE_AGENT8_VERSE=${newVerse}\n`;
-
-    // 파일 저장
-    workbenchStore.setSelectedFile(envFilePath);
-    workbenchStore.setCurrentDocumentContent(envContent);
-    await workbenchStore.saveCurrentDocument();
   };
 
   // 파일 업로드 함수 수정

@@ -87,7 +87,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
       .filter(([_, file]) => file && (file as any).content)
       .map(([path, file]) => ({
         path,
-        content: (file as any).content,
+        content: path.endsWith('.env') ? '' : (file as any).content,
       }));
 
     // 6. 새 프로젝트에 파일 커밋

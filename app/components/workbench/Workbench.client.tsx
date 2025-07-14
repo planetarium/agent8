@@ -425,6 +425,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     const shell = workbench.boltTerminal;
 
     await shell.ready;
+    await workbench.setupDeployConfig(shell);
 
     const container = await workbench.container;
     await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);

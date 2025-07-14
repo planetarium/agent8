@@ -20,7 +20,12 @@ import { extractRelativePath } from '~/utils/diff';
 import { createSampler } from '~/utils/sampler';
 import type { ActionAlert } from '~/types/actions';
 import { repoStore } from './repo';
-import { isEnabledGitbasePersistence, commitUserChanged } from '~/lib/persistenceGitbase/api.client';
+import {
+  isEnabledGitbasePersistence,
+  commitUserChanged,
+  getLastCommitHash,
+  getTags,
+} from '~/lib/persistenceGitbase/api.client';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken, type V8User } from '~/lib/verse8/userAuth';
 import type { BoltShell } from '~/utils/shell';
 import { SETTINGS_KEYS } from './settings';
@@ -441,7 +446,7 @@ export class WorkbenchStore {
       return;
     }
 
-    await this.#filesStore.saveFile(filePath, document.value);
+    await this.#filesStore.saveFile(filePath, document.value || '\n');
 
     const newUnsavedFiles = new Set(this.unsavedFiles.get());
     newUnsavedFiles.delete(filePath);
@@ -938,8 +943,18 @@ export class WorkbenchStore {
         throw new Error('Failed to publish');
       }
 
+      const taskBranch = repoStore.get().taskBranch;
+      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      const { tags } = await getTags(repoStore.get().path);
+      const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
+      let parentVerseId;
+
+      if (spinTag) {
+        parentVerseId = spinTag.name.replace('verse-from-', '').trim();
+      }
+
       // Handle successful deployment
-      this.#handleSuccessfulDeployment(verseId, chatId, title);
+      this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
       logger.error('[Publish] Error:', error);
       throw error;
@@ -965,8 +980,8 @@ export class WorkbenchStore {
     });
   }
 
-  #handleSuccessfulDeployment(verseId: string, chatId: string, title: string) {
-    const publishedUrl = `${import.meta.env.VITE_PUBLISHED_BASE_URL || 'https://agent8-games.verse8.io'}/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}&buildAt=${Date.now()}`;
+  #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {
+    const publishedUrl = `${import.meta.env.VITE_PUBLISHED_BASE_URL || 'https://agent8-games.verse8.io'}/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}${sha ? `&sha=${sha}` : ''}&buildAt=${Date.now()}`;
     this.setPublishedUrl(publishedUrl);
 
     try {
@@ -978,6 +993,7 @@ export class WorkbenchStore {
               title,
               gameId: verseId,
               playUrl: publishedUrl,
+              parentVerseId,
             },
           },
           '*',

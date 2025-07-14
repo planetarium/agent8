@@ -28,7 +28,7 @@ export const changeChatUrl = (
     {
       type: 'UPDATE_URL',
       payload: {
-        url: `/games/editor?chat=${encodeURIComponent(projectPath + appendQueryString)}`,
+        url: `/creator/editor?chat=${encodeURIComponent(projectPath + appendQueryString)}`,
         replace,
       },
     },

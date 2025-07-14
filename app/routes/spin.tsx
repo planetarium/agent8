@@ -117,7 +117,7 @@ export default function Spin() {
         toast.success('Spin created successfully!');
 
         // Navigate to the new project
-        navigate(`/chat/${forkedProject.project.path}`);
+        location.href = `/chat/${forkedProject.project.path}`;
       } else {
         throw new Error('Failed to create spin');
       }

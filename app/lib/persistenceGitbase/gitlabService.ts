@@ -1333,4 +1333,15 @@ export class GitlabService {
       return null;
     }
   }
+
+  async getTags(projectPath: string): Promise<any[]> {
+    try {
+      const tags = await this.gitlab.Tags.all(projectPath);
+
+      return tags;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get tags: ${errorMessage}`);
+    }
+  }
 }

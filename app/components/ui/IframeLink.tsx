@@ -71,7 +71,7 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
         const isNewWindow = event.shiftKey || event.ctrlKey || event.metaKey || event.button === 1;
 
         if (isNewWindow) {
-          const parentUrl = `${parentOrigin}/games/editor?chat=${encodeURIComponent(path)}`;
+          const parentUrl = `${parentOrigin}/creator/editor?chat=${encodeURIComponent(path)}`;
           console.log('IframeLink: Opening new window:', parentUrl);
 
           try {
@@ -103,7 +103,7 @@ export const IframeLink = forwardRef<HTMLAnchorElement, IframeLinkProps>(
         }
 
         const parentOrigin = getParentOrigin();
-        const parentUrl = `${parentOrigin}/games/editor?chat=${encodeURIComponent(path)}`;
+        const parentUrl = `${parentOrigin}/creator/editor?chat=${encodeURIComponent(path)}`;
 
         console.log('IframeLink: Middle click opening new window:', parentUrl);
 

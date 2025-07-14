@@ -6,7 +6,6 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
-import { createDefaultEnv } from '~/lib/container/defaultEnv';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -165,16 +164,6 @@ export class ActionRunner {
     this.#updateAction(actionId, { status: 'running' });
 
     try {
-      if (!this.#envFileCreated) {
-        try {
-          const containerInstance = await this.#container;
-          await createDefaultEnv(containerInstance);
-          this.#envFileCreated = true;
-        } catch (error) {
-          console.warn('Failed to create .env file before action execution:', error);
-        }
-      }
-
       switch (action.type) {
         case 'shell': {
           await this.#runShellAction(action);

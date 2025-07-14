@@ -164,6 +164,13 @@ export function Chat() {
       if (Object.keys(files).length > 0) {
         workbench.container.then(async (containerInstance) => {
           try {
+            await containerInstance.fs.rm('/src', { recursive: true, force: true });
+            await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
+          } catch {
+            logger.warn('Failed to remove /src directory');
+          }
+
+          try {
             const previews = workbench.previews.get();
             const currentPreview = previews.find((p: any) => p.ready);
 
