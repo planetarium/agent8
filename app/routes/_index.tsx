@@ -57,6 +57,15 @@ function AccessControlledChat() {
 
           v8UserStore.set({ loading: false, user: userInfo });
 
+          try {
+            const gitlabUser = await fetch('/api/gitlab/user', {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+            console.log('GITLAB USER', await gitlabUser.json());
+          } catch {}
+
           setIsActivated(userInfo.isActivated);
         } catch (error) {
           console.error('Failed to verify token:', error);
