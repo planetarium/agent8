@@ -1311,13 +1311,15 @@ export class RemoteContainer implements Container {
         // Interrupt current execution
         terminal.input('\x03');
 
-        // Kick the shell to retrieve the prompt properly
-        terminal.input('\n');
-
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
         // Wait for prompt
         await waitTillOscCode('prompt');
+
+        // Execute new command
+        terminal.input(':' + '\n');
+        await waitTillOscCode('exit');
+        logger.debug('terminal is responsive');
 
         logger.debug(`[${sessionId}] prompt received`, command);
 
