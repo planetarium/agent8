@@ -155,9 +155,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const prompts = [
       'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.',
       'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
-      'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above and clicks to move and attack.',
+      'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above.',
       'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
-      'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural terrain generation, block placement, and first-person movement.',
+      'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural voxel world generation, block placement, and first-person movement.',
       'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.',
     ];
     const [currentPromptIndex, setCurrentPromptIndex] = useState<number>(0);
