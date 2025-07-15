@@ -45,6 +45,23 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
     }
   };
 
+  const getServerCredit = (serverName: string) => {
+    switch (serverName) {
+      case 'Image':
+        return '$0.05/call';
+      case 'Cinematic':
+        return '$2.5/call';
+      case 'Audio':
+        return '$0.2/call';
+      case 'Skybox':
+        return '$0.2/call';
+      case 'UI':
+        return '$0.05/call';
+      default:
+        return '$0.05/call';
+    }
+  };
+
   const [showServerManager, setShowServerManager] = useState<boolean>(false);
 
   useEffect(() => {
@@ -255,7 +272,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                                 </h4>
                                 {isDefaultServer(server.name) && (
                                   <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[14px] font-medium leading-[142.9%] flex-shrink-0">
-                                    {server.name === 'Audio' ? '1 credit/s (default: 30s)' : '1 Credit'}
+                                    {getServerCredit(server.name)}
                                   </span>
                                 )}
                               </div>
