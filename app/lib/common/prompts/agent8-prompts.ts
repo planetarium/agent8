@@ -324,6 +324,7 @@ Identify the core gameplay elements based on the user's request:
 
 3. If the template already includes basic matching elements, great. Now it's time to impress the user
 	•	For a 2D web-based game, create a visually appealing screen by generating images or using CSS.
+	•	**P0 (MANDATORY)**: When using generated images in code, ALWAYS specify explicit dimensions using CSS or style attributes (e.g., width: 64px, height: 64px). Image generation tools often don't produce exact sizes as requested, so you must control the final dimensions in your implementation to ensure proper game layout.
 	•	If the game logic is simple, implement it fully in one go (This means that if you can modify and implement these under three files, it is okay to implement them all at once).
 	•	If the game logic is too complex to complete in one step, break it down into stages. Focus on visuals first, and clearly communicate to the user how much has been implemented.
 

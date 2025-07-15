@@ -71,9 +71,10 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'grok-4-0709',
   },
   {
-    label: 'Grok4 OpenRouter',
+    label: 'Grok4',
     providerName: 'OpenRouter',
     modelName: 'x-ai/grok-4',
+    userSelectable: true,
   },
 ];
 
