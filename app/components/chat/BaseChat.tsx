@@ -988,7 +988,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
-                        'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above and clicks to move and attack.';
+                        'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above.';
 
                       if (handleInputChange) {
                         const syntheticEvent = {
@@ -1026,7 +1026,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
                     onClick={() => {
                       const prompt =
-                        'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural terrain generation, block placement, and first-person movement.';
+                        'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural voxel world generation, block placement, and first-person movement.';
 
                       if (handleInputChange) {
                         const syntheticEvent = {
