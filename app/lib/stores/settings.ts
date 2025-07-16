@@ -36,6 +36,7 @@ export interface MCPServer {
   enabled: boolean;
   v8AuthIntegrated: boolean;
   description?: string;
+  version?: number;
 }
 
 export const URL_CONFIGURABLE_PROVIDERS = ['Ollama', 'LMStudio', 'OpenAILike'];
@@ -167,41 +168,47 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'All-in-one',
         url: 'https://mcp.verse8.io/mcp',
         enabled: false,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'All-in-one server that integrates all MCP tools.',
       },
       {
         name: 'Image',
         url: 'https://mcp-image.verse8.io/mcp',
-        enabled: false,
+        enabled: true,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'Create 2D game assets in various styles',
       },
       {
         name: 'Cinematic',
         url: 'https://mcp-cinematic.verse8.io/mcp',
-        enabled: false,
+        enabled: true,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'Turn text into styled game cutscenes',
       },
       {
         name: 'Audio',
         url: 'https://mcp-audio.verse8.io/mcp',
-        enabled: false,
+        enabled: true,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'Generate music and sound effects fast',
       },
       {
         name: 'Skybox',
         url: 'https://mcp-skybox.verse8.io/mcp',
-        enabled: false,
+        enabled: true,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'Make 360° environments for games or VR',
       },
       {
         name: 'UI',
         url: 'https://mcp-ui.verse8.io/mcp',
-        enabled: false,
+        enabled: true,
+        version: 1,
         v8AuthIntegrated: false,
         description: 'Design CSS styles for game interfaces',
       },
@@ -221,7 +228,7 @@ const getInitialMCPServers = (): MCPServer[] => {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SERVERS);
     const defaultServers = getDefaultMCPServers();
 
-    if (!stored || stored === '[]' || stored === '""') {
+    if (!stored || stored === '[]' || stored === '""' || stored.indexOf('version') === -1) {
       // No stored servers, use defaults
       localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers));
 
