@@ -131,13 +131,33 @@ export const selectStarterTemplate = async (options: { message: string }) => {
     message,
     system: starterTemplateSelectionPrompt(templates),
   };
+
   const response = await fetch('/api/startcall', {
     method: 'POST',
     body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    let errorMessage = await response.text();
+
+    // 에러 메시지가 비어있는 경우 상태 코드에 따른 기본 메시지 제공
+    if (!errorMessage.trim()) {
+      switch (response.status) {
+        case 401:
+          errorMessage = 'Authentication failed. Please check your API key.';
+          break;
+        case 429:
+          errorMessage = 'Rate limit exceeded. Please try again later.';
+          break;
+        case 500:
+          errorMessage = 'Server error occurred. Please try again.';
+          break;
+        default:
+          errorMessage = `Request failed with status ${response.status}`;
+      }
+    }
+
+    throw new Error(errorMessage);
   }
 
   const respJson: { text: string } = await response.json();

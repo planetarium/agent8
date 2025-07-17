@@ -79,7 +79,9 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
       });
     }
 
-    throw new Response(null, {
+    // 실제 에러 메시지를 body에 포함시키기
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Response(errorMessage, {
       status: 500,
       statusText: 'Internal Server Error',
     });

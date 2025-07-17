@@ -803,9 +803,19 @@ export const ChatImpl = memo(
           // Clear progress annotations on error
           setCustomProgressAnnotations([]);
 
-          toast.warning(
-            `${error instanceof Error ? error.message : 'Failed to import starter template'}\nRetry again after a few minutes.`,
-          );
+          const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
+
+          // 에러 메시지가 의미있는 내용인지 확인
+          if (
+            errorMessage.trim() &&
+            errorMessage !== 'Not Found Template' &&
+            errorMessage !== 'Not Found Template Data'
+          ) {
+            toast.error(errorMessage);
+          } else {
+            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+          }
+
           setChatStarted(false);
           setFakeLoading(false);
 
