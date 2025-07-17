@@ -127,14 +127,31 @@ function AccessControlledChat() {
   );
 
   // 접근 제한 화면 컴포넌트
-  const AccessRestricted = () => (
-    <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
-      <div className="bg-gradient-to-br from-cyan-700 to-sky-900 p-8 rounded-lg border border-cyan-500 max-w-md shadow-lg shadow-cyan-700/30">
-        <h2 className="text-2xl font-bold text-cyan-200 mb-3">Access Restricted</h2>
-        <p className="text-cyan-300 mb-4">Currently, Agent8 is only available to invited users.</p>
+  const AccessRestricted = () => {
+    useEffect(() => {
+      const interval = setInterval(() => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: 'REQUEST_AUTH',
+            },
+            '*',
+          );
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
+        <div className="bg-gradient-to-br from-cyan-700 to-sky-900 p-8 rounded-lg border border-cyan-500 max-w-md shadow-lg shadow-cyan-700/30">
+          <h2 className="text-2xl font-bold text-cyan-200 mb-3">Authenticating...</h2>
+          <p className="text-cyan-300 mb-4">Please wait while we verify your access.</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // 컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
   const NotLoadedContainer = () => {
