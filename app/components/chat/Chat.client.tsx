@@ -47,6 +47,7 @@ import {
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
@@ -730,6 +731,11 @@ export const ChatImpl = memo(
               taskBranch: branchName,
             });
 
+            // Record prompt activity for first request
+            sendActivityPrompt(projectPath).catch((error) => {
+              logger.warn('Failed to record prompt activity:', error);
+            });
+
             changeChatUrl(projectPath, { replace: true });
           } else {
             repoStore.set({
@@ -738,6 +744,12 @@ export const ChatImpl = memo(
               title,
               taskBranch: 'develop',
             });
+
+            // Record prompt activity for first request
+            sendActivityPrompt(projectRepo).catch((error) => {
+              logger.warn('Failed to record prompt activity:', error);
+            });
+
             changeChatUrl(projectRepo, { replace: true });
           }
 
@@ -824,6 +836,13 @@ export const ChatImpl = memo(
       }
 
       try {
+        // Record prompt activity for subsequent requests
+        if (repoStore.get().path) {
+          sendActivityPrompt(repoStore.get().path).catch((error) => {
+            logger.warn('Failed to record prompt activity:', error);
+          });
+        }
+
         if (error != null) {
           setMessages(messages.slice(0, -1));
         }
