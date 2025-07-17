@@ -567,7 +567,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   <span>Run Preview</span>
                 </button>
                 <div className="ml-auto" />
-                {(selectedView === 'code' || selectedView === 'resource') && (
+                {/* {(selectedView === 'code' || selectedView === 'resource') && (
                   <div className="flex overflow-y-auto">
                     <PanelHeaderButton
                       className="mr-1 text-sm"
@@ -579,7 +579,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                       Download
                     </PanelHeaderButton>
                   </div>
-                )}
+                )} */}
                 {selectedView === 'diff' && (
                   <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
                 )}
