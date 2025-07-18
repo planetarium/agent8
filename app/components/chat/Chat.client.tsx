@@ -356,6 +356,7 @@ export const ChatImpl = memo(
     };
 
     const lastSendMessageTime = useRef(0);
+    const promptProcessed = useRef(false);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -447,15 +448,22 @@ export const ChatImpl = memo(
     useEffect(() => {
       const prompt = searchParams.get('prompt');
 
-      if (prompt) {
-        setSearchParams({});
-        runAnimation();
-        append({
-          role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n${prompt}`,
-        });
+      if (prompt && !promptProcessed.current && !input) {
+        try {
+          const decodedPrompt = decodeURIComponent(prompt);
+          setInput(decodedPrompt);
+          setSearchParams({});
+          promptProcessed.current = true;
+        } catch (error) {
+          console.error('Error decoding prompt parameter:', error);
+
+          // If decoding fails, use the original prompt
+          setInput(prompt);
+          setSearchParams({});
+          promptProcessed.current = true;
+        }
       }
-    }, [model, provider, searchParams]);
+    }, [searchParams, input, setInput, setSearchParams]);
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
