@@ -103,7 +103,10 @@ export const ModelSelector = ({
   useEffect(() => {
     const modelParam = searchParams.get('model');
 
-    if (modelParam && setModel && setProvider && !hasAppliedSearchParam) {
+    // 데이터가 준비되었는지 확인 (providerList와 modelList가 비어있지 않은지)
+    const dataReady = providerList.length > 0 && modelList.length > 0;
+
+    if (modelParam && setModel && setProvider && !hasAppliedSearchParam && dataReady) {
       // searchParam에서 받은 모델명으로 whitelist에서 찾기
       const whitelistItem = MODEL_WHITELIST.find((item) => item.modelName === modelParam && item.userSelectable);
 
@@ -119,17 +122,30 @@ export const ModelSelector = ({
         if (providerEnabled && modelExists) {
           selectWhitelistItem(whitelistItem);
           setHasAppliedSearchParam(true);
+        } else {
+          // 모델이나 프로바이더를 찾지 못했지만 데이터는 준비되었으므로 더 이상 시도하지 않음
+          setHasAppliedSearchParam(true);
         }
+      } else {
+        // 화이트리스트에서 모델을 찾지 못했으므로 더 이상 시도하지 않음
+        setHasAppliedSearchParam(true);
       }
     }
   }, [searchParams, setModel, setProvider, providerList, modelList, hasAppliedSearchParam]);
 
   // Set default model if none is selected
   useEffect(() => {
-    // searchParam에서 model을 받았거나 이미 모델이 설정되어 있다면 기본값 설정을 건너뛰기
+    // 데이터가 준비되었는지 확인
+    const dataReady = providerList.length > 0 && modelList.length > 0;
     const modelParam = searchParams.get('model');
 
-    if (modelParam || hasAppliedSearchParam || model || provider) {
+    // 데이터가 준비되지 않았거나 searchParam 모델이 있지만 아직 적용되지 않았다면 기본값 설정을 건너뛰기
+    if (!dataReady || (modelParam && !hasAppliedSearchParam)) {
+      return;
+    }
+
+    // 이미 모델이 설정되어 있다면 기본값 설정을 건너뛰기
+    if (model || provider) {
       return;
     }
 
@@ -145,7 +161,7 @@ export const ModelSelector = ({
         setProvider(openRouterProvider);
       }
     }
-  }, [model, provider, setModel, setProvider, providerList, searchParams, hasAppliedSearchParam]);
+  }, [model, provider, setModel, setProvider, providerList, modelList, searchParams, hasAppliedSearchParam]);
 
   // 검색어로 화이트리스트 항목 필터링
   const filteredOptions = whitelistOptions.filter((item) =>

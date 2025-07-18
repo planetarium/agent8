@@ -12,7 +12,6 @@ import {
   type OnScrollCallback as OnEditorScroll,
 } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { IconButton } from '~/components/ui/IconButton';
-import { PanelHeaderButton } from '~/components/ui/PanelHeaderButton';
 import { Slider } from '~/components/ui/Slider';
 import { type WorkbenchViewType } from '~/lib/stores/workbench';
 import {
