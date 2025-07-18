@@ -357,6 +357,7 @@ export const ChatImpl = memo(
 
     const lastSendMessageTime = useRef(0);
     const promptProcessed = useRef(false);
+    const autorunRequested = useRef(false);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -447,6 +448,7 @@ export const ChatImpl = memo(
     });
     useEffect(() => {
       const prompt = searchParams.get('prompt');
+      const autorun = searchParams.get('run');
 
       if (prompt && !promptProcessed.current && !input) {
         try {
@@ -454,6 +456,11 @@ export const ChatImpl = memo(
           setInput(decodedPrompt);
           setSearchParams({});
           promptProcessed.current = true;
+
+          // Check if autorun is requested
+          if (autorun === 'auto') {
+            autorunRequested.current = true;
+          }
         } catch (error) {
           console.error('Error decoding prompt parameter:', error);
 
@@ -461,6 +468,11 @@ export const ChatImpl = memo(
           setInput(prompt);
           setSearchParams({});
           promptProcessed.current = true;
+
+          // Check if autorun is requested
+          if (autorun === 'auto') {
+            autorunRequested.current = true;
+          }
         }
       }
     }, [searchParams, input, setInput, setSearchParams]);
@@ -912,6 +924,27 @@ export const ChatImpl = memo(
       }
     };
 
+    // Auto-run effect: automatically send message when everything is ready
+    useEffect(() => {
+      if (
+        autorunRequested.current &&
+        input &&
+        !isLoading &&
+        !fakeLoading &&
+        provider &&
+        model &&
+        !enhancingPrompt &&
+        (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure files are loaded
+      ) {
+        autorunRequested.current = false;
+
+        // Use setTimeout to ensure UI is ready
+        setTimeout(() => {
+          sendMessage({} as React.UIEvent);
+        }, 100);
+      }
+    }, [input, isLoading, fakeLoading, provider, model, enhancingPrompt, sendMessage, chatStarted, files]);
+
     /**
      * Handles the change event for the textarea and updates the input state.
      * @param event - The change event from the textarea.
@@ -943,11 +976,13 @@ export const ChatImpl = memo(
     }, []);
 
     const handleModelChange = (newModel: string) => {
+      console.log('handleModelChange', newModel);
       setModel(newModel);
       Cookies.set('SelectedModel', newModel, { expires: 1 });
     };
 
     const handleProviderChange = (newProvider: ProviderInfo) => {
+      console.log('handleProviderChange', newProvider);
       setProvider(newProvider);
       Cookies.set('SelectedProvider', newProvider.name, { expires: 1 });
     };

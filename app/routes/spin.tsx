@@ -116,8 +116,18 @@ export default function Spin() {
       if (forkedProject && forkedProject.success) {
         toast.success('Spin created successfully!');
 
-        // Navigate to the new project
-        location.href = `/chat/${forkedProject.project.path}`;
+        // Build URL with search params (excluding 'from' and 'sha')
+        const chatUrl = new URL(`/chat/${forkedProject.project.path}`, window.location.origin);
+
+        // Copy all search params except 'from' and 'sha'
+        for (const [key, value] of searchParams.entries()) {
+          if (key !== 'from' && key !== 'sha') {
+            chatUrl.searchParams.set(key, value);
+          }
+        }
+
+        // Navigate to the new project with search params
+        location.href = chatUrl.toString();
       } else {
         throw new Error('Failed to create spin');
       }

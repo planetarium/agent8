@@ -1,5 +1,6 @@
 import type { ProviderInfo } from '~/types/model';
 import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from '@remix-run/react';
 import type { KeyboardEvent } from 'react';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { classNames } from '~/utils/classNames';
@@ -31,6 +32,8 @@ export const ModelSelector = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [hasAppliedSearchParam, setHasAppliedSearchParam] = useState(false);
+  const [searchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<(HTMLDivElement | null)[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -78,23 +81,71 @@ export const ModelSelector = ({
         ? MODEL_WHITELIST.find((item) => item.providerName === provider.name && item.modelName === model)
         : undefined;
 
-  // Set default model if none is selected
+  // 선택한 화이트리스트 항목 적용
+  const selectWhitelistItem = (item: WhitelistItem) => {
+    // 해당 프로바이더 찾기
+    const newProvider = providerList.find((p) => p.name === item.providerName);
+
+    if (newProvider && setProvider) {
+      setProvider(newProvider);
+    }
+
+    // 모델 설정
+    if (setModel) {
+      setModel(item.modelName);
+    }
+
+    setIsDropdownOpen(false);
+    setSearchQuery('');
+  };
+
+  // Handle searchParam model selection (only once)
   useEffect(() => {
-    if (!model || !provider) {
-      // Default to Auto mode
-      if (setModel) {
-        setModel(AUTO_MODEL_NAME);
-      }
+    const modelParam = searchParams.get('model');
 
-      if (setProvider) {
-        const openRouterProvider = providerList.find((p) => p.name === 'OpenRouter');
+    if (modelParam && setModel && setProvider && !hasAppliedSearchParam) {
+      // searchParam에서 받은 모델명으로 whitelist에서 찾기
+      const whitelistItem = MODEL_WHITELIST.find((item) => item.modelName === modelParam && item.userSelectable);
 
-        if (openRouterProvider) {
-          setProvider(openRouterProvider);
+      if (whitelistItem) {
+        // 해당 프로바이더가 활성화되어 있는지 확인
+        const providerEnabled = providerList.some((p) => p.name === whitelistItem.providerName);
+
+        // 해당 모델이 모델 목록에 있는지 확인
+        const modelExists = modelList.some(
+          (m) => m.provider === whitelistItem.providerName && m.name === whitelistItem.modelName,
+        );
+
+        if (providerEnabled && modelExists) {
+          selectWhitelistItem(whitelistItem);
+          setHasAppliedSearchParam(true);
         }
       }
     }
-  }, [model, provider, setModel, setProvider, providerList]);
+  }, [searchParams, setModel, setProvider, providerList, modelList, hasAppliedSearchParam]);
+
+  // Set default model if none is selected
+  useEffect(() => {
+    // searchParam에서 model을 받았거나 이미 모델이 설정되어 있다면 기본값 설정을 건너뛰기
+    const modelParam = searchParams.get('model');
+
+    if (modelParam || hasAppliedSearchParam || model || provider) {
+      return;
+    }
+
+    // Default to Auto mode
+    if (setModel) {
+      setModel(AUTO_MODEL_NAME);
+    }
+
+    if (setProvider) {
+      const openRouterProvider = providerList.find((p) => p.name === 'OpenRouter');
+
+      if (openRouterProvider) {
+        setProvider(openRouterProvider);
+      }
+    }
+  }, [model, provider, setModel, setProvider, providerList, searchParams, hasAppliedSearchParam]);
 
   // 검색어로 화이트리스트 항목 필터링
   const filteredOptions = whitelistOptions.filter((item) =>
@@ -175,24 +226,6 @@ export const ModelSelector = ({
 
         break;
     }
-  };
-
-  // 선택한 화이트리스트 항목 적용
-  const selectWhitelistItem = (item: WhitelistItem) => {
-    // 해당 프로바이더 찾기
-    const newProvider = providerList.find((p) => p.name === item.providerName);
-
-    if (newProvider && setProvider) {
-      setProvider(newProvider);
-    }
-
-    // 모델 설정
-    if (setModel) {
-      setModel(item.modelName);
-    }
-
-    setIsDropdownOpen(false);
-    setSearchQuery('');
   };
 
   // Focus the selected option
