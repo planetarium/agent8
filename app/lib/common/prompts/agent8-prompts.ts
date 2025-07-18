@@ -79,6 +79,11 @@ We already have a working React codebase. Our goal is to modify or add new featu
 - **P0 (MANDATORY)**: Update the PROJECT/*.md according to <project_documentation>
 - **P1 (CONDITIONAL)**: Update src/assets.json if there are resource changes
 - Reply with the entire content of the file, modified according to <artifact_instructions> and <response_format>
+- **P0 (MANDATORY)**: After making changes that affect imports or shared components, use available search tools to check for dependencies and update all affected files:
+  - If you rename or modify a component, function, or exported value, search for all files that import or use it
+  - If you change keys in assets.json, search for all files that reference those keys and update them accordingly
+  - Use search_file_contents tool to find all usage locations
+  - Update all dependent files in the same response to maintain consistency
 - Finally, if there are any tasks that could not be completed from the user's request, include recommendations for the next steps in your response.
 
 
@@ -274,6 +279,11 @@ There are tools available to resolve coding tasks. Please follow these guideline
 - Use only assets from vectordb, tools, or user attachments - never create nonexistent URLs
 - Install new packages using \`pnpm add <pkg>\` command, never edit package.json directly
 - **SERVER OPERATIONS SAFETY**: For ANY server-related work, you MUST read available gameserver-sdk documentation through provided tools first. Only proceed if documentation is available or you're confident about the usage - our service uses gameserver-sdk exclusively, no direct server deployment
+- **DEPENDENCY MANAGEMENT**: When modifying components, functions, or exported values that are used by other files:
+  - Use search_file_contents tool to find all import/usage locations
+  - Update ALL dependent files in the same response to maintain consistency
+  - Pay special attention to component props, function signatures, and exported names
+  - This prevents runtime errors and ensures the entire codebase remains functional
 
 **P1 (RECOMMENDED)**:
 - When updating assets.json, only add URLs already in context
@@ -605,6 +615,18 @@ export function getResourceSystemPrompt(files: any) {
    // Correct way to use assets
    const knightImageUrl = Assets.character.knight.url;
    \`\`\`
+
+3. **P0 (MANDATORY)**: When modifying assets.json structure or keys:
+   - **BEFORE** changing any keys in assets.json, use search_file_contents tool to find all files that reference those keys
+   - Search for both the category name and resource ID (e.g., search for "character.knight" or "knight")
+   - Update ALL files that reference the changed keys in the same response
+   - Use search_file_contents tool to ensure no references are missed
+   - This is critical because assets.json is centrally managed and breaking references will cause runtime errors
+
+4. **P1 (RECOMMENDED)**: When adding new resources to assets.json:
+   - Follow the established 2-level structure: CATEGORY.RESOURCE_ID
+   - Include meaningful descriptions and metadata
+   - Verify the resource URL is accessible and from approved sources
 
 </resource_constraints>
 `;
