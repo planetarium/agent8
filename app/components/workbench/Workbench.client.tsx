@@ -35,7 +35,6 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
-import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -494,10 +493,11 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                         <div className="text-sm text-bolt-elements-textPrimary mb-3">Connection Failed</div>
                         <button
                           onClick={async () => {
-                            const token = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
-                            setIsManuallyReconnecting(true);
-                            setTerminalReady(false);
-                            await workbench.reinitializeContainer(token);
+                            /*
+                             * FIXME: After stabilizing reconnecting, we can replace this with a proper reconnecting mechanism.
+                             * See also: https://github.com/planetarium/agent8/issues/269
+                             */
+                            window.location.reload();
                           }}
                           className="px-3 py-1.5 text-sm rounded bg-accent-500 hover:bg-accent-600 text-white transition-colors mx-auto block"
                         >
