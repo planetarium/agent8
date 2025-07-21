@@ -19,6 +19,7 @@ type ProviderName =
   | 'Cohere'
   | 'Deepseek'
   | 'Google'
+  | 'GoogleVertex'
   | 'Groq'
   | 'HuggingFace'
   | 'Mistral'
@@ -170,6 +171,14 @@ const PROVIDER_STATUS_URLS: Record<ProviderName, ProviderConfig> = {
     },
     testModel: 'deepseek-chat',
   },
+  GoogleVertex: {
+    statusUrl: 'https://status.cloud.google.com/',
+    apiUrl: 'https://generativelanguage.googleapis.com/v1/models',
+    headers: {
+      'x-goog-api-key': '$GOOGLE_API_KEY',
+    },
+    testModel: 'gemini-pro',
+  },
 };
 
 const PROVIDER_ICONS: Record<ProviderName, IconType> = {
@@ -186,6 +195,7 @@ const PROVIDER_ICONS: Record<ProviderName, IconType> = {
   Together: BsCloud,
   XAI: BsRobot,
   Deepseek: BiCodeBlock,
+  GoogleVertex: SiGoogle,
 };
 
 const ServiceStatusTab = () => {
@@ -211,6 +221,7 @@ const ServiceStatusTab = () => {
         Anthropic: 'ANTHROPIC_API_KEY',
         Cohere: 'COHERE_API_KEY',
         Google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+        GoogleVertex: 'GOOGLE_CLOUD_PROJECT',
         HuggingFace: 'HuggingFace_API_KEY',
         Mistral: 'MISTRAL_API_KEY',
         Perplexity: 'PERPLEXITY_API_KEY',
