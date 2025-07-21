@@ -3,19 +3,6 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModelV1 } from 'ai';
 
-let createVertex: any = null;
-
-// Preload Google Vertex module on server side only
-if (typeof window === 'undefined') {
-  import('@ai-sdk/google-vertex')
-    .then((module) => {
-      createVertex = module.createVertex;
-    })
-    .catch(() => {
-      // Silently fail - will be handled in getModelInstance
-    });
-}
-
 export default class GoogleVertexProvider extends BaseProvider {
   name = 'GoogleVertexAI';
   getApiKeyLink = 'https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal';
@@ -33,64 +20,8 @@ export default class GoogleVertexProvider extends BaseProvider {
     { name: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
   ];
 
-  async getDynamicModels(
-    apiKeys?: Record<string, string>,
-    settings?: IProviderSetting,
-    serverEnv?: Record<string, string>,
-  ): Promise<ModelInfo[]> {
-    const { projectId } = this._getVertexAIConfig({
-      apiKeys,
-      providerSettings: settings,
-      serverEnv: serverEnv as any,
-    });
-
-    if (!projectId) {
-      throw new Error(
-        `Missing Google Cloud Project ID for ${this.name} provider. Please set GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS_JSON.`,
-      );
-    }
-
+  async getDynamicModels(): Promise<ModelInfo[]> {
     return this.staticModels;
-  }
-
-  private _getVertexAIConfig(options: {
-    apiKeys?: Record<string, string>;
-    providerSettings?: IProviderSetting;
-    serverEnv?: Record<string, string>;
-  }) {
-    const { apiKeys, providerSettings, serverEnv } = options;
-
-    // Use BaseProvider's method to get configuration
-    const { baseUrl: projectId, apiKey: credentialsJson } = this.getProviderBaseUrlAndKey({
-      apiKeys,
-      providerSettings,
-      serverEnv,
-      defaultBaseUrlKey: 'GOOGLE_CLOUD_PROJECT',
-      defaultApiTokenKey: 'GOOGLE_APPLICATION_CREDENTIALS_JSON',
-    });
-
-    // Parse credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON
-    let credentials = null;
-
-    if (credentialsJson) {
-      try {
-        credentials = JSON.parse(credentialsJson);
-      } catch (error) {
-        console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', error);
-        throw new Error('Invalid JSON format in GOOGLE_APPLICATION_CREDENTIALS_JSON');
-      }
-    }
-
-    // Get project ID from credentials if not provided directly
-    const finalProjectId = projectId || credentials?.project_id;
-
-    const location =
-      serverEnv?.GOOGLE_CLOUD_LOCATION ||
-      process?.env?.GOOGLE_CLOUD_LOCATION ||
-      apiKeys?.GOOGLE_CLOUD_LOCATION ||
-      'us-central1';
-
-    return { projectId: finalProjectId, location, credentials };
   }
 
   getModelInstance(options: {
@@ -99,41 +30,72 @@ export default class GoogleVertexProvider extends BaseProvider {
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
   }): LanguageModelV1 {
-    const { model, serverEnv, apiKeys, providerSettings } = options;
+    const { model } = options;
 
-    // Browser environment check
+    // Browser environment is not supported
     if (typeof window !== 'undefined') {
-      throw new Error('Google Vertex AI provider can only be used on the server side');
+      throw new Error('Google Vertex AI is only supported on the server side');
     }
 
-    // Check if Google Vertex module is loaded
-    if (!createVertex) {
-      throw new Error('Google Vertex AI module is still loading. Please try again in a moment.');
-    }
+    // Use Google Vertex AI SDK directly on server
+    const createVertexModel = async () => {
+      const { createVertex } = await import('@ai-sdk/google-vertex');
 
-    const { projectId, location, credentials } = this._getVertexAIConfig({
-      apiKeys,
-      providerSettings: providerSettings?.[this.name],
-      serverEnv: serverEnv as any,
-    });
+      // Read settings from environment variables (no credential transmission)
+      const projectId = process.env.GOOGLE_CLOUD_PROJECT;
+      const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+      const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-    if (!projectId) {
-      throw new Error(
-        `Missing Google Cloud Project ID for ${this.name} provider. Please set GOOGLE_CLOUD_PROJECT or provide credentials in GOOGLE_APPLICATION_CREDENTIALS_JSON.`,
-      );
-    }
+      if (!projectId) {
+        throw new Error('Missing GOOGLE_CLOUD_PROJECT environment variable');
+      }
 
-    const vertexConfig: any = {
-      project: projectId,
-      location,
+      const vertexConfig: any = {
+        project: projectId,
+        location,
+      };
+
+      // Parse and use credentials JSON if available
+      if (credentialsJson) {
+        try {
+          const credentials = JSON.parse(credentialsJson);
+          vertexConfig.googleAuthOptions = { credentials };
+        } catch {
+          throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON format');
+        }
+      }
+
+      const vertex = createVertex(vertexConfig);
+
+      return vertex(model);
     };
 
-    if (credentials) {
-      vertexConfig.googleAuthOptions = { credentials };
-    }
+    // Proxy for lazy loading
+    let modelPromise: Promise<LanguageModelV1> | null = null;
 
-    const vertex = createVertex(vertexConfig);
+    const getModel = () => {
+      if (!modelPromise) {
+        modelPromise = createVertexModel();
+      }
 
-    return vertex(model);
+      return modelPromise;
+    };
+
+    return {
+      specificationVersion: 'v1',
+      provider: 'google-vertex',
+      modelId: model,
+      defaultObjectGenerationMode: undefined,
+
+      async doGenerate(options: any) {
+        const vertexModel = await getModel();
+        return vertexModel.doGenerate(options);
+      },
+
+      async doStream(options: any) {
+        const vertexModel = await getModel();
+        return vertexModel.doStream(options);
+      },
+    } as LanguageModelV1;
   }
 }
