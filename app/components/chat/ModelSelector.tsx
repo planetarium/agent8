@@ -2,7 +2,6 @@ import type { ProviderInfo } from '~/types/model';
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from '@remix-run/react';
 import type { KeyboardEvent } from 'react';
-import type { ModelInfo } from '~/lib/modules/llm/types';
 import { classNames } from '~/utils/classNames';
 import { MODEL_WHITELIST } from '~/lib/modules/llm/whitelist';
 import type { WhitelistItem } from '~/lib/modules/llm/whitelist';
@@ -12,23 +11,13 @@ interface ModelSelectorProps {
   setModel?: (model: string) => void;
   provider?: ProviderInfo;
   setProvider?: (provider: ProviderInfo) => void;
-  modelList: ModelInfo[];
   providerList: ProviderInfo[];
-  modelLoading?: string;
 }
 
 // Special model name for Auto mode
 const AUTO_MODEL_NAME = 'auto';
 
-export const ModelSelector = ({
-  model,
-  setModel,
-  provider,
-  setProvider,
-  modelList,
-  providerList,
-  modelLoading,
-}: ModelSelectorProps) => {
+export const ModelSelector = ({ model, setModel, provider, setProvider, providerList }: ModelSelectorProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -60,10 +49,7 @@ export const ModelSelector = ({
     // 해당 프로바이더가 활성화되어 있는지 확인
     const providerEnabled = providerList.some((p) => p.name === item.providerName);
 
-    // 해당 모델이 모델 목록에 있는지 확인
-    const modelExists = modelList.some((m) => m.provider === item.providerName && m.name === item.modelName);
-
-    return providerEnabled && modelExists;
+    return providerEnabled;
   });
 
   // Auto 옵션 생성 - OpenRouter의 Claude 모델을 기본값으로 사용
@@ -103,33 +89,48 @@ export const ModelSelector = ({
   useEffect(() => {
     const modelParam = searchParams.get('model');
 
-    if (modelParam && setModel && setProvider && !hasAppliedSearchParam) {
-      // searchParam에서 받은 모델명으로 whitelist에서 찾기
-      const whitelistItem = MODEL_WHITELIST.find((item) => item.modelName === modelParam && item.userSelectable);
+    // searchParam 모델이 없거나 이미 적용되었다면 skip
+    if (!modelParam || !setModel || !setProvider || hasAppliedSearchParam) {
+      return;
+    }
 
-      if (whitelistItem) {
-        // 해당 프로바이더가 활성화되어 있는지 확인
-        const providerEnabled = providerList.some((p) => p.name === whitelistItem.providerName);
+    // 데이터가 준비되었는지 확인 (providerList가 비어있지 않은지)
+    const dataReady = providerList.length > 0;
 
-        // 해당 모델이 모델 목록에 있는지 확인
-        const modelExists = modelList.some(
-          (m) => m.provider === whitelistItem.providerName && m.name === whitelistItem.modelName,
-        );
+    // 데이터가 준비되지 않았다면 나중에 다시 시도하도록 리턴 (hasAppliedSearchParam을 설정하지 않음)
+    if (!dataReady) {
+      return;
+    }
 
-        if (providerEnabled && modelExists) {
-          selectWhitelistItem(whitelistItem);
-          setHasAppliedSearchParam(true);
-        }
+    // 데이터가 준비되었으므로 searchParam 모델 선택을 시도
+    const whitelistItem = MODEL_WHITELIST.find((item) => item.modelName === modelParam && item.userSelectable);
+
+    if (whitelistItem) {
+      // 해당 프로바이더가 활성화되어 있는지 확인
+      const providerEnabled = providerList.some((p) => p.name === whitelistItem.providerName);
+
+      if (providerEnabled) {
+        selectWhitelistItem(whitelistItem);
       }
     }
-  }, [searchParams, setModel, setProvider, providerList, modelList, hasAppliedSearchParam]);
+
+    // 성공하든 실패하든 데이터가 준비된 상태에서 시도했으므로 더 이상 시도하지 않음
+    setHasAppliedSearchParam(true);
+  }, [searchParams, setModel, setProvider, providerList, hasAppliedSearchParam]);
 
   // Set default model if none is selected
   useEffect(() => {
-    // searchParam에서 model을 받았거나 이미 모델이 설정되어 있다면 기본값 설정을 건너뛰기
+    // 데이터가 준비되었는지 확인
+    const dataReady = providerList.length > 0;
     const modelParam = searchParams.get('model');
 
-    if (modelParam || hasAppliedSearchParam || model || provider) {
+    // 데이터가 준비되지 않았거나 searchParam 모델이 있지만 아직 적용되지 않았다면 기본값 설정을 건너뛰기
+    if (!dataReady || (modelParam && !hasAppliedSearchParam)) {
+      return;
+    }
+
+    // 이미 모델이 설정되어 있다면 기본값 설정을 건너뛰기
+    if (model || provider) {
       return;
     }
 
@@ -323,9 +324,7 @@ export const ModelSelector = ({
                 'sm:[&::-webkit-scrollbar-track]:bg-transparent',
               )}
             >
-              {modelLoading === 'all' ? (
-                <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">Loading...</div>
-              ) : displayOptions.length === 0 ? (
+              {displayOptions.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-bolt-elements-textTertiary">No models found</div>
               ) : (
                 displayOptions.map((option, index) => (

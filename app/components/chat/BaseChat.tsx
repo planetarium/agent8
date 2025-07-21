@@ -23,7 +23,6 @@ import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
-import type { ModelInfo } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
@@ -141,10 +140,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     ref,
   ) => {
     const TEXTAREA_MAX_HEIGHT = 200;
-    const [modelList, setModelList] = useState<ModelInfo[]>([]);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
     const [transcript, setTranscript] = useState('');
-    const [isModelLoading, setIsModelLoading] = useState<string | undefined>('all');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(3);
     const repo = useStore(repoStore);
@@ -272,24 +269,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         setRecognition(recognition);
       }
     }, []);
-
-    useEffect(() => {
-      if (typeof window !== 'undefined') {
-        setIsModelLoading('all');
-        fetch('/api/models')
-          .then((response) => response.json())
-          .then((data) => {
-            const typedData = data as { modelList: ModelInfo[] };
-            setModelList(typedData.modelList);
-          })
-          .catch((error) => {
-            console.error('Error fetching model list:', error);
-          })
-          .finally(() => {
-            setIsModelLoading(undefined);
-          });
-      }
-    }, [providerList, provider]);
 
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
       if (sendMessage) {
@@ -881,14 +860,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               <Tooltip.Trigger asChild>
                                 <div>
                                   <ModelSelector
-                                    key={provider?.name + ':' + modelList.length}
                                     model={model}
                                     setModel={setModel}
-                                    modelList={modelList}
                                     provider={provider}
                                     setProvider={setProvider}
                                     providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
-                                    modelLoading={isModelLoading}
                                   />
                                 </div>
                               </Tooltip.Trigger>
