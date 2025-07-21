@@ -5,13 +5,15 @@ import type { LanguageModelV1 } from 'ai';
 
 let createVertex: any = null;
 
+// Preload Google Vertex module on server side only
 if (typeof window === 'undefined') {
-  try {
-    const module = await import('@ai-sdk/google-vertex');
-    createVertex = module.createVertex;
-  } catch (error) {
-    console.warn('Failed to load @ai-sdk/google-vertex:', error);
-  }
+  import('@ai-sdk/google-vertex')
+    .then((module) => {
+      createVertex = module.createVertex;
+    })
+    .catch(() => {
+      // Silently fail - will be handled in getModelInstance
+    });
 }
 
 export default class GoogleVertexProvider extends BaseProvider {
@@ -93,7 +95,7 @@ export default class GoogleVertexProvider extends BaseProvider {
 
   getModelInstance(options: {
     model: string;
-    serverEnv: any;
+    serverEnv?: any;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
   }): LanguageModelV1 {
@@ -104,8 +106,9 @@ export default class GoogleVertexProvider extends BaseProvider {
       throw new Error('Google Vertex AI provider can only be used on the server side');
     }
 
+    // Check if Google Vertex module is loaded
     if (!createVertex) {
-      throw new Error('Google Vertex AI not available - failed to load @ai-sdk/google-vertex package');
+      throw new Error('Google Vertex AI module is still loading. Please try again in a moment.');
     }
 
     const { projectId, location, credentials } = this._getVertexAIConfig({
