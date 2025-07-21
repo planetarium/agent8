@@ -76,6 +76,12 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'x-ai/grok-4',
     userSelectable: true,
   },
+  {
+    label: 'Google Vertex AI',
+    providerName: 'GoogleVertexAI',
+    modelName: 'gemini-2.5-pro',
+    userSelectable: true,
+  },
 ];
 
 /**
