@@ -34,4 +34,6 @@ interface Env {
   VITE_GITLAB_PERSISTENCE_ENABLED: string;
   GITLAB_URL: string;
   GITLAB_TOKEN: string;
+  GOOGLE_CLIENT_EMAIL: string;
+  GOOGLE_PRIVATE_KEY: string;
 }
