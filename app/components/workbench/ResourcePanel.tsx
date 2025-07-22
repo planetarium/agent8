@@ -187,6 +187,96 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
   const [, setEditedResourceItem] = useState<ResourcePoolItem | null>(null);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
 
+  // Replace upload states
+  const [previewDragOver, setPreviewDragOver] = useState(false);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Replace asset function
+
+  const handleReplaceAsset = async (assetKey: string, file: File) => {
+    if (!file || !selectedCategory) {
+      return;
+    }
+
+    // Validate file type
+    const fileExtension = `.${file.name.split('.').pop()?.toLowerCase()}`;
+
+    if (!allowedFileExtensions.includes(fileExtension)) {
+      toast.error(`Unsupported file type: ${fileExtension}`);
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      const uploadId = `replace_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      // Add upload progress tracking
+      setUploadingAssets((prev) => ({
+        ...prev,
+        [uploadId]: {
+          id: uploadId,
+          file,
+          progress: 0,
+          status: 'uploading',
+        },
+      }));
+
+      // Upload the file
+      const result = await uploadFile(file, uploadId);
+
+      if (result && result.url) {
+        // Update the asset with new URL while keeping the same key
+        const updatedAsset = {
+          ...editedAsset!,
+          url: result.url,
+          description: editedAsset!.description || file.name,
+        };
+
+        setEditedAsset(updatedAsset);
+
+        // Update in categories
+        const updatedCategories = { ...categoriesRef.current };
+
+        if (updatedCategories[selectedCategory] && updatedCategories[selectedCategory][assetKey]) {
+          updatedCategories[selectedCategory][assetKey] = updatedAsset;
+          setCategories(updatedCategories);
+          categoriesRef.current = updatedCategories;
+
+          // Save to file
+          const content = JSON.stringify(updatedCategories, null, 2);
+          workbenchStore.setSelectedFile(assetsPath);
+          workbenchStore.setCurrentDocumentContent(content);
+          await workbenchStore.saveCurrentDocument();
+        }
+
+        toast.success('Asset replaced successfully');
+        setSuccessfulUploads((prev) => ({ ...prev, [uploadId]: true }));
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      console.error('Error replacing asset:', error);
+      toast.error('Failed to replace asset');
+    } finally {
+      setIsUploading(false);
+
+      // Clean up upload state after a delay
+      setTimeout(() => {
+        setUploadingAssets((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((key) => {
+            if (key.startsWith('replace_')) {
+              delete updated[key];
+            }
+          });
+
+          return updated;
+        });
+      }, 3000);
+    }
+  };
+
   // 허용되는 파일 확장자 목록
   const allowedFileExtensions = ATTACHMENT_EXTS;
 
@@ -2237,16 +2327,12 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
         <Panel defaultSize={40} minSize={30}>
           <div className="flex flex-col h-full">
             <PanelHeader>
-              <div className="i-ph:pencil-duotone shrink-0" />
-              {isResourcePoolMode
-                ? selectedResourceItem
-                  ? 'Resource Details'
-                  : 'Resource Details'
-                : selectedAsset
-                  ? 'Edit Asset'
-                  : 'Asset Details'}
               {selectedAsset && editedAsset && !isResourcePoolMode && (
                 <div className="ml-auto flex gap-1">
+                  <PanelHeaderButton onClick={() => replaceFileInputRef.current?.click()} disabled={isUploading}>
+                    <div className="i-ph:upload-duotone" />
+                    Replace Asset
+                  </PanelHeaderButton>
                   <PanelHeaderButton onClick={handleAssetUpdate} disabled={isSaving}>
                     <div className="i-ph:floppy-disk-duotone" />
                     Save
@@ -2334,7 +2420,42 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                 <div className="text-center text-bolt-elements-textSecondary">Select an asset to edit</div>
               ) : (
                 <div className="space-y-4 text-bolt-elements-textPrimary">
-                  <div className="bg-bolt-elements-bgSecondary rounded-lg p-4 flex items-center justify-center">
+                  <div
+                    className={`bg-bolt-elements-bgSecondary rounded-lg p-4 flex items-center justify-center relative transition-all duration-200 ${
+                      previewDragOver
+                        ? 'ring-2 ring-bolt-elements-textHighlight bg-bolt-elements-bgTertiary'
+                        : 'hover:bg-bolt-elements-bgTertiary'
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setPreviewDragOver(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setPreviewDragOver(false);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setPreviewDragOver(false);
+
+                      const files = Array.from(e.dataTransfer.files);
+
+                      if (files.length > 0) {
+                        handleReplaceAsset(selectedAsset.key, files[0]);
+                      }
+                    }}
+                  >
+                    {previewDragOver && (
+                      <div className="absolute inset-0 bg-bolt-elements-bgSecondary bg-opacity-90 rounded-lg flex items-center justify-center z-10">
+                        <div className="text-center">
+                          <div className="i-ph:upload-duotone text-4xl text-bolt-elements-textHighlight mx-auto mb-2" />
+                          <p className="text-sm text-bolt-elements-textPrimary font-medium">Drop to replace asset</p>
+                        </div>
+                      </div>
+                    )}
                     {getPreviewUrl(editedAsset) ? (
                       <img
                         src={getPreviewUrl(editedAsset) || ''}
@@ -2404,6 +2525,20 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
                       placeholder="{}"
                     />
                   </div>
+
+                  {/* Hidden file input for replace functionality */}
+                  <input
+                    type="file"
+                    ref={replaceFileInputRef}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+
+                      if (file) {
+                        handleReplaceAsset(selectedAsset.key, file);
+                      }
+                    }}
+                    className="hidden"
+                  />
                 </div>
               )}
             </div>
