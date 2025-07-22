@@ -14,9 +14,10 @@ interface Env {
   DEEPSEEK_API_KEY: string;
   LMSTUDIO_API_BASE_URL: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
-  GOOGLE_APPLICATION_CREDENTIALS_JSON: string;
   GOOGLE_CLOUD_PROJECT: string;
   GOOGLE_CLOUD_LOCATION: string;
+  GOOGLE_CLIENT_EMAIL: string;
+  GOOGLE_PRIVATE_KEY: string;
   MISTRAL_API_KEY: string;
   XAI_API_KEY: string;
   PERPLEXITY_API_KEY: string;
@@ -34,6 +35,4 @@ interface Env {
   VITE_GITLAB_PERSISTENCE_ENABLED: string;
   GITLAB_URL: string;
   GITLAB_TOKEN: string;
-  GOOGLE_CLIENT_EMAIL: string;
-  GOOGLE_PRIVATE_KEY: string;
 }

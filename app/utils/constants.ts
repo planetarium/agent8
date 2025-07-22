@@ -19,27 +19,27 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
     model: 'gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
   FIRST_2D_CHAT: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
   FIRST_3D_CHAT: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
   DEFAULT_MODEL: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'models/gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    model: 'gemini-2.5-flash',
+    provider: PROVIDER_LIST.find((p) => p.name === 'GoogleVertexAI')!,
   },
 };
 

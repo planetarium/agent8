@@ -16,13 +16,12 @@ export default class GoogleVertexProvider extends BaseProvider {
   getApiKeyLink = 'https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal';
 
   config = {
-    baseUrlKey: 'GOOGLE_CLOUD_PROJECT',
     apiTokenKey: 'GOOGLE_PRIVATE_KEY',
   };
 
   staticModels: ModelInfo[] = [
     { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 65535 },
-    { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro - Vertex', provider: 'GoogleVertexAI', maxTokenAllowed: 65535 },
+    { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'GoogleVertexAI', maxTokenAllowed: 65535 },
     { name: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
     { name: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
     { name: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
