@@ -11,6 +11,7 @@ export const SendButton = ({ show, isStreaming, disabled, onClick }: SendButtonP
     <button
       className="inline-flex justify-center items-center py-2 px-[14px] gap-1.2 rounded-[3.2px] border border-solid border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.22)] active:border-[rgba(255,255,255,0.35)] disabled:border-[rgba(255,255,255,0.08)] bg-interactive-gradient hover:bg-interactive-gradient-hovered active:bg-interactive-gradient-pressed disabled:bg-[var(--color-bg-disabled)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
       style={{ backgroundSize: '104% 104%', backgroundPosition: 'center' }}
+      {...(!disabled && { 'data-track': isStreaming ? 'editor-prompt-stop' : 'editor-prompt-create' })}
       disabled={disabled}
       onClick={(event) => {
         event.preventDefault();

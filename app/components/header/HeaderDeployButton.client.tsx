@@ -16,6 +16,7 @@ export function HeaderDeployButton() {
     <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden mr-2 text-sm">
       <Button
         onClick={handleDeploy}
+        data-track="editor-deploy"
         className="px-4 dark:bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-item-backgroundActive flex items-center gap-2"
       >
         Deploy
