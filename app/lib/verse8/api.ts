@@ -4,6 +4,100 @@ import { V8_ACCESS_TOKEN_KEY } from './userAuth';
 
 const logger = createScopedLogger('verse8Api');
 
+export interface VerseData {
+  id: number;
+  verseId: string;
+  verseShortId: string;
+  verseAddress: string | null;
+  title: string;
+  description: string;
+  shortDescription: string;
+  imageUrl: string;
+  coverImageUrl: string | null;
+  playUrl: string;
+  category: string;
+  tag: string[];
+  buildVersion: string;
+  deployTx: string;
+  projectAddress: string;
+  allowRemix: boolean;
+  isMobileSupported: boolean;
+  isPublic: boolean;
+  visibility: string;
+  parentVerseId: string | null;
+  parentVerse: any | null;
+  spinCount: number;
+  realtimeUsers: number;
+  dau: number;
+  mau: number;
+  sessions: number;
+  avgSessionDuration: number;
+  commentSize: number;
+  likeSize: number;
+  shareSize: number;
+  gameSessions: number;
+  featured: boolean;
+  createdAt: string;
+  userUid: string;
+  userDisplayName: string;
+  userHandle: string;
+  userProfilePicture: string;
+  isOwner: boolean;
+}
+
+// Extract project info from verse playUrl
+export const extractProjectInfoFromPlayUrl = (playUrl: string) => {
+  try {
+    const url = new URL(playUrl);
+    const chatId = url.searchParams.get('chatId');
+    const sha = url.searchParams.get('sha') || 'develop';
+
+    if (!chatId) {
+      throw new Error('No chatId found in play URL');
+    }
+
+    // Decode the chatId to get the project path
+    const projectPath = decodeURIComponent(chatId);
+
+    return {
+      projectPath,
+      sha,
+    };
+  } catch {
+    throw new Error('Invalid play URL format');
+  }
+};
+
+export const fetchVerse = async (verseId: string, env?: any): Promise<VerseData | null> => {
+  try {
+    // Use provided env for server-side, import.meta.env for client-side
+    const v8ApiEndpoint = env?.VITE_V8_API_ENDPOINT || import.meta.env.VITE_V8_API_ENDPOINT;
+
+    if (!v8ApiEndpoint) {
+      logger.warn('V8 API endpoint not configured');
+      return null;
+    }
+
+    const response = await fetch(`${v8ApiEndpoint}/v1/verse/verseId?verseId=${encodeURIComponent(verseId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch verse data: ${response.status}`);
+    }
+
+    const verseData: VerseData = await response.json();
+
+    return verseData;
+  } catch (error) {
+    logger.error('Failed to fetch verse data', error);
+    return null;
+  }
+};
+
 export const sendActivityPrompt = async (projectPath: string): Promise<boolean> => {
   try {
     const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;

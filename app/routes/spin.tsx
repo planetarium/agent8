@@ -4,50 +4,35 @@ import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
 import { Button } from '~/components/ui/Button';
 import { createScopedLogger } from '~/utils/logger';
-import { forkProject, getPublicProject } from '~/lib/persistenceGitbase/api.client';
+import { forkProject } from '~/lib/persistenceGitbase/api.client';
+import { fetchVerse, extractProjectInfoFromPlayUrl, type VerseData } from '~/lib/verse8/api';
 
 const logger = createScopedLogger('Spin');
-
-interface ProjectInfo {
-  id: number;
-  name: string;
-  path_with_namespace: string;
-  description?: string;
-  visibility: string;
-  default_branch: string;
-  latest_commit?: {
-    id: string;
-    message: string;
-    created_at: string;
-    author_name: string;
-  } | null;
-}
 
 export default function Spin() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = useState(true);
-  const [project, setProject] = useState<ProjectInfo | null>(null);
+  const [verse, setVerse] = useState<VerseData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
-  const projectPath = searchParams.get('from');
-  const sha = searchParams.get('sha') || 'develop';
+  const fromVerse = searchParams.get('fromVerse');
 
   useEffect(() => {
-    if (!projectPath) {
-      setError('Project path is required');
+    if (!fromVerse) {
+      setError('Verse ID is required');
       setIsLoading(false);
 
       return;
     }
 
-    loadProjectInfo();
-  }, [projectPath]);
+    loadVerseInfo();
+  }, [fromVerse]);
 
-  const loadProjectInfo = async () => {
-    if (!projectPath) {
+  const loadVerseInfo = async () => {
+    if (!fromVerse) {
       return;
     }
 
@@ -55,30 +40,34 @@ export default function Spin() {
       setIsLoading(true);
       setError(null);
 
-      // Use single API call to get public project info
-      const projectResponse = await getPublicProject(projectPath);
+      // Fetch verse data
+      const verseData = await fetchVerse(fromVerse);
 
-      if (!projectResponse.success) {
-        throw new Error(projectResponse.message || 'Project not found or not accessible');
+      if (!verseData) {
+        throw new Error('Verse not found or not accessible');
       }
 
-      const projectData = projectResponse.data;
-      setProject(projectData);
+      // Check if remix is allowed
+      if (!verseData.allowRemix) {
+        throw new Error('This verse does not allow remixing');
+      }
+
+      setVerse(verseData);
       setIsLoading(false);
 
       // Start creating spin immediately after a short delay for better UX
-      setTimeout(() => createSpin(projectData), 500);
+      setTimeout(() => createSpin(verseData), 500);
     } catch (error) {
-      logger.error('Error loading project info:', error);
+      logger.error('Error loading verse info:', error);
 
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load project information';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load verse information';
       setError(errorMessage);
       setIsLoading(false);
     }
   };
 
-  const createSpin = async (projectData: ProjectInfo) => {
-    if (!projectData || !projectPath) {
+  const createSpin = async (verseData: VerseData) => {
+    if (!verseData || !fromVerse) {
       return;
     }
 
@@ -86,42 +75,33 @@ export default function Spin() {
       setIsSpinning(true);
       setError(null);
 
-      // Generate new repository name with better uniqueness
-      const nameWords = projectData.name.split('-');
-      let newRepoName = '';
+      // Extract project path and SHA from playUrl
+      const { projectPath, sha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
 
-      if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
-        newRepoName = nameWords.slice(0, -1).join('-');
-      } else {
-        newRepoName = nameWords.join('-');
-      }
+      // Generate new repository name with better uniqueness
+      const nameWords = verseData.title.split(/[\s-]+/).filter((word) => word.length > 0);
+      let newRepoName = nameWords.join('-').toLowerCase();
 
       // Add timestamp and random suffix for better uniqueness
       const timestamp = Date.now().toString(36).slice(-6);
       const randomSuffix = Math.random().toString(36).slice(-3);
       newRepoName = `${newRepoName}-spin-${timestamp}${randomSuffix}`;
 
-      // Fork the project with source information for tag creation
-      const forkedProject = await forkProject(
-        projectPath,
-        newRepoName,
-        sha,
-        `Spin from ${projectData.name}${projectData.description ? `: ${projectData.description}` : ''}`,
-        {
-          sourceProjectPath: projectPath,
-          sourceSha: sha,
-        },
-      );
+      // Fork the project with verse information
+      const forkedProject = await forkProject(projectPath, newRepoName, sha, `Spin from ${verseData.title}`, {
+        resetEnv: true,
+        fromVerseId: fromVerse,
+      });
 
       if (forkedProject && forkedProject.success) {
         toast.success('Spin created successfully!');
 
-        // Build URL with search params (excluding 'from' and 'sha')
+        // Build URL with search params (excluding 'fromVerse')
         const chatUrl = new URL(`/chat/${forkedProject.project.path}`, window.location.origin);
 
-        // Copy all search params except 'from' and 'sha'
+        // Copy all search params except 'fromVerse'
         for (const [key, value] of searchParams.entries()) {
-          if (key !== 'from' && key !== 'sha') {
+          if (key !== 'fromVerse') {
             chatUrl.searchParams.set(key, value);
           }
         }
@@ -141,10 +121,10 @@ export default function Spin() {
   };
 
   const handleRetry = () => {
-    if (project) {
-      createSpin(project);
+    if (verse) {
+      createSpin(verse);
     } else {
-      loadProjectInfo();
+      loadVerseInfo();
     }
   };
 
@@ -164,10 +144,10 @@ export default function Spin() {
             />
           </div>
           <h1 className="text-2xl font-bold text-bolt-elements-textPrimary mb-2">
-            {isSpinning ? 'Creating a spin' : 'Loading Project'}
+            {isSpinning ? 'Creating a spin' : 'Loading Verse'}
           </h1>
           <p className="text-bolt-elements-textSecondary">
-            {isSpinning ? `Creating your spin of "${project?.name}"...` : 'Gathering project details...'}
+            {isSpinning ? `Creating your spin of "${verse?.title}"...` : 'Gathering verse details...'}
           </p>
         </motion.div>
       </div>

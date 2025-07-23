@@ -2,6 +2,7 @@ import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { unzipCode } from '~/lib/persistenceGitbase/utils';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
+import { fetchVerse, extractProjectInfoFromPlayUrl } from '~/lib/verse8/api';
 
 export const action = withV8AuthUser(forkAction, { checkCredit: true });
 
@@ -9,16 +10,25 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
-  const { projectPath, projectName, description, commitSha, sourceInfo } = (await request.json()) as {
+  const {
+    projectPath,
+    projectName,
+    description,
+    commitSha: requestCommitSha,
+    metadata,
+  } = (await request.json()) as {
     projectPath: string;
     projectName: string;
     description: string;
     commitSha?: string;
-    sourceInfo?: {
-      sourceProjectPath: string;
-      sourceSha: string;
+    metadata?: {
+      resetEnv?: boolean;
+      fromVerseId?: string;
     };
   };
+
+  let commitSha = requestCommitSha;
+  let verseData: any = null;
 
   const email = user.email;
 
@@ -27,6 +37,70 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
   }
 
   const gitlabService = new GitlabService(env);
+
+  // Check fork permissions
+  try {
+    // Check if user owns the project
+    const isOwner = await gitlabService.isProjectOwner(email, projectPath);
+
+    if (!isOwner) {
+      // If not the owner, check verse permissions
+      if (!metadata?.fromVerseId) {
+        return json(
+          {
+            success: false,
+            message: 'You can only fork your own projects or projects with verse remix permission',
+          },
+          { status: 403 },
+        );
+      }
+
+      // Fetch and validate verse data
+      verseData = await fetchVerse(metadata.fromVerseId, env);
+
+      if (!verseData) {
+        return json({ success: false, message: 'Verse not found or not accessible' }, { status: 400 });
+      }
+
+      // Check if remix is allowed
+      if (!verseData.allowRemix) {
+        return json({ success: false, message: 'This verse does not allow remixing' }, { status: 403 });
+      }
+
+      // Extract and validate project info from verse playUrl
+      const { projectPath: verseProjectPath, sha: verseSha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
+
+      // Validate that the requested projectPath matches the verse's project
+      if (projectPath !== verseProjectPath) {
+        return json({ success: false, message: 'Project path does not match verse project' }, { status: 400 });
+      }
+
+      // If commitSha is provided, validate it matches the verse's SHA
+      if (commitSha && commitSha !== verseSha) {
+        return json({ success: false, message: 'Commit SHA does not match verse version' }, { status: 400 });
+      }
+
+      // Use verse SHA if no commitSha provided
+      if (!commitSha) {
+        commitSha = verseSha;
+      }
+    } else if (metadata?.fromVerseId) {
+      // If owner is forking their own project with verse metadata, still validate verse
+      verseData = await fetchVerse(metadata.fromVerseId, env);
+
+      if (verseData) {
+        const { sha: verseSha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
+
+        // Use verse SHA if no commitSha provided
+        if (!commitSha) {
+          commitSha = verseSha;
+        }
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Permission check failed';
+    return json({ success: false, message: errorMessage }, { status: 400 });
+  }
 
   try {
     let actualCommitSha = commitSha;
@@ -47,29 +121,6 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
       }
     }
 
-    // Extract verse information if this is a spin fork
-    let verseInfo: string | null = null;
-
-    if (sourceInfo) {
-      try {
-        const envContent = await gitlabService.getFileContent(
-          sourceInfo.sourceProjectPath,
-          '.env',
-          sourceInfo.sourceSha,
-        );
-
-        if (envContent) {
-          const verseMatch = envContent.match(/VITE_AGENT8_VERSE\s*=\s*(.+)/);
-
-          if (verseMatch && verseMatch[1]) {
-            verseInfo = verseMatch[1].trim();
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to extract verse information:', error);
-      }
-    }
-
     // 1. 원본 레포지토리에서 특정 커밋 기준으로 코드 다운로드
     const codeBuffer = await gitlabService.downloadCode(projectPath, actualCommitSha);
 
@@ -87,34 +138,32 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
       .filter(([_, file]) => file && (file as any).content)
       .map(([path, file]) => ({
         path,
-        content: path.endsWith('.env') ? '' : (file as any).content,
+        content: metadata?.resetEnv && path.endsWith('.env') ? '' : (file as any).content,
       }));
 
     // 6. 새 프로젝트에 파일 커밋
     await gitlabService.commitFiles(newProject.id, filesToCommit, `Fork from ${projectPath}`, 'develop');
 
     // 7. Create tags for tracking fork origin and verse information
-    if (sourceInfo) {
-      try {
-        // Create fork-from tag
-        const forkFromTag = `fork-from-${sourceInfo.sourceProjectPath.replace(/[^a-zA-Z0-9-]/g, '-')}`;
-        await gitlabService.createTag(
-          newProject.id,
-          forkFromTag,
-          'develop',
-          `Forked from ${sourceInfo.sourceProjectPath} at ${sourceInfo.sourceSha}`,
-        );
+    try {
+      // Create fork-from tag
+      const forkFromTag = `fork-from-${projectPath.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+      await gitlabService.createTag(
+        newProject.id,
+        forkFromTag,
+        'develop',
+        `Forked from ${projectPath} at ${commitSha}`,
+      );
 
-        // Create verse-from tag if verse information is available
-        if (verseInfo) {
-          const verseFromTag = `verse-from-${verseInfo.replace(/[^a-zA-Z0-9-]/g, '-')}`;
-          await gitlabService.createTag(newProject.id, verseFromTag, 'develop', `Original verse: ${verseInfo}`);
-        }
-      } catch (tagError) {
-        console.warn('Failed to create tags for fork tracking:', tagError);
-
-        // Don't fail the fork operation if tag creation fails
+      // Create verse-spin tag if this is a verse-based fork
+      if (verseData?.verseId) {
+        const verseSpinTag = `verse-spin-${verseData.verseId.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+        await gitlabService.createTag(newProject.id, verseSpinTag, 'develop', `Spun from verse: ${verseData.verseId}`);
       }
+    } catch (tagError) {
+      console.warn('Failed to create tags for fork tracking:', tagError);
+
+      // Don't fail the fork operation if tag creation fails
     }
 
     return json({

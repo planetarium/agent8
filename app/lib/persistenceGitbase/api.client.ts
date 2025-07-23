@@ -311,9 +311,9 @@ export const forkProject = async (
   projectName: string,
   commitSha: string | undefined,
   description: string,
-  sourceInfo?: {
-    sourceProjectPath: string;
-    sourceSha: string;
+  metadata?: {
+    resetEnv?: boolean;
+    fromVerseId?: string;
   },
 ) => {
   const response = await axios.post('/api/gitlab/fork', {
@@ -321,7 +321,7 @@ export const forkProject = async (
     projectName,
     commitSha,
     description,
-    sourceInfo,
+    metadata,
   });
 
   return response.data;

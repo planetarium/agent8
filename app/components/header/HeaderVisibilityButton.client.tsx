@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button } from '~/components/ui/Button';
-import { Dropdown, DropdownItem, DropdownSeparator } from '~/components/ui/Dropdown';
+import { Dropdown, DropdownSeparator } from '~/components/ui/Dropdown';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { classNames } from '~/utils/classNames';
 import { repoStore } from '~/lib/stores/repo';
 import axios from 'axios';
@@ -13,8 +14,10 @@ export function HeaderVisibilityButton() {
   const [visibility, setVisibility] = useState<VisibilityType>('private');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [currentUrl, setCurrentUrl] = useState('');
+  const [copyButtonText, setCopyButtonText] = useState('Copy');
 
-  // Load current visibility on mount
+  // Load current visibility on mount and set current URL
   useEffect(() => {
     const loadVisibility = async () => {
       if (!repo.path) {
@@ -35,6 +38,11 @@ export function HeaderVisibilityButton() {
         setIsInitialLoading(false);
       }
     };
+
+    // Set share URL
+    if (repo.path) {
+      setCurrentUrl(`https://verse8.io/creator/editor?chat=${encodeURIComponent(repo.path)}`);
+    }
 
     loadVisibility();
   }, [repo.path]);
@@ -64,6 +72,24 @@ export function HeaderVisibilityButton() {
     }
   };
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      setCopyButtonText('Copied!');
+      setTimeout(() => {
+        setCopyButtonText('Copy');
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy link:', error);
+      setCopyButtonText('Failed');
+      setTimeout(() => {
+        setCopyButtonText('Copy');
+      }, 2000);
+    }
+  };
+
+  const isCopyDisabled = visibility === 'private' || isLoading || isInitialLoading;
+
   return (
     <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden mr-2 text-sm">
       <Dropdown
@@ -85,7 +111,13 @@ export function HeaderVisibilityButton() {
                     visibility === 'public' ? 'bg-green-500' : 'bg-orange-500',
                   )}
                 />
-                {visibility === 'public' ? 'Public' : 'Private'}
+                <span
+                  className={classNames(
+                    visibility === 'private' ? 'text-bolt-elements-textSecondary' : 'text-bolt-elements-textPrimary',
+                  )}
+                >
+                  Share this chat
+                </span>
                 <div className="i-ph:caret-down text-xs" />
               </>
             )}
@@ -93,11 +125,50 @@ export function HeaderVisibilityButton() {
         }
         align="end"
       >
-        <DropdownItem
-          onSelect={() => handleVisibilityChange('public')}
+        {/* Copy Link Section */}
+        <div className="px-3 pt-2 pb-2 border-b border-bolt-elements-borderColor">
+          <div className="text-sm font-medium mb-2 text-bolt-elements-textPrimary">Share Link</div>
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              value={currentUrl}
+              readOnly
+              className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-bolt-elements-textSecondary"
+            />
+            <Button
+              onClick={handleCopyLink}
+              className={classNames(
+                'px-3 py-1 text-xs',
+                visibility === 'public' && !isCopyDisabled && copyButtonText === 'Copy'
+                  ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                  : '',
+                copyButtonText === 'Copied!' ? 'bg-green-500 hover:bg-green-600 text-white' : '',
+                copyButtonText === 'Failed' ? 'bg-red-500 hover:bg-red-600 text-white' : '',
+              )}
+              disabled={isCopyDisabled}
+            >
+              {copyButtonText}
+            </Button>
+          </div>
+          {visibility === 'private' && (
+            <div className="text-xs text-bolt-elements-textSecondary mt-1">Make chat public to enable sharing</div>
+          )}
+        </div>
+
+        <DropdownMenu.Item
+          onSelect={(e) => {
+            e.preventDefault();
+            handleVisibilityChange('public');
+          }}
           disabled={isLoading || isInitialLoading}
           className={classNames(
-            'flex flex-col items-start gap-1 text-left w-full',
+            'relative flex flex-col items-start gap-1 text-left w-full px-3 py-2 rounded-lg text-sm',
+            'text-bolt-elements-textPrimary',
+            (!isLoading &&
+              !isInitialLoading &&
+              'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary cursor-pointer') ||
+              '',
+            'transition-colors outline-none',
             visibility === 'public' ? 'bg-bolt-elements-background-depth-3' : '',
           )}
         >
@@ -107,17 +178,26 @@ export function HeaderVisibilityButton() {
             {visibility === 'public' && <div className="i-ph:check text-accent ml-auto" />}
           </div>
           <div className="text-xs text-bolt-elements-textSecondary text-left w-full">
-            Code is publicly accessible, history is viewable, spin is enabled
+            Chat is publicly accessible and shareable
           </div>
-        </DropdownItem>
+        </DropdownMenu.Item>
 
         <DropdownSeparator />
 
-        <DropdownItem
-          onSelect={() => handleVisibilityChange('private')}
+        <DropdownMenu.Item
+          onSelect={(e) => {
+            e.preventDefault();
+            handleVisibilityChange('private');
+          }}
           disabled={isLoading || isInitialLoading}
           className={classNames(
-            'flex flex-col items-start gap-1 text-left w-full',
+            'relative flex flex-col items-start gap-1 text-left w-full px-3 py-2 rounded-lg text-sm',
+            'text-bolt-elements-textPrimary',
+            (!isLoading &&
+              !isInitialLoading &&
+              'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary cursor-pointer') ||
+              '',
+            'transition-colors outline-none',
             visibility === 'private' ? 'bg-bolt-elements-background-depth-3' : '',
           )}
         >
@@ -127,9 +207,9 @@ export function HeaderVisibilityButton() {
             {visibility === 'private' && <div className="i-ph:check text-accent ml-auto" />}
           </div>
           <div className="text-xs text-bolt-elements-textSecondary text-left w-full">
-            Code is private, history is hidden, remix is disabled
+            Chat is private and not shareable
           </div>
-        </DropdownItem>
+        </DropdownMenu.Item>
       </Dropdown>
     </div>
   );
