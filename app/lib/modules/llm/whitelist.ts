@@ -51,13 +51,13 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
   },
   {
     label: 'Gemini 2.5 Flash',
-    providerName: 'GoogleVertexAI',
+    providerName: 'Google',
     modelName: 'gemini-2.5-flash',
     userSelectable: false,
   },
   {
     label: 'Gemini 2.5 Pro',
-    providerName: 'GoogleVertexAI',
+    providerName: 'Google',
     modelName: 'gemini-2.5-pro',
     userSelectable: true,
   },

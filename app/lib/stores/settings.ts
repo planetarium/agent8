@@ -82,7 +82,7 @@ const getInitialProviderSettings = (): ProviderSetting => {
       ...provider,
       settings: {
         // Only enable by default, disable all others
-        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'xAI', 'GoogleVertexAI'].includes(provider.name),
+        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'Google', 'xAI'].includes(provider.name),
       },
     };
   });
