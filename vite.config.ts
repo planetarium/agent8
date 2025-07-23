@@ -198,7 +198,7 @@ function chrome129IssuePlugin() {
 }
 
 function accessLogPlugin() {
-  // Simple inline logger to avoid import issues in vite config
+  // Simple inline logger for development environment
   const shouldSkip = (url: string) => {
     return (
       /\.(js|css|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/.test(url) ||
@@ -231,7 +231,7 @@ function accessLogPlugin() {
           const responseTime = Date.now() - startTime;
           const statusCode = res.statusCode;
 
-          // Log access request
+          // Log access request (development environment - console only)
           if (!shouldSkip(url)) {
             const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
             const message = `${method} ${url} ${statusCode} ${responseTime}ms - ${ip} - "${userAgent}"`;
