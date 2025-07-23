@@ -102,6 +102,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             <div className="flex items-center mr-3">
               <button
                 className="flex items-center justify-center p-1.5 rounded-full bg-cyan-700 hover:bg-cyan-600 transition-colors"
+                {...(!isProcessing && { 'data-track': 'editor-task-back' })}
                 onClick={async () => {
                   await workbenchStore.commitModifiedFiles();
                   lastActionStore.set({ action: 'LOAD' });
@@ -173,6 +174,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
               <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
                 <button
                   className="px-4 py-2 my-2 border border-zinc-700 bg-zinc-800 text-white rounded-md hover:bg-zinc-700 active:bg-zinc-900 transition-colors shadow-sm font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-track="editor-task-remove"
                   onClick={async () => {
                     setIsLoading(true);
 
@@ -219,6 +221,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                   {(mergeStatus === 'can_be_merged' && (
                     <button
                       className="px-6 py-2 bg-cyan-600 text-white rounded-[4px] hover:bg-cyan-500 active:bg-cyan-700 transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      {...(!isConfirming && !isProcessing && { 'data-track': 'editor-task-confirm' })}
                       onClick={async () => {
                         setIsConfirming(true);
                         setIsLoading(true);

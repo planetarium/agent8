@@ -49,6 +49,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
       <div className="flex items-center ml-3 flex-shrink-0 gap-1.5">
         <button
           className="px-4 py-1.5 bg-transparent text-[rgba(63,210,232,0.9)] rounded-md hover:bg-[rgba(63,210,232,0.15)] transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          {...(!isLoading && { 'data-track': 'editor-task-close' })}
           onClick={handleClose}
           disabled={isLoading}
         >
@@ -75,6 +76,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
         </button>
         <button
           className="px-4 py-1.5 bg-[rgba(63,210,232,0.8)] text-white rounded-md hover:bg-[rgba(63,210,232,0.9)] active:bg-[rgba(63,210,232,1)] transition-colors shadow-sm font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(63,210,232,0.5)] focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          {...(!isLoading && { 'data-track': 'editor-task-continue' })}
           onClick={handleContinue}
           disabled={isLoading}
         >

@@ -480,9 +480,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
                     {connectionState === 'reconnecting' ? (
                       <>
-                        <div className="animate-spin w-6 h-6 mb-2 mx-auto">
-                          <div className="i-ph:spinner" />
-                        </div>
+                        <div className="w-5 h-5 mx-auto mb-2 border-2 border-bolt-elements-button-primary-background border-t-transparent rounded-full animate-spin" />
                         <div className="text-sm text-bolt-elements-textPrimary">Reconnecting to Server...</div>
                       </>
                     ) : connectionState === 'failed' ? (
@@ -524,9 +522,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
-                    <div className="animate-spin w-6 h-6 mb-2 mx-auto">
-                      <div className="i-ph:spinner" />
-                    </div>
+                    <div className="w-5 h-5 mx-auto mb-2 border-2 border-bolt-elements-button-primary-background border-t-transparent rounded-full animate-spin" />
                     <div className="text-sm text-bolt-elements-textPrimary">Preparing Workbench...</div>
                   </div>
                 </div>
