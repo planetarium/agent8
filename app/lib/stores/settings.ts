@@ -168,7 +168,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'All-in-one',
         url: 'https://mcp.verse8.io/mcp',
         enabled: false,
-        version: 1,
+        version: 2,
         v8AuthIntegrated: false,
         description: 'All-in-one server that integrates all MCP tools.',
       },
@@ -176,40 +176,40 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Image',
         url: 'https://mcp-image.verse8.io/mcp',
         enabled: true,
-        version: 1,
-        v8AuthIntegrated: false,
+        version: 2,
+        v8AuthIntegrated: true,
         description: 'Create 2D game assets in various styles',
       },
       {
         name: 'Cinematic',
         url: 'https://mcp-cinematic.verse8.io/mcp',
         enabled: true,
-        version: 1,
-        v8AuthIntegrated: false,
+        version: 2,
+        v8AuthIntegrated: true,
         description: 'Turn text into styled game cutscenes',
       },
       {
         name: 'Audio',
         url: 'https://mcp-audio.verse8.io/mcp',
         enabled: true,
-        version: 1,
-        v8AuthIntegrated: false,
+        version: 2,
+        v8AuthIntegrated: true,
         description: 'Generate music and sound effects fast',
       },
       {
         name: 'Skybox',
         url: 'https://mcp-skybox.verse8.io/mcp',
         enabled: true,
-        version: 1,
-        v8AuthIntegrated: false,
+        version: 2,
+        v8AuthIntegrated: true,
         description: 'Make 360° environments for games or VR',
       },
       {
         name: 'UI',
         url: 'https://mcp-ui.verse8.io/mcp',
         enabled: true,
-        version: 1,
-        v8AuthIntegrated: false,
+        version: 2,
+        v8AuthIntegrated: true,
         description: 'Design CSS styles for game interfaces',
       },
     ];
@@ -228,7 +228,7 @@ const getInitialMCPServers = (): MCPServer[] => {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SERVERS);
     const defaultServers = getDefaultMCPServers();
 
-    if (!stored || stored === '[]' || stored === '""' || stored.indexOf('version') === -1) {
+    if (!stored || stored === '[]' || stored === '""' || stored.indexOf('"version":2') === -1) {
       // No stored servers, use defaults
       localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers));
 
