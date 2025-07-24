@@ -34,6 +34,7 @@ import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
+import { useWorkbenchStore } from '~/lib/hooks/useWorkbenchStore';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 const MAX_ATTACHMENTS = 10;
@@ -145,6 +146,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(3);
     const repo = useStore(repoStore);
+    const workbench = useWorkbenchStore();
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
@@ -624,13 +626,37 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         autoFixChance={autoFixChance}
                         alert={actionAlert}
                         clearAlert={() => clearAlert?.()}
-                        postMessage={(message, isAutoFix = false) => {
+                        postMessage={async (message, isAutoFix = false) => {
                           if (isStreaming) {
                             return;
                           }
 
                           if (isAutoFix && lastActionStore.get().action !== 'SEND_MESSAGE') {
                             return;
+                          }
+
+                          // Close preview by aborting any running shell command
+                          try {
+                            const shell = workbench.boltTerminal;
+                            await shell.ready;
+
+                            const currentState = shell.executionState.get();
+
+                            if (currentState?.active && currentState.abort) {
+                              currentState.abort();
+                            }
+
+                            // Also switch to code view
+                            if (workbench.currentView.get() === 'preview') {
+                              workbench.currentView.set('code');
+                            }
+                          } catch (error) {
+                            console.error('Failed to abort shell command:', error);
+
+                            // Fallback to just switching view
+                            if (workbench.currentView.get() === 'preview') {
+                              workbench.currentView.set('code');
+                            }
                           }
 
                           sendMessage?.({} as any, message);

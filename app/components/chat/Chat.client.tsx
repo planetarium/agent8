@@ -348,7 +348,17 @@ export const ChatImpl = memo(
         if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
           shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
         } else {
-          shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
+          if (workbench.hasEslintFile()) {
+            shell.executeCommand(
+              Date.now().toString(),
+              'pnpm update && pnpm lint && npx -y @agent8/deploy --preview && pnpm run dev',
+            );
+          } else {
+            shell.executeCommand(
+              Date.now().toString(),
+              'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
+            );
+          }
         }
 
         break;

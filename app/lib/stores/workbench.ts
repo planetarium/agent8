@@ -932,7 +932,14 @@ export class WorkbenchStore {
       const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
 
       if (buildResult?.exitCode === 2) {
+        const eslintOutput = await this.checkEslint();
+
+        if (eslintOutput) {
+          buildResult.output += '\n\n' + eslintOutput;
+        }
+
         this.#handleBuildError(buildResult.output);
+
         return;
       }
 
@@ -1004,6 +1011,66 @@ export class WorkbenchStore {
       logger.error('[Publish] Error sending message to parent:', error);
 
       // Communication failure doesn't affect deployment success
+    }
+  }
+
+  hasEslintFile(): boolean {
+    const files = this.files.get();
+    const container = this.#currentContainerAtom.get();
+
+    if (!container) {
+      return false;
+    }
+
+    const eslintConfigPath = path.join(container.workdir, 'eslint.config.js');
+
+    return files[eslintConfigPath]?.type === 'file';
+  }
+
+  async checkEslint(): Promise<string> {
+    console.log('checkEslint');
+
+    if (!this.hasEslintFile()) {
+      return '';
+    }
+
+    const container = await this.container;
+    const shell = this.boltTerminal;
+
+    await shell.ready;
+
+    // Interrupt any currently running shell command
+    const currentState = shell.executionState.get();
+
+    if (currentState?.active && currentState.abort) {
+      currentState.abort();
+    }
+
+    try {
+      // Run eslint and output to .eslint.out
+      await this.#runShellCommand(shell, 'pnpm lint > .eslint.out');
+
+      // Read the output file
+      const eslintOutputPath = '.eslint.out';
+      let eslintOutput = '';
+
+      try {
+        eslintOutput = await container.fs.readFile(eslintOutputPath, 'utf-8');
+      } catch (error) {
+        logger.error('[checkEslint] Failed to read .eslint.out:', error);
+      }
+
+      // Delete the output file
+      try {
+        await container.fs.rm(eslintOutputPath);
+      } catch (error) {
+        logger.warn('[checkEslint] Failed to delete .eslint.out:', error);
+      }
+
+      return eslintOutput;
+    } catch (error) {
+      logger.error('[checkEslint] Error running eslint:', error);
+      return `Error running eslint: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 }
