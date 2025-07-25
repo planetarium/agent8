@@ -67,21 +67,6 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
   }
 }
 
-// Convenience function for chat-related errors
-export async function sendChatErrorNotification(
-  message: string,
-  error?: Error | string,
-  additionalContext?: string,
-): Promise<void> {
-  const context = `Chat - ${additionalContext || 'Unknown context'}`;
-
-  await sendErrorNotification({
-    message,
-    error,
-    context,
-  });
-}
-
 // Convenience function for sending toast message errors with stack trace context
 export async function sendChatErrorWithToastMessage(
   toastMessage: string,
