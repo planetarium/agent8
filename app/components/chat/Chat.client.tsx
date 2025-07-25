@@ -57,6 +57,7 @@ import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
+import { handleChatError } from '~/utils/errorNotification';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -412,8 +413,11 @@ export const ChatImpl = memo(
           action: 'request',
           error: e.message,
         });
-        toast.error(
+
+        handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+          e,
+          'useChat onError callback',
         );
         setFakeLoading(false);
       },
@@ -537,7 +541,11 @@ export const ChatImpl = memo(
           reloadTaskBranches(repoStore.get().path);
         });
       } catch (e) {
-        toast.error('The code commit has failed. You can download the code and restore it.');
+        handleChatError(
+          'The code commit has failed. You can download the code and restore it.',
+          e instanceof Error ? e : String(e),
+          'handleCommit',
+        );
         console.log(e);
       }
     };
@@ -606,7 +614,7 @@ export const ChatImpl = memo(
       }
 
       if (chatStarted && Object.keys(files).length === 0) {
-        toast.error('Files are not loaded. Please try again later.');
+        handleChatError('Files are not loaded. Please try again later.', undefined, 'sendMessage - files check');
         return;
       }
 
@@ -737,7 +745,7 @@ export const ChatImpl = memo(
               const { success, message, data } = await createTaskBranch(projectPath);
 
               if (!success) {
-                toast.error(message);
+                handleChatError(message, undefined, 'createTaskBranch - starter template');
                 return;
               }
 
@@ -843,9 +851,14 @@ export const ChatImpl = memo(
             errorMessage !== 'Not Found Template' &&
             errorMessage !== 'Not Found Template Data'
           ) {
-            toast.error(errorMessage);
+            handleChatError(errorMessage, error instanceof Error ? error : String(error), 'starter template selection');
           } else {
-            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            handleChatError(
+              'Failed to import starter template\nRetry again after a few minutes.',
+              error instanceof Error ? error : String(error),
+              'starter template selection',
+              'warning',
+            );
           }
 
           setChatStarted(false);
@@ -887,7 +900,7 @@ export const ChatImpl = memo(
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
 
             if (!success) {
-              toast.error(message);
+              handleChatError(message, undefined, 'createTaskBranch - subsequent message');
               return;
             }
 
@@ -919,7 +932,7 @@ export const ChatImpl = memo(
         logger.error('Error sending message:', error);
 
         if (error instanceof Error) {
-          toast.error('Error:' + error?.message);
+          handleChatError('Error:' + error?.message, error, 'sendMessage function');
         }
       }
     };
@@ -1033,7 +1046,11 @@ export const ChatImpl = memo(
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
         logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-        toast.error(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`);
+        handleChatError(
+          `Failed to import ${source.type === 'github' ? 'repository' : 'project'}`,
+          error instanceof Error ? error : String(error),
+          'handleTemplateImport',
+        );
       } finally {
         setFakeLoading(false);
       }
@@ -1051,7 +1068,7 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        toast.error('No commit hash found');
+        handleChatError('No commit hash found', undefined, 'handleFork - commit hash validation');
         return;
       }
 
@@ -1078,12 +1095,16 @@ export const ChatImpl = memo(
           toast.success('Forked project successfully');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          toast.error('Failed to fork project');
+          handleChatError('Failed to fork project', undefined, 'handleFork - fork result check');
         }
       } catch (error) {
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
-        toast.error('Failed to fork project');
+        handleChatError(
+          'Failed to fork project',
+          error instanceof Error ? error : String(error),
+          'handleFork - catch block',
+        );
         logger.error('Error forking project:', error);
       }
     };
@@ -1095,7 +1116,7 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        toast.error('No commit hash found');
+        handleChatError('No commit hash found', undefined, 'handleRevert - commit hash validation');
         return;
       }
 
@@ -1110,7 +1131,7 @@ export const ChatImpl = memo(
       const commitHash = messages[messageIndex + 1].id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        toast.error('No commit hash found');
+        handleChatError('No commit hash found', undefined, 'handleRetry - commit hash validation');
         return;
       }
 
@@ -1121,7 +1142,7 @@ export const ChatImpl = memo(
         revertTo(parentCommitHash);
         setInput(stripMetadata(extractTextContent(message)));
       } else {
-        toast.error('No parent commit hash found');
+        handleChatError('No parent commit hash found', undefined, 'handleRetry - parent commit check');
       }
     };
 
@@ -1130,7 +1151,7 @@ export const ChatImpl = memo(
         const commitHash = message.id?.split('-').pop();
 
         if (!commitHash || !isCommitHash(commitHash)) {
-          toast.error('Invalid commit information');
+          handleChatError('Invalid commit information', undefined, 'handleViewDiff - commit validation');
           return;
         }
 
@@ -1140,7 +1161,11 @@ export const ChatImpl = memo(
         workbench.diffCommitHash.set(commitHash);
       } catch (error) {
         console.error('Diff view error:', error);
-        toast.error('Error displaying diff view');
+        handleChatError(
+          'Error displaying diff view',
+          error instanceof Error ? error : String(error),
+          'handleViewDiff - catch block',
+        );
       }
     };
 
