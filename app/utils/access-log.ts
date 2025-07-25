@@ -20,6 +20,7 @@ export interface AccessLogData {
   ip: string;
   userAgent: string;
   serviceName?: string;
+  requestId?: string;
 }
 
 // Process query parameters with length limits

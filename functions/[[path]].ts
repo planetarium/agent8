@@ -28,6 +28,13 @@ export const onRequest = async (context: any) => {
     request.headers.get('X-Real-IP') ||
     'unknown';
 
+  // Get or generate request ID
+  const requestId =
+    request.headers.get('CF-Ray') ||
+    request.headers.get('CF-Request-ID') ||
+    request.headers.get('X-Request-ID') ||
+    crypto.randomUUID();
+
   let response: Response;
   let statusCode = 200;
 
@@ -77,6 +84,7 @@ export const onRequest = async (context: any) => {
       ip,
       userAgent: userAgent || 'unknown',
       serviceName: getServiceName(),
+      requestId,
     },
     context.env,
   ).catch((error) => {

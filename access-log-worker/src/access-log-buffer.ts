@@ -12,6 +12,7 @@ export interface AccessLogData {
   ip: string;
   userAgent: string;
   serviceName?: string;
+  requestId?: string;
 }
 
 interface BigQueryResponse {
@@ -169,6 +170,7 @@ export class AccessLogBuffer extends DurableObject {
             client_ip: log.ip,
             ua: log.userAgent,
             query: log.query,
+            request_id: log.requestId,
           },
         })),
       };
