@@ -35,4 +35,6 @@ interface Env {
   VITE_GITLAB_PERSISTENCE_ENABLED: string;
   GITLAB_URL: string;
   GITLAB_TOKEN: string;
+  SLACK_ALERT_BOT_TOKEN: string;
+  SLACK_ALERT_CHANNEL_ID: string;
 }

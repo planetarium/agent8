@@ -13,6 +13,7 @@ import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast } from 'react-toastify';
+import { handleChatError } from '~/utils/errorNotification';
 
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
@@ -336,7 +337,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const uploadFileAndAddToAttachmentList = async (file: File) => {
       try {
         if (attachmentList?.length >= MAX_ATTACHMENTS) {
-          toast.error(`Attachments are limited to ${MAX_ATTACHMENTS} files.`);
+          handleChatError(
+            `Attachments are limited to ${MAX_ATTACHMENTS} files.`,
+            undefined,
+            'uploadFileAndAddToAttachmentList - attachment limit',
+          );
           return;
         }
 
@@ -349,7 +354,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
 
         if (!ATTACHMENT_EXTS.includes(fileExt)) {
-          toast.error('Not allowed file type');
+          handleChatError(
+            'Not allowed file type',
+            undefined,
+            'uploadFileAndAddToAttachmentList - file type validation',
+          );
           return;
         }
 
@@ -369,7 +378,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         } else if (videoExtensions.includes(fileExt)) {
           fileType = 'video';
         } else {
-          toast.error('Only media files are allowed');
+          handleChatError(
+            'Only media files are allowed',
+            undefined,
+            'uploadFileAndAddToAttachmentList - media file validation',
+          );
           return;
         }
 
@@ -463,7 +476,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           );
 
           console.error('Error uploading file:', error);
-          toast.error(`Upload failed: ${error.message}`);
+          handleChatError(`Upload failed: ${error.message}`, error, 'uploadFileAndAddToAttachmentList - upload error');
 
           // 3초 후 에러 상태의 첨부 파일 제거
           setTimeout(() => {
@@ -472,7 +485,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
       } catch (error: any) {
         console.error('Error handling file:', error);
-        toast.error(`Upload failed: ${error.message}`);
+        handleChatError(`Upload failed: ${error.message}`, error, 'uploadFileAndAddToAttachmentList - general error');
       }
     };
 
