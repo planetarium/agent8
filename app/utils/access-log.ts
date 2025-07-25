@@ -14,7 +14,7 @@ export const logger = {
 export interface AccessLogData {
   method: string;
   path: string;
-  query: Record<string, any> | null;
+  query: string | null;
   statusCode: number;
   responseTime: number;
   ip: string;

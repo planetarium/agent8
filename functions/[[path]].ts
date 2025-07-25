@@ -71,7 +71,7 @@ export const onRequest = async (context: any) => {
     {
       method,
       path,
-      query: url.search ? Object.fromEntries(new URLSearchParams(url.search)) : null,
+      query: url.search || null,
       statusCode,
       responseTime,
       ip,
