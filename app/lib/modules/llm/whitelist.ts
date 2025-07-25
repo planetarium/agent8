@@ -22,12 +22,12 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     label: 'Claude 4 Sonnet',
     providerName: 'Anthropic',
     modelName: 'claude-sonnet-4-20250514',
-    userSelectable: true,
   },
   {
-    label: 'Claude 3.7 Sonnet (OpenRouter)',
+    label: 'Claude 4 Sonnet',
     providerName: 'OpenRouter',
-    modelName: 'anthropic/claude-3.7-sonnet',
+    modelName: 'anthropic/claude-sonnet-4',
+    userSelectable: true,
   },
   {
     label: 'Claude 3.7 Sonnet',
@@ -45,26 +45,20 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'openai/o4-mini',
   },
   {
-    label: 'Gemini 2.5 Pro Preview',
+    label: 'Gemini 2.5 Pro',
     providerName: 'OpenRouter',
-    modelName: 'google/gemini-2.5-pro-preview',
+    modelName: 'google/gemini-2.5-pro',
   },
   {
     label: 'Gemini 2.5 Flash',
-    providerName: 'Google',
-    modelName: 'gemini-2.5-flash',
-    userSelectable: false,
+    providerName: 'OpenRouter',
+    modelName: 'google/gemini-2.5-flash',
   },
   {
     label: 'Gemini 2.5 Pro',
     providerName: 'Google',
     modelName: 'gemini-2.5-pro',
     userSelectable: true,
-  },
-  {
-    label: 'Gemini 2.0 Flash',
-    providerName: 'OpenRouter',
-    modelName: 'google/gemini-2.0-flash-001',
   },
   {
     label: 'Gemini 2.5 Flash',

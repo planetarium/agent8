@@ -225,7 +225,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         });
         result.mergeIntoDataStream(dataStream);
       },
-      onError: (error: any) => `Custom error: ${error.message}`,
+      onError: (error: any) => {
+        const message = error.message;
+
+        if (message.includes('Overloaded')) {
+          return `Custom error: ${message}. Please try changing the model.`;
+        }
+
+        return `Custom error: ${message}`;
+      },
     }).pipeThrough(
       new TransformStream({
         transform: (chunk, controller) => {
