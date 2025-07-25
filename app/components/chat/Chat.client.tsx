@@ -417,7 +417,7 @@ export const ChatImpl = memo(
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           e,
-          'useChat onError callback',
+          'useChat onError callback, model: ' + model + ', provider: ' + provider.name,
         );
         setFakeLoading(false);
       },
