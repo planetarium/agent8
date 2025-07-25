@@ -1,0 +1,23 @@
+name = "agent8-access-log-worker"
+main = "src/index.ts"
+compatibility_date = "2024-11-11"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object configuration (self-hosted)
+[durable_objects]
+bindings = [
+  { name = "ACCESS_LOG_BUFFER", class_name = "AccessLogBuffer" }
+]
+
+# Durable Object migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["AccessLogBuffer"]
+
+# Environment variables set via web console
+
+[vars]
+GCP_LOGGER_SERVICE_ACCOUNT_JSON =
+
+[observability.logs]
+enabled = true
