@@ -155,9 +155,9 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
         `Forked from ${projectPath} at ${commitSha}`,
       );
 
-      // Create verse-spin tag if this is a verse-based fork
+      // Create verse-from tag if this is a verse-based fork
       if (verseData?.verseId) {
-        const verseSpinTag = `verse-spin-${verseData.verseId.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+        const verseSpinTag = `verse-from-${verseData.verseId.replace(/[^a-zA-Z0-9-]/g, '-')}`;
         await gitlabService.createTag(newProject.id, verseSpinTag, 'develop', `Spun from verse: ${verseData.verseId}`);
       }
     } catch (tagError) {
