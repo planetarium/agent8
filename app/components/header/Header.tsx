@@ -20,18 +20,18 @@ export function Header() {
   const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
 
   return (
-    <header
-      className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
-        'border-transparent': !chat.started,
-        'border-bolt-elements-borderColor': chat.started,
-        'mt-[56px]': !chat.started && isEmbedMode,
-        'mt-2': chat.started && isEmbedMode,
-      })}
-    >
-      {/* Logo and menu button - hidden in embed mode */}
-      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
-        {!isSideMenuDisabled && (
-          <TooltipProvider>
+    <TooltipProvider>
+      <header
+        className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
+          'border-transparent': !chat.started,
+          'border-bolt-elements-borderColor': chat.started,
+          'mt-[56px]': !chat.started && isEmbedMode,
+          'mt-2': chat.started && isEmbedMode,
+        })}
+      >
+        {/* Logo and menu button - hidden in embed mode */}
+        <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
+          {!isSideMenuDisabled && (
             <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
               <div
                 onClick={(e) => {
@@ -41,24 +41,26 @@ export function Header() {
                 className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
               />
             </WithTooltip>
-          </TooltipProvider>
-        )}
-      </div>
+          )}
+        </div>
 
-      {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
-        <>
-          <span
-            className={classNames('truncate text-center text-bolt-elements-textPrimary', {
-              'flex-1 px-4': !isEmbedMode,
-              'flex-1': isEmbedMode,
-            })}
-          >
-            <ClientOnly>{() => <ChatDescription />}</ClientOnly>
-          </span>
-          {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
-          <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
-        </>
-      )}
-    </header>
+        {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
+          <>
+            <span
+              className={classNames('truncate text-center text-bolt-elements-textPrimary', {
+                'flex-1 px-4': !isEmbedMode,
+                'flex-1': isEmbedMode,
+              })}
+            >
+              <ClientOnly>{() => <ChatDescription />}</ClientOnly>
+            </span>
+            <div className="flex items-center gap-3">
+              {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
+              <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
+            </div>
+          </>
+        )}
+      </header>
+    </TooltipProvider>
   );
 }
