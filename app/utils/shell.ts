@@ -1,6 +1,9 @@
 import type { Container, ExecutionResult, ShellSession } from '~/lib/container/interfaces';
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('BoltShell');
 
 export class BoltShell {
   #initialized: (() => void) | undefined;
@@ -35,12 +38,63 @@ export class BoltShell {
   }
 
   async init(container: Container, terminal: ITerminal) {
+    // Check if existing session is valid and can be reused
+    if (this.#container === container && this.#shellSession && this.#terminal) {
+      logger.debug('BoltShell: Checking existing session validity...');
+
+      const isValid = await this._isSessionValid();
+
+      if (isValid) {
+        logger.debug('BoltShell: ✅ Reusing existing session - process still alive');
+
+        // Only replace terminal reference if different
+        if (this.#terminal !== terminal) {
+          logger.debug('BoltShell: Updating terminal reference and reattaching streams');
+          this.#terminal = terminal;
+
+          // Reattach terminal streams to the new terminal
+          if (this.#shellSession.attachTerminal) {
+            await this.#shellSession.attachTerminal(terminal);
+            logger.debug('BoltShell: Terminal streams successfully reattached');
+          } else {
+            logger.warn('BoltShell: Terminal reattachment not supported by this session');
+          }
+        } else {
+          logger.debug('BoltShell: Terminal reference unchanged');
+        }
+
+        this.#initialized?.();
+        logger.debug('BoltShell: Session reuse completed successfully');
+
+        return;
+      } else {
+        logger.debug('BoltShell: ❌ Existing session is invalid, creating new session');
+      }
+    }
+
+    // Clean up existing session if any
+    if (this.#shellSession) {
+      logger.debug('BoltShell: Cleaning up existing session');
+      this.detachTerminal();
+    }
+
     this.#container = container;
     this.#terminal = terminal;
 
+    logger.debug('BoltShell: 🔄 Creating new session...');
     this.#shellSession = await container.spawnShell(terminal, { splitOutput: true });
+    logger.debug('BoltShell: Waiting for shell session to be ready...');
     await this.#shellSession.ready;
     this.#initialized?.();
+    logger.debug('BoltShell: ✅ New session created and initialized successfully');
+
+    // Send a newline to display initial prompt
+    setTimeout(() => {
+      if (this.#terminal) {
+        logger.debug('BoltShell: Sending newline to display initial prompt');
+        this.#terminal.input('\n');
+      }
+    }, 200); // Small delay to ensure session is fully ready
   }
 
   async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult | undefined> {
@@ -98,6 +152,28 @@ export class BoltShell {
   detachTerminal() {
     if (this.#shellSession && this.#shellSession.detachTerminal) {
       this.#shellSession.detachTerminal();
+    }
+  }
+
+  private async _isSessionValid(): Promise<boolean> {
+    if (!this.#container || !this.#shellSession || !this.#terminal) {
+      logger.debug('BoltShell: Session validation failed - missing components');
+      return false;
+    }
+
+    try {
+      // Check if process is still alive by racing against the exit promise
+      const processStatus = await Promise.race([
+        this.#shellSession.process.exit.then(() => 'dead' as const),
+        new Promise<'alive'>((resolve) => setTimeout(() => resolve('alive'), 100)),
+      ]);
+
+      logger.debug(`BoltShell: Process status check result: ${processStatus}`);
+
+      return processStatus === 'alive';
+    } catch (error) {
+      logger.debug('BoltShell: Session validation error:', error);
+      return false;
     }
   }
 }

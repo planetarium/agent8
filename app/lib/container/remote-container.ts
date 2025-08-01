@@ -1308,8 +1308,13 @@ export class RemoteContainer implements Container {
 
         logger.debug(`[${sessionId}] executeCommand`, command);
 
+        // Use currentTerminal instead of original terminal for input
+        if (!currentTerminal) {
+          throw new Error('No terminal attached to session');
+        }
+
         // Interrupt current execution
-        terminal.input('\x03');
+        currentTerminal.input('\x03');
 
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
@@ -1317,13 +1322,13 @@ export class RemoteContainer implements Container {
         await waitTillOscCode('prompt');
 
         // Execute new command
-        terminal.input(':' + '\n');
+        currentTerminal.input(':' + '\n');
         await waitTillOscCode('exit');
         logger.debug('terminal is responsive');
 
         logger.debug(`[${sessionId}] prompt received`, command);
 
-        terminal.input(command.trim() + '\n');
+        currentTerminal.input(command.trim() + '\n');
 
         logger.debug(`[${sessionId}] command executed`, command);
 
@@ -1346,6 +1351,10 @@ export class RemoteContainer implements Container {
     // Shell ready signal
     const shellReady = withResolvers<void>();
 
+    // Track current terminal for dynamic reconnection
+    let currentTerminal: ITerminal = terminal;
+    let currentTerminalDataDisposable: IDisposable | null = null;
+
     // Detect interactive mode
     let checkInteractive = false;
     output.pipeTo(
@@ -1360,13 +1369,15 @@ export class RemoteContainer implements Container {
             }
           }
 
-          terminal.write(data);
+          // Write to current terminal (allows dynamic switching)
+          if (currentTerminal) {
+            currentTerminal.write(data);
+          }
         },
       }),
     );
 
     // Handle terminal input - store the disposable for later cleanup
-    let terminalDataDisposable: IDisposable | null = null;
     const pendingBuffer: string[] = [];
     let isProcessingBuffer = false;
 
@@ -1415,20 +1426,65 @@ export class RemoteContainer implements Container {
       return /[\x03\x04\x1b\r\n\t]/.test(data) || data.length > 1;
     };
 
-    terminalDataDisposable = terminal.onData(async (data) => {
-      if (shouldSendImmediately(data)) {
-        addToBuffer(data);
-      } else {
-        debouncedWrite(data);
+    // Attach terminal input handler
+    const attachTerminalInput = (term: ITerminal) => {
+      // Detach previous terminal if any
+      if (currentTerminalDataDisposable) {
+        currentTerminalDataDisposable.dispose();
+        currentTerminalDataDisposable = null;
       }
-    });
+
+      // Attach new terminal
+      currentTerminalDataDisposable = term.onData(async (data) => {
+        if (shouldSendImmediately(data)) {
+          addToBuffer(data);
+        } else {
+          debouncedWrite(data);
+        }
+      });
+    };
+
+    // Initial terminal attachment
+    attachTerminalInput(terminal);
 
     const detachTerminal = () => {
-      if (terminalDataDisposable) {
-        terminalDataDisposable.dispose();
-        terminalDataDisposable = null;
-        logger.debug('Terminal detached from shell session');
+      if (currentTerminalDataDisposable) {
+        currentTerminalDataDisposable.dispose();
+        currentTerminalDataDisposable = null;
+        logger.debug('Terminal input detached from shell session');
       }
+
+      currentTerminal = null as any; // Clear terminal reference
+    };
+
+    const attachTerminal = async (newTerminal: ITerminal) => {
+      logger.debug('Attaching new terminal to existing shell session');
+
+      // Update terminal references
+      currentTerminal = newTerminal;
+
+      // Reattach input handler
+      attachTerminalInput(newTerminal);
+
+      // Sync terminal dimensions if different
+      if (newTerminal.cols && newTerminal.rows) {
+        try {
+          await process.resize({ cols: newTerminal.cols, rows: newTerminal.rows });
+          logger.debug(`Terminal dimensions synced: ${newTerminal.cols}x${newTerminal.rows}`);
+        } catch (error) {
+          logger.warn('Failed to sync terminal dimensions:', error);
+        }
+      }
+
+      logger.debug('Terminal successfully reattached to shell session');
+
+      // Send a newline to display prompt after terminal reattachment
+      setTimeout(() => {
+        if (currentTerminal) {
+          logger.debug('Sending newline to display prompt');
+          addToBuffer('\n');
+        }
+      }, 100); // Small delay to ensure terminal is fully connected
     };
 
     // Return basic shell session
@@ -1441,6 +1497,7 @@ export class RemoteContainer implements Container {
       executeCommand,
       waitTillOscCode,
       detachTerminal,
+      attachTerminal,
     };
 
     return session;
