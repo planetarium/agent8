@@ -73,7 +73,7 @@ export const onRequest = async (context: any) => {
     return 'agent8';
   };
 
-  // Fire-and-forget logging for performance (DO version)
+  // Fast and reliable logging with HTTP fetch to Durable Object
   await logAccess(
     {
       method,

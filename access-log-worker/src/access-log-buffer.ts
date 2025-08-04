@@ -57,23 +57,6 @@ export class AccessLogBuffer extends DurableObject {
   }
 
   /**
-   * Add a log entry to the buffer (RPC method)
-   */
-  async addLog(logData: AccessLogData): Promise<void> {
-    const logEntry: LogEntry = {
-      ...logData,
-      timestamp: new Date().toISOString(),
-    };
-
-    this._logs.push(logEntry);
-
-    // Force flush if buffer is getting too large
-    if (this._logs.length >= MAX_BUFFER_SIZE) {
-      await this._doFlush(false); // Manual flush, don't reschedule
-    }
-  }
-
-  /**
    * Manual flush (called externally via RPC)
    * Used for manual API calls only
    */
@@ -247,6 +230,28 @@ export class AccessLogBuffer extends DurableObject {
         console.error('Scheduled flush failed:', error);
       });
     }, FLUSH_INTERVAL) as any;
+  }
+
+  /**
+   * RPC method for ultra-fast logging
+   * Simple and direct access logging
+   */
+  async addLog(logData: AccessLogData): Promise<void> {
+    // Add to buffer immediately
+    const logEntry: LogEntry = {
+      ...logData,
+      timestamp: new Date().toISOString(),
+    };
+
+    this._logs.push(logEntry);
+
+    // Background flush if needed (don't wait)
+    if (this._logs.length >= MAX_BUFFER_SIZE) {
+      this._doFlush(false).catch((err) => console.error('Background flush failed:', err));
+    }
+
+    // Simple summary log
+    console.log(`Access log buffered: ${this._logs.length}/${MAX_BUFFER_SIZE}`);
   }
 
   /**
