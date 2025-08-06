@@ -48,6 +48,7 @@ const FLUSH_INTERVAL = 60 * 1000; // 1 minute in milliseconds
 export class AccessLogBuffer extends DurableObject {
   private _logs: LogEntry[] = [];
   private _flushTimer: number | null = null;
+  private _isFlushInProgress: boolean = false; // Prevent concurrent flush operations
 
   constructor(ctx: DurableObjectState, env: any) {
     super(ctx, env);
@@ -65,10 +66,16 @@ export class AccessLogBuffer extends DurableObject {
   }
 
   /**
-   * Internal flush implementation
+   * Internal flush implementation with race condition protection
    * @param reschedule - Whether to schedule next flush after completion
    */
   private async _doFlush(reschedule: boolean = true): Promise<void> {
+    // Prevent concurrent flush operations
+    if (this._isFlushInProgress) {
+      console.log(`[${new Date().toISOString()}] Flush skipped: another flush in progress`);
+      return;
+    }
+
     if (this._logs.length === 0) {
       console.log(`[${new Date().toISOString()}] Flush completed: 0 logs to process, buffer already empty`);
 
@@ -79,32 +86,48 @@ export class AccessLogBuffer extends DurableObject {
       return;
     }
 
-    const initialLogCount = this._logs.length;
-    console.log(`[${new Date().toISOString()}] Starting flush: ${initialLogCount} logs queued`);
+    // Set flush lock
+    this._isFlushInProgress = true;
 
-    // Process logs in batches
-    const batches = this._createBatches(this._logs, BATCH_SIZE);
-    let successCount = 0;
-    let failureCount = 0;
+    try {
+      const initialLogCount = this._logs.length;
+      console.log(`[${new Date().toISOString()}] Starting flush: ${initialLogCount} logs queued`);
 
-    for (const batch of batches) {
-      try {
-        await this._sendBatchToBigQuery(batch);
-        successCount += batch.length;
-      } catch (error) {
-        failureCount += batch.length;
-        console.error(`Failed to send batch of ${batch.length} logs:`, error);
-      }
-    }
-
-    // Clear successfully sent logs
-    if (successCount > 0) {
+      // Atomically move current logs to flush queue and clear buffer for new logs
+      const logsToFlush = [...this._logs];
       this._logs = [];
-    }
 
-    console.log(
-      `[${new Date().toISOString()}] Flush completed: ${successCount} sent, ${failureCount} failed, buffer cleared`,
-    );
+      // Process logs in batches
+      const batches = this._createBatches(logsToFlush, BATCH_SIZE);
+      let successCount = 0;
+      let failureCount = 0;
+      const failedLogs: LogEntry[] = [];
+
+      for (const batch of batches) {
+        try {
+          await this._sendBatchToBigQuery(batch);
+          successCount += batch.length;
+        } catch (error) {
+          failureCount += batch.length;
+          console.error(`Failed to send batch of ${batch.length} logs:`, error);
+
+          // Collect failed logs for restoration
+          failedLogs.push(...batch);
+        }
+      }
+
+      // Restore failed logs back to buffer (prepend to maintain order)
+      if (failedLogs.length > 0) {
+        this._logs.unshift(...failedLogs);
+      }
+
+      console.log(
+        `[${new Date().toISOString()}] Flush completed: ${successCount} sent, ${failureCount} failed${failedLogs.length > 0 ? ', failed logs restored to buffer' : ', buffer cleared'}`,
+      );
+    } finally {
+      // Always release flush lock
+      this._isFlushInProgress = false;
+    }
 
     // Only reschedule if this was an automatic flush
     if (reschedule) {
@@ -245,8 +268,8 @@ export class AccessLogBuffer extends DurableObject {
 
     this._logs.push(logEntry);
 
-    // Background flush if needed (don't wait)
-    if (this._logs.length >= MAX_BUFFER_SIZE) {
+    // Background flush if needed (don't wait) - check lock to prevent race conditions
+    if (this._logs.length >= MAX_BUFFER_SIZE && !this._isFlushInProgress) {
       this._doFlush(false).catch((err) => console.error('Background flush failed:', err));
     }
 
