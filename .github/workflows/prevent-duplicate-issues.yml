@@ -1,0 +1,28 @@
+name: Prevent Duplicate Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  check-duplicate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 중복 제목 검색
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const title = context.payload.issue.title;
+            // 동일 repo 내 열린(issue) 이슈 중 같은 제목 검색
+            const { data: search } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title "${title}"`
+            });
+            if (search.total_count > 1) {
+              // 경고 코멘트
+              await github.rest.issues.createComment({
+                ...context.issue,
+                body: '🚨 동일한 제목의 이슈가 이미 존재합니다. 중복 여부를 확인해주세요.'
+              });
+              // (선택) 열려 있는 중복 이슈 자동 닫기
+              // await github.rest.issues.update({ ...context.issue, state: 'closed' });
+            }
