@@ -78,7 +78,7 @@ export const onRequest = async (context: any) => {
     {
       method,
       path,
-      query: url.search || null,
+      query: url.search || undefined,
       statusCode,
       responseTime,
       ip,
