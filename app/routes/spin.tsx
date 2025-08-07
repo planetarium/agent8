@@ -79,7 +79,7 @@ export default function Spin() {
       const { projectPath, sha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
 
       // Generate new repository name with better uniqueness
-      const nameWords = verseData.title.split(/[\s-]+/).filter((word) => word.length > 0);
+      const nameWords = verseData.title.split(/[^a-zA-Z0-9]+/).filter((word) => word.length > 0);
       let newRepoName = nameWords.join('-').toLowerCase();
 
       // Add timestamp and random suffix for better uniqueness
