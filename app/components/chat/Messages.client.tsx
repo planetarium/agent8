@@ -18,7 +18,7 @@ interface MessagesProps {
   className?: string;
   isStreaming?: boolean;
   messages?: Message[];
-  onRetry?: (message: Message) => void;
+  onRetry?: (message: Message, prevMessage?: Message) => void;
   onFork?: (message: Message) => void;
   onRevert?: (message: Message) => void;
   onViewDiff?: (message: Message) => void;
@@ -152,7 +152,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
                               }
                             >
-                              <DropdownItem onSelect={() => onRetry?.(message)}>
+                              <DropdownItem
+                                onSelect={() => {
+                                  const prevMessage = index > 0 ? messages[index - 1] : undefined;
+                                  onRetry?.(message, prevMessage);
+                                }}
+                              >
                                 <span className="i-ph:arrow-clockwise text-xl" />
                                 Retry chat
                               </DropdownItem>

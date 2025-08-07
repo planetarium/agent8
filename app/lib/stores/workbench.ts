@@ -982,7 +982,8 @@ export class WorkbenchStore {
 
   #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {
     const publishedUrl = `${import.meta.env.VITE_PUBLISHED_BASE_URL || 'https://agent8-games.verse8.io'}/${verseId}/index.html?chatId=${encodeURIComponent(chatId)}${sha ? `&sha=${sha}` : ''}&buildAt=${Date.now()}`;
-    this.setPublishedUrl(publishedUrl);
+
+    // this.setPublishedUrl(publishedUrl);
 
     try {
       if (window.parent && window.parent !== window) {

@@ -68,7 +68,7 @@ export function cleanoutFileContent(content: string, filePath: string): string {
 
 function cleanoutCodeblockSyntax(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[\n([\s\S]*?)\n\s*\]\]>\s*$/;
+  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
 
   const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
 
