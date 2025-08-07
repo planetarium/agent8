@@ -136,7 +136,6 @@ export default defineConfig((config) => {
               map: null,
             };
           }
-          return null;
         },
       },
       config.mode !== 'test' && remixCloudflareDevProxy(),
@@ -151,7 +150,6 @@ export default defineConfig((config) => {
       UnoCSS(),
       tsconfigPaths(),
       chrome129IssuePlugin(),
-      accessLogPlugin(),
       config.mode === 'production' && optimizeCssModules({ apply: 'build' }),
     ],
     envPrefix: [
@@ -190,57 +188,6 @@ function chrome129IssuePlugin() {
             return;
           }
         }
-
-        next();
-      });
-    },
-  };
-}
-
-function accessLogPlugin() {
-  // Simple inline logger for development environment
-  const shouldSkip = (url: string) => {
-    return (
-      /\.(js|css|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/.test(url) ||
-      url.includes('/node_modules/.vite/') ||
-      url.includes('/@vite/') ||
-      url.includes('/__vite_ping') ||
-      url.includes('/favicon')
-    );
-  };
-
-  const log = (level: string, message: string) => {
-    console.log(`[${new Date().toISOString()}] ${level.toUpperCase()} access-log [DEV] ${message}`);
-  };
-
-  return {
-    name: 'access-log-plugin',
-    configureServer(server: ViteDevServer) {
-      server.middlewares.use((req, res, next) => {
-        const startTime = Date.now();
-
-        // Collect request information
-        const method = req.method || 'GET';
-        const url = req.url || '/';
-        const userAgent = req.headers['user-agent'] || 'unknown';
-        const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || 'unknown';
-
-        // Log when response ends
-        const originalEnd = res.end;
-        res.end = function (chunk?: any, encoding?: any) {
-          const responseTime = Date.now() - startTime;
-          const statusCode = res.statusCode;
-
-          // Log access request (development environment - console only)
-          if (!shouldSkip(url)) {
-            const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
-            const message = `${method} ${url} ${statusCode} ${responseTime}ms - ${ip} - "${userAgent}"`;
-            log(level, message);
-          }
-
-          // Call original end function
-          return originalEnd.call(this, chunk, encoding);
-        };
 
         next();
       });

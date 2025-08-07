@@ -12,15 +12,22 @@ const baseHandler = createPagesFunctionHandler({
   build: serverBuild as unknown as ServerBuild,
 });
 
-// Wrap with access logging (Optimized for performance)
+// Wrap with access logging (Optimized for API requests only)
 export const onRequest = async (context: any) => {
-  const startTime = Date.now();
   const { request } = context;
-
-  // Minimal request information collection
   const url = new URL(request.url);
   const method = request.method;
   const path = url.pathname;
+
+  // 🚀 FAST TRACK: Only log API requests, skip everything else
+  if (!path.startsWith('/api/') || method === 'OPTIONS') {
+    return await baseHandler(context);
+  }
+
+  // API request detected - start performance measurement
+  const startTime = Date.now();
+
+  // Collect request information for API logging
   const userAgent = request.headers.get('User-Agent');
   const ip =
     request.headers.get('CF-Connecting-IP') ||
@@ -73,7 +80,7 @@ export const onRequest = async (context: any) => {
     return 'agent8';
   };
 
-  // Fast and reliable logging with HTTP fetch to Durable Object
+  // Log API request to Cloudflare Queue
   await logAccess(
     {
       method,
