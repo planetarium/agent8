@@ -5,6 +5,9 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('BoltShell');
 
+const PROCESS_STATUS_CHECK_TIMEOUT_MS = 100;
+const TERMINAL_READY_PROMPT_DELAY_MS = 200;
+
 export class BoltShell {
   #initialized: (() => void) | undefined;
   #readyPromise: Promise<void>;
@@ -94,7 +97,7 @@ export class BoltShell {
         logger.debug('BoltShell: Sending newline to display initial prompt');
         this.#terminal.input('\n');
       }
-    }, 200); // Small delay to ensure session is fully ready
+    }, TERMINAL_READY_PROMPT_DELAY_MS);
   }
 
   async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult | undefined> {
@@ -165,7 +168,7 @@ export class BoltShell {
       // Check if process is still alive by racing against the exit promise
       const processStatus = await Promise.race([
         this.#shellSession.process.exit.then(() => 'dead' as const),
-        new Promise<'alive'>((resolve) => setTimeout(() => resolve('alive'), 100)),
+        new Promise<'alive'>((resolve) => setTimeout(() => resolve('alive'), PROCESS_STATUS_CHECK_TIMEOUT_MS)),
       ]);
 
       logger.debug(`BoltShell: Process status check result: ${processStatus}`);

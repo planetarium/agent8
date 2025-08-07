@@ -47,6 +47,7 @@ const BUFFER_CONFIG = {
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
+const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
 const logger = createScopedLogger('remote-container');
 
 // Connection state enum
@@ -1352,7 +1353,7 @@ export class RemoteContainer implements Container {
     const shellReady = withResolvers<void>();
 
     // Track current terminal for dynamic reconnection
-    let currentTerminal: ITerminal = terminal;
+    let currentTerminal: ITerminal | null = terminal;
     let currentTerminalDataDisposable: IDisposable | null = null;
 
     // Detect interactive mode
@@ -1454,7 +1455,7 @@ export class RemoteContainer implements Container {
         logger.debug('Terminal input detached from shell session');
       }
 
-      currentTerminal = null as any; // Clear terminal reference
+      currentTerminal = null;
     };
 
     const attachTerminal = async (newTerminal: ITerminal) => {
@@ -1484,7 +1485,7 @@ export class RemoteContainer implements Container {
           logger.debug('Sending newline to display prompt');
           addToBuffer('\n');
         }
-      }, 100); // Small delay to ensure terminal is fully connected
+      }, TERMINAL_REATTACH_PROMPT_DELAY_MS);
     };
 
     // Return basic shell session
