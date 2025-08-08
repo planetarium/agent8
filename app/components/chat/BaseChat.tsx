@@ -35,6 +35,7 @@ import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
+import { sendMessageToParent } from '~/utils/postMessageUtils';
 
 const TEXTAREA_MIN_HEIGHT = 76;
 const MAX_ATTACHMENTS = 10;
@@ -562,11 +563,25 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
           >
             {!chatStarted && (
-              <div id="intro" className="mt-[30px] max-w-chat-before-start mx-auto text-center px-4 lg:px-0">
-                <div className="flex justify-center mb-4">
-                  <img src="/title/Title.svg" alt="Agent8 Title" className="max-w-full h-auto" />
+              <>
+                <div id="intro" className="mt-[30px] max-w-chat-before-start mx-auto text-center px-4 lg:px-0">
+                  <div className="flex justify-center mb-4">
+                    <img src="/title/Title.svg" alt="Agent8 Title" className="max-w-full h-auto" />
+                  </div>
                 </div>
-              </div>
+                <div className="text-center border border-[#4c5354] rounded-lg w-full h-18 max-w-chat-before-start mx-auto flex items-center justify-between px-4 bg-gradient-to-r from-[#111315] to-[#123135] mt-12">
+                  <div className="flex items-center gap-3">
+                    <img src="/icons/tutorial.svg" alt="Tutorial" className="w-5 h-5 mt-1" />
+                    <span className="text-white font-semibold">Learn how to make a game with Verse8</span>
+                  </div>
+                  <button
+                    className="text-white bg-[#1A92A4] rounded font-semibold py-2 px-4 text-sm hover:bg-[#1A92A4]/80 active:bg-[#1A92A4]/60 transition-all duration-200"
+                    onClick={() => sendMessageToParent('GOTO_TUTORIAL', {})}
+                  >
+                    View Tutorial
+                  </button>
+                </div>
+              </>
             )}
             <div
               className={classNames('pt-4 px-2 sm:px-6 relative', {
