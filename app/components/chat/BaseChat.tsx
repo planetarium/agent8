@@ -569,7 +569,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <img src="/title/Title.svg" alt="Agent8 Title" className="max-w-full h-auto" />
                   </div>
                 </div>
-                <div className="text-center border border-[#4c5354] rounded-lg w-full h-18 max-w-chat-before-start mx-auto flex items-center justify-between px-4 bg-gradient-to-r from-[#111315] to-[#123135] mt-12">
+                <div className="text-center border border-[#4c5354] rounded-lg w-full h-18 max-w-chat-before-start mx-auto flex items-center justify-between px-4 bg-gradient-to-r from-[#111315] to-[#123135] mt-8 -mb-3">
                   <div className="flex items-center gap-3">
                     <img src="/icons/tutorial.svg" alt="Tutorial" className="w-5 h-5 mt-1" />
                     <span className="text-white font-semibold">Learn how to make a game with Verse8</span>
