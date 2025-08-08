@@ -1,0 +1,22 @@
+{
+  "name": "agent8-access-log-worker",
+  "version": "1.0.0",
+  "description": "Access log worker with Durable Objects and BigQuery batching",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler preview"
+  },
+  "dependencies": {
+    "jose": "^5.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.45.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

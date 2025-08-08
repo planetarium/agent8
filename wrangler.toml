@@ -4,3 +4,8 @@ compatibility_flags = ["nodejs_compat"]
 compatibility_date = "2024-11-11"
 pages_build_output_dir = "./build/client"
 send_metrics = false
+
+[[queues.producers]]
+binding = "ACCESS_LOG_QUEUE"
+queue = "access-log-queue"
+
