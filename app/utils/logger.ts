@@ -58,11 +58,11 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
 
   const allMessages = messages.reduce((acc, cur) => (acc ? `${acc} ${cur}` : `${cur}`), '');
 
-  const labelBg = getColorForLevel(level);
-  const labelFg = level === 'warn' ? '#000000' : '#FFFFFF';
+  const labelBackgroundColor = getColorForLevel(level);
+  const labelTextColor = level === 'warn' ? '#000000' : '#FFFFFF';
 
   const timeStyles = getLabelStyles('#555555', '#FFFFFF');
-  const labelStyles = getLabelStyles(labelBg, labelFg);
+  const labelStyles = getLabelStyles(labelBackgroundColor, labelTextColor);
   const scopeStyles = getLabelStyles('#77828D', '#FFFFFF');
 
   const time = formatTime();
@@ -76,7 +76,7 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
     console.log(fmt, ...args, allMessages);
   } else {
     const timeLabel = formatText(` ${time} `, '#FFFFFF', '#555555');
-    let labelText = formatText(` ${level.toUpperCase()} `, labelFg, labelBg);
+    let labelText = formatText(` ${level.toUpperCase()} `, labelTextColor, labelBackgroundColor);
 
     if (hasScope) {
       labelText += ` ${formatText(` ${scope} `, '#FFFFFF', '#77828D')}`;
