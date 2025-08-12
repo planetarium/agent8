@@ -116,6 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 import { logStore } from './lib/stores/logs';
+import { initializeSoundSystem } from './utils/sound';
 
 export default function App() {
   const theme = useStore(themeStore);
@@ -129,6 +130,7 @@ export default function App() {
     });
 
     initCaptureService();
+    initializeSoundSystem();
   }, []);
 
   return (

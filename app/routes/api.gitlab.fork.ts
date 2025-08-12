@@ -75,10 +75,12 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
         return json({ success: false, message: 'Project path does not match verse project' }, { status: 400 });
       }
 
-      // If commitSha is provided, validate it matches the verse's SHA
-      if (commitSha && commitSha !== verseSha) {
-        return json({ success: false, message: 'Commit SHA does not match verse version' }, { status: 400 });
-      }
+      /*
+       * If commitSha is provided, validate it matches the verse's SHA
+       * if (commitSha && commitSha !== verseSha) {
+       *   return json({ success: false, message: 'Commit SHA does not match verse version' }, { status: 400 });
+       * }
+       */
 
       // Use verse SHA if no commitSha provided
       if (!commitSha) {

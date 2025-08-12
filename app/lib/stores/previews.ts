@@ -1,5 +1,6 @@
 import type { Container } from '~/lib/container/interfaces';
 import { atom } from 'nanostores';
+import { playCompletionSound } from '~/utils/sound';
 
 export interface PreviewInfo {
   port: number;
@@ -62,6 +63,11 @@ export class PreviewsStore {
 
       previewInfo.ready = type === 'open';
       previewInfo.baseUrl = url;
+
+      // Play completion sound when preview is ready
+      if (type === 'open') {
+        playCompletionSound();
+      }
 
       this.previews.set([previewInfo]);
     });

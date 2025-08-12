@@ -19,6 +19,7 @@ export default function Spin() {
   const [isSpinning, setIsSpinning] = useState(false);
 
   const fromVerse = searchParams.get('fromVerse');
+  const requestSha = searchParams.get('sha');
 
   useEffect(() => {
     if (!fromVerse) {
@@ -88,10 +89,16 @@ export default function Spin() {
       newRepoName = `${newRepoName}-spin-${timestamp}${randomSuffix}`;
 
       // Fork the project with verse information
-      const forkedProject = await forkProject(projectPath, newRepoName, sha, `Spin from ${verseData.title}`, {
-        resetEnv: true,
-        fromVerseId: fromVerse,
-      });
+      const forkedProject = await forkProject(
+        projectPath,
+        newRepoName,
+        requestSha || sha,
+        `Spin from ${verseData.title}`,
+        {
+          resetEnv: true,
+          fromVerseId: fromVerse,
+        },
+      );
 
       if (forkedProject && forkedProject.success) {
         toast.success('Spin created successfully!');

@@ -39,6 +39,7 @@ import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
+import { playCompletionSound } from '~/utils/sound';
 import {
   commitChanges,
   createTaskBranch,
@@ -325,14 +326,16 @@ export const ChatImpl = memo(
       const previews = workbench.previews.get();
 
       if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p: any) => p.ready)) {
+        playCompletionSound();
         workbench.currentView.set('preview');
+
         return;
       }
 
       const shell = workbench.boltTerminal;
       await shell.ready;
 
-      for (let retry = 0; retry < 60; retry++) {
+      for (let retry = 0; retry < 15; retry++) {
         const state = await shell.executionState.get();
 
         if (state?.active) {
@@ -340,19 +343,19 @@ export const ChatImpl = memo(
           continue;
         }
 
-        await workbench.setupDeployConfig(shell);
-
-        const container = await workbench.container;
-        await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
-        await shell.waitTillOscCode('prompt');
-
-        if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-          shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
-        } else {
-          shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
-        }
-
         break;
+      }
+
+      await workbench.setupDeployConfig(shell);
+
+      const container = await workbench.container;
+      await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
+      await shell.waitTillOscCode('prompt');
+
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+        shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+      } else {
+        shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
       }
     };
 
@@ -1123,27 +1126,50 @@ export const ChatImpl = memo(
       revertTo(commitHash);
     };
 
-    const handleRetry = async (message: Message) => {
+    const handleRetry = async (message: Message, prevMessage?: Message) => {
       workbench.currentView.set('code');
 
-      const messageIndex = messages.findIndex((m) => m.id === message.id);
+      // Use prevMessage if provided, otherwise find the previous message
+      let commitHash: string | undefined;
 
-      const commitHash = messages[messageIndex + 1].id.split('-').pop();
+      if (prevMessage && prevMessage.id) {
+        commitHash = prevMessage.id.split('-').pop();
+      } else {
+        const messageIndex = messages.findIndex((m) => m.id === message.id);
+
+        // Check if next message exists
+        if (messageIndex >= 0 && messageIndex + 1 < messages.length) {
+          const nextCommitHash = messages[messageIndex + 1].id.split('-').pop();
+
+          if (nextCommitHash && isCommitHash(nextCommitHash)) {
+            try {
+              const { data } = await getCommit(repoStore.get().path, nextCommitHash);
+
+              if (data.commit.parent_ids.length > 0) {
+                commitHash = data.commit.parent_ids[0];
+              } else {
+                handleChatError('No parent commit found', undefined, 'handleRetry - parent commit check');
+                return;
+              }
+            } catch (error) {
+              handleChatError(
+                'Failed to get commit data',
+                error instanceof Error ? error : String(error),
+                'handleRetry - getCommit',
+              );
+              return;
+            }
+          }
+        }
+      }
 
       if (!commitHash || !isCommitHash(commitHash)) {
         handleChatError('No commit hash found', undefined, 'handleRetry - commit hash validation');
         return;
       }
 
-      const { data } = await getCommit(repoStore.get().path, commitHash);
-
-      if (data.commit.parent_ids.length > 0) {
-        const parentCommitHash = data.commit.parent_ids[0];
-        revertTo(parentCommitHash);
-        setInput(stripMetadata(extractTextContent(message)));
-      } else {
-        handleChatError('No parent commit hash found', undefined, 'handleRetry - parent commit check');
-      }
+      revertTo(commitHash);
+      setInput(stripMetadata(extractTextContent(message)));
     };
 
     const handleViewDiff = async (message: Message) => {

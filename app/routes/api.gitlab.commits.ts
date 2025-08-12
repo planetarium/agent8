@@ -20,6 +20,7 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const perPage = url.searchParams.get('perPage') || '10';
   const branch = url.searchParams.get('branch') || '';
   const untilCommit = url.searchParams.get('untilCommit') || '';
+  const all = url.searchParams.get('all') === 'true';
 
   if (!projectPath) {
     return json({ success: false, message: 'Project path is required' }, { status: 400 });
@@ -47,6 +48,7 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
       parsedPerPage,
       branchToUse,
       untilCommit,
+      all,
     );
 
     return json({

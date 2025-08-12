@@ -559,6 +559,7 @@ export class GitlabService {
     perPage: number = 20,
     branch?: string,
     untilCommit?: string,
+    all: boolean = false,
   ): Promise<{
     project: {
       id: number;
@@ -572,13 +573,18 @@ export class GitlabService {
     try {
       const project = await this.gitlab.Projects.show(projectPath);
 
-      const refName = branch || 'develop';
-
       const params: Record<string, any> = {
-        ref_name: refName,
         page,
         per_page: perPage,
       };
+
+      /* all=true가 아닐 때만 특정 브랜치로 제한 */
+      if (!all) {
+        const refName = branch || 'develop';
+        params.ref_name = refName;
+      } else {
+        params.all = true;
+      }
 
       if (untilCommit && isCommitHash(untilCommit)) {
         try {
@@ -592,7 +598,8 @@ export class GitlabService {
         }
       }
 
-      if (branch && branch.startsWith('task-')) {
+      /* task 브랜치 관련 처리는 all=true일 때는 제외 */
+      if (!all && branch && branch.startsWith('task-')) {
         const sinceTimestamp = branch.split('-')[1];
         params.since = new Date(parseInt(sinceTimestamp)).toISOString();
       }
@@ -606,12 +613,16 @@ export class GitlabService {
           params,
         },
       );
+
       const hasMore = !!commitsResponse.headers['x-next-page'];
 
       let commitsData = commitsResponse.data as GitlabCommit[];
 
-      // Filter commits to only include those with the branch name in the message for task branches
-      if (branch && branch.startsWith('task-')) {
+      /*
+       * Filter commits to only include those with the branch name in the message for task branches
+       * all=true일 때는 필터링하지 않음
+       */
+      if (!all && branch && branch.startsWith('task-')) {
         commitsData = commitsData.filter((commit) => commit.message.includes(branch));
       }
 
