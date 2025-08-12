@@ -6,7 +6,6 @@ import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('BoltShell');
 
 const PROCESS_STATUS_CHECK_TIMEOUT_MS = 100;
-const TERMINAL_READY_PROMPT_DELAY_MS = 200;
 
 export class BoltShell {
   #initialized: (() => void) | undefined;
@@ -59,11 +58,33 @@ export class BoltShell {
           if (this.#shellSession.attachTerminal) {
             await this.#shellSession.attachTerminal(terminal);
             logger.debug('BoltShell: Terminal streams successfully reattached');
+
+            // Clear buffer by waiting for prompt after terminal reattachment
+            if (this.#shellSession.waitTillOscCode) {
+              try {
+                logger.debug('BoltShell: Clearing buffer by waiting for prompt');
+                await this.#shellSession.waitTillOscCode('prompt');
+                logger.debug('BoltShell: Buffer cleared successfully');
+              } catch (error) {
+                logger.warn('BoltShell: Failed to clear buffer:', error);
+              }
+            }
           } else {
             logger.warn('BoltShell: Terminal reattachment not supported by this session');
           }
         } else {
           logger.debug('BoltShell: Terminal reference unchanged');
+
+          // Clear buffer for session reuse even when terminal reference is same
+          if (this.#shellSession.waitTillOscCode) {
+            try {
+              logger.debug('BoltShell: Clearing buffer for session reuse');
+              await this.#shellSession.waitTillOscCode('prompt');
+              logger.debug('BoltShell: Buffer cleared for reuse');
+            } catch (error) {
+              logger.warn('BoltShell: Failed to clear buffer for reuse:', error);
+            }
+          }
         }
 
         this.#initialized?.();
@@ -90,14 +111,6 @@ export class BoltShell {
     await this.#shellSession.ready;
     this.#initialized?.();
     logger.debug('BoltShell: ✅ New session created and initialized successfully');
-
-    // Send a newline to display initial prompt
-    setTimeout(() => {
-      if (this.#terminal) {
-        logger.debug('BoltShell: Sending newline to display initial prompt');
-        this.#terminal.input('\n');
-      }
-    }, TERMINAL_READY_PROMPT_DELAY_MS);
   }
 
   async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult | undefined> {
