@@ -7,6 +7,7 @@ import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { useSearchParams } from '@remix-run/react';
 import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
+import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import WithTooltip from '~/components/ui/Tooltip';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
@@ -46,6 +47,7 @@ export function Header() {
 
         {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
           <>
+            {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
             <span
               className={classNames('truncate text-center text-bolt-elements-textPrimary', {
                 'flex-1 px-4': !isEmbedMode,
