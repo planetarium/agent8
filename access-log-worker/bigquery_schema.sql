@@ -3,6 +3,7 @@
 -- Table: access_log
 
 CREATE TABLE `your-project-id.monitoring.access_log` (
+  request_id STRING NOT NULL,
   timestamp TIMESTAMP NOT NULL,
   service_name STRING NOT NULL,
   method STRING NOT NULL,
