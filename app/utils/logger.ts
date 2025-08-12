@@ -56,54 +56,33 @@ function log(level: DebugLevel, scope: string | undefined, messages: any[]) {
     return;
   }
 
-  const allMessages = messages.reduce((acc, current) => {
-    if (acc.endsWith('\n')) {
-      return acc + current;
-    }
+  const allMessages = messages.reduce((acc, cur) => (acc ? `${acc} ${cur}` : `${cur}`), '');
 
-    if (!acc) {
-      return current;
-    }
+  const labelBg = getColorForLevel(level);
+  const labelFg = level === 'warn' ? '#000000' : '#FFFFFF';
 
-    return `${acc} ${current}`;
-  }, '');
+  const timeStyles = getLabelStyles('#555555', '#FFFFFF');
+  const labelStyles = getLabelStyles(labelBg, labelFg);
+  const scopeStyles = getLabelStyles('#77828D', '#FFFFFF');
 
-  const labelBackgroundColor = getColorForLevel(level);
-  const labelTextColor = level === 'warn' ? '#000000' : '#FFFFFF';
-
-  const labelStyles = getLabelStyles(labelBackgroundColor, labelTextColor);
-  const scopeStyles = getLabelStyles('#77828D', 'white');
-  const timeStyles = getLabelStyles('#555555', 'white');
-
-  const styles = [labelStyles];
-
-  if (typeof scope === 'string') {
-    styles.push('', scopeStyles);
-  }
-
-  styles.push('', timeStyles);
-
-  const timeString = formatTime();
-  const timeLabel = formatText(` ${timeString} `, '#FFFFFF', '#555555');
-
-  let labelText = formatText(` ${level.toUpperCase()} `, labelTextColor, labelBackgroundColor);
-
-  if (scope) {
-    labelText = `${labelText} ${formatText(` ${scope} `, '#FFFFFF', '77828D')}`;
-  }
-
-  labelText = `${timeLabel} ${labelText}`;
+  const time = formatTime();
+  const hasScope = typeof scope === 'string' && scope.length > 0;
 
   if (typeof window !== 'undefined') {
-    console.log(
-      `%c${timeString}%c ${level.toUpperCase()}${scope ? `%c %c${scope}` : ''}`,
-      timeStyles,
-      labelStyles,
-      ...styles.slice(2),
-      allMessages,
-    );
+    const fmt = hasScope ? `%c${time}%c ${level.toUpperCase()}%c ${scope}%c` : `%c${time}%c ${level.toUpperCase()}%c`;
+
+    const args = hasScope ? [timeStyles, labelStyles, scopeStyles, ''] : [timeStyles, labelStyles, ''];
+
+    console.log(fmt, ...args, allMessages);
   } else {
-    console.log(`${labelText}`, allMessages);
+    const timeLabel = formatText(` ${time} `, '#FFFFFF', '#555555');
+    let labelText = formatText(` ${level.toUpperCase()} `, labelFg, labelBg);
+
+    if (hasScope) {
+      labelText += ` ${formatText(` ${scope} `, '#FFFFFF', '#77828D')}`;
+    }
+
+    console.log(`${timeLabel} ${labelText}`, allMessages);
   }
 }
 
