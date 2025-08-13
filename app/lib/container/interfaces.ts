@@ -87,6 +87,7 @@ export interface ShellSession {
   executeCommand?(command: string): Promise<ExecutionResult>;
   waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
   detachTerminal?(): void;
+  attachTerminal?(terminal: ITerminal): Promise<void>;
 }
 
 /**
