@@ -1,0 +1,19 @@
+name = "agent8-access-log-worker"
+main = "src/index.ts"
+compatibility_date = "2024-11-11"
+compatibility_flags = ["nodejs_compat"]
+
+# Queue consumer configuration - optimized for speed, not reliability
+[[queues.consumers]]
+queue = "access-log-queue"
+max_batch_size = 100
+max_batch_timeout = 10
+max_retries = 1
+# No DLQ - skip failed messages for speed
+
+# BigQuery credentials stored as single JSON secret
+# Set via: wrangler secret put GOOGLE_CLOUD_CREDENTIALS
+# Value: Complete service account JSON file content
+
+[observability.logs]
+enabled = true
