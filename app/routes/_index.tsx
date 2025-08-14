@@ -56,6 +56,7 @@ function AccessControlledChat() {
           const userInfo = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
 
           v8UserStore.set({ loading: false, user: userInfo });
+          updateV8AccessToken(accessToken);
 
           try {
             const gitlabUser = await fetch('/api/gitlab/user', {

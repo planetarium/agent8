@@ -6,6 +6,9 @@ import { Button } from '~/components/ui/Button';
 import { createScopedLogger } from '~/utils/logger';
 import { forkProject } from '~/lib/persistenceGitbase/api.client';
 import { fetchVerse, extractProjectInfoFromPlayUrl, type VerseData } from '~/lib/verse8/api';
+import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { v8UserStore } from '~/lib/stores/v8User';
 
 const logger = createScopedLogger('Spin');
 
@@ -18,6 +21,12 @@ export default function Spin() {
   const [error, setError] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
+  // Token authentication states
+  const [isActivated, setIsActivated] = useState<boolean | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
+  const [loadedContainer, setLoadedContainer] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const fromVerse = searchParams.get('fromVerse');
   const requestSha = searchParams.get('sha');
 
@@ -29,8 +38,102 @@ export default function Spin() {
       return;
     }
 
-    loadVerseInfo();
-  }, [fromVerse]);
+    const isAccessControlEnabled = import.meta.env.VITE_ACCESS_CONTROL_ENABLED === 'true';
+
+    // If access control is disabled, load verse info immediately
+    if (!isAccessControlEnabled) {
+      loadVerseInfo();
+
+      return;
+    }
+
+    // If access control is enabled, wait for authentication to complete
+    if (!authLoading && isActivated === true && loadedContainer) {
+      loadVerseInfo();
+    }
+  }, [fromVerse, authLoading, isActivated, loadedContainer]);
+
+  // Token verification effect
+  useEffect(() => {
+    if (accessToken) {
+      const verifyToken = async () => {
+        try {
+          const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
+          const userInfo = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
+
+          v8UserStore.set({ loading: false, user: userInfo });
+          updateV8AccessToken(accessToken);
+
+          try {
+            const gitlabUser = await fetch('/api/gitlab/user', {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+            console.log('GITLAB USER', await gitlabUser.json());
+          } catch {}
+
+          setIsActivated(userInfo.isActivated);
+        } catch (error) {
+          console.error('Failed to verify token:', error);
+          setIsActivated(false);
+          v8UserStore.set({ loading: false, user: null });
+        } finally {
+          setAuthLoading(false);
+        }
+      };
+      verifyToken();
+    } else {
+      setAuthLoading(false);
+    }
+  }, [accessToken]);
+
+  // Container loading effect
+  useEffect(() => {
+    // RemoteContainer는 항상 사용 가능
+    setLoadedContainer(true);
+
+    // Initialize container if access control is disabled and we have a token
+    if (!import.meta.env.VITE_ACCESS_CONTROL_ENABLED && accessToken) {
+      workbenchStore.initializeContainer(accessToken);
+    }
+  }, [accessToken]);
+
+  // Message event listener for token initialization
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data && event.data.type === 'INIT') {
+        const token = event.data.payload?.accessToken;
+
+        if (token) {
+          updateV8AccessToken(token);
+          setAccessToken(token);
+
+          // Reinitialize container with the new token to recover from potential failures
+          try {
+            await workbenchStore.reinitializeContainer(token);
+          } catch (error) {
+            console.error('Failed to reinitialize container:', error);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // 일정 시간 후에도 메시지가 오지 않으면 로딩 상태 해제
+    const timeout = setTimeout(() => {
+      if (authLoading && !accessToken) {
+        setAuthLoading(false);
+        setIsActivated(false);
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearTimeout(timeout);
+    };
+  }, [authLoading, accessToken]);
 
   const loadVerseInfo = async () => {
     if (!fromVerse) {
@@ -138,6 +241,126 @@ export default function Spin() {
   const handleCancel = () => {
     navigate(-1);
   };
+
+  // Authentication UI components
+  const AuthLoadingScreen = () => (
+    <div className="flex flex-col items-center justify-center h-full w-full">
+      <p className="mt-4 text-lg text-gray-600"></p>
+    </div>
+  );
+
+  const AccessRestricted = () => {
+    useEffect(() => {
+      const interval = setInterval(() => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: 'REQUEST_AUTH',
+            },
+            '*',
+          );
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
+        <div className="bg-gradient-to-br from-cyan-700 to-sky-900 p-8 rounded-lg border border-cyan-500 max-w-md shadow-lg shadow-cyan-700/30">
+          <h2 className="text-2xl font-bold text-cyan-200 mb-3">Authenticating...</h2>
+          <p className="text-cyan-300 mb-4">Please wait while we verify your access.</p>
+        </div>
+      </div>
+    );
+  };
+
+  const NotLoadedContainer = () => {
+    const [countdown, setCountdown] = useState(5);
+    const [showMessage, setShowMessage] = useState(false);
+
+    useEffect(() => {
+      // 1.5초 후에 메시지 표시
+      const messageTimer = setTimeout(() => {
+        setShowMessage(true);
+      }, 1500);
+
+      return () => {
+        clearTimeout(messageTimer);
+      };
+    }, []);
+
+    useEffect(() => {
+      if (showMessage) {
+        const countdownTimer = setInterval(() => {
+          setCountdown((prevCount) => {
+            if (prevCount <= 1) {
+              clearInterval(countdownTimer);
+              location.reload();
+
+              return 0;
+            }
+
+            return prevCount - 1;
+          });
+        }, 1000);
+
+        return () => {
+          clearInterval(countdownTimer);
+        };
+      }
+
+      return () => {
+        // No cleanup needed
+      };
+    }, [showMessage]);
+
+    if (!showMessage) {
+      return <div className="flex flex-col items-center justify-center h-full w-full"></div>;
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
+        <div className="bg-gradient-to-br from-gray-900 to-cyan-950 p-8 rounded-lg border border-cyan-700 max-w-md shadow-lg shadow-cyan-800/50 min-w-[500px]">
+          <h2 className="text-2xl font-bold text-cyan-300 mb-3">The service is temporarily busy.</h2>
+          <p className="text-gray-400 mb-4">
+            Please wait a moment.
+            <br /> We will reload the page in {countdown} seconds.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Check if access control is enabled
+  const isAccessControlEnabled = import.meta.env.VITE_ACCESS_CONTROL_ENABLED === 'true';
+
+  // If access control is enabled, check authentication first
+  if (isAccessControlEnabled) {
+    if (authLoading) {
+      return (
+        <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+          <AuthLoadingScreen />
+        </div>
+      );
+    }
+
+    if (isActivated === false) {
+      return (
+        <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+          <AccessRestricted />
+        </div>
+      );
+    }
+
+    if (!loadedContainer) {
+      return (
+        <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+          <NotLoadedContainer />
+        </div>
+      );
+    }
+  }
 
   if (isLoading || isSpinning) {
     return (
