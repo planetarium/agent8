@@ -578,7 +578,15 @@ class RemoteContainerConnection {
     }
 
     this._setState(ConnectionState.CONNECTING, 'manual-connect');
-    this._initializeWebSocket();
+
+    if (this._ws?.readyState === WebSocket.OPEN) {
+      console.log('🔄 WebSocket already open, skipping connection');
+      this._setState(ConnectionState.CONNECTED, 'manual-connect');
+
+      return;
+    } else {
+      this._initializeWebSocket();
+    }
 
     // Wait until connection is complete
     const { promise, resolve, reject } = withResolvers<void>();
