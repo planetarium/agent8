@@ -160,7 +160,7 @@ class RemoteContainerConnection {
       .onClose((_ws, ev) => this._handleClose(ev))
       .onError((_ws, ev) => this._handleError(ev))
       .onMessage((_ws, ev) => this._handleMessage(ev.data))
-      .onRetry((_ws, _ev) => this._handleRetry())
+      .onRetry((ws, _ev) => this._handleRetry(ws))
       .onReconnect((_ws, _ev) => this._handleReconnect())
       .build();
   }
@@ -325,7 +325,7 @@ class RemoteContainerConnection {
     }
   }
 
-  private _handleRetry(): void {
+  private _handleRetry(ws: Websocket): void {
     this._reconnectAttempts++;
     logger.info(
       `🔄 Container WebSocket retrying connection... (attempt ${this._reconnectAttempts}/${this._config.maxReconnectAttempts})`,
@@ -338,13 +338,13 @@ class RemoteContainerConnection {
       this._maxAttemptsReached = true;
       this._setState(ConnectionState.FAILED, 'max-retries-reached');
 
-      if (this._ws) {
-        this._ws.close();
-        this._ws = null;
-      }
+      ws.close(3002, 'Maximum reconnection attempts reached');
 
-      this._rejectPendingRequests('Maximum reconnection attempts reached');
-      this._notifyError(new Error(`Connection failed after ${this._config.maxReconnectAttempts} attempts`));
+      if (this._ws === ws) {
+        this._ws = null;
+        this._rejectPendingRequests('Maximum reconnection attempts reached');
+        this._notifyError(new Error(`Connection failed after ${this._config.maxReconnectAttempts} attempts`));
+      }
 
       return;
     }
