@@ -543,27 +543,6 @@ class RemoteContainerConnection {
     this._requestMap.clear();
   }
 
-  private _cleanupExpiredRequests(): void {
-    const now = Date.now();
-    const expiredIds: string[] = [];
-
-    this._requestMap.forEach(({ timestamp }, id) => {
-      if (now - timestamp > 30000) {
-        // 30 second timeout
-        expiredIds.push(id);
-      }
-    });
-
-    for (const id of expiredIds) {
-      const request = this._requestMap.get(id);
-
-      if (request) {
-        request.reject(new Error('Request expired'));
-        this._requestMap.delete(id);
-      }
-    }
-  }
-
   async connect(): Promise<void> {
     if (this._state === ConnectionState.CONNECTING || this._state === ConnectionState.CONNECTED) {
       return;
