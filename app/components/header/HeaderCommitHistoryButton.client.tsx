@@ -162,7 +162,7 @@ export function HeaderCommitHistoryButton() {
 
       if (forkedProject && forkedProject.success) {
         toast.success('Forked project successfully');
-        window.open('/chat/' + forkedProject.project.path, '_blank');
+        window.location.href = '/chat/' + forkedProject.project.path;
       } else {
         handleChatError('Failed to fork project', undefined, 'handleFork - fork result check');
       }
@@ -190,7 +190,7 @@ export function HeaderCommitHistoryButton() {
         </button>
       </RadixDialog.Trigger>
       <Dialog
-        className="max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col bg-zinc-900 border-zinc-700"
+        className="max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col bg-zinc-900 border-zinc-700 z-[100]"
         onClose={() => setIsOpen(false)}
       >
         <div className="p-6 border-b border-zinc-700 bg-gradient-to-r from-zinc-800 to-zinc-900">
