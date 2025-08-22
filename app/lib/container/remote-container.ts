@@ -47,6 +47,7 @@ const BUFFER_CONFIG = {
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
+const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
 const logger = createScopedLogger('remote-container');
 
 // Connection state enum
@@ -159,7 +160,7 @@ class RemoteContainerConnection {
       .onClose((_ws, ev) => this._handleClose(ev))
       .onError((_ws, ev) => this._handleError(ev))
       .onMessage((_ws, ev) => this._handleMessage(ev.data))
-      .onRetry((_ws, _ev) => this._handleRetry())
+      .onRetry((ws, _ev) => this._handleRetry(ws))
       .onReconnect((_ws, _ev) => this._handleReconnect())
       .build();
   }
@@ -324,7 +325,7 @@ class RemoteContainerConnection {
     }
   }
 
-  private _handleRetry(): void {
+  private _handleRetry(ws: Websocket): void {
     this._reconnectAttempts++;
     logger.info(
       `🔄 Container WebSocket retrying connection... (attempt ${this._reconnectAttempts}/${this._config.maxReconnectAttempts})`,
@@ -337,13 +338,13 @@ class RemoteContainerConnection {
       this._maxAttemptsReached = true;
       this._setState(ConnectionState.FAILED, 'max-retries-reached');
 
-      if (this._ws) {
-        this._ws.close();
-        this._ws = null;
-      }
+      ws.close(3002, 'Maximum reconnection attempts reached');
 
-      this._rejectPendingRequests('Maximum reconnection attempts reached');
-      this._notifyError(new Error(`Connection failed after ${this._config.maxReconnectAttempts} attempts`));
+      if (this._ws === ws) {
+        this._ws = null;
+        this._rejectPendingRequests('Maximum reconnection attempts reached');
+        this._notifyError(new Error(`Connection failed after ${this._config.maxReconnectAttempts} attempts`));
+      }
 
       return;
     }
@@ -542,27 +543,6 @@ class RemoteContainerConnection {
     this._requestMap.clear();
   }
 
-  private _cleanupExpiredRequests(): void {
-    const now = Date.now();
-    const expiredIds: string[] = [];
-
-    this._requestMap.forEach(({ timestamp }, id) => {
-      if (now - timestamp > 30000) {
-        // 30 second timeout
-        expiredIds.push(id);
-      }
-    });
-
-    for (const id of expiredIds) {
-      const request = this._requestMap.get(id);
-
-      if (request) {
-        request.reject(new Error('Request expired'));
-        this._requestMap.delete(id);
-      }
-    }
-  }
-
   async connect(): Promise<void> {
     if (this._state === ConnectionState.CONNECTING || this._state === ConnectionState.CONNECTED) {
       return;
@@ -577,7 +557,15 @@ class RemoteContainerConnection {
     }
 
     this._setState(ConnectionState.CONNECTING, 'manual-connect');
-    this._initializeWebSocket();
+
+    if (this._ws?.readyState === WebSocket.OPEN) {
+      console.log('🔄 WebSocket already open, skipping connection');
+      this._setState(ConnectionState.CONNECTED, 'manual-connect');
+
+      return;
+    } else {
+      this._initializeWebSocket();
+    }
 
     // Wait until connection is complete
     const { promise, resolve, reject } = withResolvers<void>();
@@ -1308,8 +1296,13 @@ export class RemoteContainer implements Container {
 
         logger.debug(`[${sessionId}] executeCommand`, command);
 
+        // Use currentTerminal instead of original terminal for input
+        if (!currentTerminal) {
+          throw new Error('No terminal attached to session');
+        }
+
         // Interrupt current execution
-        terminal.input('\x03');
+        currentTerminal.input('\x03');
 
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
@@ -1317,13 +1310,13 @@ export class RemoteContainer implements Container {
         await waitTillOscCode('prompt');
 
         // Execute new command
-        terminal.input(':' + '\n');
+        currentTerminal.input(':' + '\n');
         await waitTillOscCode('exit');
         logger.debug('terminal is responsive');
 
         logger.debug(`[${sessionId}] prompt received`, command);
 
-        terminal.input(command.trim() + '\n');
+        currentTerminal.input(command.trim() + '\n');
 
         logger.debug(`[${sessionId}] command executed`, command);
 
@@ -1346,6 +1339,10 @@ export class RemoteContainer implements Container {
     // Shell ready signal
     const shellReady = withResolvers<void>();
 
+    // Track current terminal for dynamic reconnection
+    let currentTerminal: ITerminal | null = terminal;
+    let currentTerminalDataDisposable: IDisposable | null = null;
+
     // Detect interactive mode
     let checkInteractive = false;
     output.pipeTo(
@@ -1360,13 +1357,15 @@ export class RemoteContainer implements Container {
             }
           }
 
-          terminal.write(data);
+          // Write to current terminal (allows dynamic switching)
+          if (currentTerminal) {
+            currentTerminal.write(data);
+          }
         },
       }),
     );
 
     // Handle terminal input - store the disposable for later cleanup
-    let terminalDataDisposable: IDisposable | null = null;
     const pendingBuffer: string[] = [];
     let isProcessingBuffer = false;
 
@@ -1415,20 +1414,65 @@ export class RemoteContainer implements Container {
       return /[\x03\x04\x1b\r\n\t]/.test(data) || data.length > 1;
     };
 
-    terminalDataDisposable = terminal.onData(async (data) => {
-      if (shouldSendImmediately(data)) {
-        addToBuffer(data);
-      } else {
-        debouncedWrite(data);
+    // Attach terminal input handler
+    const attachTerminalInput = (term: ITerminal) => {
+      // Detach previous terminal if any
+      if (currentTerminalDataDisposable) {
+        currentTerminalDataDisposable.dispose();
+        currentTerminalDataDisposable = null;
       }
-    });
+
+      // Attach new terminal
+      currentTerminalDataDisposable = term.onData(async (data) => {
+        if (shouldSendImmediately(data)) {
+          addToBuffer(data);
+        } else {
+          debouncedWrite(data);
+        }
+      });
+    };
+
+    // Initial terminal attachment
+    attachTerminalInput(terminal);
 
     const detachTerminal = () => {
-      if (terminalDataDisposable) {
-        terminalDataDisposable.dispose();
-        terminalDataDisposable = null;
-        logger.debug('Terminal detached from shell session');
+      if (currentTerminalDataDisposable) {
+        currentTerminalDataDisposable.dispose();
+        currentTerminalDataDisposable = null;
+        logger.debug('Terminal input detached from shell session');
       }
+
+      currentTerminal = null;
+    };
+
+    const attachTerminal = async (newTerminal: ITerminal) => {
+      logger.debug('Attaching new terminal to existing shell session');
+
+      // Update terminal references
+      currentTerminal = newTerminal;
+
+      // Reattach input handler
+      attachTerminalInput(newTerminal);
+
+      // Sync terminal dimensions if different
+      if (newTerminal.cols && newTerminal.rows) {
+        try {
+          await process.resize({ cols: newTerminal.cols, rows: newTerminal.rows });
+          logger.debug(`Terminal dimensions synced: ${newTerminal.cols}x${newTerminal.rows}`);
+        } catch (error) {
+          logger.warn('Failed to sync terminal dimensions:', error);
+        }
+      }
+
+      logger.debug('Terminal successfully reattached to shell session');
+
+      // Send a newline to display prompt after terminal reattachment
+      setTimeout(() => {
+        if (currentTerminal) {
+          logger.debug('Sending newline to display prompt');
+          addToBuffer('\n');
+        }
+      }, TERMINAL_REATTACH_PROMPT_DELAY_MS);
     };
 
     // Return basic shell session
@@ -1441,6 +1485,7 @@ export class RemoteContainer implements Container {
       executeCommand,
       waitTillOscCode,
       detachTerminal,
+      attachTerminal,
     };
 
     return session;

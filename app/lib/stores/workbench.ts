@@ -832,10 +832,11 @@ export class WorkbenchStore {
     const envVars = this.#parseEnvFile(envFile);
     const currentAccount = envVars.VITE_AGENT8_ACCOUNT;
     const currentVerse = envVars.VITE_AGENT8_VERSE;
+    const userIdentifiers = [user.walletAddress, user.userUid].filter(Boolean);
 
     if (
-      (currentAccount === user.walletAddress || currentAccount === user.userUid) &&
-      currentVerse?.startsWith(currentAccount) &&
+      userIdentifiers.some((id) => currentAccount === id) &&
+      userIdentifiers.some((id) => currentVerse?.startsWith(id)) &&
       !reset
     ) {
       return currentVerse;
