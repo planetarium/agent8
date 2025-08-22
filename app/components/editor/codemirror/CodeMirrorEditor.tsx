@@ -14,8 +14,8 @@ import {
   EditorState,
   StateEffect,
   StateField,
+  Transaction,
   type Extension,
-  type Transaction,
 } from '@codemirror/state';
 import {
   drawSelection,
@@ -72,6 +72,8 @@ const EDITOR_MESSAGES = {
   FOCUS_FAILED: 'Failed to set focus',
   SCROLL_FAILED: 'Failed to set scroll position',
   SCROLL_RESET_FAILED: 'Failed to reset scroll position',
+  AI_COMPLETION_SYNC: 'Final state synchronization',
+  AI_COMPLETION_FAILED: 'Final state synchronization failed',
 } as const;
 
 /*
@@ -277,8 +279,10 @@ function createDispatchTransactions(
 
     // Only notify of changes if we have a document and something actually changed
     if (docRef.current && (transactions.some((transaction) => transaction.docChanged) || selectionChanged)) {
-      // Don't trigger callbacks during view recreation to prevent infinite loops
-      if (!isRecreating) {
+      const documentChanged = transactions.some((transaction) => transaction.docChanged);
+      const shouldNotify = documentChanged || !isRecreating;
+
+      if (shouldNotify) {
         onUpdate({
           selection: view.state.selection,
           content: view.state.doc.toString(),
@@ -582,6 +586,9 @@ export const CodeMirrorEditor = memo(
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
 
+    // Track previous editable state for AI completion detection
+    const prevEditableRef = useRef<boolean>(editable);
+
     // EditorView recreation function (infinite recursion prevention)
     const recreateEditorView = (() => {
       let isRecreating = false;
@@ -673,6 +680,37 @@ export const CodeMirrorEditor = memo(
       docRef.current = doc;
       themeRef.current = theme;
     });
+
+    // AI completion detection and final state synchronization
+    useEffect(() => {
+      // Detect AI streaming completion (editable: false → true)
+      if (!prevEditableRef.current && editable && doc?.value && viewRef.current) {
+        // Use existing safeDispatch for safety and consistency
+        const success = safeDispatch(
+          viewRef.current,
+          {
+            changes: {
+              from: 0,
+              to: viewRef.current.state.doc.length,
+              insert: doc.value,
+            },
+            selection: { anchor: doc.value.length }, // Move cursor to end of file
+            annotations: [Transaction.addToHistory.of(false)], // Don't add to undo history
+          },
+          EDITOR_MESSAGES.AI_COMPLETION_SYNC,
+          recreateEditorView,
+        );
+
+        if (success) {
+          logger.info(EDITOR_MESSAGES.AI_COMPLETION_SYNC);
+        } else {
+          logger.warn(EDITOR_MESSAGES.AI_COMPLETION_FAILED);
+        }
+      }
+
+      // Update previous editable state
+      prevEditableRef.current = editable;
+    }, [editable]);
 
     // Initialize CodeMirror editor view (mount only)
     useEffect(() => {
