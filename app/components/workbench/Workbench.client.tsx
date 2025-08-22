@@ -483,12 +483,12 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                         <div className="w-5 h-5 mx-auto mb-2 border-2 border-bolt-elements-button-primary-background border-t-transparent rounded-full animate-spin" />
                         <div className="text-sm text-bolt-elements-textPrimary">Reconnecting to Server...</div>
                       </>
-                    ) : connectionState === 'failed' ? (
+                    ) : (
                       <>
                         <div className="w-6 h-6 mb-2 mx-auto text-red-400">
-                          <div className="i-ph:warning-circle" />
+                          <div className="i-ph:wifi-slash" />
                         </div>
-                        <div className="text-sm text-bolt-elements-textPrimary mb-3">Connection Failed</div>
+                        <div className="text-sm text-bolt-elements-textPrimary">Server Disconnected</div>
                         <button
                           onClick={async () => {
                             /*
@@ -501,13 +501,6 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                         >
                           Reconnect
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
-                          <div className="i-ph:wifi-slash" />
-                        </div>
-                        <div className="text-sm text-bolt-elements-textPrimary">Server Disconnected</div>
                       </>
                     )}
                   </div>
