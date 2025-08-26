@@ -1,4 +1,4 @@
-import { type Message } from 'ai';
+import { type UIMessage } from 'ai';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -19,15 +19,19 @@ function stripMetadata(content?: string) {
     .replace(DEV_TAG_REGEX, '');
 }
 
-export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
+export function extractPropertiesFromMessage(message: Omit<UIMessage, 'id'>): {
   model: string;
   provider: string;
   content: any;
   parts: any;
 } {
-  const textContent = Array.isArray(message.content)
-    ? message.content.find((item) => item.type === 'text')?.text || ''
-    : message.content;
+  const textContent =
+    message.parts && message.parts.length > 0
+      ? message.parts
+          .filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join('')
+      : '';
 
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
@@ -58,18 +62,8 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
     }
   } catch {}
 
-  const cleanedContent = Array.isArray(message.content)
-    ? message.content.map((item) => {
-        if (item.type === 'text') {
-          return {
-            type: 'text',
-            text: stripMetadata(item.text) + attachmentsText,
-          };
-        }
-
-        return item; // Preserve image_url and other types as is
-      })
-    : stripMetadata(textContent) + attachmentsText;
+  // AI SDK v5에서는 parts 구조를 사용하므로 cleanedContent는 텍스트 콘텐츠만 처리
+  const cleanedContent = stripMetadata(textContent) + attachmentsText;
 
   const parts =
     message.parts?.map((part) => {
@@ -130,7 +124,7 @@ export function createFilesContext(files: FileMap, useRelativePath?: boolean) {
   return `<boltArtifact id="code-content" title="Code Content" >\n${fileContexts.join('\n')}\n</boltArtifact>`;
 }
 
-export function extractCurrentContext(messages: Message[]) {
+export function extractCurrentContext(messages: UIMessage[]) {
   const lastAssistantMessage = messages.filter((x) => x.role == 'assistant').slice(-1)[0];
 
   if (!lastAssistantMessage) {
@@ -140,12 +134,14 @@ export function extractCurrentContext(messages: Message[]) {
   let summary: ContextAnnotation | undefined;
   let codeContext: ContextAnnotation | undefined;
 
-  if (!lastAssistantMessage.annotations?.length) {
+  const annotations = (lastAssistantMessage.metadata as any)?.annotations;
+
+  if (!annotations?.length) {
     return { summary: undefined, codeContext: undefined };
   }
 
-  for (let i = 0; i < lastAssistantMessage.annotations.length; i++) {
-    const annotation = lastAssistantMessage.annotations[i];
+  for (let i = 0; i < annotations.length; i++) {
+    const annotation = annotations[i];
 
     if (!annotation || typeof annotation !== 'object') {
       continue;

@@ -44,8 +44,8 @@ export async function consumeUserCredit(
       provider: string;
       name: string;
     };
-    inputTokens: number;
-    outputTokens: number;
+    inputTokens: number | undefined;
+    outputTokens: number | undefined;
     cacheRead?: number;
     cacheWrite?: number;
     description?: string;
@@ -66,8 +66,8 @@ export async function consumeUserCredit(
       userUid,
       llmProvider: consumeArgs.model.provider,
       llmModelName: consumeArgs.model.name,
-      inputTokens: consumeArgs.inputTokens,
-      outputTokens: consumeArgs.outputTokens,
+      inputTokens: consumeArgs.inputTokens ?? 0,
+      outputTokens: consumeArgs.outputTokens ?? 0,
       cacheReadTokens: consumeArgs.cacheRead,
       cacheWriteTokens: consumeArgs.cacheWrite,
       description: consumeArgs.description || 'Agent8 Chat',

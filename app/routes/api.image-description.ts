@@ -47,7 +47,7 @@ export async function generateImageDescription(
       
       CRITICAL: Do not return any text other than JSON.
       `,
-      maxTokens: 8000,
+      maxOutputTokens: 8000,
       messages: [
         {
           role: 'user',
@@ -89,8 +89,8 @@ async function imageDescriptionAction({ request, context }: ActionFunctionArgs) 
         const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
         consumeUserCredit({
           model: { provider, name: model },
-          inputTokens: usage.promptTokens,
-          outputTokens: usage.completionTokens,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
           description: 'Image Description',
         });
       }

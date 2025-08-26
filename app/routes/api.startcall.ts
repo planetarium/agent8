@@ -29,7 +29,9 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
           role: 'system',
           content: system,
           providerOptions: {
-            anthropic: { cacheControl: { type: 'ephemeral' } },
+            anthropic: {
+              cacheControl: { type: 'ephemeral' },
+            },
           },
         },
         {
@@ -44,7 +46,6 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
 
           if (providerMetadata?.anthropic) {
             const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
-
             cacheRead += Number(cacheReadInputTokens || 0);
             cacheWrite += Number(cacheCreationInputTokens || 0);
           }
@@ -52,8 +53,8 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
           const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
           await consumeUserCredit({
             model: { provider: provider.name, name: model },
-            inputTokens: usage.promptTokens,
-            outputTokens: usage.completionTokens,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
             cacheRead,
             cacheWrite,
             description: 'Start Call',

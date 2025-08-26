@@ -1,5 +1,5 @@
 import { tool } from 'ai';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { createClient } from '@supabase/supabase-js';
 import { embed } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -22,7 +22,7 @@ export async function createSearchCodebase(env: Env): Promise<Record<string, any
     tools.search_codebase_vectordb_items = tool({
       description:
         'Search the vector database for 3D game development code examples based on natural language queries. This database is specifically for 3D game implementations like (implementing trees in a 3D world), (3D skybox setup examples). This tool should be called only once with carefully selected search phrases focused on 3D game development. Carefully review the returned descriptions to determine if the code examples are useful for your task. If you find relevant examples, you must then call read_codebase_vectordb_contents with the item IDs to retrieve the actual code implementations.',
-      parameters: z.object({
+      inputSchema: z.object({
         keywords: z
           .array(z.string())
           .describe(
@@ -93,7 +93,7 @@ export async function createSearchCodebase(env: Env): Promise<Record<string, any
     tools.read_codebase_vectordb_contents = tool({
       description:
         "Retrieve the full content of specific 3D game code examples from the vector database using their IDs. This tool should only be called once after you've identified relevant code examples using search_codebase_vectordb_items. Use this to get the complete implementation details for 3D game features.",
-      parameters: z.object({
+      inputSchema: z.object({
         ids: z.array(z.coerce.string()).describe('Array of 3D game code example IDs to retrieve content for'),
       }),
       execute: async ({ ids }) => {
@@ -149,7 +149,7 @@ export async function createSearchResources(env: Env): Promise<Record<string, an
     tools.search_resources_vectordb_items = tool({
       description:
         "Search the vector database for 3D game development resources based on natural language queries. This database is exclusively for 3D game assets and resources like '3D 캐릭터 모델링' (3D character models), '리얼리스틱 텍스처 팩' (realistic texture packs), or 'game environment sound effects'. This tool should be called only once with carefully selected search phrases focused on 3D game development resources. You'll need to analyze the results to determine if they're useful for your task.",
-      parameters: z.object({
+      inputSchema: z.object({
         keywords: z
           .array(z.string())
           .describe(

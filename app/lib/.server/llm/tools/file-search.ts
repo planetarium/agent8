@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { tool } from 'ai';
@@ -11,7 +11,7 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
   return tool({
     description:
       'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
-    parameters: z.object({
+    inputSchema: z.object({
       pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
       caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
       beforeLines: z
@@ -60,7 +60,7 @@ export const createFilesReadTool = (fileMap: FileMap) => {
   return tool({
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
-    parameters: z.object({
+    inputSchema: z.object({
       pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
     }),
     execute: async ({ pathList }: { pathList: string[] }) => {

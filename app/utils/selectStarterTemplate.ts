@@ -225,8 +225,11 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
         const filePath = `${data.path}`;
         fileMap[filePath] = {
           type: 'file',
-          content,
-          isBinary: false,
+
+          file: {
+            content,
+            isBinary: false
+          }
         };
 
         return fileMap;
@@ -259,8 +262,11 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
           const filePath = `${item.path}`;
           fileMap[filePath] = {
             type: 'file',
-            content,
-            isBinary: false,
+
+            file: {
+              content,
+              isBinary: false
+            }
           };
         }
       }),

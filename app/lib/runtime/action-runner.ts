@@ -343,6 +343,7 @@ export class ActionRunner {
 
     try {
       await container.fs.writeFile(relativePath, action.content);
+
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
@@ -373,9 +374,14 @@ export class ActionRunner {
 
     await this.#runFileAction({
       type: 'file',
-      filePath: historyPath,
-      content: JSON.stringify(history),
-      changeSource: 'auto-save',
+
+      file: {
+        file: {
+          filePath: historyPath,
+          content: JSON.stringify(history),
+          changeSource: 'auto-save',
+        },
+      },
     } as any);
   }
 

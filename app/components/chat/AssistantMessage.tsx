@@ -119,7 +119,6 @@ export const AssistantMessage = memo(({ content, annotations, forceExpanded }: A
           )}
         </div>
       </>
-
       <div className="markdown-container">
         <div
           className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}

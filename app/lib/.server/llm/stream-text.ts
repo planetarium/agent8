@@ -1,4 +1,4 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
+import { streamText as _streamText, convertToModelMessages, type CoreSystemMessage, type UIMessage } from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -17,14 +17,14 @@ import {
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 
-export type Messages = Message[];
+export type Messages = UIMessage[];
 
-export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model'>;
+export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 const logger = createScopedLogger('stream-text');
 
 export async function streamText(props: {
-  messages: Array<Omit<Message, 'id'>>;
+  messages: Array<Omit<UIMessage, 'id'>>;
   env?: Env;
   options?: StreamingOptions;
   files?: FileMap;
@@ -130,7 +130,7 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    ...convertToCoreMessages(processedMessages).slice(-3),
+    ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
@@ -145,8 +145,7 @@ export async function streamText(props: {
       serverEnv,
     }),
     abortSignal,
-    maxTokens: dynamicMaxTokens,
-    maxSteps: 20,
+    maxOutputTokens: dynamicMaxTokens,
     messages: coreMessages,
     tools: combinedTools,
     ...options,

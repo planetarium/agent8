@@ -71,16 +71,26 @@ interface ConnectionConfig {
 
 function base64ToUint8Array(base64: string) {
   if (typeof Buffer !== 'undefined') {
-    return new Uint8Array(Buffer.from(base64, 'base64'));
-  } else {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
+    try {
+      const result = new Uint8Array(Buffer.from(base64, 'base64'));
 
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
+      return result;
+    } catch {
+      return new Uint8Array(0);
     }
+  } else {
+    try {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
 
-    return bytes;
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      return bytes;
+    } catch {
+      return new Uint8Array(0);
+    }
   }
 }
 
@@ -559,7 +569,6 @@ class RemoteContainerConnection {
     this._setState(ConnectionState.CONNECTING, 'manual-connect');
 
     if (this._ws?.readyState === WebSocket.OPEN) {
-      console.log('🔄 WebSocket already open, skipping connection');
       this._setState(ConnectionState.CONNECTED, 'manual-connect');
 
       return;
@@ -800,8 +809,10 @@ export class RemoteContainerFileSystem implements FileSystem {
   }
 
   async writeFile(path: string, content: string | Uint8Array, options?: { encoding?: BufferEncoding }): Promise<void> {
+    const requestId = `writeFile-${v4()}`;
+
     const response = await this._connection.sendRequest({
-      id: `writeFile-${v4()}`,
+      id: requestId,
       operation: {
         type: 'writeFile',
         path,
@@ -892,7 +903,8 @@ export class RemoteContainerFileSystem implements FileSystem {
       addEventListener(event: string, listener) {
         const unsubscribe = connection.on('file-change', (watcherId, eventType, filename, buffer) => {
           if (watcherId === watcherIdFromResponse) {
-            listener(eventType, filename, buffer ? base64ToUint8Array(buffer) : null);
+            const convertedBuffer = buffer ? base64ToUint8Array(buffer) : null;
+            listener(eventType, filename, convertedBuffer);
           }
         });
         unsubscribers.push(unsubscribe);
@@ -924,7 +936,8 @@ export class RemoteContainerFileSystem implements FileSystem {
 
     this._connection.on('file-change', (watcherId, eventType, filename, buffer) => {
       if (watcherId === watcherIdFromResponse) {
-        callback([{ type: eventType as any, path: filename, buffer: buffer ? base64ToUint8Array(buffer) : undefined }]);
+        const convertedBuffer = buffer ? base64ToUint8Array(buffer) : undefined;
+        callback([{ type: eventType as any, path: filename, buffer: convertedBuffer }]);
       }
     });
   }

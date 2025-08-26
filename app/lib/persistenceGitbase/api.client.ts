@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import axios from 'axios';
 import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -29,7 +29,7 @@ export const getCommit = async (projectPath: string, commitHash: string) => {
   return response.data;
 };
 
-export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
+export const commitChanges = async (message: UIMessage, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
   const taskBranch = repoStore.get().taskBranch || 'develop';
@@ -115,7 +115,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     }
   }
 
-  const promptAnnotation = message.annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
+  const promptAnnotation = (message as any).annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
   const userMessage = promptAnnotation?.prompt || 'Commit changes';
 
   const commitMessage = `${stripMetadata(userMessage)}

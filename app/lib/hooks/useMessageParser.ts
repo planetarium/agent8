@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import { useCallback, useState } from 'react';
 import { StreamingMessageParser } from '~/lib/runtime/message-parser';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -51,7 +51,7 @@ const messageParser = new StreamingMessageParser({
 export function useMessageParser() {
   const [parsedMessages, setParsedMessages] = useState<{ [key: number]: string }>({});
 
-  const parseMessages = useCallback((messages: Message[]) => {
+  const parseMessages = useCallback((messages: UIMessage[]) => {
     messageParser.reset();
 
     for (const [index, message] of messages.entries()) {

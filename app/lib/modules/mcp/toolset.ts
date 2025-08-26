@@ -3,8 +3,8 @@
  */
 
 import { type Tool } from 'ai';
-import { type JSONSchema7 } from '@ai-sdk/provider';
-import { jsonSchema } from '@ai-sdk/ui-utils';
+import { type JSONSchema7 } from 'ai';
+import { jsonSchema } from 'ai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -187,7 +187,7 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
         // Replace spaces with dashes due to AI SDK tool name restrictions
         toolName = toolName.replaceAll(' ', '-');
 
-        const parameters = jsonSchema({
+        const inputSchema = jsonSchema({
           ...tool.inputSchema,
           properties: tool.inputSchema.properties ?? {},
           additionalProperties: false,
@@ -198,7 +198,7 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
 
         toolset.tools[toolName] = {
           description: tool.description || '',
-          parameters,
+          inputSchema,
           progressEmitter,
           execute: async (args) => {
             /*

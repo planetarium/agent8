@@ -1,4 +1,4 @@
-import { generateText, type CoreTool, type GenerateTextResult, type Message } from 'ai';
+import { generateText, type UIMessage, type GenerateTextResult } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, PROVIDER_LIST } from '~/utils/constants';
 import { extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
@@ -9,13 +9,13 @@ import { extractTextContent } from '~/utils/message';
 const logger = createScopedLogger('create-summary');
 
 export async function createSummary(props: {
-  messages: Message[];
+  messages: UIMessage[];
   env?: Env;
   apiKeys?: Record<string, string>;
   providerSettings?: Record<string, IProviderSetting>;
   promptId?: string;
   contextOptimization?: boolean;
-  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
+  onFinish?: (resp: GenerateTextResult<{}, void>) => void;
   abortSignal?: AbortSignal;
 }) {
   const { messages, env: serverEnv, apiKeys, providerSettings, onFinish, abortSignal } = props;
@@ -29,13 +29,17 @@ export async function createSummary(props: {
 
       return { ...message, content };
     } else if (message.role == 'assistant') {
-      let content = message.content;
+      const parts = [...(message.parts || [])];
 
-      content = simplifyBoltActions(content);
-      content = content.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
-      content = content.replace(/<think>.*?<\/think>/s, '');
+      for (const part of parts) {
+        if (part.type === 'text') {
+          part.text = simplifyBoltActions(part.text);
+          part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
+          part.text = part.text.replace(/<think>.*?<\/think>/s, '');
+        }
+      }
 
-      return { ...message, content };
+      return { ...message, parts };
     }
 
     return message;

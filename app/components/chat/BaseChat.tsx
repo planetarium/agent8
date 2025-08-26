@@ -1,8 +1,4 @@
-/*
- * @ts-nocheck
- * Preventing TS checks with files presented in the video for a better presentation.
- */
-import type { JSONValue, Message } from 'ai';
+import type { JSONValue, UIMessage } from 'ai';
 import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
@@ -57,7 +53,7 @@ interface BaseChatProps {
   chatStarted?: boolean;
   isStreaming?: boolean;
   onStreamingChange?: (streaming: boolean) => void;
-  messages?: Message[];
+  messages?: UIMessage[];
   description?: string;
   enhancingPrompt?: boolean;
   promptEnhanced?: boolean;
@@ -84,10 +80,10 @@ interface BaseChatProps {
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
   onProjectZipImport?: (title: string, zipFile: File) => void;
-  handleRetry?: (message: Message) => void;
-  handleFork?: (message: Message) => void;
-  handleRevert?: (message: Message) => void;
-  onViewDiff?: (message: Message) => void;
+  handleRetry?: (message: UIMessage) => void;
+  handleFork?: (message: UIMessage) => void;
+  handleRevert?: (message: UIMessage) => void;
+  onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
