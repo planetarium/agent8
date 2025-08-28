@@ -4,13 +4,13 @@ import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
-import { WORK_DIR_NAME } from '~/utils/constants';
+import { WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
-import { FilesStore, type FileMap } from './files';
+import { FilesStore, type FileMap, type File } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
 import JSZip from 'jszip';
@@ -820,10 +820,18 @@ export class WorkbenchStore {
 
   async setupEnvFile(user: V8User, reset: boolean = false) {
     const wc = await this.container;
-    let envFile = '';
+    const files = this.files.get();
+
+    if (!files || Object.keys(files).length === 0) {
+      throw new Error('Files not found');
+    }
+
+    let envFile = (files[`${WORK_DIR}/.env`] as File)?.content || '';
 
     try {
-      envFile = await wc.fs.readFile('.env', 'utf-8');
+      if (!envFile) {
+        envFile = await wc.fs.readFile('.env', 'utf-8');
+      }
     } catch {
       // File might not exist yet, continue with empty content
     }

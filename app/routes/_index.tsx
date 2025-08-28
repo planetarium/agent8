@@ -83,6 +83,15 @@ function AccessControlledChat() {
   useEffect(() => {
     // RemoteContainer는 항상 사용 가능
     setLoadedContainer(true);
+
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: 'REQUEST_AUTH',
+        },
+        '*',
+      );
+    }
   }, []);
 
   useEffect(() => {
