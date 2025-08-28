@@ -182,6 +182,7 @@ export function Chat() {
             }
 
             await containerInstance.mount(convertFileMapToFileSystemTree(files));
+            workbench.resetAllFileModifications();
 
             if (currentPreview) {
               workbench.previews.set(
