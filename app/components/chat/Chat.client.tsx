@@ -6,16 +6,11 @@ import { useStore } from '@nanostores/react';
 import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
-import {
-  useWorkbenchFiles,
-  useWorkbenchActionAlert,
-  useWorkbenchStore,
-  useWorkbenchContainer,
-} from '~/lib/hooks/useWorkbenchStore';
+import { useWorkbenchActionAlert, useWorkbenchStore, useWorkbenchContainer } from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -66,6 +61,17 @@ const toastAnimation = cssTransition({
 });
 
 const logger = createScopedLogger('Chat');
+
+// 🔄 공통 함수: 파일 맵을 workbench 형식으로 변환
+function processFilesForWorkbench(fileMap: Record<string, any>): Record<string, any> {
+  return Object.entries(fileMap).reduce(
+    (acc, [key, value]) => {
+      acc[key.startsWith(WORK_DIR) ? key : `${WORK_DIR}/${key}`] = value;
+      return acc;
+    },
+    {} as Record<string, any>,
+  );
+}
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
@@ -165,6 +171,19 @@ export function Chat() {
       }
 
       if (Object.keys(files).length > 0) {
+        // 🛡️ 안전한 초기화: workbench가 비어있을 때만 GitBase files로 초기화
+        const currentWorkbenchFiles = workbench.files.get();
+        const hasWorkbenchFiles = Object.keys(currentWorkbenchFiles).length > 0;
+
+        if (!hasWorkbenchFiles) {
+          // workbench가 비어있으면 GitBase files로 안전하게 초기화
+          const processedFileMap = processFilesForWorkbench(files);
+          workbench.files.set(processedFileMap);
+          logger.info('🔄 Initialized workbench files from GitBase');
+        } else {
+          logger.info('📝 Workbench files already exist, preserving current state');
+        }
+
         workbench.container.then(async (containerInstance) => {
           try {
             await containerInstance.fs.rm('/src', { recursive: true, force: true });
@@ -312,7 +331,7 @@ export const ChatImpl = memo(
     useShortcuts();
 
     const workbench = useWorkbenchStore();
-    const container = useWorkbenchContainer(); // Container 인스턴스 구독
+    const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const runAndPreview = async (message: UIMessage) => {
@@ -368,7 +387,7 @@ export const ChatImpl = memo(
     const [fakeLoading, setFakeLoading] = useState(false);
     const [installNpm, setInstallNpm] = useState(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
-    const files = useWorkbenchFiles();
+    const files = useMemo(() => workbench.files.get() || {}, [workbench]);
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
@@ -389,6 +408,23 @@ export const ChatImpl = memo(
     const [input, setInput] = useState(() => Cookies.get(PROMPT_COOKIE_KEY) || '');
     const [chatData, setChatData] = useState<any>(undefined);
 
+    const transport = useMemo(
+      () =>
+        new DefaultChatTransport({
+          api: '/api/chat',
+          body: () => {
+            const currentFiles = workbench.files.get() || {};
+            return {
+              apiKeys,
+              files: currentFiles,
+              promptId,
+              contextOptimization: contextOptimizationEnabled,
+            };
+          },
+        }),
+      [apiKeys, promptId, contextOptimizationEnabled, workbench],
+    );
+
     const {
       messages,
       status,
@@ -399,15 +435,7 @@ export const ChatImpl = memo(
       error,
     } = useChat({
       messages: initialMessages,
-      transport: new DefaultChatTransport({
-        api: '/api/chat',
-        body: {
-          apiKeys,
-          files,
-          promptId,
-          contextOptimization: contextOptimizationEnabled,
-        },
-      }),
+      transport,
 
       onError: (e) => {
         logger.error('Request failed\n\n', e, error);
@@ -428,16 +456,12 @@ export const ChatImpl = memo(
       onFinish: async ({ message }) => {
         setChatData(undefined);
 
-        /*
-         * Note: usage information is no longer available in v5 onFinish callback
-         * This will need to be handled differently if usage tracking is required
-         */
         logStore.logProvider('Chat response completed', {
           component: 'Chat',
           action: 'response',
           model,
           provider: provider.name,
-          messageLength: message.parts?.[0]?.type === 'text' ? message.parts[0].text.length : 0,
+          messageLength: message.parts?.find((part) => part.type === 'text')?.text?.length || 0,
         });
 
         workbench.onArtifactClose(message.id, async () => {
@@ -460,6 +484,7 @@ export const ChatImpl = memo(
     const handleInputChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
       setInput(event.target.value);
     }, []);
+
     useEffect(() => {
       const prompt = searchParams.get('prompt');
       const autorun = searchParams.get('run');
@@ -492,7 +517,7 @@ export const ChatImpl = memo(
     }, [searchParams, input, setInput, setSearchParams]);
 
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
-    const { parsedMessages, parseMessages } = useMessageParser();
+    const { parseMessages } = useMessageParser();
 
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
@@ -514,7 +539,7 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       setInstallNpm(false);
-    }, [container]); // Container 변경 시 트리거
+    }, [container]);
 
     useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
@@ -732,13 +757,7 @@ export const ChatImpl = memo(
             throw new Error('Not Found Template Data');
           }
 
-          const processedFileMap = Object.entries(temResp.fileMap).reduce(
-            (acc, [key, value]) => {
-              acc[WORK_DIR + '/' + key] = value;
-              return acc;
-            },
-            {} as Record<string, any>,
-          );
+          const processedFileMap = processFilesForWorkbench(temResp.fileMap);
           workbench.files.set(processedFileMap);
 
           const containerInstance = await workbench.container;
@@ -966,7 +985,7 @@ export const ChatImpl = memo(
         provider &&
         model &&
         !enhancingPrompt &&
-        (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure files are loaded
+        (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure workbenchFiles are loaded
       ) {
         autorunRequested.current = false;
 
@@ -1258,16 +1277,7 @@ export const ChatImpl = memo(
         handleRevert={handleRevert}
         onViewDiff={handleViewDiff}
         description={description}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
-
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
+        messages={messages}
         enhancePrompt={() => {
           enhancePrompt(
             input,

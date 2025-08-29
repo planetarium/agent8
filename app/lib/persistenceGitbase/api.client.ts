@@ -115,7 +115,9 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
     }
   }
 
-  const promptAnnotation = (message as any).annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
+  const promptAnnotation = (message as any).metadata?.annotations?.find(
+    (annotation: any) => annotation.type === 'prompt',
+  ) as any;
   const userMessage = promptAnnotation?.prompt || 'Commit changes';
 
   const commitMessage = `${stripMetadata(userMessage)}

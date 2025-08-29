@@ -47,23 +47,18 @@ export const AssistantMessage = memo(({ content, annotations, forceExpanded }: A
     (annotation: JSONValue) => annotation && typeof annotation === 'object' && Object.keys(annotation).includes('type'),
   ) || []) as { type: string; value: any } & { [key: string]: any }[];
 
-  let chatSummary: string | undefined = undefined;
+  // Find annotations once and reuse results to avoid duplicate find operations
+  const chatSummaryAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary');
+  const codeContextAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'codeContext');
+  const usageAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'usage');
 
-  if (filteredAnnotations.find((annotation) => annotation.type === 'chatSummary')) {
-    chatSummary = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary')?.summary;
-  }
-
-  let codeContext: string[] | undefined = undefined;
-
-  if (filteredAnnotations.find((annotation) => annotation.type === 'codeContext')) {
-    codeContext = filteredAnnotations.find((annotation) => annotation.type === 'codeContext')?.files;
-  }
-
+  const chatSummary: string | undefined = chatSummaryAnnotation?.summary;
+  const codeContext: string[] | undefined = codeContextAnnotation?.files;
   const usage: {
     completionTokens: number;
     promptTokens: number;
     totalTokens: number;
-  } = filteredAnnotations.find((annotation) => annotation.type === 'usage')?.value;
+  } = usageAnnotation?.value;
 
   const toggleExpanded = () => {
     setExpanded(!expanded);

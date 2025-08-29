@@ -160,9 +160,39 @@ export const selectStarterTemplate = async (options: { message: string }) => {
     throw new Error(errorMessage);
   }
 
-  const respJson: { text: string } = await response.json();
+  // AI SDK v5 네이티브 구조 처리
+  const respJson = (await response.json()) as {
+    steps?: Array<{
+      content?: Array<{ type: string; text?: string }>;
+      finishReason?: string;
+      usage?: any;
+      providerMetadata?: any;
+    }>;
+  };
 
-  const { text } = respJson;
+  // Extract text from v5 structure: iterate through all steps to find text
+  let text = '';
+  const textChunks: string[] = [];
+
+  if (respJson.steps && Array.isArray(respJson.steps) && respJson.steps.length > 0) {
+    for (let i = 0; i < respJson.steps.length; i++) {
+      const step = respJson.steps[i];
+
+      if (step.content && Array.isArray(step.content)) {
+        const textParts = step.content.filter((c: any) => c && c.type === 'text' && c.text);
+
+        textParts.forEach((textPart: any) => {
+          if (textPart.text.trim()) {
+            textChunks.push(textPart.text.trim());
+          }
+        });
+      }
+    }
+
+    // Combine all text chunks
+    text = textChunks.join('\n').trim();
+  }
+
   const selectedTemplate = parseSelectedTemplate(text);
 
   if (!selectedTemplate) {
@@ -226,10 +256,8 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
         fileMap[filePath] = {
           type: 'file',
 
-          file: {
-            content,
-            isBinary: false
-          }
+          content,
+          isBinary: false,
         };
 
         return fileMap;
@@ -262,11 +290,8 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
           const filePath = `${item.path}`;
           fileMap[filePath] = {
             type: 'file',
-
-            file: {
-              content,
-              isBinary: false
-            }
+            content,
+            isBinary: false,
           };
         }
       }),

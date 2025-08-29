@@ -22,7 +22,6 @@ function stripMetadata(content?: string) {
 export function extractPropertiesFromMessage(message: Omit<UIMessage, 'id'>): {
   model: string;
   provider: string;
-  content: any;
   parts: any;
 } {
   const textContent =
@@ -62,9 +61,6 @@ export function extractPropertiesFromMessage(message: Omit<UIMessage, 'id'>): {
     }
   } catch {}
 
-  // AI SDK v5에서는 parts 구조를 사용하므로 cleanedContent는 텍스트 콘텐츠만 처리
-  const cleanedContent = stripMetadata(textContent) + attachmentsText;
-
   const parts =
     message.parts?.map((part) => {
       if (part.type === 'text') {
@@ -77,7 +73,7 @@ export function extractPropertiesFromMessage(message: Omit<UIMessage, 'id'>): {
       return part;
     }) || [];
 
-  return { model, provider, content: cleanedContent, parts };
+  return { model, provider, parts };
 }
 
 export function simplifyBoltActions(input: string): string {

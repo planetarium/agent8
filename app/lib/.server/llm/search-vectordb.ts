@@ -293,11 +293,11 @@ export async function searchVectorDB(props: {
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content } = extractPropertiesFromMessage(message);
+      const { model, provider, parts } = extractPropertiesFromMessage(message);
       currentModel = model;
       currentProvider = provider;
 
-      return { ...message, content };
+      return { ...message, parts };
     } else if (message.role == 'assistant') {
       let content = extractTextContent(message);
 

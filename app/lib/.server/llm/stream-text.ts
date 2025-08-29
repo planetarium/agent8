@@ -1,4 +1,10 @@
-import { streamText as _streamText, convertToModelMessages, type CoreSystemMessage, type UIMessage } from 'ai';
+import {
+  streamText as _streamText,
+  convertToModelMessages,
+  stepCountIs,
+  type SystemModelMessage,
+  type UIMessage,
+} from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -19,7 +25,13 @@ import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 
 export type Messages = UIMessage[];
 
-export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
+// AI SDK v5 호환: StreamingOptions 확장
+export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'> & {
+  // v5 추가 옵션들
+  stopWhen?: Parameters<typeof _streamText>[0]['stopWhen'];
+  onStepFinish?: Parameters<typeof _streamText>[0]['onStepFinish'];
+  maxSteps?: number; // 호환성을 위해 유지 (내부적으로 stopWhen으로 변환)
+};
 
 const logger = createScopedLogger('stream-text');
 
@@ -124,12 +136,12 @@ export async function streamText(props: {
           ({
             role: 'system',
             content,
-          }) as CoreSystemMessage,
+          }) as SystemModelMessage,
       ),
     {
       role: 'system',
       content: getProjectMdPrompt(files),
-    } as CoreSystemMessage,
+    } as SystemModelMessage,
     ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
@@ -146,6 +158,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
+    stopWhen: stepCountIs(20),
     messages: coreMessages,
     tools: combinedTools,
     ...options,

@@ -44,11 +44,8 @@ export async function extractZipTemplate(zipBuffer: ArrayBuffer): Promise<FileMa
         // FileMap에 파일 추가
         fileMap[filePath] = {
           type: 'file',
-
-          file: {
-            content,
-            isBinary: false
-          }
+          content,
+          isBinary: false,
         };
       } catch (error) {
         console.error(`Error extracting file ${filename}:`, error);

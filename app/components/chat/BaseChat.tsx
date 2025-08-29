@@ -181,7 +181,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     useEffect(() => {
       const progressFromData = data
-        ? (data.filter((x) => typeof x === 'object' && (x as any).type === 'progress') as ProgressAnnotation[])
+        ? (data.filter(
+            (x) => typeof x === 'object' && x !== null && 'type' in x && (x as any).type === 'progress',
+          ) as ProgressAnnotation[])
         : [];
 
       // Merge custom progress annotations with data progress annotations

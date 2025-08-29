@@ -1,5 +1,5 @@
 import { tool } from 'ai';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { createClient } from '@supabase/supabase-js';
 import { embed } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';

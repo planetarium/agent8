@@ -374,14 +374,9 @@ export class ActionRunner {
 
     await this.#runFileAction({
       type: 'file',
-
-      file: {
-        file: {
-          filePath: historyPath,
-          content: JSON.stringify(history),
-          changeSource: 'auto-save',
-        },
-      },
+      filePath: historyPath,
+      content: JSON.stringify(history),
+      changeSource: 'auto-save',
     } as any);
   }
 

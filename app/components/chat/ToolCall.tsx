@@ -4,7 +4,7 @@ import classNames from 'clsx';
 export interface ToolCall {
   toolName: string;
   toolCallId: string;
-  args: Record<string, any>;
+  input: Record<string, any>;
 }
 
 interface ToolCallProps {
@@ -48,7 +48,7 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
             <div className="text-sm">
               <strong className="text-sm text-gray-300">Parameters:</strong>
               <pre className="block p-2 mt-2 rounded-md bg-gray-800 text-sm overflow-auto max-h-64">
-                {JSON.stringify(toolCall.args, null, 2)}
+                {JSON.stringify(toolCall.input, null, 2)}
               </pre>
             </div>
           </div>
