@@ -924,6 +924,7 @@ export class WorkbenchStore {
 
     try {
       // Install dependencies
+      await this.#runShellCommand(shell, 'rm -rf dist');
       await this.#runShellCommand(shell, 'pnpm update');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
@@ -943,6 +944,18 @@ export class WorkbenchStore {
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);
         return;
+      }
+
+      const wc = await this.container;
+
+      let buildFile = '';
+
+      try {
+        buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
+      } catch {}
+
+      if (!buildFile) {
+        throw new Error('Failed to publish');
       }
 
       // Deploy project
