@@ -761,7 +761,7 @@ export class GitlabService {
             per_page: 100,
             order: 'topo',
             since: new Date(parseInt(sinceTimestamp)).toISOString(),
-            until: new Date(parseInt(sinceTimestamp) + 300_000).toISOString(),
+            until: new Date(parseInt(sinceTimestamp) + 1000_000).toISOString(),
           },
         },
       );

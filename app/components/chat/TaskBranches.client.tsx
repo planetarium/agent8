@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { repoStore } from '~/lib/stores/repo';
+import { ConfirmDialog } from '~/components/ui/ConfirmDialog';
 
 interface TaskBranchesProps {
   taskBranches?: any[];
@@ -12,6 +13,7 @@ interface TaskBranchesProps {
 
 const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise<void> }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const handleClose = async () => {
     try {
@@ -23,6 +25,10 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCloseClick = () => {
+    setShowConfirmDialog(true);
   };
 
   const handleContinue = async () => {
@@ -50,7 +56,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
         <button
           className="px-4 py-1.5 bg-transparent text-[rgba(63,210,232,0.9)] rounded-md hover:bg-[rgba(63,210,232,0.15)] transition-colors shadow-sm font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           {...(!isLoading && { 'data-track': 'editor-task-close' })}
-          onClick={handleClose}
+          onClick={handleCloseClick}
           disabled={isLoading}
         >
           {isLoading ? (
@@ -83,6 +89,17 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
           Continue
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        onConfirm={handleClose}
+        title="Close Task Branch"
+        message={`Are you sure you want to close the task branch "${branch?.firstCommit?.title || 'New Task'}"? This action cannot be undone.`}
+        confirmText="Close"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 };

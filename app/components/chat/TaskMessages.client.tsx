@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 import { AnimatePresence, motion } from 'framer-motion';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { ConfirmDialog } from '~/components/ui/ConfirmDialog';
 
 interface TaskMessagesProps {
   id?: string;
@@ -43,6 +44,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     const [isLoading, setIsLoading] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [reloadCount, setReloadCount] = useState(0);
+    const [showRemoveConfirmDialog, setShowRemoveConfirmDialog] = useState(false);
 
     const repo = useStore(repoStore);
     const currentTaskBranch = repo.taskBranch;
@@ -82,6 +84,25 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
     }, [mergeStatus, reloadTaskBranches, repo.path, reloadCount, isStreaming]);
 
     const isProcessing = isLoading || isStreaming;
+
+    const handleRemoveTask = async () => {
+      setIsLoading(true);
+
+      try {
+        const targetTaskBranch = repoStore.get().taskBranch;
+        lastActionStore.set({ action: 'LOAD' });
+        await removeTaskBranch(repoStore.get().path, targetTaskBranch);
+        repoStore.set({
+          ...repoStore.get(),
+          taskBranch: DEFAULT_TASK_BRANCH,
+        });
+        reloadTaskBranches?.(repoStore.get().path);
+      } catch {
+        toast.error('Failed to remove task branch');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
     return (
       <div
@@ -175,24 +196,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                 <button
                   className="px-4 py-2 my-2 border border-zinc-700 bg-zinc-800 text-white rounded-md hover:bg-zinc-700 active:bg-zinc-900 transition-colors shadow-sm font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   data-track="editor-task-remove"
-                  onClick={async () => {
-                    setIsLoading(true);
-
-                    try {
-                      const targetTaskBranch = repoStore.get().taskBranch;
-                      lastActionStore.set({ action: 'LOAD' });
-                      await removeTaskBranch(repoStore.get().path, targetTaskBranch);
-                      repoStore.set({
-                        ...repoStore.get(),
-                        taskBranch: DEFAULT_TASK_BRANCH,
-                      });
-                      reloadTaskBranches?.(repoStore.get().path);
-                    } catch {
-                      toast.error('Failed to remove task branch');
-                    } finally {
-                      setIsLoading(false);
-                    }
-                  }}
+                  onClick={() => setShowRemoveConfirmDialog(true)}
                 >
                   Remove Task
                 </button>
@@ -291,6 +295,17 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
             </AnimatePresence>
           )}
         </div>
+
+        <ConfirmDialog
+          isOpen={showRemoveConfirmDialog}
+          onClose={() => setShowRemoveConfirmDialog(false)}
+          onConfirm={handleRemoveTask}
+          title="Remove Task Branch"
+          message={`Are you sure you want to remove the task branch "${branch?.firstCommit?.title || 'New Task'}"? This action cannot be undone and all work will be lost.`}
+          confirmText="Remove"
+          cancelText="Cancel"
+          isDestructive={true}
+        />
       </div>
     );
   },
