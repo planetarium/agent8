@@ -372,6 +372,14 @@ Remember: Proper documentation is as important as the code itself. It enables ef
         Verify line count with Read tool's line numbers!
       - modify: For modifying EXISTING files with SMALL, TARGETED changes. Add a \`filePath\` attribute and use <modify> tags:
         
+        **[ULTIMATE DIRECTIVE for <find>/<replace> content]**
+        - The content inside <find> and <replace> tags is RAW SOURCE CODE. It is NOT XML or HTML.
+        - It will be written DIRECTLY to files.
+        - DO NOT use HTML entities. Write literal < > & " ' characters.
+        - DO NOT use backslash escapes like \\".
+        - DO NOT use \\n for newlines. Use REAL, LITERAL line breaks.
+        - What you write between these tags is what goes into the file, CHARACTER FOR CHARACTER.
+
         **🛑 BEFORE USING MODIFY - MANDATORY CHECKS! 🛑**:
         
         **LINE COUNT CHECK FIRST**: Check Read tool output - what's the last line number?
