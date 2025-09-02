@@ -450,7 +450,6 @@ export class ActionRunner {
       logger.info(`   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`);
     } catch (error) {
       logger.error(`❌ [Modify] Failed to apply modifications to ${relativePath}:`, error);
-      throw new ActionCommandError('Failed to apply modifications', `Error modifying ${action.filePath}: ${error}`);
     }
   }
 
