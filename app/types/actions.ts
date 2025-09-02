@@ -1,6 +1,6 @@
 import type { Change } from 'diff';
 
-export type ActionType = 'file' | 'shell';
+export type ActionType = 'file' | 'shell' | 'modify';
 
 export interface BaseAction {
   content: string;
@@ -23,7 +23,12 @@ export interface BuildAction extends BaseAction {
   type: 'build';
 }
 
-export type BoltAction = FileAction | ShellAction | StartAction | BuildAction;
+export interface ModifyAction extends BaseAction {
+  type: 'modify';
+  filePath: string;
+}
+
+export type BoltAction = FileAction | ShellAction | StartAction | BuildAction | ModifyAction;
 
 export type BoltActionData = BoltAction | BaseAction;
 

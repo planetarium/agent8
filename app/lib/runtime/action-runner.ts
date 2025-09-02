@@ -173,6 +173,10 @@ export class ActionRunner {
           await this.#runFileAction(action);
           break;
         }
+        case 'modify': {
+          await this.#runModifyAction(action);
+          break;
+        }
         case 'build': {
           const buildOutput = await this.#runBuildAction(action);
 
@@ -347,6 +351,158 @@ export class ActionRunner {
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
     }
+  }
+
+  async #runModifyAction(action: ActionState) {
+    if (action.type !== 'modify') {
+      unreachable('Expected modify action');
+    }
+
+    const container = await this.#container;
+    const relativePath = nodePath.relative(container.workdir, action.filePath);
+
+    logger.info(`✏️ [Modify] Starting modifications for: ${relativePath}`);
+
+    try {
+      // Read current file content
+      let currentContent = (await container.fs.readFile(relativePath, 'utf-8')) as string;
+      const originalFileSize = Buffer.byteLength(currentContent, 'utf-8');
+
+      // Parse the modify instructions from action.content
+      const modifications = this.#parseModifications(action.content);
+
+      // Calculate total size of modifications
+      const modificationsSize = modifications.reduce((total, mod) => {
+        const findLength = Buffer.byteLength(mod.find, 'utf-8');
+        return total + findLength + Buffer.byteLength(mod.replace, 'utf-8');
+      }, 0);
+
+      logger.info(`📝 [Modify] Found ${modifications.length} modification(s) to apply`);
+      logger.info(`📊 [Modify] Modifications size: ${modificationsSize} bytes (find+replace text only)`);
+
+      // Apply each modification in order
+      for (let i = 0; i < modifications.length; i++) {
+        const mod = modifications[i];
+        logger.debug(`🔍 [Modify] Applying modification ${i + 1}/${modifications.length}`);
+
+        // Check if the text to find exists
+        if (!currentContent.includes(mod.find)) {
+          // Try with decoded HTML entities as a fallback
+          const decodedFind = this.#decodeHtmlEntities(mod.find);
+          const decodedReplace = this.#decodeHtmlEntities(mod.replace);
+
+          if (decodedFind !== mod.find && currentContent.includes(decodedFind)) {
+            logger.warn(`⚠️ [Modify] HTML entities detected and auto-corrected`);
+            logger.warn(`Original find:\n"${mod.find}"`);
+            logger.warn(`Decoded to:\n"${decodedFind}"`);
+            logger.warn(`IMPORTANT: Please use actual characters instead of HTML entities in your code!`);
+
+            // Use decoded versions
+            mod.find = decodedFind;
+            mod.replace = decodedReplace;
+          } else {
+            logger.error(`❌ [Modify] Could not find text in ${relativePath}:`);
+            logger.error(`Looking for:\n"${mod.find}"`);
+            logger.error(`Replace with:\n"${mod.replace}"`);
+
+            // If decoded version is different, suggest it might be the issue
+            if (decodedFind !== mod.find) {
+              logger.error(`Note: The text contains HTML entities. Did you mean:\n"${decodedFind}"?`);
+            }
+
+            throw new Error(`Text not found in file: ${mod.find.substring(0, 50)}...`);
+          }
+        }
+
+        // Replace the text
+        const beforeLength = currentContent.length;
+
+        // Check if text appears multiple times
+        const occurrences = (
+          currentContent.match(new RegExp(mod.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
+        ).length;
+
+        if (occurrences > 1) {
+          logger.warn(`⚠️ [Modify] Text appears ${occurrences} times in file. Only first occurrence will be replaced.`);
+        }
+
+        currentContent = currentContent.replace(mod.find, mod.replace);
+
+        const afterLength = currentContent.length;
+
+        logger.debug(`🔍 [Modify] Replaced\nfind:\n"${mod.find}"\nreplace:\n"${mod.replace}"`);
+        logger.debug(`✅ [Modify] Replacement ${i + 1} successful (${afterLength - beforeLength} chars changed)`);
+      }
+
+      // Write the updated content back
+      await container.fs.writeFile(relativePath, currentContent);
+
+      // Calculate final file size and savings
+      const finalFileSize = Buffer.byteLength(currentContent, 'utf-8');
+      const savedBytes = finalFileSize - modificationsSize;
+      const savingsPercentage = ((savedBytes / finalFileSize) * 100).toFixed(1);
+
+      logger.info(`✅ [Modify] Successfully applied ${modifications.length} modification(s) to: ${relativePath}`);
+      logger.info(`📊 [Modify] File size comparison:`);
+      logger.info(`   - Original file: ${originalFileSize} bytes`);
+      logger.info(`   - Final file: ${finalFileSize} bytes`);
+      logger.info(`   - Modifications sent: ${modificationsSize} bytes`);
+      logger.info(`   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`);
+    } catch (error) {
+      logger.error(`❌ [Modify] Failed to apply modifications to ${relativePath}:`, error);
+      throw new ActionCommandError('Failed to apply modifications', `Error modifying ${action.filePath}: ${error}`);
+    }
+  }
+
+  #parseModifications(content: string): Array<{ find: string; replace: string }> {
+    const modifications: Array<{ find: string; replace: string }> = [];
+
+    // Match all <modify> blocks
+    const modifyRegex = /<modify>([\s\S]*?)<\/modify>/g;
+    let match;
+
+    while ((match = modifyRegex.exec(content)) !== null) {
+      const modifyContent = match[1];
+
+      // Extract find and replace content
+      const findMatch = modifyContent.match(/<find>([\s\S]*?)<\/find>/);
+      const replaceMatch = modifyContent.match(/<replace>([\s\S]*?)<\/replace>/);
+
+      if (findMatch && replaceMatch) {
+        modifications.push({
+          find: findMatch[1].trim(),
+          replace: replaceMatch[1].trim(),
+        });
+      }
+    }
+
+    // If no <modify> tags found, try to parse as a simple find/replace
+    if (modifications.length === 0 && content.includes('<find>') && content.includes('<replace>')) {
+      const findMatch = content.match(/<find>([\s\S]*?)<\/find>/);
+      const replaceMatch = content.match(/<replace>([\s\S]*?)<\/replace>/);
+
+      if (findMatch && replaceMatch) {
+        modifications.push({
+          find: findMatch[1].trim(),
+          replace: replaceMatch[1].trim(),
+        });
+      }
+    }
+
+    return modifications;
+  }
+
+  #decodeHtmlEntities(text: string): string {
+    // Decode common HTML entities that LLM might incorrectly use
+    return text
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x3D;/g, '=')
+      .replace(/&apos;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'");
   }
 
   #updateAction(id: string, newState: ActionStateUpdate) {

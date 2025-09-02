@@ -89,12 +89,60 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
         matches.map(async (match) => {
           const filePath = match[1];
           const contentFromMatch = match[2];
+
+          // Extract type attribute from the full match
+          const fullMatch = match[0];
+          const typeMatch = fullMatch.match(/type="([^"]+)"/);
+          const actionType = typeMatch ? typeMatch[1] : undefined;
+
           const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
           const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
 
           // The workbench file sync is delayed. So I use the remote container file.
 
-          if (cleanedContent !== remoteContainerFile) {
+          if (actionType === 'modify') {
+            /*
+             * For modify type, verify that the modifications were applied correctly
+             * Parse the modify instructions
+             */
+            const modifyRegex = /<modify>\s*<find>([\s\S]*?)<\/find>\s*<replace>([\s\S]*?)<\/replace>\s*<\/modify>/g;
+            let match;
+            const modifications = [];
+
+            while ((match = modifyRegex.exec(cleanedContent)) !== null) {
+              modifications.push({
+                find: match[1].trim(),
+                replace: match[2].trim(),
+              });
+            }
+
+            let isValid = true;
+            const issues: string[] = [];
+
+            // Check if replacements were successful
+            for (const mod of modifications) {
+              /*
+               * The remote file should contain the replacement text, not the original
+               * Exception: if mod.replace fully contains mod.find, it's valid
+               */
+              if (remoteContainerFile && remoteContainerFile.includes(mod.find) && !mod.replace.includes(mod.find)) {
+                isValid = false;
+                issues.push(`Original text still exists: "${mod.find}"`);
+              }
+
+              if (remoteContainerFile && !remoteContainerFile.includes(mod.replace)) {
+                isValid = false;
+                issues.push(`Replacement text not found: "${mod.replace}"`);
+              }
+            }
+
+            if (!isValid) {
+              logger.warn(`Modify verification issues for ${filePath}:`, JSON.stringify({ issues }));
+            } else {
+              logger.debug(`Modifications for ${filePath} verified successfully`);
+            }
+          } else if (cleanedContent !== remoteContainerFile) {
+            // For file type, content should match exactly
             logger.error(
               `Content mismatch for ${filePath}:`,
               JSON.stringify({

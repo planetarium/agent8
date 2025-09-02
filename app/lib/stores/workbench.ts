@@ -677,6 +677,28 @@ export class WorkbenchStore {
         await artifact.runner.runAction(data);
         this.resetAllFileModifications();
       }
+    } else if (data.action.type === 'modify') {
+      // Handle modify action similar to file action but let ActionRunner apply the modifications
+      const wc = await this.container;
+      const fullPath = path.join(wc.workdir, data.action.filePath);
+
+      if (this.selectedFile.value !== fullPath) {
+        this.setSelectedFile(fullPath);
+      }
+
+      if (this.currentView.value !== 'code') {
+        this.currentView.set('code');
+      }
+
+      await artifact.runner.runAction(data);
+
+      // Refresh the editor to show updated content
+      const relativePath = data.action.filePath.replace(/^\/home\/project\//, '');
+
+      const updatedContent = (await wc.fs.readFile(relativePath, 'utf-8')) as string;
+      this.#editorStore.updateFile(fullPath, updatedContent);
+
+      this.resetAllFileModifications();
     } else if (data.action.type === 'shell') {
       // shell 액션의 경우 실행 상태 추적
       this.#shellActionRunning = true;
