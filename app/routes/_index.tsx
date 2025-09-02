@@ -252,27 +252,6 @@ export default function Index() {
     }
   }, [repoPath, repoName]);
 
-  useEffect(() => {
-    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    if (isLocalDev) {
-      const devToken =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiMTAwMDExIiwiaXNDb250YWluZXIiOmZhbHNlLCJpYXQiOjE3NTY3MjIxODEsImV4cCI6MTc1NzMyNjk4MX0.MgA4hTeygfIOPRt9XLqDyLvCY0rRKX6jzYgA9fpKvxk';
-
-      updateV8AccessToken(devToken);
-
-      window.postMessage(
-        {
-          type: 'INIT',
-          payload: {
-            accessToken: devToken,
-          },
-        },
-        '*',
-      );
-    }
-  }, []);
-
   const isAccessControlEnabled = import.meta.env.VITE_ACCESS_CONTROL_ENABLED === 'true';
 
   return isAccessControlEnabled ? <AccessControlledChat /> : <DirectChatAccess />;
