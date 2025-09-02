@@ -4,11 +4,11 @@ import {
   DEFAULT_PROVIDER,
   MODEL_REGEX,
   PROVIDER_REGEX,
+  USEDIFF_REGEX,
   ATTACHMENTS_REGEX,
   DEV_TAG_REGEX,
 } from '~/utils/constants';
 
-const USEDIFF_REGEX = /\[UseDiff:\s*(.+?)\]/;
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';

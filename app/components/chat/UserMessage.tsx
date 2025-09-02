@@ -2,7 +2,7 @@
  * @ts-nocheck
  * Preventing TS checks with files presented in the video for a better presentation.
  */
-import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX } from '~/utils/constants';
+import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX, USEDIFF_REGEX } from '~/utils/constants';
 import { Markdown } from './Markdown';
 import FilePreview from './FilePreview';
 
@@ -31,6 +31,7 @@ export function stripMetadata(content: string) {
   return content
     .replace(MODEL_REGEX, '')
     .replace(PROVIDER_REGEX, '')
+    .replace(USEDIFF_REGEX, '')
     .replace(ATTACHMENTS_REGEX, '')
     .replace(DEV_TAG_REGEX, '')
     .replace(artifactRegex, '');
