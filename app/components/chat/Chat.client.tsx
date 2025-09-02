@@ -408,23 +408,6 @@ export const ChatImpl = memo(
     const [input, setInput] = useState(() => Cookies.get(PROMPT_COOKIE_KEY) || '');
     const [chatData, setChatData] = useState<any>(undefined);
 
-    const transport = useMemo(
-      () =>
-        new DefaultChatTransport({
-          api: '/api/chat',
-          body: () => {
-            const currentFiles = workbench.files.get() || {};
-            return {
-              apiKeys,
-              files: currentFiles,
-              promptId,
-              contextOptimization: contextOptimizationEnabled,
-            };
-          },
-        }),
-      [apiKeys, promptId, contextOptimizationEnabled, workbench],
-    );
-
     const {
       messages,
       status,
@@ -435,8 +418,18 @@ export const ChatImpl = memo(
       error,
     } = useChat({
       messages: initialMessages,
-      transport,
-
+      transport: new DefaultChatTransport({
+        api: '/api/chat',
+        body: () => {
+          const currentFiles = workbench.files.get() || {};
+          return {
+            apiKeys,
+            files: currentFiles,
+            promptId,
+            contextOptimization: contextOptimizationEnabled,
+          };
+        },
+      }),
       onError: (e) => {
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {

@@ -47,7 +47,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     cacheRead: 0,
     totalTokens: 0,
   };
-  const encoder = new TextEncoder();
 
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
@@ -95,16 +94,18 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 toolProgressIds.set(eventToolName, toolProgressId);
               }
 
+              console.log('[DEBUG] type: ', type);
+
               if (type === 'start') {
                 writer.write({
                   type: 'data-progress',
                   id: toolProgressId,
                   data: {
-                    label: 'tool',
+                    type: 'progress',
                     status: 'in-progress',
                     order: progressCounter++,
                     message: `Tool '${eventToolName}' execution started`,
-                  } as ProgressAnnotation,
+                  } as any,
                 });
               } else if (type === 'progress') {
                 writer.write({
@@ -112,25 +113,25 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   id: toolProgressId,
                   data: {
                     type: 'progress',
-                    label: 'tool',
                     status: 'in-progress',
                     order: progressCounter++,
                     message: `Tool '${eventToolName}' executing: ${data.status || ''}`,
-                  } as ProgressAnnotation,
+                    percentage: data.percentage ? Number(data.percentage) : undefined,
+                  } as any,
                 });
               } else if (type === 'complete') {
                 writer.write({
                   type: 'data-progress',
                   id: toolProgressId,
                   data: {
-                    label: 'tool',
-                    status: data.status === 'failed' ? 'complete' : 'complete',
+                    type: 'progress',
+                    status: data.status === 'failed' ? 'failed' : 'complete',
                     order: progressCounter++,
                     message:
                       data.status === 'failed'
                         ? `Tool '${eventToolName}' execution failed`
                         : `Tool '${eventToolName}' execution completed`,
-                  } as ProgressAnnotation,
+                  } as any,
                 });
 
                 // Remove tool progress ID after completion
@@ -234,11 +235,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           },
         };
 
-        // Response generation progress
         writer.write({
           type: 'data-progress',
           id: responseProgressId,
           data: {
+            type: 'progress',
             label: 'response',
             status: 'in-progress',
             order: progressCounter++,
@@ -255,7 +256,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           abortSignal: request.signal,
         });
 
-        // v5: 스트림 병합
         writer.merge(result.toUIMessageStream());
       },
       onError: (error: unknown) => {
@@ -270,59 +270,95 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (chunk, controller) => {
-          // 텍스트 처리를 위한 함수
-          const sendText = (text: string) => {
-            controller.enqueue({
-              type: 'text-delta',
-              id: generateId(), // AI SDK의 generateId 사용
-              delta: text,
-            });
-          };
-
           switch (chunk.type) {
-            case 'reasoning-start': {
-              sendText(`\n<div class="__boltThought__">`);
-              break;
-            }
-            case 'reasoning-end': {
-              sendText(`</div>\n`);
-              break;
-            }
             case 'tool-input-available': {
+              console.log('[DEBUG] tool-input-available', chunk);
+
               const toolCall = {
                 toolCallId: chunk.toolCallId,
                 toolName: chunk.toolName,
                 args: chunk.input,
               };
 
-              const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
-              sendText(divString);
-              break;
-            }
-            case 'tool-output-available': {
-              const toolResult = {
-                toolCallId: chunk.toolCallId,
-                result: chunk.output,
-              };
+              const divString = `\n<div class="__toolCall__" id="${chunk.toolCallId}"><code>${JSON.stringify(toolCall)}</code></div>\n`;
 
-              const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
-              sendText(divString);
+              const toolCallPayload = {
+                type: 'text-delta',
+                id: generateId(),
+                delta: divString,
+              };
+              controller.enqueue(toolCallPayload);
+
+              console.log('[DEBUG] tool-input-available transformedChunk: ', toolCallPayload);
               break;
             }
-            case 'text-delta': {
-              sendText(chunk.delta);
+
+            /*
+             * case 'tool-output-available': {
+             *   console.log('[DEBUG] tool-output-available', chunk);
+             *   break;
+             * }
+             */
+
+            /*
+             * case 'tool-input-available': {
+             *   // v4의 tool-input-available 로직을 v5 방식으로 변환
+             *   const toolCall = {
+             *     toolCallId: chunk.toolCallId,
+             *     toolName: chunk.toolName,
+             *     args: chunk.input,
+             *   };
+             *   const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+             */
+
+            /*
+             *   // v5에서는 text-delta 형태로 전송
+             *   controller.enqueue({
+             *     type: 'text-delta',
+             *     id: generateId(),
+             *     delta: divString,
+             *   });
+             */
+
+            //   /*
+            //    * console.log('[tool-input-available]', {
+            //    *   toolCallId: toolCall.toolCallId,
+            //    *   toolName: toolCall.toolName,
+            //    *   args: toolCall.args,
+            //    *   html: divString,
+            //    * });
+            //    */
+            //   break;
+            // }
+            // case 'tool-output-available': {
+            //   // v4의 tool-output-available 로직을 v5 방식으로 변환
+            //   const toolResult = {
+            //     toolCallId: chunk.toolCallId,
+            //     result: chunk.output,
+            //   };
+            //   const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+
+            /*
+             *   controller.enqueue({
+             *     type: 'text-delta',
+             *     id: generateId(),
+             *     delta: divString,
+             *   });
+             */
+
+            //   /*
+            //    * console.log('[tool-output-available]', {
+            //    *   toolCallId: toolResult.toolCallId,
+            //    *   result: toolResult.result,
+            //    *   html: divString,
+            //    * });
+            //    */
+            //   break;
+            // }
+            default:
+              // 모든 chunk를 그대로 통과 - 클라이언트에서 안전하게 처리
+              controller.enqueue(chunk);
               break;
-            }
-            case 'abort': {
-              // abort 신호를 조용히 처리 (UI에 별도 표시 불필요)
-              console.debug('Stream aborted by user or system');
-              break;
-            }
-            case 'error': {
-              // error 타입도 함께 처리
-              console.error('Stream error:', chunk);
-              break;
-            }
           }
         },
       }),
