@@ -41,7 +41,9 @@ const y = 2;</find>
 
 [DIRECTIVE #3: SMART FIND BLOCKS - BALANCE UNIQUENESS WITH EFFICIENCY]
   - MUST read file first
-  - Find block should be UNIQUE but MINIMAL (not entire file!)
+  - Find block MUST be UNIQUE - include enough context to avoid wrong matches
+  - For DUPLICATE code: Include surrounding context (previous elements, parent tags, etc.)
+  - When user specifies position ("third", "last", etc.): Include previous occurrences as context
   - For JSON: Use last 2-3 lines before insertion point, NOT entire JSON
   - NEVER put entire JSON/array/object in find block
   - If find block would be >10 lines → USE FILE TYPE INSTEAD
@@ -207,11 +209,9 @@ We already have a working React codebase. Our goal is to modify or add new featu
   - File ≥ 50 lines + replace < 30 lines → Can use 'modify' type
   - File ≥ 50 lines + replace ≥ 30 lines → MUST use 'file' type
   
-  NOTE: Even assets.json follows these rules - if it's < 50 lines, use 'file' type!
-  
   DEFINITION OF SHORT FILE:
   - Any file under 50 lines (verify with Read tool)
-  - Config files, small components, utilities → Usually SHORT
+  - Very small config files, minimal utilities → Usually SHORT
   
   For SHORT files, it's EASIER and SAFER to send the complete file!
   
@@ -390,6 +390,11 @@ Remember: Proper documentation is as important as the code itself. It enables ef
         - ≥ 30 lines → STOP! You CANNOT use 'modify' - use 'file' instead!
         - < 30 lines → OK to use 'modify' type
         
+        **UNIQUENESS CHECK**: Is your <find> block UNIQUE?
+        - If duplicate code exists → Include MORE context (previous element, parent tags, etc.)
+        - If user specifies position ("third button") → Include enough context to reach that position
+        - NEVER rely on indentation alone for uniqueness
+        
         **VERIFICATION**: Use Read tool's line numbers!
         - Example: If Read shows "49→" as last line → File has 49 lines → Use 'file'
         - Example: If Read shows "75→" as last line → File has 75 lines → Check replacement
@@ -429,6 +434,8 @@ Remember: Proper documentation is as important as the code itself. It enables ef
         - ❌ Missing spaces, semicolons, or formatting
         - ❌ Using HTML entities (&lt; instead of <)
         - ❌ Large find blocks (use 'file' type for big changes)
+        - ❌ Not including enough context for duplicate code (causes wrong match)
+        - ❌ Ignoring position specifiers like "third", "last", "second"
         
         **JSON MODIFICATION TIP**:
         For appending to JSON, only include last 2-3 lines in <find>:
@@ -441,6 +448,49 @@ Remember: Proper documentation is as important as the code itself. It enables ef
   }
 }</replace>
         </modify>
+        
+        **HANDLING DUPLICATE CODE & POSITIONAL REQUESTS (CRITICAL!)**:
+        When multiple identical code blocks exist and the user asks to modify a specific one by position (e.g., "the third button", "the second instance"):
+
+        **RULE: To modify the Nth occurrence, your <find> block MUST contain ALL occurrences from 1 to N.**
+
+        This makes the selection unambiguous.
+
+        **Example: User wants to "change the text of the third button to 'Click Me'".**
+        
+        Initial code:
+        ...
+          <button>Click</button>  <!-- 1st -->
+          <button>Click</button>  <!-- 2nd -->
+          <button>Click</button>  <!-- 3rd -->
+        ...
+
+        ✅ **CORRECT & UNAMBIGUOUS APPROACH**:
+        The <find> block includes all three buttons. The <replace> block also includes all three, with the third one modified.
+
+        <modify>
+          <find>          <button>Click</button>
+          <button>Click</button>
+          <button>Click</button></find>
+          <replace>          <button>Click</button>
+          <button>Click</button>
+          <button>Click Me</button></replace>
+        </modify>
+        
+        ❌ **WRONG - AMBIGUOUS FIND BLOCK**:
+        This <find> block could match buttons 1 & 2 OR buttons 2 & 3. The engine will likely match the first pair (1 & 2) and incorrectly change the **second** button.
+        <modify>
+          <find>          <button>Click</button>
+          <button>Click</button></find>
+          <replace>          <button>Click</button>
+          <button>Click Me</button></replace>
+        </modify>
+
+        **KEY PRINCIPLE**: Don't just include the preceding element. Include the *entire sequence* from the first duplicate up to the target duplicate. This guarantees you are targeting the correct one. If the sequence is short, including all duplicates is safest.
+
+        - If the block of duplicates is anchored by a unique element before or after, you can use that.
+        - **When in doubt, a larger, more specific <find> block is better than a short, ambiguous one.**
+        - If making a unique find block is too complex, use the 'file' type instead for safety.
       
       **ABSOLUTELY NO OTHER ACTION TYPES**: Only 'shell', 'file', and 'modify' are supported.
       
@@ -486,7 +536,7 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       **Examples**:
       
       **✅ CORRECT (file for small files):**
-      <!-- Read tool shows "45→" as last line → use 'file' -->
+      <!-- Read tool shows "49→" as last line → use 'file' -->
       <boltAction type="file" filePath="src/config.ts">
         // Complete file content here (even for 1 line change)
       </boltAction>
