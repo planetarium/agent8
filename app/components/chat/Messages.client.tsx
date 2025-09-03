@@ -15,8 +15,25 @@ import { loadingAnimationData } from '~/utils/animationData';
 
 // Helper functions for AI SDK v5 message structure
 const getMessageText = (message: UIMessage): string => {
-  const textPart = message.parts?.find((part) => part.type === 'text');
-  return textPart?.text || '';
+  try {
+    if (message.parts && Array.isArray(message.parts)) {
+      return message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => {
+          if ('text' in part) {
+            return part.text || '';
+          }
+
+          return '';
+        })
+        .join('');
+    }
+
+    return '';
+  } catch (error) {
+    console.error('getMessageText error:', error, message);
+    return '';
+  }
 };
 
 const getMessageAnnotations = (message: UIMessage): string[] => {

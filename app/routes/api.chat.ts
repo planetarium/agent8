@@ -65,7 +65,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const toolProgressIds = new Map<string, string>();
         const responseProgressId = generateId();
 
-        // 프롬프트 데이터 작성
         const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
 
         if (lastUserMessage) {
@@ -148,6 +147,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
+            console.log('[DEBUG] onFinish: ', content);
+
             logger.debug('usage', JSON.stringify(usage));
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
@@ -269,98 +270,151 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       },
     }).pipeThrough(
       new TransformStream({
-        transform: (chunk, controller) => {
-          switch (chunk.type) {
-            case 'tool-input-available': {
-              console.log('[DEBUG] tool-input-available', chunk);
+        transform: (() => {
+          let isInReasoning = false;
+          let reasoningTextId: string | null = null;
 
-              const toolCall = {
-                toolCallId: chunk.toolCallId,
-                toolName: chunk.toolName,
-                args: chunk.input,
-              };
+          const toolCallToTextIdMap = new Map<string, string>();
 
-              const divString = `\n<div class="__toolCall__" id="${chunk.toolCallId}"><code>${JSON.stringify(toolCall)}</code></div>\n`;
+          return (chunk, controller) => {
+            switch (chunk.type) {
+              case 'reasoning-start': {
+                if (!isInReasoning) {
+                  isInReasoning = true;
+                  reasoningTextId = generateId();
 
-              const toolCallPayload = {
-                type: 'text-delta',
-                id: generateId(),
-                delta: divString,
-              };
-              controller.enqueue(toolCallPayload);
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: reasoningTextId,
+                  });
 
-              console.log('[DEBUG] tool-input-available transformedChunk: ', toolCallPayload);
-              break;
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: reasoningTextId,
+                    delta: '<div class="__boltThought__">',
+                  });
+                }
+
+                break;
+              }
+
+              case 'reasoning-delta': {
+                if (isInReasoning && reasoningTextId) {
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: reasoningTextId,
+                    delta: chunk.delta,
+                  });
+                }
+
+                break;
+              }
+
+              case 'reasoning-end': {
+                // console.log('[DEBUG] reasoning-end', chunk);
+
+                if (isInReasoning && reasoningTextId) {
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: reasoningTextId,
+                    delta: '</div>\n',
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: reasoningTextId,
+                  });
+
+                  isInReasoning = false;
+                  reasoningTextId = null;
+                }
+
+                break;
+              }
+
+              case 'tool-input-available': {
+                // console.log('[DEBUG] tool-input-available', chunk);
+
+                const toolCall = {
+                  toolCallId: chunk.toolCallId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                };
+
+                const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+
+                let textId = toolCallToTextIdMap.get(chunk.toolCallId);
+
+                if (!textId) {
+                  textId = generateId();
+                  toolCallToTextIdMap.set(chunk.toolCallId, textId);
+                }
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: textId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: textId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: textId,
+                });
+
+                console.log('[DEBUG] tool-input-available transformed to text stream');
+
+                break;
+              }
+
+              case 'tool-output-available': {
+                console.log('[DEBUG] tool-output-available', chunk);
+
+                const toolResult = {
+                  toolCallId: chunk.toolCallId,
+                  result: chunk.output,
+                };
+
+                const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+                const textId = generateId();
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: textId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: textId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: textId,
+                });
+
+                toolCallToTextIdMap.delete(chunk.toolCallId);
+                break;
+              }
+
+              case 'text-start':
+              case 'text-delta':
+              case 'text-end': {
+                controller.enqueue(chunk);
+                break;
+              }
+              default: {
+                controller.enqueue(chunk);
+                break;
+              }
             }
-
-            /*
-             * case 'tool-output-available': {
-             *   console.log('[DEBUG] tool-output-available', chunk);
-             *   break;
-             * }
-             */
-
-            /*
-             * case 'tool-input-available': {
-             *   // v4의 tool-input-available 로직을 v5 방식으로 변환
-             *   const toolCall = {
-             *     toolCallId: chunk.toolCallId,
-             *     toolName: chunk.toolName,
-             *     args: chunk.input,
-             *   };
-             *   const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
-             */
-
-            /*
-             *   // v5에서는 text-delta 형태로 전송
-             *   controller.enqueue({
-             *     type: 'text-delta',
-             *     id: generateId(),
-             *     delta: divString,
-             *   });
-             */
-
-            //   /*
-            //    * console.log('[tool-input-available]', {
-            //    *   toolCallId: toolCall.toolCallId,
-            //    *   toolName: toolCall.toolName,
-            //    *   args: toolCall.args,
-            //    *   html: divString,
-            //    * });
-            //    */
-            //   break;
-            // }
-            // case 'tool-output-available': {
-            //   // v4의 tool-output-available 로직을 v5 방식으로 변환
-            //   const toolResult = {
-            //     toolCallId: chunk.toolCallId,
-            //     result: chunk.output,
-            //   };
-            //   const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
-
-            /*
-             *   controller.enqueue({
-             *     type: 'text-delta',
-             *     id: generateId(),
-             *     delta: divString,
-             *   });
-             */
-
-            //   /*
-            //    * console.log('[tool-output-available]', {
-            //    *   toolCallId: toolResult.toolCallId,
-            //    *   result: toolResult.result,
-            //    *   html: divString,
-            //    * });
-            //    */
-            //   break;
-            // }
-            default:
-              // 모든 chunk를 그대로 통과 - 클라이언트에서 안전하게 처리
-              controller.enqueue(chunk);
-              break;
-          }
-        },
+          };
+        })(),
       }),
     );
 
@@ -381,5 +435,3 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     });
   }
 }
-
-// 모델 인스턴스 생성 헬퍼 함수 제거 - 원본 streamText wrapper 사용
