@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { classNames } from '~/utils/classNames';
 import { Progress } from '~/components/ui/Progress';
-import { useToast } from '~/components/ui/use-toast';
 import { useSettings } from '~/lib/hooks/useSettings';
+import { toast } from 'react-toastify';
 
 interface OllamaModelInstallerProps {
   onModelInstalled: () => void;
@@ -141,7 +141,6 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
   const [installProgress, setInstallProgress] = useState<InstallProgress | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [models, setModels] = useState<ModelInfo[]>(POPULAR_MODELS);
-  const { toast } = useToast();
   const { providers } = useSettings();
 
   // Get base URL from provider settings
@@ -193,10 +192,10 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
 
     try {
       await checkInstalledModels();
-      toast('Model versions checked');
+      toast.info('Model versions checked');
     } catch (err) {
       console.error('Failed to check model versions:', err);
-      toast('Failed to check model versions');
+      toast.info('Failed to check model versions');
     } finally {
       setIsChecking(false);
     }
@@ -287,7 +286,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
         }
       }
 
-      toast('Successfully installed ' + modelToInstall + '. The model list will refresh automatically.');
+      toast.info('Successfully installed ' + modelToInstall + '. The model list will refresh automatically.');
 
       // Ensure we call onModelInstalled after successful installation
       setTimeout(() => {
@@ -296,7 +295,7 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error(`Error installing ${modelToInstall}:`, errorMessage);
-      toast(`Failed to install ${modelToInstall}. ${errorMessage}`);
+      toast.info(`Failed to install ${modelToInstall}. ${errorMessage}`);
     } finally {
       setIsInstalling(false);
       setInstallProgress(null);
@@ -365,14 +364,14 @@ export default function OllamaModelInstaller({ onModelInstalled }: OllamaModelIn
         }
       }
 
-      toast('Successfully updated ' + modelToUpdate);
+      toast.info('Successfully updated ' + modelToUpdate);
 
       // Refresh model list after update
       await checkInstalledModels();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error(`Error updating ${modelToUpdate}:`, errorMessage);
-      toast(`Failed to update ${modelToUpdate}. ${errorMessage}`);
+      toast.info(`Failed to update ${modelToUpdate}. ${errorMessage}`);
       setModels((prev) => prev.map((m) => (m.name === modelToUpdate ? { ...m, status: 'error' } : m)));
     } finally {
       setInstallProgress(null);

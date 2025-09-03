@@ -10,7 +10,7 @@ import { BiChip, BiCodeBlock } from 'react-icons/bi';
 import { FaCloud, FaBrain } from 'react-icons/fa';
 import type { IconType } from 'react-icons';
 import { useSettings } from '~/lib/hooks/useSettings';
-import { useToast } from '~/components/ui/use-toast';
+import { toast } from 'react-toastify';
 
 // Types
 type ProviderName =
@@ -206,7 +206,6 @@ const ServiceStatusTab = () => {
   const [testProvider, setTestProvider] = useState<ProviderName | ''>('');
   const [testingStatus, setTestingStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const settings = useSettings();
-  const { success, error } = useToast();
 
   // Function to get the API key for a provider from environment variables
   const getApiKey = useCallback(
@@ -584,14 +583,14 @@ const ServiceStatusTab = () => {
 
       setServiceStatuses(statuses.sort((a, b) => a.provider.localeCompare(b.provider)));
       setLastRefresh(new Date());
-      success('Service statuses updated successfully');
+      toast.success('Service statuses updated successfully');
     } catch (err) {
       console.error('Error fetching all statuses:', err);
-      error('Failed to update service statuses');
+      toast.error('Failed to update service statuses');
     } finally {
       setLoading(false);
     }
-  }, [fetchProviderStatus, success, error]);
+  }, [fetchProviderStatus]);
 
   useEffect(() => {
     fetchAllStatuses();
@@ -641,10 +640,10 @@ const ServiceStatusTab = () => {
 
             if (result.ok) {
               setTestingStatus('success');
-              success('API key is valid!');
+              toast.success('API key is valid!');
             } else {
               setTestingStatus('error');
-              error(`API key test failed: ${result.message}`);
+              toast.error(`API key test failed: ${result.message}`);
             }
 
             return;
@@ -655,20 +654,20 @@ const ServiceStatusTab = () => {
 
         if (ok) {
           setTestingStatus('success');
-          success('API key is valid!');
+          toast.success('API key is valid!');
         } else {
           setTestingStatus('error');
-          error(`API key test failed: ${message}`);
+          toast.error(`API key test failed: ${message}`);
         }
       } catch (err: unknown) {
         setTestingStatus('error');
-        error('Failed to test API key: ' + (err instanceof Error ? err.message : 'Unknown error'));
+        toast.error('Failed to test API key: ' + (err instanceof Error ? err.message : 'Unknown error'));
       } finally {
         // Reset testing status after a delay
         setTimeout(() => setTestingStatus('idle'), 3000);
       }
     },
-    [checkApiEndpoint, success, error],
+    [checkApiEndpoint],
   );
 
   const getStatusColor = (status: ServiceStatus['status']) => {
