@@ -153,7 +153,7 @@ We already have a working React codebase. Our goal is to modify or add new featu
 
 2. Collect relevant information
 - Read the information in <project_description> to understand the overall structure of the project.
-- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the read_file tool. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
+- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the read_file_contents tool. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
   
   🚨🚨🚨 **LINE COUNT CHECK - USE READ TOOL OUTPUT** 🚨🚨🚨: 
   
@@ -754,7 +754,7 @@ There are tools available to resolve coding tasks. Please follow these guideline
 3. **P2 (ETIQUETTE)**: 
    - Briefly explain what information you're obtaining
    - Follow tool calling schema exactly
-   - Don't mention tool names to users (say 'I will read the file' not 'I will use the read_file tool')
+   - Don't mention tool names to users (say 'I will read the file' not 'I will use the read_file_contents tool')
    - You can use up to 15 tool calls per task if needed for thorough documentation reading and file analysis
 </tool_calling>
 `;
