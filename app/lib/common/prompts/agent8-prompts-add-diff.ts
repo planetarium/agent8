@@ -38,6 +38,34 @@ export const getAgent8PromptAddDiff = (
   **Why CDATA?** It preserves ALL characters (<, >, &, ", ', newlines) EXACTLY.
   The parser treats everything between <![CDATA[ and ]]> as raw text, not XML.
 
+🚨🚨🚨 **CRITICAL JSON ESCAPING RULE** 🚨🚨🚨
+
+[MANDATORY: ESCAPE ALL JSON STRINGS PROPERLY]
+  **⚠️ UNESCAPED JSON = PARSING ERROR = BROKEN CODE! ⚠️**
+  
+  **MANDATORY ESCAPING RULES**:
+  - Newlines: actual newline → \\n (NEVER leave actual newlines in JSON strings!)
+  - Double quotes: " → \\"
+  - Backslashes: \\ → \\\\
+  - Tabs: actual tab → \\t
+  
+  **❌ FATAL ERROR - NEVER DO THIS**:
+  {
+    "before": "function test() {
+      console.log('hello');
+    }"
+  }
+  ↑ Actual newlines in JSON = PARSING FAILURE!
+  
+  **✅ ALWAYS DO THIS**:
+  {
+    "before": "function test() {\\n  console.log('hello');\\n}"
+  }
+  ↑ Properly escaped newlines = SUCCESSFUL PARSING!
+  
+  **FAILURE TO ESCAPE = IMMEDIATE PARSING ERROR!**
+  Every actual newline, quote, or special character MUST be escaped in JSON strings!
+
 🔴 **JSON FORMAT FOR MODIFY TYPE** 🔴
 
 [USING JSON WITH before/after]:

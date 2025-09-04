@@ -363,7 +363,7 @@ export class ActionRunner {
     const relativePath = nodePath.relative(container.workdir, action.filePath);
 
     logger.info(`✏️ [Modify] Starting modifications for: ${relativePath}`);
-    logger.info(`✏️ [Modify] raw content: ${action.content}`);
+    logger.info(`✏️ [Modify] raw content:\n${action.content}`);
 
     try {
       // Read current file content
@@ -430,12 +430,25 @@ export class ActionRunner {
     }
   }
 
+  #normalizeJsonString(content: string): string {
+    try {
+      JSON.parse(content);
+      return content;
+    } catch (error) {
+      logger.debug('JSON parsing failed, attempting normalization:', error);
+      return content.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    }
+  }
+
   #parseModifications(jsonContent: string): Array<{ before: string; after: string }> {
     const modifications: Array<{ before: string; after: string }> = [];
 
     try {
+      // JSON parsing before defensive normalization
+      const normalizedContent = this.#normalizeJsonString(jsonContent);
+
       // Parse the JSON array
-      const parsed = JSON.parse(jsonContent);
+      const parsed = JSON.parse(normalizedContent);
 
       // Ensure it's an array
       const modArray = Array.isArray(parsed) ? parsed : [parsed];
@@ -451,7 +464,7 @@ export class ActionRunner {
       }
     } catch (error) {
       logger.error('Failed to parse modification JSON:', error);
-      logger.debug('Raw content:', jsonContent);
+      logger.debug('Raw content:\n', jsonContent);
     }
 
     return modifications;

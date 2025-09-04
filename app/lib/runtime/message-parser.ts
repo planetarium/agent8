@@ -124,6 +124,8 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content = cleanoutFileContent(content, currentAction.filePath);
+            } else {
+              content = extractFromCDATA(content);
             }
 
             currentAction.content = content;
@@ -181,6 +183,8 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content = cleanoutFileContent(content, currentAction.filePath);
+            } else {
+              content = extractFromCDATA(content);
             }
 
             currentAction.content = content;
