@@ -1,6 +1,7 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, ModifyAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
+import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
@@ -55,12 +56,8 @@ interface MessageState {
 export function cleanoutFileContent(content: string, filePath: string): string {
   let processedContent = content.trim();
 
-  // Remove markdown code block syntax if present and file is not markdown
-  if (!filePath.endsWith('.md')) {
-    processedContent = cleanoutCodeblockSyntax(processedContent);
-    processedContent = cleanEscapedTags(processedContent);
-  }
-
+  logger.trace(`cleanoutFileContent: ${filePath}`);
+  processedContent = cleanoutCodeblockSyntax(processedContent);
   processedContent += '\n';
 
   return processedContent;
@@ -68,27 +65,14 @@ export function cleanoutFileContent(content: string, filePath: string): string {
 
 function cleanoutCodeblockSyntax(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
 
-  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
+  const markdownMatch = content.match(markdownCodeBlockRegex);
 
-  if (match) {
-    return match[1];
-  } else {
-    return content;
+  if (markdownMatch) {
+    return markdownMatch[1];
   }
-}
 
-function cleanEscapedTags(content: string) {
-  return content
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/\\n/g, '\n')
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, '"');
+  return extractFromCDATA(content);
 }
 
 export class StreamingMessageParser {

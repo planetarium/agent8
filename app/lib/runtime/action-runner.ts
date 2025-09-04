@@ -6,6 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { extractFromCDATA } from '~/utils/stringUtils';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -362,23 +363,23 @@ export class ActionRunner {
     const relativePath = nodePath.relative(container.workdir, action.filePath);
 
     logger.info(`✏️ [Modify] Starting modifications for: ${relativePath}`);
+    logger.info(`✏️ [Modify] raw content: ${action.content}`);
 
     try {
       // Read current file content
-      let currentContent = (await container.fs.readFile(relativePath, 'utf-8')) as string;
-      const originalFileSize = Buffer.byteLength(currentContent, 'utf-8');
+      let currentFileContent = (await container.fs.readFile(relativePath, 'utf-8')) as string;
+      const originalFileSize = Buffer.byteLength(currentFileContent, 'utf-8');
 
-      // Parse the modify instructions from action.content
-      const modifications = this.#parseModifications(action.content);
+      // Extract the JSON content from CDATA if present
+      const jsonContent = extractFromCDATA(action.content.trim());
 
       // Calculate total size of modifications
-      const modificationsSize = modifications.reduce((total, mod) => {
-        const findLength = Buffer.byteLength(mod.find, 'utf-8');
-        return total + findLength + Buffer.byteLength(mod.replace, 'utf-8');
-      }, 0);
+      const modificationsSize = Buffer.byteLength(jsonContent, 'utf-8');
+
+      // Parse the modify instructions from action.content
+      const modifications = this.#parseModifications(jsonContent);
 
       logger.info(`📝 [Modify] Found ${modifications.length} modification(s) to apply`);
-      logger.info(`📊 [Modify] Modifications size: ${modificationsSize} bytes (find+replace text only)`);
 
       // Apply each modification in order
       for (let i = 0; i < modifications.length; i++) {
@@ -386,59 +387,35 @@ export class ActionRunner {
         logger.debug(`🔍 [Modify] Applying modification ${i + 1}/${modifications.length}`);
 
         // Check if the text to find exists
-        if (!currentContent.includes(mod.find)) {
-          // Try with decoded HTML entities as a fallback
-          const decodedFind = this.#decodeHtmlEntities(mod.find);
-          const decodedReplace = this.#decodeHtmlEntities(mod.replace);
-
-          if (decodedFind !== mod.find && currentContent.includes(decodedFind)) {
-            logger.warn(`⚠️ [Modify] HTML entities detected and auto-corrected`);
-            logger.warn(`Original find:\n"${mod.find}"`);
-            logger.warn(`Decoded to:\n"${decodedFind}"`);
-            logger.warn(`IMPORTANT: Please use actual characters instead of HTML entities in your code!`);
-
-            // Use decoded versions
-            mod.find = decodedFind;
-            mod.replace = decodedReplace;
-          } else {
-            logger.error(`❌ [Modify] Could not find text in ${relativePath}:`);
-            logger.error(`Looking for:\n"${mod.find}"`);
-            logger.error(`Replace with:\n"${mod.replace}"`);
-
-            // If decoded version is different, suggest it might be the issue
-            if (decodedFind !== mod.find) {
-              logger.error(`Note: The text contains HTML entities. Did you mean:\n"${decodedFind}"?`);
-            }
-
-            throw new Error(`Text not found in file: ${mod.find.substring(0, 50)}...`);
-          }
+        if (!currentFileContent.includes(mod.before)) {
+          throw new Error(`Text not found in file: ${mod.before}`);
         }
 
         // Replace the text
-        const beforeLength = currentContent.length;
+        const beforeLength = currentFileContent.length;
 
         // Check if text appears multiple times
         const occurrences = (
-          currentContent.match(new RegExp(mod.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
+          currentFileContent.match(new RegExp(mod.before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
         ).length;
 
         if (occurrences > 1) {
           logger.warn(`⚠️ [Modify] Text appears ${occurrences} times in file. Only first occurrence will be replaced.`);
         }
 
-        currentContent = currentContent.replace(mod.find, mod.replace);
+        currentFileContent = currentFileContent.replace(mod.before, mod.after);
 
-        const afterLength = currentContent.length;
+        const afterLength = currentFileContent.length;
 
-        logger.debug(`🔍 [Modify] Replaced\nfind:\n"${mod.find}"\nreplace:\n"${mod.replace}"`);
+        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\nafter:\n"${mod.after}"`);
         logger.debug(`✅ [Modify] Replacement ${i + 1} successful (${afterLength - beforeLength} chars changed)`);
       }
 
       // Write the updated content back
-      await container.fs.writeFile(relativePath, currentContent);
+      await container.fs.writeFile(relativePath, currentFileContent);
 
       // Calculate final file size and savings
-      const finalFileSize = Buffer.byteLength(currentContent, 'utf-8');
+      const finalFileSize = Buffer.byteLength(currentFileContent, 'utf-8');
       const savedBytes = finalFileSize - modificationsSize;
       const savingsPercentage = ((savedBytes / finalFileSize) * 100).toFixed(1);
 
@@ -453,55 +430,31 @@ export class ActionRunner {
     }
   }
 
-  #parseModifications(content: string): Array<{ find: string; replace: string }> {
-    const modifications: Array<{ find: string; replace: string }> = [];
+  #parseModifications(jsonContent: string): Array<{ before: string; after: string }> {
+    const modifications: Array<{ before: string; after: string }> = [];
 
-    // Match all <modify> blocks
-    const modifyRegex = /<modify>([\s\S]*?)<\/modify>/g;
-    let match;
+    try {
+      // Parse the JSON array
+      const parsed = JSON.parse(jsonContent);
 
-    while ((match = modifyRegex.exec(content)) !== null) {
-      const modifyContent = match[1];
+      // Ensure it's an array
+      const modArray = Array.isArray(parsed) ? parsed : [parsed];
 
-      // Extract find and replace content
-      const findMatch = modifyContent.match(/<find>([\s\S]*?)<\/find>/);
-      const replaceMatch = modifyContent.match(/<replace>([\s\S]*?)<\/replace>/);
-
-      if (findMatch && replaceMatch) {
-        modifications.push({
-          find: findMatch[1].trim(),
-          replace: replaceMatch[1].trim(),
-        });
+      // Process each modification
+      for (const mod of modArray) {
+        if (mod && typeof mod === 'object' && 'before' in mod && 'after' in mod) {
+          modifications.push({
+            before: String(mod.before),
+            after: String(mod.after),
+          });
+        }
       }
-    }
-
-    // If no <modify> tags found, try to parse as a simple find/replace
-    if (modifications.length === 0 && content.includes('<find>') && content.includes('<replace>')) {
-      const findMatch = content.match(/<find>([\s\S]*?)<\/find>/);
-      const replaceMatch = content.match(/<replace>([\s\S]*?)<\/replace>/);
-
-      if (findMatch && replaceMatch) {
-        modifications.push({
-          find: findMatch[1].trim(),
-          replace: replaceMatch[1].trim(),
-        });
-      }
+    } catch (error) {
+      logger.error('Failed to parse modification JSON:', error);
+      logger.debug('Raw content:', jsonContent);
     }
 
     return modifications;
-  }
-
-  #decodeHtmlEntities(text: string): string {
-    // Decode common HTML entities that LLM might incorrectly use
-    return text
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#x3D;/g, '=')
-      .replace(/&apos;/g, "'")
-      .replace(/&#39;/g, "'")
-      .replace(/&#x27;/g, "'");
   }
 
   #updateAction(id: string, newState: ActionStateUpdate) {
