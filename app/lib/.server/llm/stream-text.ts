@@ -1,4 +1,11 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
+import {
+  streamText as _streamText,
+  convertToCoreMessages,
+  type CoreAssistantMessage,
+  type CoreSystemMessage,
+  type CoreUserMessage,
+  type Message,
+} from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -118,6 +125,59 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  /*
+   * const assistantPrompt = {
+   *   role: 'assistant',
+   *   content: `작업을 아래 순서로 진행하겠습니다.
+   *   1 어떤 수정 사항을 변경할지 모든 파일 목록을 정의하겠습니다.
+   *   2. 수정에 필요한 파일을 읽겠습니다(한번에 읽을 수 없다면 여러번 요청해서라도 반드시 모든 파일을 읽겠습니다).
+   *   2-1. 추가로 연관된 파일을 읽겠습니다(반복).
+   *   3. 수정 코드를 생성하겠습니다.`,
+   * } as CoreAssistantMessage;
+   */
+
+  const assistantPrompt = {
+    role: 'assistant',
+    content: `알겠습니다. 시스템 제약으로 인해 boltAction 생성 시 다음 규칙을 준수하겠습니다:
+
+🔴 **시스템 제약사항 - boltAction 생성 규칙**:
+
+**파일 수정/생성 시 필수 프로세스**:
+1. **boltAction type="file" 또는 type="modify" 전**: 반드시 해당 파일 경로 설명
+2. **boltAction type="file" 또는 type="modify" 전**: 반드시 read_files_contents 툴 호출
+3. **boltAction type="file" 또는 type="modify"**: 읽은 내용 기반으로만 생성
+
+**중요: 한 번에 하나의 boltAction만 생성**
+- ✅ 올바른 예: 설명 → 읽기 → boltAction 1개 → 다음 파일 설명 → 읽기 → boltAction 1개
+- ❌ 잘못된 예: 여러 boltAction을 연속으로 생성
+
+**시스템이 거부하는 패턴**:
+- read_files_contents 없이 boltAction type="file" 또는 type="modify" 생성 시 시스템 오류
+- 여러 boltAction을 동시에 생성 시 첫 번째만 처리됨
+- 파일 내용 확인 없이 수정 시 데이터 손실 위험
+
+이는 기술적 제약이므로 반드시 준수하겠습니다.`,
+  } as CoreAssistantMessage;
+
+  const userPrompt = {
+    role: 'user',
+    content: `🚨 시스템 경고: boltAction 생성 제약
+- boltAction type="file" 또는 type="modify"를 생성하기 전에 반드시 read_files_contents를 먼저 호출해야 합니다
+- 이 순서를 어기면 시스템이 boltAction을 거부합니다
+- 여러 boltAction을 한번에 생성하지 마세요. 하나씩 처리해야 합니다
+- 반드시 한글로 응답하세요`,
+  } as CoreUserMessage;
+
+  // 파일 작업 제약 시스템 프롬프트 추가
+  const fileOperationConstraint = {
+    role: 'system',
+    content: `CRITICAL SYSTEM CONSTRAINT FOR BOLTACTION:
+- Before ANY boltAction with type="file" or type="modify": MUST call read_files_contents first
+- Generate only ONE boltAction at a time, then wait for next instruction
+- System will REJECT boltActions that don't follow this pattern
+- This is a technical limitation, not a suggestion`,
+  } as CoreSystemMessage;
+
   const coreMessages = [
     ...[
       systemPrompt,
@@ -139,7 +199,10 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
+    fileOperationConstraint,
     ...convertToCoreMessages(processedMessages).slice(-3),
+    assistantPrompt,
+    userPrompt,
   ];
 
   if (modelDetails.name.includes('anthropic')) {
