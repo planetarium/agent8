@@ -68,14 +68,41 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
 
         if (lastUserMessage) {
+          // 🎯 User 메시지용 별도 ID 생성
+          const userMessageId = generateId();
+          const userTextId = generateId();
+
+          // 🎯 User 메시지 시작 (role: 'user' 명시)
           writer.write({
-            type: 'data-prompt',
-            id: generateId(),
-            data: {
-              prompt: extractTextContent(lastUserMessage),
-            },
+            type: 'start',
+            messageId: userMessageId,
+            messageMetadata: { role: 'user' },
+          });
+
+          // 🎯 User 메시지 내용 스트리밍
+          writer.write({ type: 'text-start', id: userTextId });
+          writer.write({
+            type: 'text-delta',
+            id: userTextId,
+            delta: extractTextContent(lastUserMessage),
+          });
+          writer.write({ type: 'text-end', id: userTextId });
+
+          // 🎯 User 메시지 완료
+          writer.write({
+            type: 'finish',
+            messageMetadata: { role: 'user' },
           });
         }
+
+        // 🎯 Assistant 메시지용 별도 ID 시작
+        const assistantMessageId = generateId();
+
+        writer.write({
+          type: 'start',
+          messageId: assistantMessageId,
+          messageMetadata: { role: 'assistant' },
+        });
 
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
@@ -85,20 +112,19 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             const unsubscribe = tool.progressEmitter.subscribe((event) => {
               const { type, data, toolName: eventToolName } = event;
 
-              // Generate and manage unique IDs for each tool
-              let toolProgressId = toolProgressIds.get(eventToolName);
+              // // Generate and manage unique IDs for each tool
+              // let toolProgressId = toolProgressIds.get(eventToolName);
 
-              if (!toolProgressId) {
-                toolProgressId = generateId();
-                toolProgressIds.set(eventToolName, toolProgressId);
-              }
-
-              console.log('[DEBUG] type: ', type);
+              /*
+               * if (!toolProgressId) {
+               *   toolProgressId = generateId();
+               *   toolProgressIds.set(eventToolName, toolProgressId);
+               * }
+               */
 
               if (type === 'start') {
                 writer.write({
                   type: 'data-progress',
-                  id: toolProgressId,
                   data: {
                     type: 'progress',
                     status: 'in-progress',
@@ -109,7 +135,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } else if (type === 'progress') {
                 writer.write({
                   type: 'data-progress',
-                  id: toolProgressId,
                   data: {
                     type: 'progress',
                     status: 'in-progress',
@@ -121,7 +146,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } else if (type === 'complete') {
                 writer.write({
                   type: 'data-progress',
-                  id: toolProgressId,
                   data: {
                     type: 'progress',
                     status: data.status === 'failed' ? 'failed' : 'complete',
@@ -230,6 +254,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
+            for await (const part of result.fullStream) {
+              if (part.type === 'error') {
+                const error: any = part.error;
+                logger.error(`${error}`);
+              }
+            }
+
             writer.merge(result.toUIMessageStream());
 
             return;
@@ -277,7 +308,31 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           const toolCallToTextIdMap = new Map<string, string>();
 
           return (chunk, controller) => {
-            switch (chunk.type) {
+            const messageType = chunk.type;
+
+            /*
+             * if (messageType === 'data-prompt' || messageType === 'data-progress') {
+             *   return;
+             * }
+             */
+
+            switch (messageType) {
+              /*
+               * case 'data-prompt': {
+               *   controller.enqueue({
+               *     type: 'data-prompt',
+               *     id: chunk.id,
+               *     data: {
+               *       prompt: (chunk.data as { prompt: string }).prompt,
+               *     },
+               *   });
+               */
+
+              /*
+               *   break;
+               * }
+               */
+
               case 'reasoning-start': {
                 if (!isInReasoning) {
                   isInReasoning = true;
@@ -343,27 +398,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
                 const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
 
-                let textId = toolCallToTextIdMap.get(chunk.toolCallId);
+                // let textId = toolCallToTextIdMap.get(chunk.toolCallId);
 
-                if (!textId) {
-                  textId = generateId();
-                  toolCallToTextIdMap.set(chunk.toolCallId, textId);
-                }
+                /*
+                 * if (!textId) {
+                 *   textId = generateId();
+                 *   toolCallToTextIdMap.set(chunk.toolCallId, textId);
+                 * }
+                 */
 
                 controller.enqueue({
                   type: 'text-start',
-                  id: textId,
+                  id: toolCall.toolCallId,
                 });
 
                 controller.enqueue({
                   type: 'text-delta',
-                  id: textId,
+                  id: toolCall.toolCallId,
                   delta: divString,
                 });
 
                 controller.enqueue({
                   type: 'text-end',
-                  id: textId,
+                  id: toolCall.toolCallId,
                 });
 
                 console.log('[DEBUG] tool-input-available transformed to text stream');

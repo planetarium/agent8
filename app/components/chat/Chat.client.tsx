@@ -946,9 +946,15 @@ export const ChatImpl = memo(
         }
 
         sendChatMessage({
-          text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\n${messageContent}`,
+          role: 'user',
+          parts: [
+            {
+              type: 'text',
+              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                attachmentList,
+              )}]\n\n${messageContent}`,
+            },
+          ],
         });
 
         setInput('');

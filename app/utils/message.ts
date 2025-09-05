@@ -1,12 +1,23 @@
 import type { UIMessage } from 'ai';
 
 export const extractTextContent = (message: UIMessage) => {
-  if (message.parts && message.parts.length > 0) {
-    return message.parts
-      .filter((part) => part.type === 'text')
-      .map((part) => part.text || '')
-      .join('');
-  }
+  try {
+    if (message.parts && Array.isArray(message.parts)) {
+      return message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => {
+          if ('text' in part) {
+            return part.text || '';
+          }
 
-  return '';
+          return '';
+        })
+        .join('');
+    }
+
+    return '';
+  } catch (error) {
+    console.error('getMessageText error:', error, message);
+    return '';
+  }
 };
