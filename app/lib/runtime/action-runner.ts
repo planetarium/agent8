@@ -430,25 +430,22 @@ export class ActionRunner {
     }
   }
 
-  #normalizeJsonString(content: string): string {
-    try {
-      JSON.parse(content);
-      return content;
-    } catch (error) {
-      logger.debug('JSON parsing failed, attempting normalization:', error);
-      return content.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-    }
+  #unescapeString(content: string): string {
+    return content
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
   }
 
-  #parseModifications(jsonContent: string): Array<{ before: string; after: string }> {
+  #parseModifications(content: string): Array<{ before: string; after: string }> {
     const modifications: Array<{ before: string; after: string }> = [];
 
     try {
-      // JSON parsing before defensive normalization
-      const normalizedContent = this.#normalizeJsonString(jsonContent);
-
-      // Parse the JSON array
-      const parsed = JSON.parse(normalizedContent);
+      // Parse the JSON
+      const parsed = JSON.parse(content);
 
       // Ensure it's an array
       const modArray = Array.isArray(parsed) ? parsed : [parsed];
@@ -463,8 +460,28 @@ export class ActionRunner {
         }
       }
     } catch (error) {
-      logger.error('Failed to parse modification JSON:', error);
-      logger.debug('Raw content:\n', jsonContent);
+      logger.warn('Failed to parse JSON:', error);
+      logger.debug('Raw content:\n', content);
+
+      // fallback to regex if json parsing fails
+      const regex = /"before"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"after"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+      const reverseRegex = /"after"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"before"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[1]),
+          after: this.#unescapeString(match[2]),
+        });
+      }
+
+      while ((match = reverseRegex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[2]),
+          after: this.#unescapeString(match[1]),
+        });
+      }
     }
 
     return modifications;
