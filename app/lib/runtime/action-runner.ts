@@ -391,9 +391,6 @@ export class ActionRunner {
           throw new Error(`Text not found in file: ${mod.before}`);
         }
 
-        // Replace the text
-        const beforeLength = currentFileContent.length;
-
         // Check if text appears multiple times
         const occurrences = (
           currentFileContent.match(new RegExp(mod.before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
@@ -405,10 +402,8 @@ export class ActionRunner {
 
         currentFileContent = currentFileContent.replace(mod.before, mod.after);
 
-        const afterLength = currentFileContent.length;
-
         logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\nafter:\n"${mod.after}"`);
-        logger.debug(`✅ [Modify] Replacement ${i + 1} successful (${afterLength - beforeLength} chars changed)`);
+        logger.debug(`✅ [Modify] Replacement ${i + 1} successful`);
       }
 
       // Write the updated content back
