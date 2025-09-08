@@ -144,7 +144,7 @@ export async function streamText(props: {
   - 작업이 즉시 중단됨
   - 프로젝트 진행 불가능
   
-  💡 **중요**: 반드시 사용 가능한 툴 목록을 먼저 확인 후, 있는 툴만 호출하세요`,
+  💡 **중요**: 반드시 사용 가능한 툴 목록을 먼저 확인 후, 있는 툴만 호출하세요. shell은 툴이 아니므로 절대 호출하지 마세요.`,
   } as CoreSystemMessage;
 
   const resourceValidationPrompt = {
@@ -185,22 +185,42 @@ export async function streamText(props: {
 
   const assistantPrompt = {
     role: 'assistant',
-    content: `알겠습니다. 시스템 제약으로 인해 boltAction 생성 시 다음 규칙을 준수하겠습니다:
+    content: `알겠습니다. 시스템 제약으로 인해 boltArtifact/boltAction 생성 시 다음 규칙을 준수하겠습니다:
 
-🔴 **시스템 제약사항 - boltAction 생성 규칙**:
+🔴 **시스템 제약사항 - boltArtifact/boltAction 생성 규칙**:
+
+**핵심 규칙: 1:1 관계**
+- 각 boltArtifact는 정확히 하나의 boltAction만 포함
+- 각 boltArtifact는 유니크한 ID 필요 (timestamp 또는 suffix 추가)
+- boltArtifact 태그 전에 해당 action 설명 필수 (태그 내부가 아님)
+
+**📁 파일 읽기 상태 관리 시스템**:
+- 세션 동안 read_files_contents 툴로 읽은 모든 파일을 기억합니다
+- 읽은 파일 목록을 내부적으로 추적하여 중복 읽기를 방지합니다
+- 파일 수정 전 반드시 해당 파일이 읽은 파일 목록에 있는지 확인합니다
+
+**읽은 파일 체크 프로세스**:
+1. **내부 읽기 목록 확인**: read_files_contents로 읽은 파일인지 체크
+2. **명확한 상태 선언**:
+   - 읽은 파일: "✅ [파일명]을 이미 읽었습니다. 내용을 기반으로 수정합니다."
+   - 읽지 않은 파일: "❌ [파일명]을 아직 읽지 않았습니다. 먼저 파일을 읽겠습니다."
+3. **읽지 않은 파일 처리**: read_files_contents 툴 호출 후 목록에 추가
 
 **파일 수정/생성 시 필수 프로세스**:
 1. **boltAction type="file" 또는 type="modify" 전**: 반드시 해당 파일 경로 설명
-2. **boltAction type="file" 또는 type="modify" 전**: 반드시 파일을 읽었는지 확인 후, 읽지 않았다면 read_files_contents 툴 호출
+2. **boltAction type="file" 또는 type="modify" 전**: 읽은 파일 목록에서 확인
+   - 목록에 있음: "✅ 이미 읽었습니다. 기존 내용을 토대로 수정하겠습니다." 선언
+   - 목록에 없음: "❌ 읽지 않았습니다. 파일을 읽겠습니다." 선언 → read_files_contents 툴 호출
 3. **boltAction type="file" 또는 type="modify"**: 읽은 내용 기반으로만 생성
 
-**중요: 한 번에 하나의 boltAction만 생성**
-- ✅ 올바른 예: 설명 → 읽기 → boltAction 1개 → 다음 파일 설명 → 읽기 확인 및 읽기 → boltAction 1개
-- ❌ 잘못된 예: 여러 boltAction을 연속으로 생성
+**중요: 한 번에 하나의 boltArtifact(하나의 boltAction)만 생성**
+- ✅ 올바른 예: 파일 읽기 → action 설명 → boltArtifact(유니크 ID) → boltAction 1개
+- ❌ 잘못된 예: 하나의 boltArtifact에 여러 boltAction 포함
 
 **시스템이 거부하는 패턴**:
 - 파일 읽기 확인 없이 boltAction type="file" 또는 type="modify" 생성 시 시스템 오류
-- 여러 boltAction을 동시에 생성 시 첫 번째만 처리됨
+- 하나의 boltArtifact에 여러 boltAction 포함 시 오류
+- 유니크하지 않은 artifact ID 사용 시 충돌 위험
 - 파일 내용 확인 없이 수정 시 데이터 손실 위험
 
 이는 기술적 제약이므로 반드시 준수하겠습니다.`,
@@ -210,6 +230,19 @@ export async function streamText(props: {
     role: 'user',
     content: `- 반드시 한글로 응답하세요`,
   } as CoreUserMessage;
+
+  const fileOperationConstraint = {
+    role: 'system',
+    content: `CRITICAL SYSTEM CONSTRAINT FOR BOLTARTIFACT/BOLTACTION:
+- Each boltArtifact must contain EXACTLY ONE boltAction (1:1 relationship)
+- Each boltArtifact must have a UNIQUE ID with timestamp or suffix
+- Must include action description BEFORE boltArtifact tag (not inside the tag)
+- Any file reading or preliminary explanations happen BEFORE boltArtifact tag
+- Before ANY boltAction with type="file" or type="modify": MUST call read_files_contents first
+- Generate only ONE boltArtifact (with one boltAction) at a time, then wait for next instruction
+- System will REJECT artifacts that don't follow this 1:1 pattern
+- This is a technical limitation, not a suggestion`,
+  } as CoreSystemMessage;
 
   diffPrompts.push(assistantPrompt, userPrompt);
 
@@ -234,6 +267,7 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
+    fileOperationConstraint,
     ...(useDiff ? [toolUsageRulesPrompt] : []),
     ...(useDiff ? [resourceValidationPrompt] : []),
     ...convertToCoreMessages(processedMessages).slice(-3),
