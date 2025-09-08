@@ -402,7 +402,7 @@ export class ActionRunner {
 
         currentFileContent = currentFileContent.replace(mod.before, mod.after);
 
-        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\nafter:\n"${mod.after}"`);
+        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\n-----------------------\nafter:\n"${mod.after}"`);
         logger.debug(`✅ [Modify] Replacement ${i + 1} successful`);
       }
 
