@@ -125,16 +125,63 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  /*
-   * const assistantPrompt = {
-   *   role: 'assistant',
-   *   content: `작업을 아래 순서로 진행하겠습니다.
-   *   1 어떤 수정 사항을 변경할지 모든 파일 목록을 정의하겠습니다.
-   *   2. 수정에 필요한 파일을 읽겠습니다(한번에 읽을 수 없다면 여러번 요청해서라도 반드시 모든 파일을 읽겠습니다).
-   *   2-1. 추가로 연관된 파일을 읽겠습니다(반복).
-   *   3. 수정 코드를 생성하겠습니다.`,
-   * } as CoreAssistantMessage;
-   */
+  const toolUsageRulesPrompt = {
+    role: 'system',
+    content: `🛠️ **툴 사용 절대 규칙**:
+
+  ⚠️ **중요: 툴 호출 전 반드시 확인**
+  1. 제공된 툴 목록에서만 툴을 선택하여 사용하세요
+  2. 툴 이름은 정확히 일치해야 합니다 (대소문자, 언더스코어 포함)
+  3. 존재하지 않는 툴을 절대 호출하지 마세요 (예: shell, bash, cmd 등)
+  
+  📋 **툴 호출 체크리스트**:
+  □ 툴 이름이 제공된 목록과 정확히 일치하는가?
+  □ 언더스코어(_)와 소문자를 정확히 사용했는가?
+  □ 툴의 파라미터가 올바른가?
+  
+  🚨 **'shell' 툴 호출 시도 시**:
+  - "Model tried to call unavailable tool 'shell'" 에러 발생
+  - 작업이 즉시 중단됨
+  - 프로젝트 진행 불가능
+  
+  💡 **중요**: 반드시 사용 가능한 툴 목록을 먼저 확인 후, 있는 툴만 호출하세요`,
+  } as CoreSystemMessage;
+
+  const resourceValidationPrompt = {
+    role: 'system',
+    content: `🎮 **리소스 추가 절대 규칙**:
+
+    ⚠️ **중요: assets.json에 리소스 추가 전 필수 검증**
+    
+    📋 **리소스 추가 전 체크리스트**:
+    1. search_file_contents 또는 search_codebase_vectordb 툴로 먼저 검색
+    2. public/models/, public/assets/, src/assets/ 등 리소스 디렉토리 확인
+    3. 정확한 파일 경로와 확장자(.glb, .gltf, .png, .jpg 등) 확인
+    
+    ❌ **절대 금지 사항**:
+    - 존재하지 않는 파일을 assets.json에 추가
+    - 상상으로 리소스 경로 생성 (예: "/models/duck.glb" 임의 생성)
+    - 확인 없이 리소스 추가
+    
+    ✅ **올바른 작업 순서**:
+    1. 사용자 요청 분석 (예: "오리를 배치해줘")
+    2. 관련 리소스 검색 (duck, bird, animal 등 키워드)
+    3. 검색 결과 확인
+    4. 존재하는 파일만 assets.json에 추가
+    
+    💡 **리소스가 없을 경우 대안**:
+    - 유사한 기존 리소스 제안 (예: 오리 대신 새 모델)
+    - 기본 도형(큐브, 구, 실린더)으로 대체 제안
+    - 사용자에게 리소스 업로드 요청
+    
+    🔴 **위반 시 결과**:
+    - 런타임 에러 발생 (404 Not Found)
+    - 3D 씬 로딩 실패
+    - 사용자 경험 저하`,
+  } as CoreSystemMessage;
+
+  // Diff mode prompts - only added when useDiff is true
+  const diffPrompts: (CoreAssistantMessage | CoreUserMessage)[] = [];
 
   const assistantPrompt = {
     role: 'assistant',
@@ -144,15 +191,15 @@ export async function streamText(props: {
 
 **파일 수정/생성 시 필수 프로세스**:
 1. **boltAction type="file" 또는 type="modify" 전**: 반드시 해당 파일 경로 설명
-2. **boltAction type="file" 또는 type="modify" 전**: 반드시 read_files_contents 툴 호출
+2. **boltAction type="file" 또는 type="modify" 전**: 반드시 파일을 읽었는지 확인 후, 읽지 않았다면 read_files_contents 툴 호출
 3. **boltAction type="file" 또는 type="modify"**: 읽은 내용 기반으로만 생성
 
 **중요: 한 번에 하나의 boltAction만 생성**
-- ✅ 올바른 예: 설명 → 읽기 → boltAction 1개 → 다음 파일 설명 → 읽기 → boltAction 1개
+- ✅ 올바른 예: 설명 → 읽기 → boltAction 1개 → 다음 파일 설명 → 읽기 확인 및 읽기 → boltAction 1개
 - ❌ 잘못된 예: 여러 boltAction을 연속으로 생성
 
 **시스템이 거부하는 패턴**:
-- read_files_contents 없이 boltAction type="file" 또는 type="modify" 생성 시 시스템 오류
+- 파일 읽기 확인 없이 boltAction type="file" 또는 type="modify" 생성 시 시스템 오류
 - 여러 boltAction을 동시에 생성 시 첫 번째만 처리됨
 - 파일 내용 확인 없이 수정 시 데이터 손실 위험
 
@@ -161,22 +208,10 @@ export async function streamText(props: {
 
   const userPrompt = {
     role: 'user',
-    content: `🚨 시스템 경고: boltAction 생성 제약
-- boltAction type="file" 또는 type="modify"를 생성하기 전에 반드시 read_files_contents를 먼저 호출해야 합니다
-- 이 순서를 어기면 시스템이 boltAction을 거부합니다
-- 여러 boltAction을 한번에 생성하지 마세요. 하나씩 처리해야 합니다
-- 반드시 한글로 응답하세요`,
+    content: `- 반드시 한글로 응답하세요`,
   } as CoreUserMessage;
 
-  // 파일 작업 제약 시스템 프롬프트 추가
-  const fileOperationConstraint = {
-    role: 'system',
-    content: `CRITICAL SYSTEM CONSTRAINT FOR BOLTACTION:
-- Before ANY boltAction with type="file" or type="modify": MUST call read_files_contents first
-- Generate only ONE boltAction at a time, then wait for next instruction
-- System will REJECT boltActions that don't follow this pattern
-- This is a technical limitation, not a suggestion`,
-  } as CoreSystemMessage;
+  diffPrompts.push(assistantPrompt, userPrompt);
 
   const coreMessages = [
     ...[
@@ -199,10 +234,10 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    fileOperationConstraint,
+    ...(useDiff ? [toolUsageRulesPrompt] : []),
+    ...(useDiff ? [resourceValidationPrompt] : []),
     ...convertToCoreMessages(processedMessages).slice(-3),
-    assistantPrompt,
-    userPrompt,
+    ...diffPrompts,
   ];
 
   if (modelDetails.name.includes('anthropic')) {
