@@ -260,12 +260,10 @@ export class GitlabService {
         }
       }
 
-      const existingFiles = await this._getProjectFiles(projectId, branch);
-
       const actions: CommitAction[] = [];
 
       for (const file of files) {
-        const fileExists = existingFiles.includes(file.path);
+        const fileExists = await this._existsFile(projectId, file.path, branch);
         const action: CommitAction = {
           action: fileExists ? ('update' as const) : ('create' as const),
           filePath: file.path,
@@ -293,7 +291,9 @@ export class GitlabService {
           try {
             for (const file of files) {
               try {
-                if (existingFiles.includes(file.path)) {
+                const fileExists = await this._existsFile(projectId, file.path, branch);
+
+                if (fileExists) {
                   await this.gitlab.RepositoryFiles.edit(
                     projectId,
                     file.path,
@@ -386,6 +386,16 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get project files: ${errorMessage}`);
+    }
+  }
+
+  private async _existsFile(projectId: number, filePath: string, branch: string = 'develop'): Promise<boolean> {
+    try {
+      await this.gitlab.RepositoryFiles.show(projectId, filePath, branch);
+      return true;
+    } catch {
+      // If the file doesn't exist, the API will return a 404 error
+      return false;
     }
   }
 
