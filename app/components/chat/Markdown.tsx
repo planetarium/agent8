@@ -27,12 +27,19 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
       div: ({ className, children, node, ...props }) => {
         if (className?.includes('__boltArtifact__')) {
           const messageId = node?.properties.dataMessageId as string;
+          const artifactId = node?.properties.dataArtifactId as string;
 
           if (!messageId) {
-            logger.error(`Invalid message id ${messageId}`);
+            logger.error('Missing message id in artifact element');
+            return null; // Don't render artifact without messageId
           }
 
-          return <Artifact messageId={messageId} />;
+          // artifactId is optional for backward compatibility
+          if (!artifactId) {
+            logger.warn('Missing artifact id in artifact element, using messageId as fallback');
+          }
+
+          return <Artifact messageId={messageId} artifactId={artifactId} />;
         }
 
         if (className?.includes('__boltThought__')) {

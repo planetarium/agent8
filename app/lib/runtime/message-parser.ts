@@ -37,7 +37,7 @@ interface ElementFactoryProps {
   messageId: string;
 }
 
-type ElementFactory = (props: ElementFactoryProps) => string;
+type ElementFactory = (props: ElementFactoryProps, artifactId?: string) => string;
 
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
@@ -303,7 +303,7 @@ export class StreamingMessageParser {
 
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 
-              output += artifactFactory({ messageId });
+              output += artifactFactory({ messageId }, artifactId);
 
               i = openTagEnd + 1;
             } else {
@@ -377,13 +377,18 @@ export class StreamingMessageParser {
   }
 }
 
-const createArtifactElement: ElementFactory = (props) => {
+const createArtifactElement: ElementFactory = (props, artifactId?: string) => {
   const elementProps = [
     'class="__boltArtifact__"',
     ...Object.entries(props).map(([key, value]) => {
       return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
     }),
   ];
+
+  // Add artifactId if available
+  if (artifactId) {
+    elementProps.push(`data-artifact-id=${JSON.stringify(artifactId)}`);
+  }
 
   return `<div ${elementProps.join(' ')}></div>`;
 };

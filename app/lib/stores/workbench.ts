@@ -8,7 +8,6 @@ import { WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
-import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
 import { FilesStore, type FileMap, type File } from './files';
 import { PreviewsStore } from './previews';
@@ -98,6 +97,7 @@ export class WorkbenchStore {
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
+  #messageArtifactMap: Map<string, string[]> = new Map();
   #globalExecutionQueue = Promise.resolve();
   #shellActionRunning = false;
   #shellActionPromise: Promise<void> | null = null;
@@ -503,17 +503,32 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(messageId);
+    // Validate required fields
+    if (!id || !messageId) {
+      logger.warn('Invalid artifact data: missing id or messageId', { messageId, id, title });
+      return;
+    }
+
+    // Use composite key: messageId:artifactId
+    const compositeKey = `${messageId}:${id}`;
+    const artifact = this.#getArtifact(compositeKey);
 
     if (artifact) {
       return;
     }
 
-    if (!this.artifactIdList.includes(messageId)) {
-      this.artifactIdList.push(messageId);
+    if (!this.artifactIdList.includes(compositeKey)) {
+      this.artifactIdList.push(compositeKey);
     }
 
-    this.artifacts.setKey(messageId, {
+    // Track artifacts by messageId for backward compatibility
+    if (!this.#messageArtifactMap.has(messageId)) {
+      this.#messageArtifactMap.set(messageId, []);
+    }
+
+    this.#messageArtifactMap.get(messageId)!.push(id);
+
+    this.artifacts.setKey(compositeKey, {
       id,
       title,
       closed: false,
@@ -543,15 +558,23 @@ export class WorkbenchStore {
 
     this.#artifactCloseCallbacks.get(messageId)?.push(callback);
 
-    const artifact = this.#getArtifact(messageId);
+    // Check if all artifacts for this message are closed
+    const artifactIds = this.#messageArtifactMap.get(messageId) || [];
+    const allClosed = artifactIds.every((artifactId) => {
+      const compositeKey = `${messageId}:${artifactId}`;
+      const artifact = this.#getArtifact(compositeKey);
 
-    if (artifact?.closed) {
+      return artifact?.closed;
+    });
+
+    if (allClosed && artifactIds.length > 0) {
       callback();
     }
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(data.messageId);
+    const compositeKey = `${data.messageId}:${data.id}`;
+    const artifact = this.#getArtifact(compositeKey);
 
     if (artifact?.closed) {
       return;
@@ -573,38 +596,58 @@ export class WorkbenchStore {
 
     const { messageId } = data;
 
-    // Trigger registered callbacks for this messageId
-    const callbacks = this.#artifactCloseCallbacks.get(messageId);
+    // Check if all artifacts for this message are closed
+    const artifactIds = this.#messageArtifactMap.get(messageId) || [];
+    const allClosed = artifactIds.every((artifactId) => {
+      const compositeKey = `${messageId}:${artifactId}`;
+      const artifact = this.#getArtifact(compositeKey);
 
-    if (callbacks && callbacks.length > 0) {
-      await Promise.all(callbacks.map((callback) => callback()));
+      return artifact?.closed;
+    });
+
+    // Trigger registered callbacks for this messageId if all artifacts are closed
+    if (allClosed) {
+      const callbacks = this.#artifactCloseCallbacks.get(messageId);
+
+      if (callbacks && callbacks.length > 0) {
+        await Promise.all(callbacks.map((callback) => callback()));
+      }
     }
   }
 
-  updateArtifact({ messageId }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
-    const artifact = this.#getArtifact(messageId);
+  updateArtifact({ messageId, id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
+    const compositeKey = `${messageId}:${id}`;
+    const artifact = this.#getArtifact(compositeKey);
 
     if (!artifact) {
       return;
     }
 
-    this.artifacts.setKey(messageId, { ...artifact, ...state });
+    this.artifacts.setKey(compositeKey, { ...artifact, ...state });
   }
   addAction(data: ActionCallbackData) {
     // this._addAction(data);
 
-    this.addToExecutionQueue(() => this._addAction(data));
+    this.addToExecutionQueue(async () => this._addAction(data));
   }
-  async _addAction(data: ActionCallbackData) {
-    const { messageId } = data;
+  _addAction(data: ActionCallbackData) {
+    const { messageId, artifactId } = data;
 
-    const artifact = this.#getArtifact(messageId);
-
-    if (!artifact) {
-      unreachable('Artifact not found');
+    // Validate required fields
+    if (!artifactId || !messageId) {
+      logger.error('Invalid action data: missing artifactId or messageId', { messageId, artifactId });
+      return;
     }
 
-    return artifact.runner.addAction(data);
+    const compositeKey = `${messageId}:${artifactId}`;
+    const artifact = this.#getArtifact(compositeKey);
+
+    if (!artifact) {
+      logger.error(`Artifact not found for key: ${compositeKey}`);
+      return;
+    }
+
+    artifact.runner.addAction(data);
   }
 
   runAction(data: ActionCallbackData, isStreaming: boolean = false) {
@@ -628,12 +671,20 @@ export class WorkbenchStore {
     });
   }
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    const { messageId } = data;
+    const { messageId, artifactId } = data;
 
-    const artifact = this.#getArtifact(messageId);
+    // Validate required fields
+    if (!artifactId || !messageId) {
+      logger.error('Invalid action data: missing artifactId or messageId', { messageId, artifactId });
+      return;
+    }
+
+    const compositeKey = `${messageId}:${artifactId}`;
+    const artifact = this.#getArtifact(compositeKey);
 
     if (!artifact) {
-      unreachable('Artifact not found');
+      logger.error(`Artifact not found for key: ${compositeKey}`);
+      return;
     }
 
     const action = artifact.runner.actions.get()[data.actionId];

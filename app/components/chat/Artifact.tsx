@@ -24,15 +24,24 @@ if (import.meta.hot) {
 
 interface ArtifactProps {
   messageId: string;
+  artifactId?: string;
 }
 
-export const Artifact = memo(({ messageId }: ArtifactProps) => {
+export const Artifact = memo(({ messageId, artifactId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
   const [allActionFinished, setAllActionFinished] = useState(false);
 
   const artifacts = useWorkbenchArtifacts();
-  const artifact = artifacts[messageId];
+
+  // Use composite key if artifactId is provided, otherwise fallback to messageId for backward compatibility
+  const compositeKey = artifactId ? `${messageId}:${artifactId}` : messageId;
+  const artifact = artifacts[compositeKey];
+
+  // Return early if artifact is not found
+  if (!artifact) {
+    return null;
+  }
 
   const actions = useStore(
     computed(artifact.runner.actions, (actions) => {
