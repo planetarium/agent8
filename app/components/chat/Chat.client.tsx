@@ -406,7 +406,7 @@ export const ChatImpl = memo(
 
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
     const [input, setInput] = useState(() => Cookies.get(PROMPT_COOKIE_KEY) || '');
-    const [chatData, setChatData] = useState<any>(undefined);
+    const [chatData, setChatData] = useState<any[]>([]);
 
     const {
       messages,
@@ -430,6 +430,9 @@ export const ChatImpl = memo(
           };
         },
       }),
+      onData: (data) => {
+        setChatData([data]);
+      },
       onError: (e) => {
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
@@ -447,7 +450,7 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
-        setChatData(undefined);
+        setChatData([]);
 
         logStore.logProvider('Chat response completed', {
           component: 'Chat',
