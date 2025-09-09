@@ -180,9 +180,6 @@ export async function streamText(props: {
     - 사용자 경험 저하`,
   } as CoreSystemMessage;
 
-  // Diff mode prompts - only added when useDiff is true
-  const diffPrompts: (CoreAssistantMessage | CoreUserMessage)[] = [];
-
   const assistantPrompt = {
     role: 'assistant',
     content: `알겠습니다. 시스템 제약으로 인해 boltArtifact/boltAction 생성 시 다음 규칙을 준수하겠습니다:
@@ -244,7 +241,8 @@ export async function streamText(props: {
 - This is a technical limitation, not a suggestion`,
   } as CoreSystemMessage;
 
-  diffPrompts.push(assistantPrompt, userPrompt);
+  // Diff mode prompts - only added when useDiff is true
+  const diffPrompts = useDiff ? [assistantPrompt, userPrompt] : [];
 
   const coreMessages = [
     ...[
@@ -267,9 +265,7 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    fileOperationConstraint,
-    ...(useDiff ? [toolUsageRulesPrompt] : []),
-    ...(useDiff ? [resourceValidationPrompt] : []),
+    ...(useDiff ? [fileOperationConstraint, toolUsageRulesPrompt, resourceValidationPrompt] : []),
     ...convertToCoreMessages(processedMessages).slice(-3),
     ...diffPrompts,
   ];
