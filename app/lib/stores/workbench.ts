@@ -621,9 +621,9 @@ export class WorkbenchStore {
     this.artifacts.setKey(compositeKey, { ...artifact, ...state });
   }
   addAction(data: ActionCallbackData) {
-    // this._addAction(data);
+    this._addAction(data);
 
-    this.addToExecutionQueue(() => this._addAction(data));
+    //this.addToExecutionQueue(() => this._addAction(data));
   }
   async _addAction(data: ActionCallbackData) {
     const { messageId, artifactId } = data;
@@ -642,7 +642,11 @@ export class WorkbenchStore {
     if (isStreaming) {
       this.actionStreamSampler(data, isStreaming);
     } else {
-      this.addToExecutionQueue(() => this._runAction(data, isStreaming));
+      if (data.action.type !== 'shell') {
+        this._runAction(data, isStreaming);
+      } else {
+        this.addToExecutionQueue(() => this._runAction(data, isStreaming));
+      }
     }
   }
 
@@ -681,10 +685,12 @@ export class WorkbenchStore {
       return;
     }
 
-    // shell 액션이 아닌 경우, 현재 실행 중인 shell 액션 완료를 기다림
-    if (data.action.type !== 'shell' && this.#shellActionRunning && this.#shellActionPromise) {
-      await this.#shellActionPromise;
-    }
+    /*
+     * shell 액션이 아닌 경우, 현재 실행 중인 shell 액션 완료를 기다림
+     * if (data.action.type !== 'shell' && this.#shellActionRunning && this.#shellActionPromise) {
+     *   await this.#shellActionPromise;
+     * }
+     */
 
     // Don't run the action if it's a reload
     if (isCommitedMessage(messageId)) {
