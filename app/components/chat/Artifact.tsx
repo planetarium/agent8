@@ -24,7 +24,7 @@ if (import.meta.hot) {
 
 interface ArtifactProps {
   messageId: string;
-  artifactId?: string;
+  artifactId: string;
 }
 
 export const Artifact = memo(({ messageId, artifactId }: ArtifactProps) => {
@@ -34,8 +34,8 @@ export const Artifact = memo(({ messageId, artifactId }: ArtifactProps) => {
 
   const artifacts = useWorkbenchArtifacts();
 
-  // Use composite key if artifactId is provided, otherwise fallback to messageId for backward compatibility
-  const compositeKey = artifactId ? `${messageId}:${artifactId}` : messageId;
+  // Always use composite key with both messageId and artifactId
+  const compositeKey = `${messageId}:${artifactId}`;
   const artifact = artifacts[compositeKey];
 
   // Return early if artifact is not found

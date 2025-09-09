@@ -37,7 +37,7 @@ interface ElementFactoryProps {
   messageId: string;
 }
 
-type ElementFactory = (props: ElementFactoryProps, artifactId?: string) => string;
+type ElementFactory = (props: ElementFactoryProps, artifactId: string) => string;
 
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
@@ -279,7 +279,7 @@ export class StreamingMessageParser {
 
               const artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
               const type = this.#extractAttribute(artifactTag, 'type') as string;
-              const artifactId = this.#extractAttribute(artifactTag, 'id') as string;
+              let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
                 logger.warn('Artifact title missing');
@@ -287,6 +287,7 @@ export class StreamingMessageParser {
 
               if (!artifactId) {
                 logger.warn('Artifact id missing');
+                artifactId = `fallback-artifact-${i}`;
               }
 
               state.insideArtifact = true;
@@ -377,18 +378,14 @@ export class StreamingMessageParser {
   }
 }
 
-const createArtifactElement: ElementFactory = (props, artifactId?: string) => {
+const createArtifactElement: ElementFactory = (props, artifactId) => {
   const elementProps = [
     'class="__boltArtifact__"',
     ...Object.entries(props).map(([key, value]) => {
       return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
     }),
+    `data-artifact-id=${JSON.stringify(artifactId)}`,
   ];
-
-  // Add artifactId if available
-  if (artifactId) {
-    elementProps.push(`data-artifact-id=${JSON.stringify(artifactId)}`);
-  }
 
   return `<div ${elementProps.join(' ')}></div>`;
 };

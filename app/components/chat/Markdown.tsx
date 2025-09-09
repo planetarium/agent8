@@ -30,13 +30,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
           const artifactId = node?.properties.dataArtifactId as string;
 
           if (!messageId) {
-            logger.error('Missing message id in artifact element');
-            return null; // Don't render artifact without messageId
-          }
-
-          // artifactId is optional for backward compatibility
-          if (!artifactId) {
-            logger.warn('Missing artifact id in artifact element, using messageId as fallback');
+            logger.error(`Invalid message id ${messageId}`);
           }
 
           return <Artifact messageId={messageId} artifactId={artifactId} />;

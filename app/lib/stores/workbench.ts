@@ -8,6 +8,7 @@ import { WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
+import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
 import { FilesStore, type FileMap, type File } from './files';
 import { PreviewsStore } from './previews';
@@ -503,13 +504,7 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    // Validate required fields
-    if (!id || !messageId) {
-      logger.warn('Invalid artifact data: missing id or messageId', { messageId, id, title });
-      return;
-    }
-
-    // Use composite key: messageId:artifactId
+    // Create composite key with both IDs
     const compositeKey = `${messageId}:${id}`;
     const artifact = this.#getArtifact(compositeKey);
 
@@ -521,7 +516,7 @@ export class WorkbenchStore {
       this.artifactIdList.push(compositeKey);
     }
 
-    // Track artifacts by messageId for backward compatibility
+    // Track artifacts by messageId for message-level operations
     if (!this.#messageArtifactMap.has(messageId)) {
       this.#messageArtifactMap.set(messageId, []);
     }
@@ -628,26 +623,19 @@ export class WorkbenchStore {
   addAction(data: ActionCallbackData) {
     // this._addAction(data);
 
-    this.addToExecutionQueue(async () => this._addAction(data));
+    this.addToExecutionQueue(() => this._addAction(data));
   }
-  _addAction(data: ActionCallbackData) {
+  async _addAction(data: ActionCallbackData) {
     const { messageId, artifactId } = data;
-
-    // Validate required fields
-    if (!artifactId || !messageId) {
-      logger.error('Invalid action data: missing artifactId or messageId', { messageId, artifactId });
-      return;
-    }
 
     const compositeKey = `${messageId}:${artifactId}`;
     const artifact = this.#getArtifact(compositeKey);
 
     if (!artifact) {
-      logger.error(`Artifact not found for key: ${compositeKey}`);
-      return;
+      unreachable('Artifact not found');
     }
 
-    artifact.runner.addAction(data);
+    return artifact.runner.addAction(data);
   }
 
   runAction(data: ActionCallbackData, isStreaming: boolean = false) {
