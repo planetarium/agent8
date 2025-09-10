@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { createUIMessageStream, createUIMessageStreamResponse, generateId } from 'ai';
+import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
 import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
@@ -7,9 +7,9 @@ import { createScopedLogger } from '~/utils/logger';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
-import { extractTextContent } from '~/utils/message';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { ProgressAnnotation } from '~/types/context';
+import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -25,17 +25,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     contextOptimization: boolean;
   }>();
 
-  // Debug: files 데이터 수신 상태 확인
-  logger.info('[DEBUG] API Chat - Received files data:', {
-    filesCount: files ? Object.keys(files).length : 0,
-    filesKeys: files ? Object.keys(files).slice(0, 5) : [], // 처음 5개만 표시
-    hasFiles: !!files && Object.keys(files).length > 0,
-    firstFileExample:
-      files && Object.keys(files).length > 0
-        ? { path: Object.keys(files)[0], type: files[Object.keys(files)[0]]?.type }
-        : null,
-  });
-
   const cookieHeader = request.headers.get('Cookie');
 
   const stream = new SwitchableStream();
@@ -48,13 +37,26 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     totalTokens: 0,
   };
 
+  const extractTextPartsToStringify = (message: UIMessage) => {
+    try {
+      if (message.parts && Array.isArray(message.parts)) {
+        return message.parts.map((part) => JSON.stringify(part)).join(' ');
+      }
+
+      return '';
+    } catch (error) {
+      console.error('extractTextPartsToStringify error:', error, message);
+      return '';
+    }
+  };
+
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
 
     const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
     const mcpTools = mcpToolset.tools;
 
-    const totalMessageContent = messages.reduce((acc, message) => acc + extractTextContent(message), '');
+    const totalMessageContent = messages.reduce((acc, message) => acc + extractTextPartsToStringify(message), '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length} words`);
 
     const messageStream = createUIMessageStream({
@@ -62,110 +64,84 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let progressCounter = 1;
         const progressUnsubscribers: Array<() => void> = [];
 
-        const toolProgressIds = new Map<string, string>();
-        const responseProgressId = generateId();
+        try {
+          const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
 
-        const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
-
-        if (lastUserMessage) {
-          // 🎯 User 메시지용 별도 ID 생성
-          const userMessageId = generateId();
-          const userTextId = generateId();
-
-          // 🎯 User 메시지 시작 (role: 'user' 명시)
-          writer.write({
-            type: 'start',
-            messageId: userMessageId,
-            messageMetadata: { role: 'user' },
-          });
-
-          // 🎯 User 메시지 내용 스트리밍
-          writer.write({ type: 'text-start', id: userTextId });
-          writer.write({
-            type: 'text-delta',
-            id: userTextId,
-            delta: extractTextContent(lastUserMessage),
-          });
-          writer.write({ type: 'text-end', id: userTextId });
-
-          // 🎯 User 메시지 완료
-          writer.write({
-            type: 'finish',
-            messageMetadata: { role: 'user' },
-          });
-        }
-
-        // 🎯 Assistant 메시지용 별도 ID 시작
-        const assistantMessageId = generateId();
-
-        writer.write({
-          type: 'start',
-          messageId: assistantMessageId,
-          messageMetadata: { role: 'assistant' },
-        });
-
-        logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
-
-        for (const toolName in mcpTools) {
-          if (mcpTools[toolName]?.progressEmitter) {
-            const tool = mcpTools[toolName];
-            const unsubscribe = tool.progressEmitter.subscribe((event) => {
-              const { type, data, toolName: eventToolName } = event;
-
-              // // Generate and manage unique IDs for each tool
-              // let toolProgressId = toolProgressIds.get(eventToolName);
-
-              /*
-               * if (!toolProgressId) {
-               *   toolProgressId = generateId();
-               *   toolProgressIds.set(eventToolName, toolProgressId);
-               * }
-               */
-
-              if (type === 'start') {
-                writer.write({
-                  type: 'data-progress',
-                  data: {
-                    type: 'progress',
-                    status: 'in-progress',
-                    order: progressCounter++,
-                    message: `Tool '${eventToolName}' execution started`,
-                  } as any,
-                });
-              } else if (type === 'progress') {
-                writer.write({
-                  type: 'data-progress',
-                  data: {
-                    type: 'progress',
-                    status: 'in-progress',
-                    order: progressCounter++,
-                    message: `Tool '${eventToolName}' executing: ${data.status || ''}`,
-                    percentage: data.percentage ? Number(data.percentage) : undefined,
-                  } as any,
-                });
-              } else if (type === 'complete') {
-                writer.write({
-                  type: 'data-progress',
-                  data: {
-                    type: 'progress',
-                    status: data.status === 'failed' ? 'failed' : 'complete',
-                    order: progressCounter++,
-                    message:
-                      data.status === 'failed'
-                        ? `Tool '${eventToolName}' execution failed`
-                        : `Tool '${eventToolName}' execution completed`,
-                  } as any,
-                });
-
-                // Remove tool progress ID after completion
-                toolProgressIds.delete(eventToolName);
-                unsubscribe();
-              }
+          if (lastUserMessage) {
+            writer.write({
+              type: 'data-prompt',
+              data: {
+                role: 'user',
+                prompt: extractTextContent(lastUserMessage),
+              },
             });
-
-            progressUnsubscribers.push(unsubscribe);
-            logger.info(`Subscribed to progress events for tool: ${toolName}`);
           }
+
+          console.log(`[DEBUG] MCP tools count: ${Object.keys(mcpTools).length}`);
+          logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
+
+          for (const toolName in mcpTools) {
+            if (mcpTools[toolName]?.progressEmitter) {
+              const tool = mcpTools[toolName];
+              const unsubscribe = tool.progressEmitter.subscribe((event) => {
+                const { type, data, toolName: eventToolName } = event;
+
+                if (type === 'start') {
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: 'in-progress',
+                      order: progressCounter++,
+                      message: `Tool '${eventToolName}' execution started`,
+                    } as any,
+                  });
+                } else if (type === 'progress') {
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: 'in-progress',
+                      order: progressCounter++,
+                      message: `Tool '${eventToolName}' executing: ${data.status || ''}`,
+                      percentage: data.percentage ? Number(data.percentage) : undefined,
+                    } as any,
+                  });
+                } else if (type === 'complete') {
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: data.status === 'failed' ? 'failed' : 'complete',
+                      order: progressCounter++,
+                      message:
+                        data.status === 'failed'
+                          ? `Tool '${eventToolName}' execution failed`
+                          : `Tool '${eventToolName}' execution completed`,
+                    },
+                  } as any);
+
+                  unsubscribe();
+                }
+              });
+
+              progressUnsubscribers.push(unsubscribe);
+              logger.info(`Subscribed to progress events for tool: ${toolName}`);
+            }
+          }
+        } catch (error) {
+          logger.error('[ERROR] chatAction - error: ', error);
+        } finally {
+          progressUnsubscribers.forEach((unsubscribe) => {
+            try {
+              unsubscribe();
+            } catch (error) {
+              console.error('[ERROR] Failed to unsubscribe:', error);
+            }
+          });
         }
 
         const options: StreamingOptions = {
@@ -194,7 +170,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             if (finishReason !== 'length') {
               writer.write({
                 type: 'data-usage',
-                id: responseProgressId,
+                transient: true,
                 data: {
                   completionTokens: cumulativeUsage.completionTokens,
                   promptTokens: cumulativeUsage.promptTokens,
@@ -206,13 +182,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               writer.write({
                 type: 'data-progress',
-                id: responseProgressId,
+                transient: true,
                 data: {
+                  type: 'progress',
                   label: 'response',
                   status: 'complete',
                   order: progressCounter++,
                   message: 'Response Generated',
-                },
+                } as ProgressAnnotation,
               });
               await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -269,7 +246,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         writer.write({
           type: 'data-progress',
-          id: responseProgressId,
+          transient: true,
           data: {
             type: 'progress',
             label: 'response',
@@ -302,94 +279,52 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          let isInReasoning = false;
-          let reasoningTextId: string | null = null;
-
-          const toolCallToTextIdMap = new Map<string, string>();
-
           return (chunk, controller) => {
             const messageType = chunk.type;
 
-            /*
-             * if (messageType === 'data-prompt' || messageType === 'data-progress') {
-             *   return;
-             * }
-             */
-
+            // reasoning message
             switch (messageType) {
-              /*
-               * case 'data-prompt': {
-               *   controller.enqueue({
-               *     type: 'data-prompt',
-               *     id: chunk.id,
-               *     data: {
-               *       prompt: (chunk.data as { prompt: string }).prompt,
-               *     },
-               *   });
-               */
-
-              /*
-               *   break;
-               * }
-               */
-
               case 'reasoning-start': {
-                if (!isInReasoning) {
-                  isInReasoning = true;
-                  reasoningTextId = generateId();
+                controller.enqueue({
+                  type: 'text-start',
+                  id: chunk.id,
+                });
 
-                  controller.enqueue({
-                    type: 'text-start',
-                    id: reasoningTextId,
-                  });
-
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: reasoningTextId,
-                    delta: '<div class="__boltThought__">',
-                  });
-                }
-
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: '<div class="__boltThought__">',
+                });
                 break;
               }
 
               case 'reasoning-delta': {
-                if (isInReasoning && reasoningTextId) {
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: reasoningTextId,
-                    delta: chunk.delta,
-                  });
-                }
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: chunk.delta,
+                });
 
                 break;
               }
 
               case 'reasoning-end': {
-                // console.log('[DEBUG] reasoning-end', chunk);
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: '</div>\n',
+                });
 
-                if (isInReasoning && reasoningTextId) {
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: reasoningTextId,
-                    delta: '</div>\n',
-                  });
-
-                  controller.enqueue({
-                    type: 'text-end',
-                    id: reasoningTextId,
-                  });
-
-                  isInReasoning = false;
-                  reasoningTextId = null;
-                }
+                controller.enqueue({
+                  type: 'text-end',
+                  id: chunk.id,
+                });
 
                 break;
               }
 
+              // tool call message
               case 'tool-input-available': {
-                // console.log('[DEBUG] tool-input-available', chunk);
-
                 const toolCall = {
                   toolCallId: chunk.toolCallId,
                   toolName: chunk.toolName,
@@ -397,15 +332,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 };
 
                 const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
-
-                // let textId = toolCallToTextIdMap.get(chunk.toolCallId);
-
-                /*
-                 * if (!textId) {
-                 *   textId = generateId();
-                 *   toolCallToTextIdMap.set(chunk.toolCallId, textId);
-                 * }
-                 */
 
                 controller.enqueue({
                   type: 'text-start',
@@ -428,41 +354,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 break;
               }
 
+              // tool result message
               case 'tool-output-available': {
-                console.log('[DEBUG] tool-output-available', chunk);
-
                 const toolResult = {
                   toolCallId: chunk.toolCallId,
                   result: chunk.output,
                 };
 
                 const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
-                const textId = generateId();
 
                 controller.enqueue({
                   type: 'text-start',
-                  id: textId,
+                  id: toolResult.toolCallId,
                 });
 
                 controller.enqueue({
                   type: 'text-delta',
-                  id: textId,
+                  id: toolResult.toolCallId,
                   delta: divString,
                 });
 
                 controller.enqueue({
                   type: 'text-end',
-                  id: textId,
+                  id: toolResult.toolCallId,
                 });
-
-                toolCallToTextIdMap.delete(chunk.toolCallId);
-                break;
-              }
-
-              case 'text-start':
-              case 'text-delta':
-              case 'text-end': {
-                controller.enqueue(chunk);
                 break;
               }
               default: {
