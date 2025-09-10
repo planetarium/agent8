@@ -28,7 +28,7 @@ interface ArtifactProps {
   artifactId: string;
 }
 
-export const Artifact = memo(({ messageId, artifactId }: ArtifactProps) => {
+export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
   const [allActionFinished, setAllActionFinished] = useState(false);
@@ -36,9 +36,7 @@ export const Artifact = memo(({ messageId, artifactId }: ArtifactProps) => {
 
   const artifacts = useWorkbenchArtifacts();
 
-  // Always use composite key with both messageId and artifactId
-  const compositeKey = `${messageId}:${artifactId}`;
-  const artifact = artifacts[compositeKey];
+  const artifact = artifacts[artifactId];
 
   // Return early if artifact is not found
   if (!artifact) {

@@ -137,9 +137,11 @@ export class ActionRunner {
       return; // No return value here
     }
 
-    if (isStreaming && action.type !== 'file') {
+    if (isStreaming) {
       return; // No return value here
     }
+
+    logger.debug(`#### runAction: ${actionId}, type: ${action.type}`);
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: !isStreaming });
 
@@ -291,6 +293,7 @@ export class ActionRunner {
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
+      logger.warn(`Failed To Execute Shell Command content: ${action.content}`);
       throw new ActionCommandError(`Failed To Execute Shell Command`, resp?.output || 'No Output Available');
     }
   }

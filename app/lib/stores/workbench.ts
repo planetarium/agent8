@@ -504,16 +504,16 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    // Create composite key with both IDs
-    const compositeKey = `${messageId}:${id}`;
-    const artifact = this.#getArtifact(compositeKey);
+    const artifact = this.#getArtifact(id);
 
     if (artifact) {
       return;
+    } else {
+      logger.debug(`#### Adding artifact: ${id}`);
     }
 
-    if (!this.artifactIdList.includes(compositeKey)) {
-      this.artifactIdList.push(compositeKey);
+    if (!this.artifactIdList.includes(id)) {
+      this.artifactIdList.push(id);
     }
 
     // Track artifacts by messageId for message-level operations
@@ -523,7 +523,7 @@ export class WorkbenchStore {
 
     this.#messageArtifactMap.get(messageId)!.push(id);
 
-    this.artifacts.setKey(compositeKey, {
+    this.artifacts.setKey(id, {
       id,
       title,
       closed: false,
@@ -556,8 +556,7 @@ export class WorkbenchStore {
     // Check if all artifacts for this message are closed
     const artifactIds = this.#messageArtifactMap.get(messageId) || [];
     const allClosed = artifactIds.every((artifactId) => {
-      const compositeKey = `${messageId}:${artifactId}`;
-      const artifact = this.#getArtifact(compositeKey);
+      const artifact = this.#getArtifact(artifactId);
 
       return artifact?.closed;
     });
@@ -568,8 +567,7 @@ export class WorkbenchStore {
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
-    const compositeKey = `${data.messageId}:${data.id}`;
-    const artifact = this.#getArtifact(compositeKey);
+    const artifact = this.#getArtifact(data.id);
 
     if (artifact?.closed) {
       return;
@@ -594,8 +592,8 @@ export class WorkbenchStore {
     // Check if all artifacts for this message are closed
     const artifactIds = this.#messageArtifactMap.get(messageId) || [];
     const allClosed = artifactIds.every((artifactId) => {
-      const compositeKey = `${messageId}:${artifactId}`;
-      const artifact = this.#getArtifact(compositeKey);
+      // Use only artifactId as key
+      const artifact = this.#getArtifact(artifactId);
 
       return artifact?.closed;
     });
@@ -610,15 +608,14 @@ export class WorkbenchStore {
     }
   }
 
-  updateArtifact({ messageId, id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
-    const compositeKey = `${messageId}:${id}`;
-    const artifact = this.#getArtifact(compositeKey);
+  updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
+    const artifact = this.#getArtifact(id);
 
     if (!artifact) {
       return;
     }
 
-    this.artifacts.setKey(compositeKey, { ...artifact, ...state });
+    this.artifacts.setKey(id, { ...artifact, ...state });
   }
   addAction(data: ActionCallbackData) {
     this._addAction(data);
@@ -626,10 +623,9 @@ export class WorkbenchStore {
     //this.addToExecutionQueue(() => this._addAction(data));
   }
   async _addAction(data: ActionCallbackData) {
-    const { messageId, artifactId } = data;
+    const { artifactId } = data;
 
-    const compositeKey = `${messageId}:${artifactId}`;
-    const artifact = this.#getArtifact(compositeKey);
+    const artifact = this.#getArtifact(artifactId);
 
     if (!artifact) {
       unreachable('Artifact not found');
@@ -665,18 +661,10 @@ export class WorkbenchStore {
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
     const { messageId, artifactId } = data;
 
-    // Validate required fields
-    if (!artifactId || !messageId) {
-      logger.error('Invalid action data: missing artifactId or messageId', { messageId, artifactId });
-      return;
-    }
-
-    const compositeKey = `${messageId}:${artifactId}`;
-    const artifact = this.#getArtifact(compositeKey);
+    const artifact = this.#getArtifact(artifactId);
 
     if (!artifact) {
-      logger.error(`Artifact not found for key: ${compositeKey}`);
-      return;
+      unreachable('Artifact not found');
     }
 
     const action = artifact.runner.actions.get()[data.actionId];
