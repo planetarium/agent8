@@ -142,7 +142,7 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
-    ...convertToModelMessages(processedMessages).slice(-3),
+    ...convertToModelMessages(processedMessages, { ignoreIncompleteToolCalls: true }).slice(-3),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
