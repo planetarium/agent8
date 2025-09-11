@@ -52,9 +52,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
-
     const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
     const mcpTools = mcpToolset.tools;
+    logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
 
     const totalMessageContent = messages.reduce((acc, message) => acc + extractTextPartsToStringify(message), '');
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length} words`);
@@ -62,29 +62,32 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     const messageStream = createUIMessageStream({
       execute: async ({ writer }) => {
         let progressCounter = 1;
+
+        const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
+
+        if (lastUserMessage) {
+          writer.write({
+            type: 'data-prompt',
+            data: {
+              role: 'user',
+              prompt: extractTextContent(lastUserMessage),
+            },
+          });
+        }
+
+        // Track unsubscribe functions to clean up later if needed
         const progressUnsubscribers: Array<() => void> = [];
+        logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
-        try {
-          const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
+        for (const toolName in mcpTools) {
+          if (mcpTools[toolName]) {
+            const tool = mcpTools[toolName];
 
-          if (lastUserMessage) {
-            writer.write({
-              type: 'data-prompt',
-              data: {
-                role: 'user',
-                prompt: extractTextContent(lastUserMessage),
-              },
-            });
-          }
-
-          console.log(`[DEBUG] MCP tools count: ${Object.keys(mcpTools).length}`);
-          logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
-
-          for (const toolName in mcpTools) {
-            if (mcpTools[toolName]?.progressEmitter) {
-              const tool = mcpTools[toolName];
+            // Subscribe to progress events if emitter is available
+            if (tool.progressEmitter) {
+              // Subscribe to the tool's progress events
               const unsubscribe = tool.progressEmitter.subscribe((event) => {
-                const { type, data, toolName: eventToolName } = event;
+                const { type, data, toolName } = event;
 
                 if (type === 'start') {
                   writer.write({
@@ -94,7 +97,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                       type: 'progress',
                       status: 'in-progress',
                       order: progressCounter++,
-                      message: `Tool '${eventToolName}' execution started`,
+                      message: `Tool '${toolName}' execution started`,
                     } as any,
                   });
                 } else if (type === 'progress') {
@@ -105,7 +108,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                       type: 'progress',
                       status: 'in-progress',
                       order: progressCounter++,
-                      message: `Tool '${eventToolName}' executing: ${data.status || ''}`,
+                      message: `Tool '${toolName}' executing: ${data.status || ''}`,
                       percentage: data.percentage ? Number(data.percentage) : undefined,
                     } as any,
                   });
@@ -119,11 +122,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                       order: progressCounter++,
                       message:
                         data.status === 'failed'
-                          ? `Tool '${eventToolName}' execution failed`
-                          : `Tool '${eventToolName}' execution completed`,
+                          ? `Tool '${toolName}' execution failed`
+                          : `Tool '${toolName}' execution completed`,
                     },
                   } as any);
 
+                  // Automatically unsubscribe after complete
                   unsubscribe();
                 }
               });
@@ -132,16 +136,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               logger.info(`Subscribed to progress events for tool: ${toolName}`);
             }
           }
-        } catch (error) {
-          logger.error('[ERROR] chatAction - error: ', error);
-        } finally {
-          progressUnsubscribers.forEach((unsubscribe) => {
-            try {
-              unsubscribe();
-            } catch (error) {
-              console.error('[ERROR] Failed to unsubscribe:', error);
-            }
-          });
         }
 
         const options: StreamingOptions = {
@@ -151,7 +145,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.debug('usage', JSON.stringify(usage));
 
+            // TODO: 이부분 user 에서 데이터 가져오고있는지 확인 필요.
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
+            console.log('[DEBUG] streaming finished lastUserMessage: ', lastUserMessage);
+
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
             if (usage) {
@@ -166,6 +163,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
+
+            console.log('[DEBUG] finishReason: ', finishReason);
 
             if (finishReason !== 'length') {
               writer.write({
@@ -230,13 +229,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               tools: mcpTools,
               abortSignal: request.signal,
             });
-
-            for await (const part of result.fullStream) {
-              if (part.type === 'error') {
-                const error: any = part.error;
-                logger.error(`${error}`);
-              }
-            }
 
             writer.merge(result.toUIMessageStream());
 

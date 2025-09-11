@@ -7,7 +7,7 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
-import { extractTextContent } from '~/utils/message';
+import { extractAllTextContent, extractDataContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { cleanoutFileContent } from '~/lib/runtime/message-parser';
@@ -42,7 +42,7 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
   const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
   let files = [];
-  const content = extractTextContent(message);
+  const content = extractAllTextContent(message);
 
   if (isFirstCommit) {
     // If repositoryName is not set, commit all files
