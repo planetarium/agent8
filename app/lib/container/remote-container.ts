@@ -1299,6 +1299,12 @@ export class RemoteContainer implements Container {
           throw new Error('No terminal attached to session');
         }
 
+        /*
+         * Clear global output buffer to avoid confusion with previous command outputs
+         * This ensures we only wait for OSC codes from the current command execution
+         */
+        _globalOutputBuffer = '';
+
         // Interrupt current execution
         currentTerminal.input('\x03');
 
