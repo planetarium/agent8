@@ -93,6 +93,10 @@ export class ActionRunner {
     return this.#pendingActionsCount > 0;
   }
 
+  resetPendingActionsCount() {
+    this.#pendingActionsCount = 0;
+  }
+
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
 
@@ -103,6 +107,8 @@ export class ActionRunner {
       // action already added
       return;
     }
+
+    logger.debug(`#### add action (${actionId}), type: ${data.action.type}`);
 
     this.#pendingActionsCount++;
     this.#completeCalled = false;
@@ -121,7 +127,11 @@ export class ActionRunner {
     });
 
     this.#currentExecutionPromise.then(() => {
-      this.#updateAction(actionId, { status: 'running' });
+      const action = this.actions.get()[actionId];
+
+      if (action && action.status === 'pending') {
+        this.#updateAction(actionId, { status: 'running' });
+      }
     });
   }
 
@@ -141,7 +151,7 @@ export class ActionRunner {
       return; // No return value here
     }
 
-    logger.debug(`#### runAction: ${actionId}, type: ${action.type}`);
+    logger.debug(`#### runAction (${actionId}), type: ${action.type}`);
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: !isStreaming });
 
@@ -159,6 +169,10 @@ export class ActionRunner {
     await this.#currentExecutionPromise;
 
     return;
+  }
+
+  markActionAsRunning(actionId: string) {
+    this.#updateAction(actionId, { status: 'running' });
   }
 
   async #executeAction(actionId: string, isStreaming: boolean = false) {

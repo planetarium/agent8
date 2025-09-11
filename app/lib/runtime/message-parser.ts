@@ -51,12 +51,6 @@ interface MessageState {
   currentArtifact?: BoltArtifactData;
   currentAction: BoltActionData;
   actionId: number;
-
-  // Comprehensive state tracking to prevent re-processing
-  openedArtifacts: Set<string>;
-  closedArtifacts: Set<string>;
-  openedActions: Set<string>; // Set of actionIds that have been opened
-  closedActions: Set<string>; // Set of actionIds that have been closed
 }
 
 export function cleanoutFileContent(content: string, filePath: string): string {
@@ -96,10 +90,6 @@ export class StreamingMessageParser {
         insideArtifact: false,
         currentAction: { content: '' },
         actionId: 0,
-        openedArtifacts: new Set(),
-        closedArtifacts: new Set(),
-        openedActions: new Set(),
-        closedActions: new Set(),
       };
 
       this.#messages.set(messageId, state);
@@ -142,15 +132,12 @@ export class StreamingMessageParser {
 
             const closeActionId = String(state.actionId - 1);
 
-            if (!state.closedActions.has(closeActionId)) {
-              state.closedActions.add(closeActionId);
-              this._options.callbacks?.onActionClose?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: closeActionId,
-                action: currentAction as BoltAction,
-              });
-            }
+            this._options.callbacks?.onActionClose?.({
+              artifactId: currentArtifact.id,
+              messageId,
+              actionId: closeActionId,
+              action: currentAction as BoltAction,
+            });
 
             state.insideAction = false;
             state.currentAction = { content: '' };
@@ -178,15 +165,12 @@ export class StreamingMessageParser {
 
               const openActionId = String(state.actionId);
 
-              if (!state.openedActions.has(openActionId)) {
-                state.openedActions.add(openActionId);
-                this._options.callbacks?.onActionOpen?.({
-                  artifactId: currentArtifact.id,
-                  messageId,
-                  actionId: openActionId,
-                  action: state.currentAction as BoltAction,
-                });
-              }
+              this._options.callbacks?.onActionOpen?.({
+                artifactId: currentArtifact.id,
+                messageId,
+                actionId: openActionId,
+                action: state.currentAction as BoltAction,
+              });
 
               state.actionId++;
 
@@ -213,20 +197,14 @@ export class StreamingMessageParser {
 
             const closeActionId = String(state.actionId - 1);
 
-            if (!state.closedActions.has(closeActionId)) {
-              state.closedActions.add(closeActionId);
-              this._options.callbacks?.onActionClose?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: closeActionId,
-                action: currentAction as BoltAction,
-              });
-            }
+            this._options.callbacks?.onActionClose?.({
+              artifactId: currentArtifact.id,
+              messageId,
+              actionId: closeActionId,
+              action: currentAction as BoltAction,
+            });
 
-            if (!state.closedArtifacts.has(currentArtifact.id)) {
-              state.closedArtifacts.add(currentArtifact.id);
-              this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
-            }
+            this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
 
             state.insideAction = false;
             state.currentAction = { content: '' };
@@ -266,15 +244,12 @@ export class StreamingMessageParser {
 
               const openActionId = String(state.actionId);
 
-              if (!state.openedActions.has(openActionId)) {
-                state.openedActions.add(openActionId);
-                this._options.callbacks?.onActionOpen?.({
-                  artifactId: currentArtifact.id,
-                  messageId,
-                  actionId: openActionId,
-                  action: state.currentAction as BoltAction,
-                });
-              }
+              this._options.callbacks?.onActionOpen?.({
+                artifactId: currentArtifact.id,
+                messageId,
+                actionId: openActionId,
+                action: state.currentAction as BoltAction,
+              });
 
               state.actionId++;
 
@@ -283,10 +258,7 @@ export class StreamingMessageParser {
               break;
             }
           } else if (artifactCloseIndex !== -1) {
-            if (!state.closedArtifacts.has(currentArtifact.id)) {
-              state.closedArtifacts.add(currentArtifact.id);
-              this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
-            }
+            this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
 
             state.insideArtifact = false;
             state.currentArtifact = undefined;
@@ -327,7 +299,10 @@ export class StreamingMessageParser {
 
               if (!artifactId) {
                 logger.warn('Artifact id missing');
-                artifactId = `fallback-artifact-${i}`;
+                artifactId = `${messageId}:fallback-artifact-${i}`;
+              } else {
+                // if artifactId is not unique, add the index to make it unique
+                artifactId = `${messageId}:${artifactId}-${i}`;
               }
 
               state.insideArtifact = true;
@@ -340,11 +315,7 @@ export class StreamingMessageParser {
 
               state.currentArtifact = currentArtifact;
 
-              // Only trigger onArtifactOpen if this artifact hasn't been opened before
-              if (!state.openedArtifacts.has(artifactId)) {
-                state.openedArtifacts.add(artifactId);
-                this._options.callbacks?.onArtifactOpen?.({ messageId, ...currentArtifact });
-              }
+              this._options.callbacks?.onArtifactOpen?.({ messageId, ...currentArtifact });
 
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 

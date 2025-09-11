@@ -17,6 +17,7 @@ const logger = createScopedLogger('api.chat');
 
 // See also https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
 const TEXT_PART_PREFIX = '0';
+const MESSAGE_ID_PART_PREFIX = 'f:';
 const REASONING_PART_PREFIX = 'g';
 const TOOL_CALL_PART_PREFIX = '9';
 const TOOL_RESULT_PART_PREFIX = 'a';
@@ -54,6 +55,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
 
     let lastChunk: string | undefined = undefined;
+    let lastMessageId: string | undefined = undefined;
 
     const dataStream = createDataStream({
       async execute(dataStream) {
@@ -125,6 +127,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
             logger.debug('usage', JSON.stringify(usage));
+
+            lastMessageId = undefined;
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
             const { model, provider, useDiff } = extractPropertiesFromMessage(lastUserMessage);
@@ -256,6 +260,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           let transformedChunk = chunk;
 
           if (typeof chunk === 'string') {
+            if (chunk.startsWith(MESSAGE_ID_PART_PREFIX)) {
+              if (lastMessageId) {
+                transformedChunk = lastMessageId as any;
+              } else {
+                lastMessageId = chunk;
+              }
+            }
+
             if (chunk.startsWith(REASONING_PART_PREFIX)) {
               let content = chunk.split(':').slice(1).join(':');
 

@@ -53,6 +53,12 @@ function ensureUnsavedFilesSet(value: any): Set<string> {
   return new Set<string>();
 }
 
+interface ShellQueueItem {
+  data: ActionCallbackData;
+  executeAction: () => void;
+  next?: ShellQueueItem;
+}
+
 export interface ArtifactState {
   id: string;
   title: string;
@@ -77,7 +83,7 @@ export class WorkbenchStore {
   #filesStore: FilesStore;
   #editorStore: EditorStore;
   #terminalStore: TerminalStore;
-  #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
+  #messageCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
@@ -98,11 +104,11 @@ export class WorkbenchStore {
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
-  #messageArtifactMap: Map<string, string[]> = new Map();
+  #messageToArtifactIds: Map<string, string[]> = new Map();
   #globalExecutionQueue = Promise.resolve();
-  #shellActionRunning = false;
-  #shellActionPromise: Promise<void> | null = null;
   #connectionLostNotified = false;
+
+  #messageToShellQueue: Map<string, ShellQueueItem | null> = new Map();
 
   constructor() {
     this.#currentContainer = new Promise<Container>((resolve, reject) => {
@@ -312,10 +318,6 @@ export class WorkbenchStore {
     }
   }
 
-  addToExecutionQueue(callback: () => Promise<void>) {
-    this.#globalExecutionQueue = this.#globalExecutionQueue.then(() => callback());
-  }
-
   get previews() {
     return this.#previewsStore.previews;
   }
@@ -508,20 +510,20 @@ export class WorkbenchStore {
 
     if (artifact) {
       return;
-    } else {
-      logger.debug(`#### Adding artifact: ${id}`);
     }
+
+    logger.debug(`#### Adding artifact: ${id}`);
 
     if (!this.artifactIdList.includes(id)) {
       this.artifactIdList.push(id);
     }
 
     // Track artifacts by messageId for message-level operations
-    if (!this.#messageArtifactMap.has(messageId)) {
-      this.#messageArtifactMap.set(messageId, []);
+    if (!this.#messageToArtifactIds.has(messageId)) {
+      this.#messageToArtifactIds.set(messageId, []);
     }
 
-    this.#messageArtifactMap.get(messageId)!.push(id);
+    this.#messageToArtifactIds.get(messageId)!.push(id);
 
     this.artifacts.setKey(id, {
       id,
@@ -542,28 +544,40 @@ export class WorkbenchStore {
     });
   }
 
-  offArtifactClose(messageId: string) {
-    this.#artifactCloseCallbacks.delete(messageId);
+  offMessageClose(messageId: string) {
+    this.#messageCloseCallbacks.delete(messageId);
   }
 
-  onArtifactClose(messageId: string, callback: () => Promise<void>) {
-    if (!this.#artifactCloseCallbacks.has(messageId)) {
-      this.#artifactCloseCallbacks.set(messageId, []);
+  async #processMessageClose(messageId: string) {
+    // Trigger registered callbacks for this messageId if all artifacts are closed
+    const callbacks = this.#messageCloseCallbacks.get(messageId);
+
+    if (callbacks && callbacks.length > 0) {
+      // Check if all artifacts for this message are closed
+      const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
+
+      const allClosed = compositeIds.every((compositeId) => {
+        const artifact = this.#getArtifact(compositeId);
+
+        return artifact?.closed;
+      });
+
+      if (allClosed) {
+        await Promise.all(callbacks.map((callback) => callback()));
+      }
+    }
+  }
+
+  onMessageClose(messageId: string, callback: () => Promise<void>) {
+    if (!this.#messageCloseCallbacks.has(messageId)) {
+      this.#messageCloseCallbacks.set(messageId, []);
     }
 
-    this.#artifactCloseCallbacks.get(messageId)?.push(callback);
+    this.#messageCloseCallbacks.get(messageId)?.push(callback);
 
-    // Check if all artifacts for this message are closed
-    const artifactIds = this.#messageArtifactMap.get(messageId) || [];
-    const allClosed = artifactIds.every((artifactId) => {
-      const artifact = this.#getArtifact(artifactId);
+    logger.debug(`#### onMessageClose: ${messageId}`);
 
-      return artifact?.closed;
-    });
-
-    if (allClosed && artifactIds.length > 0) {
-      callback();
-    }
+    this.#processMessageClose(messageId);
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
@@ -580,32 +594,13 @@ export class WorkbenchStore {
       return;
     }
 
-    // shell 액션이 실행 중인 경우 완료를 기다림
-    if (this.#shellActionRunning && this.#shellActionPromise) {
-      await this.#shellActionPromise;
-    }
+    logger.debug(`#### close artifact: ${data.id}`);
 
     this.updateArtifact(data, { closed: true });
 
     const { messageId } = data;
 
-    // Check if all artifacts for this message are closed
-    const artifactIds = this.#messageArtifactMap.get(messageId) || [];
-    const allClosed = artifactIds.every((artifactId) => {
-      // Use only artifactId as key
-      const artifact = this.#getArtifact(artifactId);
-
-      return artifact?.closed;
-    });
-
-    // Trigger registered callbacks for this messageId if all artifacts are closed
-    if (allClosed) {
-      const callbacks = this.#artifactCloseCallbacks.get(messageId);
-
-      if (callbacks && callbacks.length > 0) {
-        await Promise.all(callbacks.map((callback) => callback()));
-      }
-    }
+    this.#processMessageClose(messageId);
   }
 
   updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
@@ -617,12 +612,12 @@ export class WorkbenchStore {
 
     this.artifacts.setKey(id, { ...artifact, ...state });
   }
+
   addAction(data: ActionCallbackData) {
     this._addAction(data);
-
-    //this.addToExecutionQueue(() => this._addAction(data));
   }
-  async _addAction(data: ActionCallbackData) {
+
+  _addAction(data: ActionCallbackData) {
     const { artifactId } = data;
 
     const artifact = this.#getArtifact(artifactId);
@@ -638,26 +633,10 @@ export class WorkbenchStore {
     if (isStreaming) {
       this.actionStreamSampler(data, isStreaming);
     } else {
-      if (data.action.type !== 'shell') {
-        this._runAction(data, isStreaming);
-      } else {
-        this.addToExecutionQueue(() => this._runAction(data, isStreaming));
-      }
+      this._runAction(data, isStreaming);
     }
   }
 
-  async runActionAndWait(data: ActionCallbackData, isStreaming: boolean = false): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      this.addToExecutionQueue(async () => {
-        try {
-          await this._runAction(data, isStreaming);
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-  }
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
     const { messageId, artifactId } = data;
 
@@ -673,16 +652,10 @@ export class WorkbenchStore {
       return;
     }
 
-    /*
-     * shell 액션이 아닌 경우, 현재 실행 중인 shell 액션 완료를 기다림
-     * if (data.action.type !== 'shell' && this.#shellActionRunning && this.#shellActionPromise) {
-     *   await this.#shellActionPromise;
-     * }
-     */
-
     // Don't run the action if it's a reload
     if (isCommitedMessage(messageId)) {
       artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+
       return;
     }
 
@@ -733,14 +706,8 @@ export class WorkbenchStore {
 
       this.resetAllFileModifications();
     } else if (data.action.type === 'shell') {
-      // shell 액션의 경우 실행 상태 추적
-      this.#shellActionRunning = true;
-      this.#shellActionPromise = artifact.runner.runAction(data).finally(() => {
-        this.#shellActionRunning = false;
-        this.#shellActionPromise = null;
-      });
-
-      await this.#shellActionPromise;
+      // Shell commands need to be queued per message for sequential execution
+      this.#queueShellAction(data, artifact);
     } else {
       await artifact.runner.runAction(data);
     }
@@ -750,9 +717,54 @@ export class WorkbenchStore {
     return await this._runAction(data, isStreaming);
   }, 100); // TODO: remove this magic number to have it configurable
 
-  #getArtifact(id: string) {
+  #getArtifact(compositeId: string) {
     const artifacts = this.artifacts.get();
-    return artifacts[id];
+    return artifacts[compositeId];
+  }
+
+  #queueShellAction(data: ActionCallbackData, artifact: ArtifactState) {
+    artifact.runner.markActionAsRunning(data.actionId);
+
+    const newItem: ShellQueueItem = {
+      data,
+      executeAction: () => {
+        artifact.runner.runAction(newItem.data).finally(() => {
+          if (newItem.next) {
+            const nextArtifact = this.#getArtifact(newItem.next.data.artifactId);
+
+            if (nextArtifact) {
+              this.#executeShellItem(newItem.next);
+            }
+          } else {
+            // No more items, clear the queue
+            this.#messageToShellQueue.delete(data.messageId);
+          }
+        });
+      },
+    };
+
+    const currentQueue = this.#messageToShellQueue.get(data.messageId);
+
+    if (!currentQueue) {
+      logger.debug(`#### current queue is null`);
+
+      this.#executeShellItem(newItem);
+    } else {
+      logger.debug(`#### current queue is not null`);
+
+      let tail = currentQueue;
+
+      while (tail.next) {
+        tail = tail.next;
+      }
+      tail.next = newItem;
+    }
+  }
+
+  #executeShellItem(item: ShellQueueItem) {
+    this.#messageToShellQueue.set(item.data.messageId, item);
+
+    item.executeAction();
   }
 
   async generateZip() {
