@@ -29,7 +29,6 @@ export type Messages = UIMessage[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'> & {
   // v5 추가 옵션들
   stopWhen?: Parameters<typeof _streamText>[0]['stopWhen'];
-  onStepFinish?: Parameters<typeof _streamText>[0]['onStepFinish'];
   maxSteps?: number; // 호환성을 위해 유지 (내부적으로 stopWhen으로 변환)
 };
 

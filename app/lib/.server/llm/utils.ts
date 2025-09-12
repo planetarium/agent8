@@ -10,6 +10,7 @@ import {
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import ignore from 'ignore';
 import type { ContextAnnotation } from '~/types/context';
+import { extractAllTextContent } from '~/utils/message';
 
 function stripMetadata(content?: string) {
   return content
@@ -24,14 +25,7 @@ export function extractPropertiesFromMessage(message: Omit<UIMessage, 'id'>): {
   provider: string;
   parts: any;
 } {
-  const textContent =
-    message.parts && message.parts.length > 0
-      ? message.parts
-          .filter((part: any) => part.type === 'text')
-          .map((part: any) => part.text)
-          .join('')
-      : '';
-
+  const textContent = extractAllTextContent(message);
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
   const attachmentsMatch = textContent.match(ATTACHMENTS_REGEX);

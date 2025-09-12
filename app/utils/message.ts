@@ -18,7 +18,10 @@ export interface ExtractOptions {
   separator?: string;
 }
 
-export const extractContent = (message: UIMessage, options: ExtractOptions = {}): string => {
+export const extractContent = <T extends Pick<UIMessage, 'parts'>>(
+  message: T,
+  options: ExtractOptions = {},
+): string => {
   const { types = ['text'], dataTypes = [], separator = '' } = options;
 
   try {
@@ -63,11 +66,13 @@ export const extractContent = (message: UIMessage, options: ExtractOptions = {})
 };
 
 /** Extract text type only */
-export const extractTextContent = (message: UIMessage): string => extractContent(message, { types: ['text'] });
+export const extractTextContent = <T extends Pick<UIMessage, 'parts'>>(message: T): string =>
+  extractContent(message, { types: ['text'] });
 
 /** Extract data- type only */
-export const extractDataContent = (message: UIMessage): string => extractContent(message, { types: ['data'] });
+export const extractDataContent = <T extends Pick<UIMessage, 'parts'>>(message: T): string =>
+  extractContent(message, { types: ['data'] });
 
 /** Extract both text and data- types */
-export const extractAllTextContent = (message: UIMessage): string =>
+export const extractAllTextContent = <T extends Pick<UIMessage, 'parts'>>(message: T): string =>
   extractContent(message, { types: ['text', 'data'] });

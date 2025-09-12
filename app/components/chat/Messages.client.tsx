@@ -1,4 +1,4 @@
-import type { UIMessage } from 'ai';
+import type { JSONValue, UIMessage } from 'ai';
 import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
@@ -12,43 +12,14 @@ import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import Lottie from 'lottie-react';
 import { loadingAnimationData } from '~/utils/animationData';
-
-// Helper functions for AI SDK v5 message structure
-const getMessageText = (message: UIMessage): string => {
-  try {
-    if (message.parts && Array.isArray(message.parts)) {
-      return message.parts
-        .filter((part) => part.type === 'text')
-        .map((part) => {
-          if ('text' in part) {
-            return part.text || '';
-          }
-
-          return '';
-        })
-        .join('');
-    }
-
-    return '';
-  } catch (error) {
-    console.error('getMessageText error:', error, message);
-    return '';
-  }
-};
-
-const getMessageAnnotations = (message: UIMessage): string[] => {
-  /*
-   * In v5, annotations might be in metadata or handled differently
-   * For now, we'll return an empty array or check metadata structure
-   */
-  return (message.metadata as any)?.annotations || [];
-};
+import { extractAllTextContent } from '~/utils/message';
 
 interface MessagesProps {
   id?: string;
   className?: string;
   isStreaming?: boolean;
   messages?: UIMessage[];
+  annotations?: JSONValue[];
   onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
   onRevert?: (message: UIMessage) => void;
@@ -64,6 +35,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       id,
       isStreaming = false,
       messages = [],
+      annotations = [],
       onRetry,
       onFork,
       onRevert,
@@ -101,12 +73,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         {messages.length > 0
           ? messages.map((message, index) => {
               const { role, id: messageId } = message;
-              const messageText = getMessageText(message);
-              const annotations = getMessageAnnotations(message);
+              const messageText = extractAllTextContent(message);
+              const messageMetadata = message.metadata as any;
+              const isHidden = messageMetadata?.annotations?.includes('hidden');
               const isUserMessage = role === 'user';
               const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
-              const isHidden = annotations?.includes('hidden');
               const isMergeMessage = messageText.includes('Merge task');
 
               if (isHidden || isMergeMessage) {
@@ -142,7 +114,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     {isUserMessage ? (
                       <UserMessage content={messageText} />
                     ) : (
-                      <AssistantMessage content={messageText} annotations={annotations} forceExpanded={isLast} />
+                      <AssistantMessage
+                        content={messageText}
+                        annotations={annotations}
+                        metadata={messageMetadata}
+                        forceExpanded={isLast}
+                      />
                     )}
                   </div>
                   {isEnabledGitbasePersistence && (

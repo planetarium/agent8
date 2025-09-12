@@ -181,24 +181,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     useEffect(() => {
       const progressFromData = data
-        ? data
-            .filter((item: any) => item?.type === 'data-progress')
-            .map(
-              (item: any) =>
-                ({
-                  type: item.data.type,
-                  label: item.data.label,
-                  status: item.data.status,
-                  order: item.data.order,
-                  message: item.data.message,
-                }) as ProgressAnnotation,
-            )
+        ? (data.filter((x) => typeof x === 'object' && (x as any).type === 'progress') as ProgressAnnotation[])
         : [];
 
       // Merge custom progress annotations with data progress annotations
       const allProgressAnnotations = [...customProgressAnnotations, ...progressFromData];
       setProgressAnnotations(allProgressAnnotations);
     }, [data, customProgressAnnotations]);
+
     useEffect(() => {
       console.log(transcript);
     }, [transcript]);
@@ -609,6 +599,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           reloadTaskBranches={reloadTaskBranches}
                           className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
+                          annotations={data}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
                           onFork={handleFork}
@@ -623,6 +614,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           ref={messageRef}
                           className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
+                          annotations={data}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
                           onFork={handleFork}

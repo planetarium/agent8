@@ -141,13 +141,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
-            console.log('[DEBUG] onFinish: ', content);
-
-            logger.debug('usage', JSON.stringify(usage));
-
-            // TODO: 이부분 user 에서 데이터 가져오고있는지 확인 필요.
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
-            console.log('[DEBUG] streaming finished lastUserMessage: ', lastUserMessage);
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
@@ -164,18 +158,18 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
 
-            console.log('[DEBUG] finishReason: ', finishReason);
-
             if (finishReason !== 'length') {
               writer.write({
-                type: 'data-usage',
-                transient: true,
-                data: {
-                  completionTokens: cumulativeUsage.completionTokens,
-                  promptTokens: cumulativeUsage.promptTokens,
-                  totalTokens: cumulativeUsage.totalTokens,
-                  cacheWrite: cumulativeUsage.cacheWrite,
-                  cacheRead: cumulativeUsage.cacheRead,
+                type: 'finish',
+                messageMetadata: {
+                  type: 'usage',
+                  value: {
+                    completionTokens: cumulativeUsage.completionTokens,
+                    promptTokens: cumulativeUsage.promptTokens,
+                    totalTokens: cumulativeUsage.totalTokens,
+                    cacheWrite: cumulativeUsage.cacheWrite,
+                    cacheRead: cumulativeUsage.cacheRead,
+                  },
                 },
               });
 

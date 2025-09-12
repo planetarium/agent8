@@ -431,7 +431,22 @@ export const ChatImpl = memo(
         },
       }),
       onData: (data) => {
-        setChatData([data]);
+        // Ignore empty data
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+          return;
+        }
+
+        // Extract the inner 'data' property if it exists
+        const extractedData = data?.data || data;
+
+        // Keep only the latest data of each type to prevent memory bloat
+        setChatData((prev) => {
+          const hasType = (obj: any): obj is { type: string } => obj && typeof obj === 'object' && 'type' in obj;
+          const extractedType = hasType(extractedData) ? extractedData.type : null;
+          const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
+
+          return [...filtered, extractedData];
+        });
       },
       onError: (e) => {
         logger.error('Request failed\n\n', e, error);
@@ -450,8 +465,6 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
-        setChatData([]);
-
         logStore.logProvider('Chat response completed', {
           component: 'Chat',
           action: 'response',
@@ -520,6 +533,12 @@ export const ChatImpl = memo(
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
+
+    useEffect(() => {
+      if (!isLoading) {
+        setMessages(initialMessages);
+      }
+    }, [initialMessages]);
 
     useEffect(() => {
       processSampledMessages({
@@ -634,6 +653,9 @@ export const ChatImpl = memo(
       }
 
       lastSendMessageTime.current = Date.now();
+
+      // Clear chat data at the start of new message
+      setChatData([]);
 
       const messageContent = messageInput || input;
 
@@ -1276,7 +1298,27 @@ export const ChatImpl = memo(
         handleRevert={handleRevert}
         onViewDiff={handleViewDiff}
         description={description}
-        messages={messages}
+        messages={messages.map((message, i) => {
+          if (message.role === 'user') {
+            return message;
+          }
+
+          const parsedContent = parsedMessages[i];
+
+          if (parsedContent) {
+            return {
+              ...message,
+              parts: [
+                {
+                  type: 'text' as const,
+                  text: parsedContent,
+                },
+              ],
+            } satisfies UIMessage;
+          }
+
+          return message;
+        })}
         enhancePrompt={() => {
           enhancePrompt(
             input,
