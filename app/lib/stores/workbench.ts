@@ -512,8 +512,6 @@ export class WorkbenchStore {
       return;
     }
 
-    logger.debug(`#### Adding artifact: ${id}`);
-
     if (!this.artifactIdList.includes(id)) {
       this.artifactIdList.push(id);
     }
@@ -575,8 +573,6 @@ export class WorkbenchStore {
 
     this.#messageCloseCallbacks.get(messageId)?.push(callback);
 
-    logger.debug(`#### onMessageClose: ${messageId}`);
-
     this.#processMessageClose(messageId);
   }
 
@@ -593,8 +589,6 @@ export class WorkbenchStore {
       };
       return;
     }
-
-    logger.debug(`#### close artifact: ${data.id}`);
 
     this.updateArtifact(data, { closed: true });
 
@@ -746,12 +740,8 @@ export class WorkbenchStore {
     const currentQueue = this.#messageToShellQueue.get(data.messageId);
 
     if (!currentQueue) {
-      logger.debug(`#### current queue is null`);
-
       this.#executeShellItem(newItem);
     } else {
-      logger.debug(`#### current queue is not null`);
-
       let tail = currentQueue;
 
       while (tail.next) {
