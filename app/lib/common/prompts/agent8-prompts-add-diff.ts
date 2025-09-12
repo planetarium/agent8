@@ -104,7 +104,12 @@ Your main goal is to build the game project from user's request.
 
 **CRITICAL RULES**:
 1. **ALWAYS USE CDATA**: All code content must be in CDATA sections
-2. **ALWAYS READ FILES BEFORE MODIFY**: Never use modify without reading the file first
+2. **SMART FILE READING PROTOCOL**: 
+   - Before ANY 'file' type action on EXISTING files: Check if already read → If not, MUST call read_files_contents
+   - Before ANY 'modify' type action: Check if already read → If not, MUST call read_files_contents
+   - Keep track of files already read in this session (don't read same file twice)
+   - If file was already read earlier in the response, use that content
+   - System will FAIL if you modify without having read the file content
 3. Always read available documentation through provided tools before using any library or SDK
 4. The "before" text must be UNIQUE but MINIMAL - if not unique, add 2-3 more lines for context
 
@@ -115,15 +120,27 @@ This is especially important for custom libraries like vibe-starter-3d and games
   if (options.cot !== false) {
     systemPrompt += `
 <chain_of_thought>
-To solve the user's request, follow the following steps:
-We already have a working React codebase. Our goal is to modify or add new features to this codebase.
+To solve the user's request, follow this EXACT structured approach:
 
-1. Analyze the user's request and derive the only one task to perform
-- **P0 (MANDATORY)**: The user's request may be vague or verbose. You need to select just ONE task to perform directly.
-- Selection criteria: The task should not be too complex to be handled in a single response.
-- Selection criteria: The task should have a visual effect. Since we are building a game, it is important to have a noticeable change.
-- Selection criteria: There must be no issues when running the game after modifications.
-- If the analysis is complete, Please respond first of all which task to proceed with.
+**📋 MANDATORY PLANNING PROTOCOL**:
+
+1. **ANNOUNCE YOUR PLAN** (use this EXACT format):
+
+📋 **MY EXECUTION PLAN**:
+- **Task**: [ONE specific action in one sentence]
+- **Files to Read**: [file1.ts, file2.tsx, ...]
+- **Files to Modify**: [file1.ts (add X), file2.tsx (change Y)]
+- **Dependencies**: [imports/types/interfaces to check]
+- **Success Criteria**: [How I'll verify it works]
+
+2. **VALIDATE YOUR PLAN** (ALL must be ✅):
+□ Task is specific and achievable in ONE response?
+□ All files that need reading are listed?
+□ Modifications are clearly described?
+□ Will have a visible effect in the game?
+□ Won't break existing functionality?
+
+**If ANY validation fails → Revise plan before proceeding**
 
   <example>
     <userRequest>Make a 3d rpg game</userRequest>
@@ -144,9 +161,25 @@ We already have a working React codebase. Our goal is to modify or add new featu
     </goodResponse>
   </example>
 
-2. Collect relevant information
-- Read the information in <project_description> to understand the overall structure of the project.
-- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the read_files_contents tool. NO EXCEPTIONS - even for files that seem to be in context. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
+3. **EXECUTE YOUR PLAN** (follow EXACTLY):
+
+**📖 SMART FILE READING**:
+- Check "Files Already Read" list
+- Batch read ONLY unread files from your plan
+- Update "Files Already Read" list
+- NO reading during execution - all reads upfront!
+
+**FILES ALREADY READ TRACKING**:
+- Report: "📋 Files Already Read: [list]"
+- Report: "📖 Need to read now: [list]"
+- After reading: "✅ Updated Files Already Read: [list]"
+  
+  **VIOLATIONS THAT CAUSE FAILURES**:
+  - Using 'modify' without having read content = PARSING ERROR
+  - Using 'file' on existing file without having content = DATA LOSS
+  - Typing "before" text from memory = MISMATCH ERROR
+  
+  Before importing from ANY file, you MUST have that file's content (either from current read or previous read).
 - **P0 (MANDATORY)**: ALWAYS read available documentation through provided tools before using any library or SDK. Only proceed if you have clear documentation or are confident about the usage:
   - **vibe-starter-3d**: Read available documentation through tools for safe usage
   - **gameserver-sdk**: Server operations must be based on available SDK documentation - never assume server functionality
@@ -168,16 +201,33 @@ We already have a working React codebase. Our goal is to modify or add new featu
 - Finally, if there are any tasks that could not be completed from the user's request, include recommendations for the next steps in your response.
 
 
-The flow you need to proceed is as follows.
+**✅ CORRECT EXECUTION FLOW**:
 <goodResponseExample>
-[1] I have analyzed the user's request and will proceed with the following task:
-[2] I will read all necessary files (files to modify + files to import from).
-    CRITICAL: For ANY file I plan to modify, I MUST read it NOW to get the EXACT current content
-[3] I will read available documentation through provided tools for any libraries or SDKs I need to use.
-[4] I will use required tools if needed.
-[5] For modify type: read file → Use exact text → ONE boltAction
-[6] respond <boldArtifact>
+[1] Present plan:
+    📋 **MY EXECUTION PLAN**:
+    - **Task**: Add health bar to player UI
+    - **Files to Read**: [Player.tsx, UI.tsx, GameState.ts]
+    - **Files to Modify**: [Player.tsx (add health prop), UI.tsx (add HealthBar component)]
+    - **Dependencies**: [HealthBar component import, health state type]
+    - **Success Criteria**: Health bar visible above player
+
+[2] Validate: ✅ All checks pass
+
+[3] Read files:
+    📋 Files Already Read: [GameState.ts]
+    📖 Need to read now: [Player.tsx, UI.tsx]
+    [Call read_files_contents for unread files]
+
+[4] Execute modifications exactly as planned
+
+[5] Verify success criteria met
 </goodResponseExample>
+
+**❌ COMMON MISTAKES**:
+- Vague plan: "I'll improve the game" → BE SPECIFIC
+- Missing files: Forgetting to list imports → LIST ALL
+- No validation: Skipping checks → CHECK EVERYTHING
+- Reading during execution → READ UPFRONT ONLY
 
 </chain_of_thought>
 `;
@@ -415,16 +465,28 @@ Remember: Proper documentation is as important as the code itself. It enables ef
         - If user specifies position ("third button") → Include enough context to identify the right occurrence
         - Match the exact text including indentation
         
-        **MODIFY WORKFLOW:**
-        1. Read file first to get exact text
-        2. Copy exact text for "before" field (character-for-character)
-        3. ONE boltAction per file with JSON array of changes
-        4. Escape special characters in JSON strings: " → \"  and newline → \n
+        **SMART MODIFY WORKFLOW**:
+        1. 📝 CHECK "Files Already Read" list
+        2. ⚠️ IF NOT in list: CALL read_files_contents tool
+        3. ⏳ IF reading: WAIT for tool response with exact file content
+        4. ✅ IF already read: USE previously read content
+        5. 📋 COPY exact text from read content for "before" field (character-for-character)
+        6. ✏️ CREATE your "after" text with desired changes
+        7. 🔧 BUILD ONE boltAction per file with JSON array of changes
+        8. 🔄 ESCAPE special characters in JSON strings: " → \"  and newline → \n
+        **SYSTEM WILL REJECT IF**:
+        - You don't have file content (never read) = IMMEDIATE FAILURE
+        - You type "before" from memory = MISMATCH ERROR
+        - File content doesn't match = PARSING ERROR
         
-        **WORKFLOW**:
-        1. Read file using tool → get exact content
-        2. Copy EXACT text for "before" field
-        3. Create ONE boltAction with JSON array of changes
+        **EFFICIENT WORKFLOW (ENFORCED BY SYSTEM)**:
+        1. 🔍 CHECK: Is file in "Files Already Read" list?
+        2. 🔴 IF NO: Call read_files_contents tool → get exact content
+        3. ✅ IF YES: Use previously read content (don't read again)
+        4. 📋 COPY: EXACT text from read content for "before" field
+        5. 🔧 CREATE: ONE boltAction with JSON array of changes
+        
+        **SMART READING**: Read each file ONCE, use that content for all modifications!
         
         **❌ WRONG EXAMPLES (ALL OF THESE BREAK PARSING!)**:
         
@@ -714,11 +776,13 @@ There are tools available to resolve coding tasks. Please follow these guideline
   - Update ALL dependent files in the same response to maintain consistency
   - Pay special attention to component props, function signatures, and exported names
   - This prevents runtime errors and ensures the entire codebase remains functional
-- **MODIFY TYPE DISCIPLINE**: 
-  - ALWAYS read the file immediately before using modify type
-  - COPY the exact text from the file - don't type from memory
+- **MODIFY TYPE DISCIPLINE (SYSTEM ENFORCED)**: 
+  - 🚨 MANDATORY: Have file content before modify (from current or previous read)
+  - 📊 TRACK: Maintain "Files Already Read" list to avoid duplicate reads
+  - 🚨 MANDATORY: COPY exact text from read content - NEVER type from memory
   - Common failure: Using "interface GameState" when file has "interface GameStore"
-  - The "before" text must be CHARACTER-FOR-CHARACTER identical to what's in the file
+  - The "before" text must be CHARACTER-FOR-CHARACTER identical to read content
+  - SYSTEM WILL REJECT: Any modify without having file content available
 
 **P1 (RECOMMENDED)**:
 - When updating assets.json, only add URLs already in context

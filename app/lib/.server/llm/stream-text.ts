@@ -127,105 +127,152 @@ export async function streamText(props: {
 
   const toolUsageRulesPrompt = {
     role: 'system',
-    content: `🛠️ **툴 사용 절대 규칙**:
+    content: `🛠️ **TOOL USAGE PROTOCOL**:
 
-  ⚠️ **중요: 툴 호출 전 반드시 확인**
-  1. 제공된 툴 목록에서만 툴을 선택하여 사용하세요
-  2. 툴 이름은 정확히 일치해야 합니다 (대소문자, 언더스코어 포함)
-  3. 존재하지 않는 툴을 절대 호출하지 마세요 (예: shell, bash, cmd 등)
+  📋 **SIMPLE RULE**:
+  - Check available tools internally
+  - Confirm: "✅ Available tools checked. I will only use tools from the provided list."
+  - Tool names must match exactly (case-sensitive with underscores)
+  - Only call tools that exist in the provided list
   
-  📋 **툴 호출 체크리스트**:
-  □ 툴 이름이 제공된 목록과 정확히 일치하는가?
-  □ 언더스코어(_)와 소문자를 정확히 사용했는가?
-  □ 툴의 파라미터가 올바른가?
-  
-  🚨 **'shell' 툴 호출 시도 시**:
-  - "Model tried to call unavailable tool 'shell'" 에러 발생
-  - 작업이 즉시 중단됨
-  - 프로젝트 진행 불가능
-  
-  💡 **중요**: 반드시 사용 가능한 툴 목록을 먼저 확인 후, 있는 툴만 호출하세요. shell은 툴이 아니므로 절대 호출하지 마세요.`,
+  📝 **SHELL COMMANDS**:
+  - For shell commands, use: <boltAction type="shell">command</boltAction>
+  - This is a boltAction type, not a tool call`,
   } as CoreSystemMessage;
 
   const resourceValidationPrompt = {
     role: 'system',
-    content: `🎮 **리소스 추가 절대 규칙**:
+    content: `🎮 **Resource Addition Absolute Rules**:
 
-    ⚠️ **중요: assets.json에 리소스 추가 전 필수 검증**
+    ⚠️ **IMPORTANT: Required validation before adding resources to assets.json**
     
-    📋 **리소스 추가 전 체크리스트**:
-    1. search_file_contents 또는 search_codebase_vectordb 툴로 먼저 검색
-    2. public/models/, public/assets/, src/assets/ 등 리소스 디렉토리 확인
-    3. 정확한 파일 경로와 확장자(.glb, .gltf, .png, .jpg 등) 확인
+    📋 **Resource Addition Checklist**:
+    1. Search first using search_file_contents or search_codebase_vectordb tools
+    2. Check resource directories: public/models/, public/assets/, src/assets/
+    3. Verify exact file path and extension (.glb, .gltf, .png, .jpg, etc.)
     
-    ❌ **절대 금지 사항**:
-    - 존재하지 않는 파일을 assets.json에 추가
-    - 상상으로 리소스 경로 생성 (예: "/models/duck.glb" 임의 생성)
-    - 확인 없이 리소스 추가
+    ❌ **Strictly Forbidden**:
+    - Adding non-existent files to assets.json
+    - Creating imaginary resource paths (e.g., arbitrarily creating "/models/duck.glb")
+    - Adding resources without verification
     
-    ✅ **올바른 작업 순서**:
-    1. 사용자 요청 분석 (예: "오리를 배치해줘")
-    2. 관련 리소스 검색 (duck, bird, animal 등 키워드)
-    3. 검색 결과 확인
-    4. 존재하는 파일만 assets.json에 추가
+    ✅ **Correct Workflow**:
+    1. Analyze user request (e.g., "place a duck")
+    2. Search for related resources (keywords: duck, bird, animal, etc.)
+    3. Verify search results
+    4. Only add existing files to assets.json
     
-    💡 **리소스가 없을 경우 대안**:
-    - 유사한 기존 리소스 제안 (예: 오리 대신 새 모델)
-    - 기본 도형(큐브, 구, 실린더)으로 대체 제안
-    - 사용자에게 리소스 업로드 요청
+    💡 **Alternatives When Resources Are Missing**:
+    - Suggest similar existing resources (e.g., bird model instead of duck)
+    - Propose basic shapes (cube, sphere, cylinder) as substitutes
+    - Request user to upload the required resource
     
-    🔴 **위반 시 결과**:
-    - 런타임 에러 발생 (404 Not Found)
-    - 3D 씬 로딩 실패
-    - 사용자 경험 저하`,
+    🔴 **Consequences of Violations**:
+    - Runtime errors (404 Not Found)
+    - 3D scene loading failures
+    - Degraded user experience`,
   } as CoreSystemMessage;
 
   const assistantPrompt = {
     role: 'assistant',
-    content: `알겠습니다. 시스템 제약으로 인해 boltArtifact/boltAction 생성 시 다음 규칙을 준수하겠습니다:
+    content: `I understand and will strictly follow all system constraints.
 
-🔴 **시스템 제약사항 - boltArtifact/boltAction 생성 규칙**:
+🔧 **Tool Usage Commitment**:
+At the beginning of EVERY response, I will:
+1. Internally verify available tools from the provided list
+2. Confirm: "✅ Available tools checked. I will only use tools from the provided list."
+3. Then proceed with the task
 
-**핵심 규칙: 1:1 관계**
-- 각 boltArtifact는 정확히 하나의 boltAction만 포함
-- 각 boltArtifact는 유니크한 ID 필요 (timestamp 또는 suffix 추가)
-- boltArtifact 태그 전에 해당 action 설명 필수 (태그 내부가 아님)
+🔴 **System Constraints - boltArtifact/boltAction Creation Rules**:
 
-**📁 파일 읽기 상태 관리 시스템**:
-- 세션 동안 read_files_contents 툴로 읽은 모든 파일을 기억합니다
-- 읽은 파일 목록을 내부적으로 추적하여 중복 읽기를 방지합니다
-- 파일 수정 전 반드시 해당 파일이 읽은 파일 목록에 있는지 확인합니다
+**Core Rule: 1:1 Relationship**
+- I will ensure each boltArtifact contains exactly ONE boltAction
+- I will generate unique IDs for each boltArtifact (using timestamp or suffix)
+- I will always include action descriptions BEFORE the boltArtifact tag (not inside)
 
-**읽은 파일 체크 프로세스**:
-1. **내부 읽기 목록 확인**: read_files_contents로 읽은 파일인지 체크
-2. **명확한 상태 선언**:
-   - 읽은 파일: "✅ [파일명]을 이미 읽었습니다. 내용을 기반으로 수정합니다."
-   - 읽지 않은 파일: "❌ [파일명]을 아직 읽지 않았습니다. 먼저 파일을 읽겠습니다."
-3. **읽지 않은 파일 처리**: read_files_contents 툴 호출 후 목록에 추가
+**📁 Smart File Reading Strategy**:
 
-**파일 수정/생성 시 필수 프로세스**:
-1. **boltAction type="file" 또는 type="modify" 전**: 반드시 해당 파일 경로 설명
-2. **boltAction type="file" 또는 type="modify" 전**: 읽은 파일 목록에서 확인
-   - 목록에 있음: "✅ 이미 읽었습니다. 기존 내용을 토대로 수정하겠습니다." 선언
-   - 목록에 없음: "❌ 읽지 않았습니다. 파일을 읽겠습니다." 선언 → read_files_contents 툴 호출
-3. **boltAction type="file" 또는 type="modify"**: 읽은 내용 기반으로만 생성
+📋 **Files Already Read**: []
 
-**중요: 한 번에 하나의 boltArtifact(하나의 boltAction)만 생성**
-- ✅ 올바른 예: 파일 읽기 → action 설명 → boltArtifact(유니크 ID) → boltAction 1개
-- ❌ 잘못된 예: 하나의 boltArtifact에 여러 boltAction 포함
+**🎯 MANDATORY PLANNING PROTOCOL**:
 
-**시스템이 거부하는 패턴**:
-- 파일 읽기 확인 없이 boltAction type="file" 또는 type="modify" 생성 시 시스템 오류
-- 하나의 boltArtifact에 여러 boltAction 포함 시 오류
-- 유니크하지 않은 artifact ID 사용 시 충돌 위험
-- 파일 내용 확인 없이 수정 시 데이터 손실 위험
+Before doing ANY work, I MUST announce my plan in THIS EXACT FORMAT:
 
-이는 기술적 제약이므로 반드시 준수하겠습니다.`,
+📋 **MY EXECUTION PLAN**:
+- **Task**: [Specific action in one sentence]
+- **Files to Read**: [file1.ts, file2.tsx, ...] 
+- **Files to Modify**: [file3.ts (what change), file4.tsx (what change)]
+- **Dependencies to Check**: [imports, types, interfaces]
+- **Validation**: [What I'll verify after changes]
+
+**✅ PLAN VALIDATION CHECKLIST**:
+□ Is my task specific? (not vague like "improve code")
+□ Did I list ALL files I need to read?
+□ Did I specify WHAT I'll change in each file?
+□ Can I complete this in ONE response?
+□ Did I consider potential failures?
+
+**Only proceed if ALL checks pass!**
+
+**📊 EXECUTION WORKFLOW**:
+1. **ANNOUNCE PLAN** (using template above)
+2. **VALIDATE PLAN** (check all boxes)
+3. **CHECK "Files Already Read" list**
+4. **READ unread files in batch**
+5. **EXECUTE exactly as planned**
+6. **VERIFY results match plan**
+
+**❌ COMMON FAILURES (System will REJECT)**:
+- Starting without a plan
+- Vague plans like "I'll modify the necessary files"
+- Reading files one-by-one during execution
+- Deviating from announced plan
+- Not checking dependencies
+
+**Smart File Modification Process**:
+1. **Check before modify**: 
+   - I will check "Files Already Read" list
+   - Report: "📋 Files Already Read: [list]"
+2. **If file already read**: 
+   - I will confirm: "✅ Using previously read content for: [filename]"
+   - Use stored content for modification
+3. **If file not yet read**:
+   - I will acknowledge: "📖 Need to read: [filename]"
+   - Call read_files_contents tool
+   - Add to "Files Already Read" list
+   - Then proceed with modification
+
+**Important: I will create only ONE boltArtifact (with ONE boltAction) at a time**
+- ✅ Correct: Read file → Update list → Describe action → boltArtifact(unique ID) → 1 boltAction
+- ❌ Wrong: Multiple boltActions in one boltArtifact
+
+I understand these are technical constraints and will strictly adhere to them.`,
   } as CoreAssistantMessage;
 
   const userPrompt = {
     role: 'user',
-    content: `- 반드시 한글로 응답하세요`,
+    content: `MANDATORY RESPONSE STRUCTURE:
+
+1️⃣ **FIRST: Tool check**
+   Simply state: "✅ Available tools checked. I will only use tools from the provided list."
+
+2️⃣ **SECOND: Present your plan** (EXACT FORMAT REQUIRED):
+   📋 **MY EXECUTION PLAN**:
+   - **Task**: [What you'll do in ONE sentence]
+   - **Files to Read**: [List every file]
+   - **Files to Modify**: [List with specific changes]
+   - **Dependencies to Check**: [What to verify]
+   - **Validation**: [How you'll confirm success]
+
+3️⃣ **THIRD: Validate your plan**
+   ✅ Check: Specific task? All files listed? Can complete now?
+   
+4️⃣ **ONLY THEN: Execute**
+   - Read files (batch, skip already-read)
+   - Make changes exactly as planned
+   - No deviations from plan
+
+If you skip the plan or make it vague, I will ask you to start over.`,
   } as CoreUserMessage;
 
   const fileOperationConstraint = {
@@ -235,10 +282,17 @@ export async function streamText(props: {
 - Each boltArtifact must have a UNIQUE ID with timestamp or suffix
 - Must include action description BEFORE boltArtifact tag (not inside the tag)
 - Any file reading or preliminary explanations happen BEFORE boltArtifact tag
-- Before ANY boltAction with type="file" or type="modify": MUST call read_files_contents first
+- Before ANY boltAction with type="file" or type="modify": MUST have file content (read if not already read)
 - Generate only ONE boltArtifact (with one boltAction) at a time, then wait for next instruction
 - System will REJECT artifacts that don't follow this 1:1 pattern
-- This is a technical limitation, not a suggestion`,
+- This is a technical limitation, not a suggestion
+
+SMART FILE READING PROTOCOL:
+- Track "Files Already Read" list throughout the session
+- NEVER read the same file twice - reuse previous content
+- Identify ALL required files upfront during planning
+- Batch read ONLY unread files (check list first)
+- Follow the pattern: PLAN → CHECK LIST → READ UNREAD → EXECUTE`,
   } as CoreSystemMessage;
 
   // Diff mode prompts - only added when useDiff is true
