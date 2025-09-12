@@ -3,7 +3,6 @@ import {
   convertToCoreMessages,
   type CoreAssistantMessage,
   type CoreSystemMessage,
-  type CoreUserMessage,
   type Message,
 } from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
@@ -125,178 +124,41 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  const toolUsageRulesPrompt = {
-    role: 'system',
-    content: `🛠️ **TOOL USAGE PROTOCOL**:
-
-  📋 **SIMPLE RULE**:
-  - Check available tools internally
-  - Confirm: "✅ Available tools checked. I will only use tools from the provided list."
-  - Tool names must match exactly (case-sensitive with underscores)
-  - Only call tools that exist in the provided list
-  
-  📝 **SHELL COMMANDS**:
-  - For shell commands, use: <boltAction type="shell">command</boltAction>
-  - This is a boltAction type, not a tool call`,
-  } as CoreSystemMessage;
-
-  const resourceValidationPrompt = {
-    role: 'system',
-    content: `🎮 **Resource Addition Absolute Rules**:
-
-    ⚠️ **IMPORTANT: Required validation before adding resources to assets.json**
-    
-    📋 **Resource Addition Checklist**:
-    1. Search first using search_file_contents or search_codebase_vectordb tools
-    2. Check resource directories: public/models/, public/assets/, src/assets/
-    3. Verify exact file path and extension (.glb, .gltf, .png, .jpg, etc.)
-    
-    ❌ **Strictly Forbidden**:
-    - Adding non-existent files to assets.json
-    - Creating imaginary resource paths (e.g., arbitrarily creating "/models/duck.glb")
-    - Adding resources without verification
-    
-    ✅ **Correct Workflow**:
-    1. Analyze user request (e.g., "place a duck")
-    2. Search for related resources (keywords: duck, bird, animal, etc.)
-    3. Verify search results
-    4. Only add existing files to assets.json
-    
-    💡 **Alternatives When Resources Are Missing**:
-    - Suggest similar existing resources (e.g., bird model instead of duck)
-    - Propose basic shapes (cube, sphere, cylinder) as substitutes
-    - Request user to upload the required resource
-    
-    🔴 **Consequences of Violations**:
-    - Runtime errors (404 Not Found)
-    - 3D scene loading failures
-    - Degraded user experience`,
-  } as CoreSystemMessage;
+  /*
+   * const assistantPrompt = {
+   *   role: 'assistant',
+   *   content: `작업을 아래 순서로 진행하겠습니다.
+   *   1 어떤 수정 사항을 변경할지 모든 파일 목록을 정의하겠습니다.
+   *   2. 수정에 필요한 파일을 읽겠습니다(한번에 읽을 수 없다면 여러번 요청해서라도 반드시 모든 파일을 읽겠습니다).
+   *   2-1. 추가로 연관된 파일을 읽겠습니다(반복).
+   *   3. 수정 코드를 생성하겠습니다.`,
+   * } as CoreAssistantMessage;
+   */
 
   const assistantPrompt = {
     role: 'assistant',
-    content: `I understand and will strictly follow all system constraints.
+    content: `작업을 다음 순서로 진행하겠습니다:
 
-🔧 **Tool Usage Commitment**:
-At the beginning of EVERY response, I will:
-1. Internally verify available tools from the provided list
-2. Confirm: "✅ Available tools checked. I will only use tools from the provided list."
-3. Then proceed with the task
+📌 읽은 파일 목록을 초기화합니다.
+   READ_FILES = [] (이전 대화의 기록은 무시하고 새로 시작)
 
-🔴 **System Constraints - boltArtifact/boltAction Creation Rules**:
+1️⃣ 이번 작업에 필요한 모든 관련 파일들을 파악하고 한 번에 읽겠습니다.
+   - 수정할 파일들
+   - import/export 관계가 있는 파일들
+   - 영향받을 수 있는 연관 파일들
 
-**Core Rule: 1:1 Relationship**
-- I will ensure each boltArtifact contains exactly ONE boltAction
-- I will generate unique IDs for each boltArtifact (using timestamp or suffix)
-- I will always include action descriptions BEFORE the boltArtifact tag (not inside)
+2️⃣ 각 파일을 수정하기 전에 반드시:
+   - "I will modify [filename]" 선언
+   - "Checking if file was read in THIS conversation... [read/not read]" 확인
+   - 이번 대화에서 읽지 않았다면 먼저 읽기
 
-**📁 Smart File Reading Strategy**:
+3️⃣ modify 타입 사용 규칙:
+   - 각 modify는 반드시 독립된 boltArtifact에 작성
+   - 하나의 boltArtifact = 하나의 modify만
+   - 유니크한 ID 사용 (timestamp 포함)
 
-📋 **Files Already Read**: []
-
-**🎯 MANDATORY PLANNING PROTOCOL**:
-
-Before doing ANY work, I MUST announce my plan in THIS EXACT FORMAT:
-
-📋 **MY EXECUTION PLAN**:
-- **Task**: [Specific action in one sentence]
-- **Files to Read**: [file1.ts, file2.tsx, ...] 
-- **Files to Modify**: [file3.ts (what change), file4.tsx (what change)]
-- **Dependencies to Check**: [imports, types, interfaces]
-- **Validation**: [What I'll verify after changes]
-
-**✅ PLAN VALIDATION CHECKLIST**:
-□ Is my task specific? (not vague like "improve code")
-□ Did I list ALL files I need to read?
-□ Did I specify WHAT I'll change in each file?
-□ Can I complete this in ONE response?
-□ Did I consider potential failures?
-
-**Only proceed if ALL checks pass!**
-
-**📊 EXECUTION WORKFLOW**:
-1. **ANNOUNCE PLAN** (using template above)
-2. **VALIDATE PLAN** (check all boxes)
-3. **CHECK "Files Already Read" list**
-4. **READ unread files in batch**
-5. **EXECUTE exactly as planned**
-6. **VERIFY results match plan**
-
-**❌ COMMON FAILURES (System will REJECT)**:
-- Starting without a plan
-- Vague plans like "I'll modify the necessary files"
-- Reading files one-by-one during execution
-- Deviating from announced plan
-- Not checking dependencies
-
-**Smart File Modification Process**:
-1. **Check before modify**: 
-   - I will check "Files Already Read" list
-   - Report: "📋 Files Already Read: [list]"
-2. **If file already read**: 
-   - I will confirm: "✅ Using previously read content for: [filename]"
-   - Use stored content for modification
-3. **If file not yet read**:
-   - I will acknowledge: "📖 Need to read: [filename]"
-   - Call read_files_contents tool
-   - Add to "Files Already Read" list
-   - Then proceed with modification
-
-**Important: I will create only ONE boltArtifact (with ONE boltAction) at a time**
-- ✅ Correct: Read file → Update list → Describe action → boltArtifact(unique ID) → 1 boltAction
-- ❌ Wrong: Multiple boltActions in one boltArtifact
-
-I understand these are technical constraints and will strictly adhere to them.`,
+⚠️ 중요: 이전 대화에서 읽었던 파일도 이번 작업을 위해 다시 읽어야 합니다.`,
   } as CoreAssistantMessage;
-
-  const userPrompt = {
-    role: 'user',
-    content: `MANDATORY RESPONSE STRUCTURE:
-
-1️⃣ **FIRST: Tool check**
-   Simply state: "✅ Available tools checked. I will only use tools from the provided list."
-
-2️⃣ **SECOND: Present your plan** (EXACT FORMAT REQUIRED):
-   📋 **MY EXECUTION PLAN**:
-   - **Task**: [What you'll do in ONE sentence]
-   - **Files to Read**: [List every file]
-   - **Files to Modify**: [List with specific changes]
-   - **Dependencies to Check**: [What to verify]
-   - **Validation**: [How you'll confirm success]
-
-3️⃣ **THIRD: Validate your plan**
-   ✅ Check: Specific task? All files listed? Can complete now?
-   
-4️⃣ **ONLY THEN: Execute**
-   - Read files (batch, skip already-read)
-   - Make changes exactly as planned
-   - No deviations from plan
-
-If you skip the plan or make it vague, I will ask you to start over.`,
-  } as CoreUserMessage;
-
-  const fileOperationConstraint = {
-    role: 'system',
-    content: `CRITICAL SYSTEM CONSTRAINT FOR BOLTARTIFACT/BOLTACTION:
-- Each boltArtifact must contain EXACTLY ONE boltAction (1:1 relationship)
-- Each boltArtifact must have a UNIQUE ID with timestamp or suffix
-- Must include action description BEFORE boltArtifact tag (not inside the tag)
-- Any file reading or preliminary explanations happen BEFORE boltArtifact tag
-- Before ANY boltAction with type="file" or type="modify": MUST have file content (read if not already read)
-- Generate only ONE boltArtifact (with one boltAction) at a time, then wait for next instruction
-- System will REJECT artifacts that don't follow this 1:1 pattern
-- This is a technical limitation, not a suggestion
-
-SMART FILE READING PROTOCOL:
-- Track "Files Already Read" list throughout the session
-- NEVER read the same file twice - reuse previous content
-- Identify ALL required files upfront during planning
-- Batch read ONLY unread files (check list first)
-- Follow the pattern: PLAN → CHECK LIST → READ UNREAD → EXECUTE`,
-  } as CoreSystemMessage;
-
-  // Diff mode prompts - only added when useDiff is true
-  const diffPrompts = useDiff ? [assistantPrompt, userPrompt] : [];
 
   const coreMessages = [
     ...[
@@ -319,9 +181,8 @@ SMART FILE READING PROTOCOL:
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    ...(useDiff ? [fileOperationConstraint, toolUsageRulesPrompt, resourceValidationPrompt] : []),
     ...convertToCoreMessages(processedMessages).slice(-3),
-    ...diffPrompts,
+    assistantPrompt,
   ];
 
   if (modelDetails.name.includes('anthropic')) {
