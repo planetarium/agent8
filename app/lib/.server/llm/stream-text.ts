@@ -124,40 +124,43 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  /*
-   * const assistantPrompt = {
-   *   role: 'assistant',
-   *   content: `작업을 아래 순서로 진행하겠습니다.
-   *   1 어떤 수정 사항을 변경할지 모든 파일 목록을 정의하겠습니다.
-   *   2. 수정에 필요한 파일을 읽겠습니다(한번에 읽을 수 없다면 여러번 요청해서라도 반드시 모든 파일을 읽겠습니다).
-   *   2-1. 추가로 연관된 파일을 읽겠습니다(반복).
-   *   3. 수정 코드를 생성하겠습니다.`,
-   * } as CoreAssistantMessage;
-   */
-
   const assistantPrompt = {
     role: 'assistant',
-    content: `작업을 다음 순서로 진행하겠습니다:
+    content: `I understand and will follow this exact workflow:
 
-📌 읽은 파일 목록을 초기화합니다.
-   READ_FILES = [] (이전 대화의 기록은 무시하고 새로 시작)
+🔧 Tool Usage Commitment:
+   I have internally verified the available tools for this conversation.
+   ✅ I will ONLY use tools that actually exist with EXACT spelling.
+   ❌ I will NEVER attempt to call non-existent tools or use incorrect tool names.
 
-1️⃣ 이번 작업에 필요한 모든 관련 파일들을 파악하고 한 번에 읽겠습니다.
-   - 수정할 파일들
-   - import/export 관계가 있는 파일들
-   - 영향받을 수 있는 연관 파일들
+📌 First, I will initialize my read files tracking.
+   I am setting READ_FILES = [] right now, starting fresh for this conversation.
 
-2️⃣ 각 파일을 수정하기 전에 반드시:
-   - "I will modify [filename]" 선언
-   - "Checking if file was read in THIS conversation... [read/not read]" 확인
-   - 이번 대화에서 읽지 않았다면 먼저 읽기
+1️⃣ I will now identify and read all relevant files for this task in a single batch:
+   - I will read all files that need modification
+   - I will read all files with import/export relationships
+   - I will read all potentially affected files
 
-3️⃣ modify 타입 사용 규칙:
-   - 각 modify는 반드시 독립된 boltArtifact에 작성
-   - 하나의 boltArtifact = 하나의 modify만
-   - 유니크한 ID 사용 (timestamp 포함)
+2️⃣ 🔴 MY COMMITMENT: Before modifying ANY file 🔴
+   I promise to ALWAYS follow these THREE MANDATORY STEPS IN EXACT ORDER:
+   
+   STEP 1: I will announce: "I will modify [filename]"
+   STEP 2: IMMEDIATELY AFTER STEP 1, I MUST check: "Checking if [filename] was read in THIS conversation..."
+   STEP 3: Based on Step 2 result:
+      - If read: "File was read in this conversation. Proceeding with modification."
+      - If NOT read: "File not read in this conversation. Reading it now..." → READ THE FILE → Then modify
+   
+   🚨 CRITICAL: After saying "I will modify", I CANNOT proceed without doing the check.
+   The check is NOT optional. I will ALWAYS do Step 2 after Step 1. NO EXCEPTIONS.
+   
+   I understand that skipping the check after announcement is FORBIDDEN.
 
-⚠️ 중요: 이전 대화에서 읽었던 파일도 이번 작업을 위해 다시 읽어야 합니다.`,
+3️⃣ When using modify type, I will:
+   - Always create a separate boltArtifact for each modify
+   - Never mix multiple modifies in one boltArtifact
+   - Always use a unique ID with timestamp
+
+I acknowledge: Files from previous conversations don't count - I must read them again in THIS conversation.`,
   } as CoreAssistantMessage;
 
   const coreMessages = [
