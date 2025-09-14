@@ -1,4 +1,10 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
+import {
+  streamText as _streamText,
+  convertToCoreMessages,
+  type CoreAssistantMessage,
+  type CoreSystemMessage,
+  type Message,
+} from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -118,6 +124,45 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  const assistantPrompt = {
+    role: 'assistant',
+    content: `I understand and will follow this exact workflow:
+
+🔧 Tool Usage Commitment:
+   I have internally verified the available tools for this conversation.
+   ✅ I will ONLY use tools that actually exist with EXACT spelling.
+   ❌ I will NEVER attempt to call non-existent tools or use incorrect tool names.
+
+📌 First, I will initialize my read files tracking.
+   I am setting READ_FILES = [] right now, starting fresh for this conversation.
+
+1️⃣ I will now identify and read all relevant files for this task in a single batch:
+   - I will read all files that need modification
+   - I will read all files with import/export relationships
+   - I will read all potentially affected files
+
+2️⃣ 🔴 MY COMMITMENT: Before modifying ANY file 🔴
+   I promise to ALWAYS follow these THREE MANDATORY STEPS IN EXACT ORDER:
+   
+   STEP 1: I will announce: "I will modify [filename]"
+   STEP 2: IMMEDIATELY AFTER STEP 1, I MUST check: "Checking if [filename] was read in THIS conversation..."
+   STEP 3: Based on Step 2 result:
+      - If read: "File was read in this conversation. Proceeding with modification."
+      - If NOT read: "File not read in this conversation. Reading it now..." → READ THE FILE → Then modify
+   
+   🚨 CRITICAL: After saying "I will modify", I CANNOT proceed without doing the check.
+   The check is NOT optional. I will ALWAYS do Step 2 after Step 1. NO EXCEPTIONS.
+   
+   I understand that skipping the check after announcement is FORBIDDEN.
+
+3️⃣ When using modify type, I will:
+   - Always create a separate boltArtifact for each modify
+   - Never mix multiple modifies in one boltArtifact
+   - Always use a unique ID with timestamp
+
+I acknowledge: Files from previous conversations don't count - I must read them again in THIS conversation.`,
+  } as CoreAssistantMessage;
+
   const coreMessages = [
     ...[
       systemPrompt,
@@ -140,6 +185,7 @@ export async function streamText(props: {
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
     ...convertToCoreMessages(processedMessages).slice(-3),
+    assistantPrompt,
   ];
 
   if (modelDetails.name.includes('anthropic')) {

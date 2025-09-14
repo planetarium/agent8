@@ -83,6 +83,19 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
       files.push({ path: 'package.json', content: packageJsonFile });
     }
 
+    // Create a map to store the final action type for each filePath
+    const uniqueMatches = new Map<string, string | undefined>();
+
+    for (const match of matches) {
+      const filePath = match[1];
+      const fullMatch = match[0];
+      const typeMatch = fullMatch.match(/type="([^"]+)"/);
+      const actionType = typeMatch ? typeMatch[1] : undefined;
+
+      // Store in map, later matches override earlier ones
+      uniqueMatches.set(filePath, actionType);
+    }
+
     files = [
       ...files,
       ...(await Promise.all(
@@ -100,7 +113,10 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
 
           // The workbench file sync is delayed. So I use the remote container file.
 
-          if (actionType === 'file' && cleanedContent !== remoteContainerFile) {
+          // Check content mismatch only if the final action type for this filePath is 'file'
+          const finalActionType = uniqueMatches.get(filePath);
+
+          if (actionType === 'file' && finalActionType === 'file' && cleanedContent !== remoteContainerFile) {
             // For file type, content should match exactly
             logger.error(
               `Content mismatch for ${filePath}:`,
@@ -133,7 +149,8 @@ ${userMessage}
 <V8AssistantMessage>
 ${content
   .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
-  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
+  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')
+  .replace(/(<boltAction type="modify"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋

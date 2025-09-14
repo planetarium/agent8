@@ -24,22 +24,18 @@ const messageParser = new StreamingMessageParser({
       logger.trace('onActionOpen', data.action);
 
       // we only add shell actions when when the close tag got parsed because only then we have the content
-      if (data.action.type === 'file' || data.action.type === 'modify') {
+      if (data.action.type !== 'shell') {
         workbenchStore.addAction(data);
       }
     },
     onActionClose: async (data) => {
       logger.trace('onActionClose', data.action);
 
-      if (data.action.type !== 'file' && data.action.type !== 'modify') {
+      if (data.action.type === 'shell') {
         workbenchStore.addAction(data);
       }
 
-      if (data.action.type === 'shell') {
-        await workbenchStore.runActionAndWait(data);
-      } else {
-        workbenchStore.runAction(data);
-      }
+      workbenchStore.runAction(data);
     },
     onActionStream: (data) => {
       logger.trace('onActionStream', data.action);

@@ -441,11 +441,11 @@ export const ChatImpl = memo(
           });
         }
 
-        workbench.onArtifactClose(message.id, async () => {
+        workbench.onMessageClose(message.id, async () => {
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
-          workbench.offArtifactClose(message.id);
+          workbench.offMessageClose(message.id);
         });
 
         setFakeLoading(false);

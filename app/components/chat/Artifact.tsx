@@ -9,6 +9,7 @@ import { useWorkbenchArtifacts } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { WORK_DIR } from '~/utils/constants';
+import { useDiffStore } from '~/lib/stores/useDiffStore';
 
 const highlighterOptions = {
   langs: ['shell'],
@@ -24,15 +25,23 @@ if (import.meta.hot) {
 
 interface ArtifactProps {
   messageId: string;
+  artifactId: string;
 }
 
-export const Artifact = memo(({ messageId }: ArtifactProps) => {
+export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
   const [allActionFinished, setAllActionFinished] = useState(false);
+  const useDiff = useStore(useDiffStore);
 
   const artifacts = useWorkbenchArtifacts();
-  const artifact = artifacts[messageId];
+
+  const artifact = artifacts[artifactId];
+
+  // Return early if artifact is not found
+  if (!artifact) {
+    return null;
+  }
 
   const actions = useStore(
     computed(artifact.runner.actions, (actions) => {
@@ -58,6 +67,22 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
       }
     }
   }, [actions]);
+
+  if (useDiff) {
+    return (
+      <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
+        <AnimatePresence>
+          {actions.length > 0 && (
+            <motion.div className="actions">
+              <div className="p-5 text-left bg-bolt-elements-actions-background">
+                <ActionList actions={actions} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
 
   return (
     <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">

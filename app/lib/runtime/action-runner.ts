@@ -93,6 +93,10 @@ export class ActionRunner {
     return this.#pendingActionsCount > 0;
   }
 
+  resetPendingActionsCount() {
+    this.#pendingActionsCount = 0;
+  }
+
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
 
@@ -103,6 +107,8 @@ export class ActionRunner {
       // action already added
       return;
     }
+
+    logger.debug(`#### add action (${actionId}), type: ${data.action.type}`);
 
     this.#pendingActionsCount++;
     this.#completeCalled = false;
@@ -121,7 +127,11 @@ export class ActionRunner {
     });
 
     this.#currentExecutionPromise.then(() => {
-      this.#updateAction(actionId, { status: 'running' });
+      const action = this.actions.get()[actionId];
+
+      if (action && action.status === 'pending') {
+        this.#updateAction(actionId, { status: 'running' });
+      }
     });
   }
 
@@ -137,9 +147,11 @@ export class ActionRunner {
       return; // No return value here
     }
 
-    if (isStreaming && action.type !== 'file') {
+    if (isStreaming) {
       return; // No return value here
     }
+
+    logger.debug(`#### runAction (${actionId}), type: ${action.type}`);
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: !isStreaming });
 
@@ -157,6 +169,10 @@ export class ActionRunner {
     await this.#currentExecutionPromise;
 
     return;
+  }
+
+  markActionAsRunning(actionId: string) {
+    this.#updateAction(actionId, { status: 'running' });
   }
 
   async #executeAction(actionId: string, isStreaming: boolean = false) {
@@ -291,6 +307,7 @@ export class ActionRunner {
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
+      logger.warn(`Failed To Execute Shell Command content: ${action.content}`);
       throw new ActionCommandError(`Failed To Execute Shell Command`, resp?.output || 'No Output Available');
     }
   }
@@ -391,9 +408,6 @@ export class ActionRunner {
           throw new Error(`Text not found in file: ${mod.before}`);
         }
 
-        // Replace the text
-        const beforeLength = currentFileContent.length;
-
         // Check if text appears multiple times
         const occurrences = (
           currentFileContent.match(new RegExp(mod.before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
@@ -405,10 +419,8 @@ export class ActionRunner {
 
         currentFileContent = currentFileContent.replace(mod.before, mod.after);
 
-        const afterLength = currentFileContent.length;
-
-        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\nafter:\n"${mod.after}"`);
-        logger.debug(`✅ [Modify] Replacement ${i + 1} successful (${afterLength - beforeLength} chars changed)`);
+        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\n-----------------------\nafter:\n"${mod.after}"`);
+        logger.debug(`✅ [Modify] Replacement ${i + 1} successful`);
       }
 
       // Write the updated content back
@@ -430,25 +442,22 @@ export class ActionRunner {
     }
   }
 
-  #normalizeJsonString(content: string): string {
-    try {
-      JSON.parse(content);
-      return content;
-    } catch (error) {
-      logger.debug('JSON parsing failed, attempting normalization:', error);
-      return content.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-    }
+  #unescapeString(content: string): string {
+    return content
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
   }
 
-  #parseModifications(jsonContent: string): Array<{ before: string; after: string }> {
+  #parseModifications(content: string): Array<{ before: string; after: string }> {
     const modifications: Array<{ before: string; after: string }> = [];
 
     try {
-      // JSON parsing before defensive normalization
-      const normalizedContent = this.#normalizeJsonString(jsonContent);
-
-      // Parse the JSON array
-      const parsed = JSON.parse(normalizedContent);
+      // Parse the JSON
+      const parsed = JSON.parse(content);
 
       // Ensure it's an array
       const modArray = Array.isArray(parsed) ? parsed : [parsed];
@@ -463,8 +472,28 @@ export class ActionRunner {
         }
       }
     } catch (error) {
-      logger.error('Failed to parse modification JSON:', error);
-      logger.debug('Raw content:\n', jsonContent);
+      logger.warn('Failed to parse JSON:', error);
+      logger.debug('Raw content:\n', content);
+
+      // fallback to regex if json parsing fails
+      const regex = /"before"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"after"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+      const reverseRegex = /"after"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"before"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[1]),
+          after: this.#unescapeString(match[2]),
+        });
+      }
+
+      while ((match = reverseRegex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[2]),
+          after: this.#unescapeString(match[1]),
+        });
+      }
     }
 
     return modifications;

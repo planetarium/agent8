@@ -61,12 +61,17 @@ export const createFilesReadTool = (fileMap: FileMap) => {
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     parameters: z.object({
-      pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
+      pathList: z
+        .union([z.array(z.string()), z.string()])
+        .describe('The list of paths to the files you want to read. Can be an array of paths or a single path string.'),
     }),
-    execute: async ({ pathList }: { pathList: string[] }) => {
-      const files: Record<string, { content?: string; error?: string }> = {};
+    execute: async ({ pathList }: { pathList: string[] | string }) => {
+      console.log('#### pathList', pathList);
 
-      pathList.forEach((path) => {
+      const files: Record<string, { content?: string; error?: string }> = {};
+      const paths = Array.isArray(pathList) ? pathList : [pathList];
+
+      paths.forEach((path) => {
         const content = getFileContents(fileMap, path);
 
         if (content === null) {
