@@ -16,6 +16,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
     name: '',
     url: '',
   });
+  const [nameError, setNameError] = useState<string>('');
 
   const defaultServerNames = import.meta.env?.VITE_DEFAULT_SERVER_NAMES
     ? JSON.parse(import.meta.env.VITE_DEFAULT_SERVER_NAMES)
@@ -94,7 +95,27 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
     }
   };
 
+  const validateToolName = (name: string): string => {
+    if (/^\d/.test(name)) {
+      return 'MCP Tool Name cannot start with a number.';
+    }
+
+    return '';
+  };
+
+  const handleNameChange = (name: string) => {
+    setNewServer({ ...newServer, name });
+    setNameError(validateToolName(name));
+  };
+
   const handleAddServer = () => {
+    const nameValidationError = validateToolName(newServer.name);
+
+    if (nameValidationError) {
+      setNameError(nameValidationError);
+      return;
+    }
+
     if (newServer.name && newServer.url) {
       const server = {
         name: newServer.name,
@@ -107,6 +128,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
       addMCPServer(server);
 
       setNewServer({ name: '', url: '' });
+      setNameError('');
       setShowAddForm(false);
     }
   };
@@ -364,15 +386,19 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                       type="text"
                       placeholder="e.g. agent8"
                       value={newServer.name}
-                      onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
+                      onChange={(e) => handleNameChange(e.target.value)}
                       className={classNames(
                         'w-full p-2.5 rounded-lg text-sm',
-                        'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+                        'bg-gray-50 dark:bg-gray-800',
                         'text-gray-900 dark:text-gray-100',
-                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500',
+                        'focus:outline-none focus:ring-2 focus:ring-cyan-500/40',
                         'transition-all duration-200',
+                        nameError
+                          ? 'border-red-500 focus:border-red-500'
+                          : 'border-gray-200 dark:border-gray-700 focus:border-cyan-500',
                       )}
                     />
+                    {nameError && <p className="text-red-500 text-xs mt-1 ml-1">{nameError}</p>}
                   </div>
                   <div className="flex-[0.6]">
                     <label
@@ -414,13 +440,13 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                     </button>
                     <button
                       onClick={handleAddServer}
-                      disabled={!newServer.name || !newServer.url}
+                      disabled={!newServer.name || !newServer.url || !!nameError}
                       className={classNames(
                         'px-4 py-2 rounded-lg text-sm font-medium',
                         'transition-colors duration-200',
                         'shadow-sm',
                         'disabled:cursor-not-allowed',
-                        !newServer.name || !newServer.url
+                        !newServer.name || !newServer.url || !!nameError
                           ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700'
                           : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 dark:hover:text-white hover:border-cyan-400 dark:hover:border-cyan-500',
                       )}
