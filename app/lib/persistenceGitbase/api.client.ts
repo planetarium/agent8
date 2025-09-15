@@ -10,10 +10,21 @@ import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
-import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('persistenceGitbase');
+const MAX_ASSISTANT_MESSAGE_SIZE = 20 * 1024; // 20KB for assistant message content
+
+const truncateMessage = (message: string, maxSize: number): string => {
+  if (message.length <= maxSize) {
+    return message;
+  }
+
+  const truncated = message.substring(0, maxSize - 20) + '\n...(truncated)';
+  logger.warn(`Assistant message truncated from ${message.length} to ${truncated.length} bytes (max: ${maxSize})`);
+
+  return truncated;
+};
 
 export const isEnabledGitbasePersistence =
   import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
@@ -35,6 +46,8 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
   const taskBranch = repoStore.get().taskBranch || 'develop';
   const title = repoStore.get().title;
   const isFirstCommit = !projectPath;
+
+  logger.info(`Starting commit process - Project: ${projectName}, Path: ${projectPath}, Branch: ${taskBranch}`);
 
   // Get revertTo from URL query parameters
   const url = new URL(window.location.href);
@@ -96,38 +109,15 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
       uniqueMatches.set(filePath, actionType);
     }
 
+    logger.info(`commitChanges uniqueMatches: ${JSON.stringify(uniqueMatches)}`);
+
     files = [
       ...files,
       ...(await Promise.all(
-        matches.map(async (match) => {
-          const filePath = match[1];
-          const contentFromMatch = match[2];
-
-          // Extract type attribute from the full match
-          const fullMatch = match[0];
-          const typeMatch = fullMatch.match(/type="([^"]+)"/);
-          const actionType = typeMatch ? typeMatch[1] : undefined;
-
-          const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
+        Array.from(uniqueMatches.entries()).map(async ([filePath, _]) => {
           const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
 
-          // The workbench file sync is delayed. So I use the remote container file.
-
-          // Check content mismatch only if the final action type for this filePath is 'file'
-          const finalActionType = uniqueMatches.get(filePath);
-
-          if (actionType === 'file' && finalActionType === 'file' && cleanedContent !== remoteContainerFile) {
-            // For file type, content should match exactly
-            logger.error(
-              `Content mismatch for ${filePath}:`,
-              JSON.stringify({
-                fromMatch: cleanedContent,
-                fromRemoteContainer: remoteContainerFile,
-              }),
-            );
-          }
-
-          return { path: filePath, content: remoteContainerFile || cleanedContent };
+          return { path: filePath, content: remoteContainerFile };
         }),
       )),
     ];
@@ -147,10 +137,13 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
 ${userMessage}
 </V8UserMessage>
 <V8AssistantMessage>
-${content
-  .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
-  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')
-  .replace(/(<boltAction type="modify"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
+${truncateMessage(
+  content
+    .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
+    .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')
+    .replace(/(<boltAction type="modify"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3'),
+  MAX_ASSISTANT_MESSAGE_SIZE,
+)}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋
