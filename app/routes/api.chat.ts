@@ -147,7 +147,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             if (usage) {
               cumulativeUsage.promptTokens += usage.inputTokens || 0;
-              cumulativeUsage.completionTokens += usage.outputTokens || 0;
+              cumulativeUsage.completionTokens += (usage.outputTokens || 0) + (usage.reasoningTokens || 0);
               cumulativeUsage.totalTokens += usage.totalTokens || 0;
             }
 
