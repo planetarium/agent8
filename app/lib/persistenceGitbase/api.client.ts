@@ -109,8 +109,6 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
       uniqueMatches.set(filePath, actionType);
     }
 
-    logger.info(`commitChanges uniqueMatches: ${JSON.stringify(uniqueMatches)}`);
-
     files = [
       ...files,
       ...(await Promise.all(
