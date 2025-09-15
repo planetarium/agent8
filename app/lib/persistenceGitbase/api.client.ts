@@ -84,41 +84,34 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     const matches = [...content.matchAll(regex)];
     const container = await workbenchStore.container;
 
+    // Use Map to store unique files
+    const fileMap = new Map<string, string>();
+
+    // Add default files first
     const envFile = await container.fs.readFile(`.env`, 'utf-8');
 
     if (envFile) {
-      files.push({ path: '.env', content: envFile });
+      fileMap.set('.env', envFile);
     }
 
     const packageJsonFile = await container.fs.readFile(`package.json`, 'utf-8');
 
     if (packageJsonFile) {
-      files.push({ path: 'package.json', content: packageJsonFile });
+      fileMap.set('package.json', packageJsonFile);
     }
 
-    // Create a map to store the final action type for each filePath
-    const uniqueMatches = new Map<string, string | undefined>();
-
+    // Add files from matches (skip if already in fileMap)
     for (const match of matches) {
       const filePath = match[1];
-      const fullMatch = match[0];
-      const typeMatch = fullMatch.match(/type="([^"]+)"/);
-      const actionType = typeMatch ? typeMatch[1] : undefined;
 
-      // Store in map, later matches override earlier ones
-      uniqueMatches.set(filePath, actionType);
+      // Only read and add if not already in fileMap
+      if (!fileMap.has(filePath)) {
+        const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+        fileMap.set(filePath, remoteContainerFile);
+      }
     }
 
-    files = [
-      ...files,
-      ...(await Promise.all(
-        Array.from(uniqueMatches.entries()).map(async ([filePath, _]) => {
-          const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
-
-          return { path: filePath, content: remoteContainerFile };
-        }),
-      )),
-    ];
+    files = Array.from(fileMap.entries()).map(([path, content]) => ({ path, content }));
 
     if (files.length === 0) {
       // If no files are found, create a temporary file
