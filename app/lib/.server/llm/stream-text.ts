@@ -130,8 +130,14 @@ export async function streamText(props: {
 
 🔧 Tool Usage Commitment:
    I acknowledge that available tools vary by context and may include file operations and project-specific tools.
+   
+   🚨 CRITICAL REMINDER ABOUT SHELL COMMANDS 🚨
+   There is NO 'shell' tool available. NEVER attempt to call a 'shell' tool.
+   For shell commands, I MUST use: <boltAction type="shell">command here</boltAction>
+   Example: <boltAction type="shell">pnpm add react-dom</boltAction>
+   
    ✅ I will ONLY use tools that are actually available in this conversation.
-   ❌ I will NEVER use 'shell' tool - I must use boltAction with type "shell" instead.
+   ❌ I will NEVER use 'shell' as a tool - it does NOT exist.
    ❌ I will NEVER invent tool names or use incorrect variations.
 
 📌 First, I will initialize my read files tracking.
