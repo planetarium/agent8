@@ -129,9 +129,10 @@ export async function streamText(props: {
     content: `I understand and will follow this exact workflow:
 
 🔧 Tool Usage Commitment:
-   I have internally verified the available tools for this conversation.
-   ✅ I will ONLY use tools that actually exist with EXACT spelling.
-   ❌ I will NEVER attempt to call non-existent tools or use incorrect tool names.
+   I acknowledge that available tools vary by context and may include file operations and project-specific tools.
+   ✅ I will ONLY use tools that are actually available in this conversation.
+   ❌ I will NEVER use 'shell' tool - I must use boltAction with type "shell" instead.
+   ❌ I will NEVER invent tool names or use incorrect variations.
 
 📌 First, I will initialize my read files tracking.
    I am setting READ_FILES = [] right now, starting fresh for this conversation.
