@@ -6,11 +6,16 @@ import { useStore } from '@nanostores/react';
 import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
-import { useWorkbenchActionAlert, useWorkbenchStore, useWorkbenchContainer } from '~/lib/hooks/useWorkbenchStore';
+import {
+  useWorkbenchFiles,
+  useWorkbenchActionAlert,
+  useWorkbenchStore,
+  useWorkbenchContainer,
+} from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -387,7 +392,7 @@ export const ChatImpl = memo(
     const [fakeLoading, setFakeLoading] = useState(false);
     const [installNpm, setInstallNpm] = useState(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
-    const files = useMemo(() => workbench.files.get() || {}, [workbench]);
+    const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
@@ -421,10 +426,9 @@ export const ChatImpl = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
         body: () => {
-          const currentFiles = workbench.files.get() || {};
           return {
             apiKeys,
-            files: currentFiles,
+            files,
             promptId,
             contextOptimization: contextOptimizationEnabled,
           };
