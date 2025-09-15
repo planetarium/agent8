@@ -465,11 +465,21 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
+        const usage =
+          message.metadata &&
+          typeof message.metadata === 'object' &&
+          'type' in message.metadata &&
+          message.metadata.type === 'usage' &&
+          'value' in message.metadata
+            ? message.metadata.value
+            : null;
+
         logStore.logProvider('Chat response completed', {
           component: 'Chat',
           action: 'response',
           model,
           provider: provider.name,
+          usage,
           messageLength: message.parts?.find((part) => part.type === 'text')?.text?.length || 0,
         });
 
