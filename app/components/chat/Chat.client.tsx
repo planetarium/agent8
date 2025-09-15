@@ -503,11 +503,6 @@ export const ChatImpl = memo(
     // Derived state for loading status
     const isLoading = status === 'streaming' || status === 'submitted';
 
-    // Input change handler
-    const handleInputChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setInput(event.target.value);
-    }, []);
-
     useEffect(() => {
       const prompt = searchParams.get('prompt');
       const autorun = searchParams.get('run');
@@ -1036,7 +1031,7 @@ export const ChatImpl = memo(
      * @param event - The change event from the textarea.
      */
     const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      handleInputChange(event);
+      setInput(event.target.value);
     };
 
     /**

@@ -337,8 +337,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   id: toolCall.toolCallId,
                 });
 
-                console.log('[DEBUG] tool-input-available transformed to text stream');
-
                 break;
               }
 

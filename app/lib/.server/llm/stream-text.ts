@@ -25,12 +25,7 @@ import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 
 export type Messages = UIMessage[];
 
-// AI SDK v5 호환: StreamingOptions 확장
-export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'> & {
-  // v5 추가 옵션들
-  stopWhen?: Parameters<typeof _streamText>[0]['stopWhen'];
-  maxSteps?: number; // 호환성을 위해 유지 (내부적으로 stopWhen으로 변환)
-};
+export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 const logger = createScopedLogger('stream-text');
 
