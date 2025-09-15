@@ -285,10 +285,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               case 'reasoning-delta': {
+                const sanitizedDelta = chunk.delta.replace(/\[REDACTED\]/g, '');
+
                 controller.enqueue({
                   type: 'text-delta',
                   id: chunk.id,
-                  delta: chunk.delta,
+                  delta: sanitizedDelta,
                 });
 
                 break;

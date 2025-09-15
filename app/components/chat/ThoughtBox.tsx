@@ -1,6 +1,10 @@
 import { useState, type PropsWithChildren } from 'react';
 
 const ThoughtBox = ({ title, children }: PropsWithChildren<{ title: string }>) => {
+  if (children === undefined) {
+    return null;
+  }
+
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
