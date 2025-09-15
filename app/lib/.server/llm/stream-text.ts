@@ -186,7 +186,7 @@ I acknowledge: Files from previous conversations don't count - I must read them 
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
     ...convertToCoreMessages(processedMessages).slice(-3),
-    assistantPrompt,
+    ...(useDiff ? [assistantPrompt] : []),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
