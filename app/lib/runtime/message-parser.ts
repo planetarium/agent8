@@ -289,12 +289,13 @@ export class StreamingMessageParser {
             if (openTagEnd !== -1) {
               const artifactTag = input.slice(i, openTagEnd + 1);
 
-              const artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
+              let artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
               const type = this.#extractAttribute(artifactTag, 'type') as string;
               let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
-                logger.warn('Artifact title missing');
+                logger.warn('Artifact title missing, using default');
+                artifactTitle = 'Untitled';
               }
 
               if (!artifactId) {
