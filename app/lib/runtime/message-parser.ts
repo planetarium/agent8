@@ -294,7 +294,6 @@ export class StreamingMessageParser {
               let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
-                logger.warn('Artifact title missing, using default');
                 artifactTitle = 'Untitled';
               }
 
