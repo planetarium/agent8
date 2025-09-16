@@ -300,6 +300,12 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
+    const currentState = shell.executionState?.get();
+
+    if (currentState?.active) {
+      shell.terminal.input('\x03');
+    }
+
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
