@@ -85,7 +85,7 @@ export class ProgressEmitter {
  * Extended Tool interface with progress reporting capability
  */
 interface ProgressAwareTool extends Omit<Tool, 'execute'> {
-  progressEmitter: ProgressEmitter;
+  progressEmitter?: ProgressEmitter;
   execute: (args: any) => Promise<object>;
 }
 
@@ -193,13 +193,9 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
           additionalProperties: false,
         } as JSONSchema7);
 
-        // Create a progress emitter for this tool
-        const progressEmitter = new ProgressEmitter(toolName);
-
         toolset.tools[toolName] = {
           description: tool.description || '',
           parameters,
-          progressEmitter,
           execute: async (args) => {
             /*
              * We don't keep clients due to CloudFlare worker's connection limit.
@@ -208,9 +204,6 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
             let client: Client | null = null;
 
             try {
-              // Emit start event
-              progressEmitter.emit('start', { status: 'started' });
-
               client = await createClient();
 
               const result = await client.callTool(
@@ -222,23 +215,14 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
                 {
                   onprogress: (progress) => {
                     logger.info(`Progress: ${JSON.stringify(progress)}`);
-
-                    // Emit progress event
-                    progressEmitter.emit('progress', progress);
                   },
                   resetTimeoutOnProgress: true,
                 },
               );
 
-              // Emit complete event
-              progressEmitter.emit('complete', { status: 'completed' });
-
               return result;
             } catch (error) {
               logger.error(`MCP client[${serverName}] error: ${error}`);
-              progressEmitter.emit('complete', {
-                status: 'failed',
-              });
 
               return {
                 error: (error as Error).message || String(error),
