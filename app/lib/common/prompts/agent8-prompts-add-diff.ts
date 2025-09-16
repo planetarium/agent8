@@ -75,7 +75,7 @@ NEVER use shell for: rm, ls, cd, mkdir, npm run, or any other commands.
 
 🔴 CRITICAL: boltAction is XML OUTPUT that YOU WRITE - NOT A TOOL TO CALL!
 ─────────────────────────────────────────────────────────────────
-DON'T: Call boltAction as a tool (this will cause AI_NoSuchToolError)
+DON'T: Call boltAction as a tool (this will cause Error)
 DO: Write boltAction as XML tags in your response
 
 1️⃣ Say ONE of these EXACT phrases:
