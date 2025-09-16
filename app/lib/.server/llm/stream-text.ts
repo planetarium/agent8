@@ -1,4 +1,10 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
+import {
+  streamText as _streamText,
+  convertToCoreMessages,
+  type CoreAssistantMessage,
+  type CoreSystemMessage,
+  type Message,
+} from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -118,6 +124,24 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  const allMessages = convertToCoreMessages(processedMessages);
+  const previousMessages = allMessages.slice(-3, -1);
+  const latestMessage = allMessages.slice(-1);
+
+  // Create a combined context message to preserve order
+  const contextSeparator = `
+
+========================================
+[PREVIOUS CONTEXT ENDS HERE]
+========================================
+[YOUR CURRENT RESPONSE STARTS HERE]
+- File tracking begins NOW
+- You have read ZERO files in THIS response
+- Any files mentioned above were from PREVIOUS responses
+========================================
+
+`;
+
   const coreMessages = [
     ...[
       systemPrompt,
@@ -139,7 +163,16 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    ...convertToCoreMessages(processedMessages).slice(-3),
+    ...previousMessages,
+    ...(useDiff
+      ? [
+          {
+            role: 'assistant',
+            content: contextSeparator,
+          } as CoreAssistantMessage,
+        ]
+      : []),
+    ...latestMessage,
   ];
 
   if (modelDetails.name.includes('anthropic')) {
