@@ -172,6 +172,25 @@ export const Game = () => <div>Game</div>;
    ]
    ]]></boltAction>
 
+   **HANDLING DUPLICATE CODE (CRITICAL!)**:
+   When the same code appears multiple times in a file:
+   - Include enough surrounding context in "before" to make it unique
+   - If user specifies position (e.g., "third button"), include all occurrences in one "before" block
+   - When in doubt, use more context rather than less
+
+   Example - Modifying the third button when three identical buttons exist:
+   ✅ CORRECT (includes full context):
+   {
+     "before": "  <button>Click</button>\n  <button>Click</button>\n  <button>Click</button>",
+     "after": "  <button>Click</button>\n  <button>Click</button>\n  <button>Click Me</button>"
+   }
+
+   ❌ WRONG (ambiguous - could match any button):
+   {
+     "before": "<button>Click</button>",
+     "after": "<button>Click Me</button>"
+   }
+
 3. SHELL ACTION FORMAT (Package installation ONLY):
    <boltAction type="shell">pnpm add [package-name]</boltAction>
    - ONLY for installing packages with pnpm add
