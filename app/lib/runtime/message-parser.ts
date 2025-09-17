@@ -3,6 +3,7 @@ import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
+import { useDiffStore } from '~/lib/stores/useDiffStore';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
@@ -54,16 +55,53 @@ interface MessageState {
 }
 
 export function cleanoutFileContent(content: string, filePath: string): string {
+  const useDiff = useDiffStore.get();
+
+  if (useDiff) {
+    return cleanoutFileContentDiffMode(content, filePath);
+  } else {
+    return cleanoutFileContentDefaultMode(content, filePath);
+  }
+}
+
+function cleanoutFileContentDefaultMode(content: string, filePath: string): string {
   let processedContent = content.trim();
 
-  logger.trace(`cleanoutFileContent: ${filePath}`);
-  processedContent = cleanoutCodeblockSyntax(processedContent);
+  // Remove markdown code block syntax if present and file is not markdown
+  if (!filePath.endsWith('.md')) {
+    processedContent = cleanoutCodeblockSyntaxDefaultMode(processedContent);
+    processedContent = cleanEscapedTags(processedContent);
+  }
+
   processedContent += '\n';
 
   return processedContent;
 }
 
-function cleanoutCodeblockSyntax(content: string) {
+function cleanoutFileContentDiffMode(content: string, filePath: string): string {
+  let processedContent = content.trim();
+
+  logger.trace(`cleanoutFileContent: ${filePath}`);
+  processedContent = cleanoutCodeblockSyntaxDiffMode(processedContent);
+  processedContent += '\n';
+
+  return processedContent;
+}
+
+function cleanoutCodeblockSyntaxDefaultMode(content: string) {
+  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
+  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
+
+  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
+
+  if (match) {
+    return match[1];
+  } else {
+    return content;
+  }
+}
+
+function cleanoutCodeblockSyntaxDiffMode(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
 
   const markdownMatch = content.match(markdownCodeBlockRegex);
@@ -73,6 +111,18 @@ function cleanoutCodeblockSyntax(content: string) {
   }
 
   return extractFromCDATA(content);
+}
+
+function cleanEscapedTags(content: string) {
+  return content
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"');
 }
 
 export class StreamingMessageParser {
