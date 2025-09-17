@@ -129,6 +129,7 @@ export default defineConfig({
     'bg-interactive-primary',
     'hover:bg-interactive-primary-hovered',
     'active:bg-interactive-primary-pressed',
+    'text-elevation-shadow-3',
   ],
   shortcuts: {
     'bolt-ease-cubic-bezier': 'ease-[cubic-bezier(0.4,0,0.2,1)]',
@@ -193,6 +194,10 @@ export default defineConfig({
     'px-spacing-8': 'px-[var(--spacing-8,8px)]',
     'gap-spacing-8': 'gap-[var(--spacing-8,8px)]',
     'elevation-light-3': 'shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
+
+    // Gradient text with shadow effect
+    'text-elevation-shadow-3':
+      '[text-shadow:0_8px_16px_rgba(0,0,0,0.32),0_0_8px_rgba(0,0,0,0.28)] bg-[linear-gradient(90deg,var(--color-text-primary,#FFF)_0%,#72E7F8_100%)] bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]',
   },
   rules: [
     /**

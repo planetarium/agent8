@@ -147,7 +147,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
       <div className="flex items-center justify-between flex-wrap self-stretch relative">
         {hasActiveTools && <span className="text-subtle text-heading-xs">Tools Active</span>}
 
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3 ">
           {mcpServers
             .map((server, index) => ({ server, index }))
             .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
@@ -168,12 +168,12 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                 onClick={() => setShowServerManager(!showServerManager)}
                 className={classNames(
                   hasActiveTools
-                    ? 'flex w-[32px] min-h-[32px] max-h-[32px] justify-center items-center rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-neutral,#222428)] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)]'
+                    ? 'flex w-[28px] min-h-[28px] max-h-[28px] justify-center items-center rounded-[var(--border-radius-circle,99999px)] border border-solid border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-neutral,#222428)] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)]'
                     : 'flex min-h-8 max-h-8 px-[14px] py-[8px] justify-center items-center gap-1.5 rounded-full border border-white/18 bg-[#222428] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)] focus:bg-[var(--color-bg-interactive-neutral,#222428)] text-xs font-medium hover:text-gray-500',
                   'transition-colors duration-200',
                 )}
               >
-                <img src="/icons/Plus.svg" alt="Plus" className={hasActiveTools ? 'w-4 h-4' : ''} />
+                <img src="/icons/Plus.svg" alt="Plus" className={hasActiveTools ? 'w-5 h-5' : ''} />
                 {!hasActiveTools && <span className="font-normal text-cyan-400 text-[14px]">Use Tools</span>}
               </button>
             </Tooltip.Trigger>

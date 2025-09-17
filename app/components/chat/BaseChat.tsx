@@ -37,7 +37,6 @@ import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
 
-import { ShinyText } from '~/components/ui/ShinyText';
 import { ColorTab } from '~/components/ui/ColorTab';
 import {
   TopDownIcon,
@@ -578,7 +577,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="flex flex-col items-center gap-4 flex-shrink-0 h-[85vh] relative">
                 <div id="intro" className="max-w-chat-before-start mx-auto text-center">
                   <div className="flex justify-center">
-                    <ShinyText text="Game Creation, Simplified" className="text-heading-4xl" speed={6} />
+                    <span className="text-heading-4xl text-elevation-shadow-3">Game Creation, Simplified</span>
                   </div>
                 </div>
                 <span className="flex justify-center text-heading-sm text-secondary self-stretch">
@@ -799,12 +798,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
                 <div
-                  className={classNames('flex flex-col self-stretch p-4 relative w-full mx-auto z-prompt', {
-                    'max-w-chat': chatStarted,
-                    'max-w-chat-before-start bottom-4': !chatStarted,
-                    'bg-primary': !chatStarted,
-                    [styles.promptInputActive]: chatStarted,
-                  })}
+                  className={classNames(
+                    'flex flex-col self-stretch px-4 pt-[6px] pb-4 relative w-full mx-auto z-prompt',
+                    {
+                      'max-w-chat': chatStarted,
+                      'max-w-chat-before-start bottom-4': !chatStarted,
+                      'bg-primary': !chatStarted,
+                      [styles.promptInputActive]: chatStarted,
+                    },
+                  )}
                   style={
                     !chatStarted
                       ? {
@@ -814,7 +816,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       : {}
                   }
                 >
-                  <div className="mb-3 relative">
+                  <div className="mb-[6px] relative">
                     <McpServerManager chatStarted={chatStarted} />
                   </div>
 
