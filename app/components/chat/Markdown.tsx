@@ -3,7 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import type { BundledLanguage } from 'shiki';
 import { createScopedLogger } from '~/utils/logger';
 import { rehypePlugins, remarkPlugins, allowedHTMLElements } from '~/utils/markdown';
-import { Artifact } from './Artifact';
+import { Action } from './Action';
 import { CodeBlock } from './CodeBlock';
 import { ToolCall } from './ToolCall';
 import { ToolResult } from './ToolResult';
@@ -25,15 +25,16 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
   const components = useMemo(() => {
     return {
       div: ({ className, children, node, ...props }) => {
-        if (className?.includes('__boltArtifact__')) {
+        if (className?.includes('__boltAction__')) {
           const messageId = node?.properties.dataMessageId as string;
-          const artifactId = node?.properties.dataArtifactId as string;
+          const actionId = node?.properties.dataActionId as string;
 
-          if (!messageId) {
-            logger.error(`Invalid message id ${messageId}`);
+          if (!messageId || !actionId) {
+            logger.error(`Invalid message id ${messageId} or action id ${actionId}`);
+            return null;
           }
 
-          return <Artifact messageId={messageId} artifactId={artifactId} />;
+          return <Action messageId={messageId} actionId={actionId} />;
         }
 
         if (className?.includes('__boltThought__')) {
@@ -134,58 +135,58 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
       remarkPlugins={remarkPlugins(limitedMarkdown)}
       rehypePlugins={rehypePlugins(html)}
     >
-      {stripCodeFenceFromArtifact(children)}
+      {stripCodeFenceFromAction(children)}
     </ReactMarkdown>
   );
 });
 
 /**
  * Removes code fence markers (```) surrounding an artifact element while preserving the artifact content.
- * This is necessary because artifacts should not be wrapped in code blocks when rendered for rendering action list.
+ * This is necessary because actions should not be wrapped in code blocks when rendered for rendering action list.
  *
  * @param content - The markdown content to process
  * @returns The processed content with code fence markers removed around artifacts
  *
  * @example
- * // Removes code fences around artifact
- * const input = "```xml\n<div class='__boltArtifact__'></div>\n```";
- * stripCodeFenceFromArtifact(input);
- * // Returns: "\n<div class='__boltArtifact__'></div>\n"
+ * // Removes code fences around action
+ * const input = "```xml\n<div class='__boltAction__'></div>\n```";
+ * stripCodeFenceFromAction(input);
+ * // Returns: "\n<div class='__boltAction__'></div>\n"
  *
  * @remarks
- * - Only removes code fences that directly wrap an artifact (marked with __boltArtifact__ class)
+ * - Only removes code fences that directly wrap actions (marked with __boltAction__ class)
  * - Handles code fences with optional language specifications (e.g. ```xml, ```typescript)
  * - Preserves original content if no artifact is found
  * - Safely handles edge cases like empty input or artifacts at start/end of content
  */
-export const stripCodeFenceFromArtifact = (content: string) => {
-  if (!content || !content.includes('__boltArtifact__')) {
+export const stripCodeFenceFromAction = (content: string) => {
+  if (!content || !content.includes('__boltAction__')) {
     return content;
   }
 
   const lines = content.split('\n');
-  const artifactLineIndex = lines.findIndex((line) => line.includes('__boltArtifact__'));
+  const actionLineIndex = lines.findIndex((line) => line.includes('__boltAction__'));
 
-  // Return original content if artifact line not found
-  if (artifactLineIndex === -1) {
+  // Return original content if action line not found
+  if (actionLineIndex === -1) {
     return content;
   }
 
   // Check previous line for code fence
-  if (artifactLineIndex > 0 && lines[artifactLineIndex - 1]?.trim().match(/^```\w*$/)) {
-    lines[artifactLineIndex - 1] = '';
+  if (actionLineIndex > 0 && lines[actionLineIndex - 1]?.trim().match(/^```\w*$/)) {
+    lines[actionLineIndex - 1] = '';
   }
 
-  if (artifactLineIndex < lines.length - 1 && lines[artifactLineIndex + 1]?.trim().match(/^```$/)) {
-    lines[artifactLineIndex + 1] = '';
+  if (actionLineIndex < lines.length - 1 && lines[actionLineIndex + 1]?.trim().match(/^```$/)) {
+    lines[actionLineIndex + 1] = '';
   }
 
-  if (artifactLineIndex > 0 && lines[artifactLineIndex - 1]?.trim().match(/^<!\[CDATA\[/)) {
-    lines[artifactLineIndex - 1] = '';
+  if (actionLineIndex > 0 && lines[actionLineIndex - 1]?.trim().match(/^<!\[CDATA\[/)) {
+    lines[actionLineIndex - 1] = '';
   }
 
-  if (artifactLineIndex < lines.length - 1 && lines[artifactLineIndex + 1]?.trim().match(/^\]\]>$/)) {
-    lines[artifactLineIndex + 1] = '';
+  if (actionLineIndex < lines.length - 1 && lines[actionLineIndex + 1]?.trim().match(/^\]\]>$/)) {
+    lines[actionLineIndex + 1] = '';
   }
 
   return lines.join('\n');

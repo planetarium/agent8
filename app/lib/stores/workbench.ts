@@ -1,14 +1,13 @@
 import { atom, map, type MapStore, type ReadableAtom, type WritableAtom } from 'nanostores';
 import type { EditorDocument, ScrollPosition } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { ActionRunner } from '~/lib/runtime/action-runner';
-import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
+import type { ActionCallbackData } from '~/lib/runtime/message-parser';
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
-import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
 import { FilesStore, type FileMap, type File } from './files';
 import { PreviewsStore } from './previews';
@@ -59,17 +58,12 @@ interface ShellQueueItem {
   next?: ShellQueueItem;
 }
 
-export interface ArtifactState {
-  id: string;
-  title: string;
-  type?: string;
-  closed: boolean;
+export interface MessageRunnerState {
+  messageId: string;
   runner: ActionRunner;
 }
 
-export type ArtifactUpdateState = Pick<ArtifactState, 'title' | 'closed'>;
-
-type Artifacts = MapStore<Record<string, ArtifactState>>;
+type MessageRunners = MapStore<Record<string, MessageRunnerState>>;
 
 export type WorkbenchViewType = 'code' | 'diff' | 'preview' | 'resource';
 
@@ -88,7 +82,7 @@ export class WorkbenchStore {
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
 
-  artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
+  messageRunners: MessageRunners = import.meta.hot?.data.messageRunners ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
   currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
@@ -103,8 +97,7 @@ export class WorkbenchStore {
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
-  artifactIdList: string[] = [];
-  #messageToArtifactIds: Map<string, string[]> = new Map();
+  messageIdList: string[] = [];
   #globalExecutionQueue = Promise.resolve();
   #connectionLostNotified = false;
 
@@ -122,7 +115,7 @@ export class WorkbenchStore {
     this.#terminalStore = new TerminalStore(this.#currentContainer);
 
     if (import.meta.hot) {
-      import.meta.hot.data.artifacts = this.artifacts;
+      import.meta.hot.data.messageRunners = this.messageRunners;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
       import.meta.hot.data.showWorkbench = this.showWorkbench;
       import.meta.hot.data.currentView = this.currentView;
@@ -334,8 +327,8 @@ export class WorkbenchStore {
     return this.#editorStore.selectedFile;
   }
 
-  get firstArtifact(): ArtifactState | undefined {
-    return this.#getArtifact(this.artifactIdList[0]);
+  get firstMessageRunner(): MessageRunnerState | undefined {
+    return this.#getMessageRunner(this.messageIdList[0]);
   }
 
   get filesCount(): number {
@@ -505,41 +498,35 @@ export class WorkbenchStore {
     // TODO: what do we wanna do and how do we wanna recover from this?
   }
 
-  addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(id);
+  // Create a single runner per message
+  #getOrCreateMessageRunner(messageId: string) {
+    // Use messageId as the artifact ID for backward compatibility
+    const messageRunner = this.#getMessageRunner(messageId);
 
-    if (artifact) {
-      return;
+    if (messageRunner) {
+      return messageRunner.runner;
     }
 
-    if (!this.artifactIdList.includes(id)) {
-      this.artifactIdList.push(id);
-    }
+    // Create a new runner for this message
+    const runner = new ActionRunner(
+      this.container,
+      () => this.boltTerminal,
+      (alert) => {
+        if (isCommitedMessage(messageId)) {
+          return;
+        }
 
-    // Track artifacts by messageId for message-level operations
-    if (!this.#messageToArtifactIds.has(messageId)) {
-      this.#messageToArtifactIds.set(messageId, []);
-    }
+        this.actionAlert.set(alert);
+      },
+    );
 
-    this.#messageToArtifactIds.get(messageId)!.push(id);
-
-    this.artifacts.setKey(id, {
-      id,
-      title,
-      closed: false,
-      type,
-      runner: new ActionRunner(
-        this.container,
-        () => this.boltTerminal,
-        (alert) => {
-          if (isCommitedMessage(messageId)) {
-            return;
-          }
-
-          this.actionAlert.set(alert);
-        },
-      ),
+    // Store runner using messageId as key
+    this.messageRunners.setKey(messageId, {
+      messageId,
+      runner,
     });
+
+    return runner;
   }
 
   offMessageClose(messageId: string) {
@@ -547,22 +534,12 @@ export class WorkbenchStore {
   }
 
   async #processMessageClose(messageId: string) {
-    // Trigger registered callbacks for this messageId if all artifacts are closed
+    // Trigger registered callbacks for this messageId
     const callbacks = this.#messageCloseCallbacks.get(messageId);
 
     if (callbacks && callbacks.length > 0) {
-      // Check if all artifacts for this message are closed
-      const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
-
-      const allClosed = compositeIds.every((compositeId) => {
-        const artifact = this.#getArtifact(compositeId);
-
-        return artifact?.closed;
-      });
-
-      if (allClosed) {
-        await Promise.all(callbacks.map((callback) => callback()));
-      }
+      // Execute all callbacks since we no longer track closed state
+      await Promise.all(callbacks.map((callback) => callback()));
     }
   }
 
@@ -576,51 +553,15 @@ export class WorkbenchStore {
     this.#processMessageClose(messageId);
   }
 
-  async closeArtifact(data: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(data.id);
+  // Removed closeArtifact - no longer needed without artifact concept
 
-    if (artifact?.closed) {
-      return;
-    }
-
-    if (artifact?.runner.isRunning()) {
-      artifact.runner.onComplete = () => {
-        this.closeArtifact(data);
-      };
-      return;
-    }
-
-    this.updateArtifact(data, { closed: true });
-
-    const { messageId } = data;
-
-    this.#processMessageClose(messageId);
-  }
-
-  updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
-    const artifact = this.#getArtifact(id);
-
-    if (!artifact) {
-      return;
-    }
-
-    this.artifacts.setKey(id, { ...artifact, ...state });
-  }
+  // Removed updateArtifact - no longer needed without artifact concept
 
   addAction(data: ActionCallbackData) {
-    this._addAction(data);
-  }
+    const { messageId } = data;
+    const runner = this.#getOrCreateMessageRunner(messageId);
 
-  _addAction(data: ActionCallbackData) {
-    const { artifactId } = data;
-
-    const artifact = this.#getArtifact(artifactId);
-
-    if (!artifact) {
-      unreachable('Artifact not found');
-    }
-
-    return artifact.runner.addAction(data);
+    return runner.addAction(data);
   }
 
   runAction(data: ActionCallbackData, isStreaming: boolean = false) {
@@ -632,15 +573,10 @@ export class WorkbenchStore {
   }
 
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    const { messageId, artifactId } = data;
+    const { messageId } = data;
+    const runner = this.#getOrCreateMessageRunner(messageId);
 
-    const artifact = this.#getArtifact(artifactId);
-
-    if (!artifact) {
-      unreachable('Artifact not found');
-    }
-
-    const action = artifact.runner.actions.get()[data.actionId];
+    const action = runner.actions.get()[data.actionId];
 
     if (!action || action.executed) {
       return;
@@ -648,7 +584,7 @@ export class WorkbenchStore {
 
     // Don't run the action if it's a reload
     if (isCommitedMessage(messageId)) {
-      artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+      runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
 
       return;
     }
@@ -668,13 +604,13 @@ export class WorkbenchStore {
       const doc = this.#editorStore.documents.get()[fullPath];
 
       if (!doc) {
-        await artifact.runner.runAction(data, isStreaming);
+        await runner.runAction(data, isStreaming);
       }
 
       this.#editorStore.updateFile(fullPath, data.action.content);
 
       if (!isStreaming) {
-        await artifact.runner.runAction(data);
+        await runner.runAction(data);
         this.resetAllFileModifications();
       }
     } else if (data.action.type === 'modify') {
@@ -690,7 +626,7 @@ export class WorkbenchStore {
         this.currentView.set('code');
       }
 
-      await artifact.runner.runAction(data);
+      await runner.runAction(data);
 
       // Refresh the editor to show updated content
       const relativePath = data.action.filePath.replace(/^\/home\/project\//, '');
@@ -701,9 +637,9 @@ export class WorkbenchStore {
       this.resetAllFileModifications();
     } else if (data.action.type === 'shell') {
       // Shell commands need to be queued per message for sequential execution
-      this.#queueShellAction(data, artifact);
+      this.#queueShellAction(data, runner);
     } else {
-      await artifact.runner.runAction(data);
+      await runner.runAction(data);
     }
   }
 
@@ -711,22 +647,22 @@ export class WorkbenchStore {
     return await this._runAction(data, isStreaming);
   }, 100); // TODO: remove this magic number to have it configurable
 
-  #getArtifact(compositeId: string) {
-    const artifacts = this.artifacts.get();
-    return artifacts[compositeId];
+  #getMessageRunner(messageId: string) {
+    const messageRunners = this.messageRunners.get();
+    return messageRunners[messageId];
   }
 
-  #queueShellAction(data: ActionCallbackData, artifact: ArtifactState) {
-    artifact.runner.markActionAsRunning(data.actionId);
+  #queueShellAction(data: ActionCallbackData, runner: ActionRunner) {
+    runner.markActionAsRunning(data.actionId);
 
     const newItem: ShellQueueItem = {
       data,
       executeAction: () => {
-        artifact.runner.runAction(newItem.data).finally(() => {
+        runner.runAction(newItem.data).finally(() => {
           if (newItem.next) {
-            const nextArtifact = this.#getArtifact(newItem.next.data.artifactId);
+            const nextRunner = this.#getOrCreateMessageRunner(newItem.next.data.messageId);
 
-            if (nextArtifact) {
+            if (nextRunner) {
               this.#executeShellItem(newItem.next);
             }
           } else {
@@ -982,7 +918,7 @@ export class WorkbenchStore {
     try {
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, 'pnpm update');
+      await this.#runShellCommand(shell, 'bun update');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
@@ -996,7 +932,7 @@ export class WorkbenchStore {
       await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
+      const buildResult = await this.#runShellCommand(shell, 'bun run build');
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);

@@ -4,7 +4,6 @@ import {
   DEFAULT_PROVIDER,
   MODEL_REGEX,
   PROVIDER_REGEX,
-  USEDIFF_REGEX,
   ATTACHMENTS_REGEX,
   DEV_TAG_REGEX,
 } from '~/utils/constants';
@@ -18,8 +17,7 @@ function stripMetadata(content?: string) {
     ?.replace(MODEL_REGEX, '')
     .replace(PROVIDER_REGEX, '')
     .replace(ATTACHMENTS_REGEX, '')
-    .replace(DEV_TAG_REGEX, '')
-    .replace(USEDIFF_REGEX, '');
+    .replace(DEV_TAG_REGEX, '');
 }
 
 export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
@@ -27,7 +25,6 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   provider: string;
   content: any;
   parts: any;
-  useDiff?: boolean;
 } {
   const textContent = Array.isArray(message.content)
     ? message.content.find((item) => item.type === 'text')?.text || ''
@@ -36,7 +33,6 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
   const modelMatch = textContent.match(MODEL_REGEX);
   const providerMatch = textContent.match(PROVIDER_REGEX);
   const attachmentsMatch = textContent.match(ATTACHMENTS_REGEX);
-  const useDiffMatch = textContent.match(USEDIFF_REGEX);
 
   /*
    * Extract model
@@ -49,11 +45,6 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
    * const providerMatch = message.content.match(PROVIDER_REGEX);
    */
   const provider = providerMatch ? providerMatch[1] : DEFAULT_PROVIDER.name;
-
-  /*
-   * Extract useDiff
-   */
-  const useDiff = useDiffMatch ? useDiffMatch[1] === 'true' : undefined;
 
   let attachments = [];
   let attachmentsText = '';
@@ -93,7 +84,7 @@ export function extractPropertiesFromMessage(message: Omit<Message, 'id'>): {
       return part;
     }) || [];
 
-  return { model, provider, content: cleanedContent, parts, useDiff };
+  return { model, provider, content: cleanedContent, parts };
 }
 
 export function simplifyBoltActions(input: string): string {

@@ -30,8 +30,6 @@ import type { ActionRunner } from '~/lib/runtime/action-runner';
 import McpServerManager from '~/components/chat/McpServerManager';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { useStore } from '@nanostores/react';
-import { v8UserStore } from '~/lib/stores/v8User';
-import { useDiffStore, setUseDiff } from '~/lib/stores/useDiffStore';
 import { TaskMessages } from './TaskMessages.client';
 import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
@@ -149,12 +147,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(3);
     const repo = useStore(repoStore);
-    const useDiff = useStore(useDiffStore);
-    const v8Auth = useStore(v8UserStore);
 
-    // Check if user has permission to use diff mode
-    const canUseDiff =
-      v8Auth.user?.role === 'admin' || (v8Auth.user?.email && v8Auth.user.email.endsWith('@planetariumhq.com'));
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
@@ -918,48 +911,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           )}
                         </ClientOnly>
                       </div>
-
-                      {canUseDiff && (
-                        <div className="flex items-center">
-                          <ClientOnly>
-                            {() => (
-                              <Tooltip.Root>
-                                <Tooltip.Trigger asChild>
-                                  <button
-                                    onClick={() => setUseDiff(!useDiff)}
-                                    className={classNames(
-                                      'flex min-h-8 max-h-8 px-[14px] py-[8px] justify-center items-center gap-1.5 rounded-full border border-white/18 transition-colors duration-200',
-                                      useDiff
-                                        ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
-                                        : 'bg-[#222428] hover:bg-[var(--color-bg-interactive-neutral-hovered,#32363C)] text-cyan-400',
-                                    )}
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                                      />
-                                    </svg>
-                                    <span className="font-normal text-[14px]">Use Diff</span>
-                                  </button>
-                                </Tooltip.Trigger>
-                                <Tooltip.Portal>
-                                  <Tooltip.Content
-                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-                                    sideOffset={5}
-                                    side={'bottom'}
-                                  >
-                                    {useDiff ? 'Disable diff mode' : 'Enable diff mode'}
-                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                                  </Tooltip.Content>
-                                </Tooltip.Portal>
-                              </Tooltip.Root>
-                            )}
-                          </ClientOnly>
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center">

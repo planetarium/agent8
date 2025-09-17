@@ -55,30 +55,29 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
     try {
       setIsDeploying(true);
 
-      const artifact = workbenchStore.firstArtifact;
+      const messageRunner = workbenchStore.firstMessageRunner;
 
-      if (!artifact) {
+      if (!messageRunner) {
         throw new Error('No active project found');
       }
 
       const actionId = 'build-' + Date.now();
       const actionData: ActionCallbackData = {
         messageId: 'netlify build',
-        artifactId: artifact.id,
         actionId,
         action: {
           type: 'build' as const,
-          content: 'pnpm run build',
+          content: 'bun run build',
         },
       };
 
       // Add the action first
-      artifact.runner.addAction(actionData);
+      messageRunner.runner.addAction(actionData);
 
       // Then run it
-      await artifact.runner.runAction(actionData);
+      await messageRunner.runner.runAction(actionData);
 
-      if (!artifact.runner.buildOutput) {
+      if (!messageRunner.runner.buildOutput) {
         throw new Error('Build failed');
       }
 
@@ -86,7 +85,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
       const containerInstance = await workbenchStore.container;
 
       // Remove /home/project from buildPath if it exists
-      const buildPath = artifact.runner.buildOutput.path.replace('/home/project', '');
+      const buildPath = messageRunner.runner.buildOutput.path.replace('/home/project', '');
 
       // Get all files recursively
       async function getAllFiles(dirPath: string): Promise<Record<string, string>> {

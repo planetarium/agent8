@@ -56,9 +56,9 @@ export function useWorkbenchActionAlert() {
   return useStore(workbenchStore.actionAlert);
 }
 
-export function useWorkbenchArtifacts() {
+export function useWorkbenchMessageRunners() {
   useStore(reinitCounterAtom);
-  return useStore(workbenchStore.artifacts);
+  return useStore(workbenchStore.messageRunners);
 }
 
 export function useWorkbenchDiffCommitHash() {
@@ -131,18 +131,16 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
       };
     },
 
-    // Check artifacts status
-    getArtifactsInfo: () => {
-      const artifacts = workbenchStore.artifacts.get();
+    // Check message runners status
+    getMessageRunnersInfo: () => {
+      const messageRunners = workbenchStore.messageRunners.get();
 
       return {
-        totalArtifacts: Object.keys(artifacts).length,
-        artifactList: workbenchStore.artifactIdList,
-        artifacts: Object.keys(artifacts).map((id) => ({
-          id,
-          title: artifacts[id].title,
-          type: artifacts[id].type,
-          closed: artifacts[id].closed,
+        totalRunners: Object.keys(messageRunners).length,
+        messageIds: workbenchStore.messageIdList,
+        runners: Object.keys(messageRunners).map((id) => ({
+          messageId: id,
+          isRunning: messageRunners[id].runner.isRunning(),
         })),
       };
     },
@@ -152,7 +150,7 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
       console.group('🛠️ Workbench Status');
       console.log('Container:', (window as any).__workbenchDebug.getContainerStatus());
       console.log('Files:', (window as any).__workbenchDebug.getFilesInfo());
-      console.log('Artifacts:', (window as any).__workbenchDebug.getArtifactsInfo());
+      console.log('Message Runners:', (window as any).__workbenchDebug.getMessageRunnersInfo());
       console.groupEnd();
     },
 
@@ -165,7 +163,7 @@ __workbenchDebug.reinitialize()     - Reinitialize workbench container
 __workbenchDebug.status()           - Check overall status
 __workbenchDebug.getContainerStatus() - Check container status
 __workbenchDebug.getFilesInfo()     - Check file status
-__workbenchDebug.getArtifactsInfo() - Check artifacts status
+__workbenchDebug.getMessageRunnersInfo() - Check message runners status
 __workbenchDebug.help()             - Display this help
 
 Examples:

@@ -5,11 +5,10 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { createHighlighter, type BundledLanguage, type BundledTheme, type HighlighterGeneric } from 'shiki';
 import type { ActionState } from '~/lib/runtime/action-runner';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { useWorkbenchArtifacts } from '~/lib/hooks/useWorkbenchStore';
+import { useWorkbenchMessageRunners } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { WORK_DIR } from '~/utils/constants';
-import { useDiffStore } from '~/lib/stores/useDiffStore';
 
 const highlighterOptions = {
   langs: ['shell'],
@@ -25,26 +24,24 @@ if (import.meta.hot) {
 
 interface ArtifactProps {
   messageId: string;
-  artifactId: string;
 }
 
-export const Artifact = memo(({ artifactId }: ArtifactProps) => {
+export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
   const [allActionFinished, setAllActionFinished] = useState(false);
-  const useDiff = useStore(useDiffStore);
 
-  const artifacts = useWorkbenchArtifacts();
+  const messageRunners = useWorkbenchMessageRunners();
 
-  const artifact = artifacts[artifactId];
+  const messageRunner = messageRunners[messageId];
 
-  // Return early if artifact is not found
-  if (!artifact) {
+  // Return early if message runner is not found
+  if (!messageRunner) {
     return null;
   }
 
   const actions = useStore(
-    computed(artifact.runner.actions, (actions) => {
+    computed(messageRunner.runner.actions, (actions) => {
       return Object.values(actions);
     }),
   );
@@ -59,7 +56,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
       setShowActions(true);
     }
 
-    if (actions.length !== 0 && artifact.type === 'bundled') {
+    if (actions.length !== 0) {
       const finished = !actions.find((action) => action.status !== 'complete');
 
       if (allActionFinished !== finished) {
@@ -67,22 +64,6 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
       }
     }
   }, [actions]);
-
-  if (useDiff) {
-    return (
-      <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
-        <AnimatePresence>
-          {actions.length > 0 && (
-            <motion.div className="actions">
-              <div className="p-5 text-left bg-bolt-elements-actions-background">
-                <ActionList actions={actions} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  }
 
   return (
     <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
@@ -94,7 +75,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             workbenchStore.showWorkbench.set(!showWorkbench);
           }}
         >
-          {artifact.type == 'bundled' && (
+          {true && (
             <>
               <div className="p-4">
                 {allActionFinished ? (
@@ -107,13 +88,13 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             </>
           )}
           <div className="px-5 p-3.5 w-full text-left">
-            <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
+            <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">Actions</div>
             <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
           </div>
         </button>
         <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
         <AnimatePresence>
-          {actions.length && artifact.type !== 'bundled' && (
+          {false && (
             <motion.button
               initial={{ width: 0 }}
               animate={{ width: 'auto' }}
@@ -130,7 +111,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
         </AnimatePresence>
       </div>
       <AnimatePresence>
-        {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
+        {false && showActions && actions.length > 0 && (
           <motion.div
             className="actions"
             initial={{ height: 0 }}

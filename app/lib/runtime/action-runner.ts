@@ -404,6 +404,9 @@ export class ActionRunner {
 
       logger.info(`📝 [Modify] Found ${modifications.length} modification(s) to apply`);
 
+      let successCount = 0;
+      let skipCount = 0;
+
       // Apply each modification in order
       for (let i = 0; i < modifications.length; i++) {
         const mod = modifications[i];
@@ -411,7 +414,11 @@ export class ActionRunner {
 
         // Check if the text to find exists
         if (!currentFileContent.includes(mod.before)) {
-          throw new Error(`Text not found in file: ${mod.before}`);
+          logger.warn(
+            `⚠️ [Modify] Text not found, skipping modification ${i + 1}:\n"${mod.before.substring(0, 100)}${mod.before.length > 100 ? '...' : ''}"`,
+          );
+          skipCount++;
+          continue; // Skip to next modification instead of throwing error
         }
 
         // Check if text appears multiple times
@@ -424,12 +431,13 @@ export class ActionRunner {
         }
 
         currentFileContent = currentFileContent.replace(mod.before, mod.after);
+        successCount++;
 
         logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\n-----------------------\nafter:\n"${mod.after}"`);
         logger.debug(`✅ [Modify] Replacement ${i + 1} successful`);
       }
 
-      // Write the updated content back
+      // Write the updated content back (even if no modifications were applied, to maintain consistency)
       await container.fs.writeFile(relativePath, currentFileContent);
 
       // Calculate final file size and savings
@@ -437,7 +445,14 @@ export class ActionRunner {
       const savedBytes = finalFileSize - modificationsSize;
       const savingsPercentage = ((savedBytes / finalFileSize) * 100).toFixed(1);
 
-      logger.info(`✅ [Modify] Successfully applied ${modifications.length} modification(s) to: ${relativePath}`);
+      logger.info(
+        `✅ [Modify] Successfully applied ${successCount}/${modifications.length} modification(s) to: ${relativePath}`,
+      );
+
+      if (skipCount > 0) {
+        logger.warn(`⚠️ [Modify] Skipped ${skipCount} modification(s) due to text not found`);
+      }
+
       logger.info(`📊 [Modify] File size comparison:`);
       logger.info(`   - Original file: ${originalFileSize} bytes`);
       logger.info(`   - Final file: ${finalFileSize} bytes`);

@@ -131,7 +131,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             lastMessageId = undefined;
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
-            const { model, provider, useDiff } = extractPropertiesFromMessage(lastUserMessage);
+            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
             if (usage) {
               cumulativeUsage.completionTokens += usage.completionTokens || 0;
@@ -193,7 +193,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             messages.push({
               id: generateId(),
               role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n[UseDiff: ${useDiff}]\n\n${CONTINUE_PROMPT}`,
+              content: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n${CONTINUE_PROMPT}`,
             });
 
             const result = await streamText({

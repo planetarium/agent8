@@ -20,7 +20,6 @@ import {
   getAgent8Prompt,
   getVibeStarter3dSpecPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
-import { getAgent8PromptAddDiff } from '~/lib/common/prompts/agent8-prompts-add-diff';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 
@@ -41,18 +40,12 @@ export async function streamText(props: {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
-  let useDiff = false;
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, parts, useDiff: extractedUseDiff } = extractPropertiesFromMessage(message);
+      const { model, provider, parts } = extractPropertiesFromMessage(message);
       currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
       currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
-
-      // Update useDiff if found in message
-      if (extractedUseDiff !== undefined) {
-        useDiff = extractedUseDiff;
-      }
 
       return { ...message, parts };
     } else if (message.role == 'assistant') {
@@ -103,9 +96,7 @@ export async function streamText(props: {
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
 
-  // Select appropriate prompt based on useDiff from messages
-  const systemPrompt = useDiff ? getAgent8PromptAddDiff(WORK_DIR) : getAgent8Prompt(WORK_DIR);
-  logger.info(`🔴🔴🔴 Using diff mode: ${useDiff}`);
+  const systemPrompt = getAgent8Prompt(WORK_DIR);
 
   const docTools = await createDocTools(serverEnv as Env, files);
 
@@ -164,14 +155,10 @@ export async function streamText(props: {
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
     ...previousMessages,
-    ...(useDiff
-      ? [
-          {
-            role: 'assistant',
-            content: contextSeparator,
-          } as CoreAssistantMessage,
-        ]
-      : []),
+    {
+      role: 'assistant',
+      content: contextSeparator,
+    } as CoreAssistantMessage,
     ...latestMessage,
   ];
 

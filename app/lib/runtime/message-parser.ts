@@ -1,107 +1,49 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction, ModifyAction } from '~/types/actions';
-import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
-import { useDiffStore } from '~/lib/stores/useDiffStore';
 
-const ARTIFACT_TAG_OPEN = '<boltArtifact';
-const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
-const ARTIFACT_ACTION_TAG_OPEN = '<boltAction';
-const ARTIFACT_ACTION_TAG_CLOSE = '</boltAction>';
+const ACTION_TAG_OPEN = '<boltAction';
+const ACTION_TAG_CLOSE = '</boltAction>';
 
 const logger = createScopedLogger('MessageParser');
 
-export interface ArtifactCallbackData extends BoltArtifactData {
-  messageId: string;
-}
-
 export interface ActionCallbackData {
-  artifactId: string;
   messageId: string;
   actionId: string;
   action: BoltAction;
 }
 
-export type ArtifactCallback = (data: ArtifactCallbackData) => void;
 export type ActionCallback = (data: ActionCallbackData) => void;
 
 export interface ParserCallbacks {
-  onArtifactOpen?: ArtifactCallback;
-  onArtifactClose?: ArtifactCallback;
   onActionOpen?: ActionCallback;
   onActionStream?: ActionCallback;
   onActionClose?: ActionCallback;
 }
 
-interface ElementFactoryProps {
-  messageId: string;
-}
-
-type ElementFactory = (props: ElementFactoryProps, artifactId: string) => string;
-
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
-  artifactElement?: ElementFactory;
 }
 
 interface MessageState {
   position: number;
-  insideArtifact: boolean;
   insideAction: boolean;
-  currentArtifact?: BoltArtifactData;
   currentAction: BoltActionData;
   actionId: number;
 }
 
 export function cleanoutFileContent(content: string, filePath: string): string {
-  const useDiff = useDiffStore.get();
-
-  if (useDiff) {
-    return cleanoutFileContentDiffMode(content, filePath);
-  } else {
-    return cleanoutFileContentDefaultMode(content, filePath);
-  }
-}
-
-function cleanoutFileContentDefaultMode(content: string, filePath: string): string {
-  let processedContent = content.trim();
-
-  // Remove markdown code block syntax if present and file is not markdown
-  if (!filePath.endsWith('.md')) {
-    processedContent = cleanoutCodeblockSyntaxDefaultMode(processedContent);
-    processedContent = cleanEscapedTags(processedContent);
-  }
-
-  processedContent += '\n';
-
-  return processedContent;
-}
-
-function cleanoutFileContentDiffMode(content: string, filePath: string): string {
   let processedContent = content.trim();
 
   logger.trace(`cleanoutFileContent: ${filePath}`);
-  processedContent = cleanoutCodeblockSyntaxDiffMode(processedContent);
+  processedContent = cleanoutCodeblockSyntax(processedContent);
   processedContent += '\n';
 
   return processedContent;
 }
 
-function cleanoutCodeblockSyntaxDefaultMode(content: string) {
-  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
-
-  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
-
-  if (match) {
-    return match[1];
-  } else {
-    return content;
-  }
-}
-
-function cleanoutCodeblockSyntaxDiffMode(content: string) {
+function cleanoutCodeblockSyntax(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
 
   const markdownMatch = content.match(markdownCodeBlockRegex);
@@ -111,18 +53,6 @@ function cleanoutCodeblockSyntaxDiffMode(content: string) {
   }
 
   return extractFromCDATA(content);
-}
-
-function cleanEscapedTags(content: string) {
-  return content
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/\\n/g, '\n')
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, '"');
 }
 
 export class StreamingMessageParser {
@@ -137,7 +67,6 @@ export class StreamingMessageParser {
       state = {
         position: 0,
         insideAction: false,
-        insideArtifact: false,
         currentAction: { content: '' },
         actionId: 0,
       };
@@ -150,234 +79,97 @@ export class StreamingMessageParser {
     let earlyBreak = false;
 
     while (i < input.length) {
-      if (state.insideArtifact) {
-        const currentArtifact = state.currentArtifact;
+      if (state.insideAction) {
+        // Inside an action tag, look for the closing tag
+        const closeIndex = input.indexOf(ACTION_TAG_CLOSE, i);
+        const currentAction = state.currentAction;
 
-        if (currentArtifact === undefined) {
-          unreachable('Artifact not initialized');
+        if (currentAction === undefined) {
+          unreachable('Action not initialized');
         }
 
-        if (state.insideAction) {
-          const closeIndex = input.indexOf(ARTIFACT_ACTION_TAG_CLOSE, i);
-          const newActionOpenIndex = input.indexOf(ARTIFACT_ACTION_TAG_OPEN, i);
-          const artifactCloseIndex = input.indexOf(ARTIFACT_TAG_CLOSE, i);
-          const currentAction = state.currentAction;
+        if (closeIndex !== -1) {
+          // Found closing tag - capture content and process action
+          currentAction.content += input.slice(i, closeIndex);
 
-          if (
-            closeIndex !== -1 &&
-            (newActionOpenIndex === -1 || closeIndex < newActionOpenIndex) &&
-            (artifactCloseIndex === -1 || closeIndex < artifactCloseIndex)
-          ) {
-            currentAction.content += input.slice(i, closeIndex);
+          let content = currentAction.content.trim();
 
-            let content = currentAction.content.trim();
-
-            if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
-            } else {
-              content = extractFromCDATA(content);
-            }
-
-            currentAction.content = content;
-
-            const closeActionId = String(state.actionId - 1);
-
-            this._options.callbacks?.onActionClose?.({
-              artifactId: currentArtifact.id,
-              messageId,
-              actionId: closeActionId,
-              action: currentAction as BoltAction,
-            });
-
-            state.insideAction = false;
-            state.currentAction = { content: '' };
-
-            i = closeIndex + ARTIFACT_ACTION_TAG_CLOSE.length;
-          } else if (
-            newActionOpenIndex !== -1 &&
-            (closeIndex === -1 || newActionOpenIndex < closeIndex) &&
-            (artifactCloseIndex === -1 || newActionOpenIndex < artifactCloseIndex)
-          ) {
-            const newActionEndIndex = input.indexOf('>', newActionOpenIndex);
-
-            if (newActionEndIndex !== -1) {
-              const previousAction = state.currentAction;
-              state.currentAction = this.#parseActionTag(input, newActionOpenIndex, newActionEndIndex);
-
-              previousAction.content = '';
-
-              this._options.callbacks?.onActionClose?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: String(state.actionId - 1),
-                action: previousAction as BoltAction,
-              });
-
-              const openActionId = String(state.actionId);
-
-              this._options.callbacks?.onActionOpen?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: openActionId,
-                action: state.currentAction as BoltAction,
-              });
-
-              state.actionId++;
-
-              i = newActionEndIndex + 1;
-            } else {
-              break;
-            }
-          } else if (
-            artifactCloseIndex !== -1 &&
-            (closeIndex === -1 || artifactCloseIndex < closeIndex) &&
-            (newActionOpenIndex === -1 || artifactCloseIndex < newActionOpenIndex)
-          ) {
-            currentAction.content += input.slice(i, artifactCloseIndex);
-
-            let content = currentAction.content.trim();
-
-            if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
-            } else {
-              content = extractFromCDATA(content);
-            }
-
-            currentAction.content = content;
-
-            const closeActionId = String(state.actionId - 1);
-
-            this._options.callbacks?.onActionClose?.({
-              artifactId: currentArtifact.id,
-              messageId,
-              actionId: closeActionId,
-              action: currentAction as BoltAction,
-            });
-
-            this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
-
-            state.insideAction = false;
-            state.currentAction = { content: '' };
-            state.insideArtifact = false;
-            state.currentArtifact = undefined;
-
-            i = artifactCloseIndex + ARTIFACT_TAG_CLOSE.length;
+          if ('type' in currentAction && currentAction.type === 'file') {
+            content = cleanoutFileContent(content, currentAction.filePath);
+          } else if ('type' in currentAction && currentAction.type === 'modify') {
+            content = extractFromCDATA(content);
           } else {
-            if ('type' in currentAction && currentAction.type === 'file') {
-              const content = cleanoutFileContent(input.slice(i), currentAction.filePath);
-
-              this._options.callbacks?.onActionStream?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: String(state.actionId - 1),
-                action: {
-                  ...(currentAction as FileAction),
-                  content,
-                  filePath: currentAction.filePath,
-                },
-              });
-            }
-
-            break;
+            content = extractFromCDATA(content);
           }
+
+          currentAction.content = content;
+
+          const actionId = `${messageId}:action-${state.actionId}`;
+
+          // Notify that action is complete
+          this._options.callbacks?.onActionClose?.({
+            messageId,
+            actionId,
+            action: currentAction as BoltAction,
+          });
+
+          // Add a marker div for this individual action to be rendered
+          output += `<div class="__boltAction__" data-message-id="${messageId}" data-action-id="${actionId}"></div>\n`;
+
+          state.insideAction = false;
+          state.currentAction = { content: '' };
+          state.actionId++;
+
+          i = closeIndex + ACTION_TAG_CLOSE.length;
         } else {
-          const actionOpenIndex = input.indexOf(ARTIFACT_ACTION_TAG_OPEN, i);
-          const artifactCloseIndex = input.indexOf(ARTIFACT_TAG_CLOSE, i);
-
-          if (actionOpenIndex !== -1 && (artifactCloseIndex === -1 || actionOpenIndex < artifactCloseIndex)) {
-            const actionEndIndex = input.indexOf('>', actionOpenIndex);
-
-            if (actionEndIndex !== -1) {
-              state.insideAction = true;
-
-              state.currentAction = this.#parseActionTag(input, actionOpenIndex, actionEndIndex);
-
-              const openActionId = String(state.actionId);
-
-              this._options.callbacks?.onActionOpen?.({
-                artifactId: currentArtifact.id,
-                messageId,
-                actionId: openActionId,
-                action: state.currentAction as BoltAction,
-              });
-
-              state.actionId++;
-
-              i = actionEndIndex + 1;
-            } else {
-              break;
-            }
-          } else if (artifactCloseIndex !== -1) {
-            this._options.callbacks?.onArtifactClose?.({ messageId, ...currentArtifact });
-
-            state.insideArtifact = false;
-            state.currentArtifact = undefined;
-
-            i = artifactCloseIndex + ARTIFACT_TAG_CLOSE.length;
-          } else {
-            break;
-          }
+          // No closing tag found yet, accumulate content
+          currentAction.content += input.slice(i);
+          break;
         }
       } else if (input[i] === '<' && input[i + 1] !== '/') {
+        // Check for boltAction opening tag
         let j = i;
         let potentialTag = '';
 
-        while (j < input.length && potentialTag.length < ARTIFACT_TAG_OPEN.length) {
+        while (j < input.length && potentialTag.length < ACTION_TAG_OPEN.length) {
           potentialTag += input[j];
 
-          if (potentialTag === ARTIFACT_TAG_OPEN) {
+          if (potentialTag === ACTION_TAG_OPEN) {
             const nextChar = input[j + 1];
 
             if (nextChar && nextChar !== '>' && nextChar !== ' ') {
+              // Not a valid tag, continue
               output += input.slice(i, j + 1);
               i = j + 1;
               break;
             }
 
+            // Found boltAction opening tag
             const openTagEnd = input.indexOf('>', j);
 
             if (openTagEnd !== -1) {
-              const artifactTag = input.slice(i, openTagEnd + 1);
+              // Parse the action tag
+              state.insideAction = true;
+              state.currentAction = this.#parseActionTag(input, i, openTagEnd);
 
-              let artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
-              const type = this.#extractAttribute(artifactTag, 'type') as string;
-              let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
+              const actionId = `${messageId}:action-${state.actionId}`;
 
-              if (!artifactTitle) {
-                artifactTitle = 'Untitled';
-              }
-
-              if (!artifactId) {
-                logger.warn('Artifact id missing');
-                artifactId = `${messageId}:fallback-artifact-${i}`;
-              } else {
-                // if artifactId is not unique, add the index to make it unique
-                artifactId = `${messageId}:${artifactId}-${i}`;
-              }
-
-              state.insideArtifact = true;
-
-              const currentArtifact = {
-                id: artifactId,
-                title: artifactTitle,
-                type,
-              } satisfies BoltArtifactData;
-
-              state.currentArtifact = currentArtifact;
-
-              this._options.callbacks?.onArtifactOpen?.({ messageId, ...currentArtifact });
-
-              const artifactFactory = this._options.artifactElement ?? createArtifactElement;
-
-              output += artifactFactory({ messageId }, artifactId);
+              // Notify that action has started
+              this._options.callbacks?.onActionOpen?.({
+                messageId,
+                actionId,
+                action: state.currentAction as BoltAction,
+              });
 
               i = openTagEnd + 1;
             } else {
+              // Incomplete tag, wait for more input
               earlyBreak = true;
             }
 
             break;
-          } else if (!ARTIFACT_TAG_OPEN.startsWith(potentialTag)) {
+          } else if (!ACTION_TAG_OPEN.startsWith(potentialTag)) {
+            // Not a potential action tag
             output += input.slice(i, j + 1);
             i = j + 1;
             break;
@@ -386,7 +178,8 @@ export class StreamingMessageParser {
           j++;
         }
 
-        if (j === input.length && ARTIFACT_TAG_OPEN.startsWith(potentialTag)) {
+        if (j === input.length && ACTION_TAG_OPEN.startsWith(potentialTag)) {
+          // Potential tag but need more input
           break;
         }
       } else {
@@ -441,20 +234,4 @@ export class StreamingMessageParser {
     const match = tag.match(new RegExp(`${attributeName}="([^"]*)"`, 'i'));
     return match ? match[1] : undefined;
   }
-}
-
-const createArtifactElement: ElementFactory = (props, artifactId) => {
-  const elementProps = [
-    'class="__boltArtifact__"',
-    ...Object.entries(props).map(([key, value]) => {
-      return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
-    }),
-    `data-artifact-id=${JSON.stringify(artifactId)}`,
-  ];
-
-  return `<div ${elementProps.join(' ')}></div>`;
-};
-
-function camelToDashCase(input: string) {
-  return input.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 }

@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { StreamingMessageParser, type ActionCallback, type ArtifactCallback } from './message-parser';
+import { StreamingMessageParser, type ActionCallback } from './message-parser';
 
 interface ExpectedResult {
   output: string;
   callbacks?: {
-    onArtifactOpen?: number;
-    onArtifactClose?: number;
     onActionOpen?: number;
     onActionClose?: number;
   };
@@ -22,18 +20,18 @@ describe('StreamingMessageParser', () => {
     expect(parser.parse('test_id', 'Hello <strong>world</strong>!')).toBe('Hello <strong>world</strong>!');
   });
 
-  describe('no artifacts', () => {
+  describe('no actions', () => {
     it.each<[string | string[], ExpectedResult | string]>([
       ['Foo bar', 'Foo bar'],
       ['Foo bar <', 'Foo bar '],
       ['Foo bar <p', 'Foo bar <p'],
       [['Foo bar <', 's', 'p', 'an>some text</span>'], 'Foo bar <span>some text</span>'],
-    ])('should correctly parse chunks and strip out bolt artifacts (%#)', (input, expected) => {
+    ])('should correctly parse chunks (%#)', (input, expected) => {
       runTest(input, expected);
     });
   });
 
-  describe('invalid or incomplete artifacts', () => {
+  describe('invalid or incomplete actions', () => {
     it.each<[string | string[], ExpectedResult | string]>([
       ['Foo bar <b', 'Foo bar '],
       ['Foo bar <ba', 'Foo bar <ba'],
@@ -41,193 +39,168 @@ describe('StreamingMessageParser', () => {
       ['Foo bar <bolt', 'Foo bar '],
       ['Foo bar <bolta', 'Foo bar <bolta'],
       ['Foo bar <boltA', 'Foo bar '],
-      ['Foo bar <boltArtifacs></boltArtifact>', 'Foo bar <boltArtifacs></boltArtifact>'],
-      ['Before <oltArtfiact>foo</boltArtifact> After', 'Before <oltArtfiact>foo</boltArtifact> After'],
-      ['Before <boltArtifactt>foo</boltArtifact> After', 'Before <boltArtifactt>foo</boltArtifact> After'],
-    ])('should correctly parse chunks and strip out bolt artifacts (%#)', (input, expected) => {
+      ['Foo bar <boltActions></boltAction>', 'Foo bar <boltActions></boltAction>'],
+      ['Before <oltAction>foo</boltAction> After', 'Before <oltAction>foo</boltAction> After'],
+      ['Before <boltActionn>foo</boltAction> After', 'Before <boltActionn>foo</boltAction> After'],
+    ])('should correctly parse chunks (%#)', (input, expected) => {
       runTest(input, expected);
     });
   });
 
-  describe('valid artifacts without actions', () => {
+  describe('valid actions', () => {
     it.each<[string | string[], ExpectedResult | string]>([
       [
-        'Some text before <boltArtifact title="Some title" id="artifact_1">foo bar</boltArtifact> Some more text',
+        'Some text before <boltAction type="shell">npm install</boltAction> Some more text',
         {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
+        },
+      ],
+      [
+        ['Some text before <boltAct', 'ion', ' type="shell">npm install</boltAction> Some more text'],
+        {
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
         [
-          'Some text before <boltArti',
-          'fact',
-          ' title="Some title" id="artifact_1" type="bundled" >foo</boltArtifact> Some more text',
-        ],
-        {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
-        },
-      ],
-      [
-        [
-          'Some text before <boltArti',
-          'fac',
-          't title="Some title" id="artifact_1"',
+          'Some text before <boltAct',
+          'io',
+          'n type="file" filePath="test.js"',
           ' ',
           '>',
-          'foo</boltArtifact> Some more text',
+          'content</boltAction> Some more text',
         ],
         {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact',
-          ' title="Some title" id="artifact_1"',
-          ' >fo',
-          'o</boltArtifact> Some more text',
-        ],
+        ['Some text before <boltAct', 'ion', ' type="shell"', ' >np', 'm test</boltAction> Some more text'],
         {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact tit',
-          'le="Some ',
-          'title" id="artifact_1">fo',
-          'o',
-          '<',
-          '/boltArtifact> Some more text',
-        ],
+        ['Some text before <boltAct', 'ion ty', 'pe="shel', 'l">npm', ' test', '<', '/boltAction> Some more text'],
         {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact title="Some title" id="artif',
-          'act_1">fo',
-          'o<',
-          '/boltArtifact> Some more text',
-        ],
+        ['Some text before <boltAct', 'ion type="shell"', '>npm t', 'est<', '/boltAction> Some more text'],
         {
-          output: 'Some text before  Some more text',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Some text before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n Some more text',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
-        'Before <boltArtifact title="Some title" id="artifact_1">foo</boltArtifact> After',
+        'Before <boltAction type="shell">npm test</boltAction> After',
         {
-          output: 'Before  After',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
+          output:
+            'Before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n After',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
-    ])('should correctly parse chunks and strip out bolt artifacts (%#)', (input, expected) => {
+    ])('should correctly parse chunks (%#)', (input, expected) => {
       runTest(input, expected);
     });
   });
 
-  describe('valid artifacts with actions', () => {
+  describe('multiple actions', () => {
     it.each<[string | string[], ExpectedResult | string]>([
       [
-        'Before <boltArtifact title="Some title" id="artifact_1"><boltAction type="shell">npm install</boltAction></boltArtifact> After',
+        'Before <boltAction type="shell">npm install</boltAction> After',
         {
-          output: 'Before  After',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 1, onActionClose: 1 },
+          output:
+            'Before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n After',
+          callbacks: { onActionOpen: 1, onActionClose: 1 },
         },
       ],
       [
-        'Before <boltArtifact title="Some title" id="artifact_1"><boltAction type="shell">npm install</boltAction><boltAction type="file" filePath="index.js">some content</boltAction></boltArtifact> After',
+        'Before <boltAction type="shell">npm install</boltAction><boltAction type="file" filePath="index.js">some content</boltAction> After',
         {
-          output: 'Before  After',
-          callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 2, onActionClose: 2 },
+          output:
+            'Before <div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-0"></div>\n<div class="__boltAction__" data-message-id="message_1" data-action-id="message_1:action-1"></div>\n After',
+          callbacks: { onActionOpen: 2, onActionClose: 2 },
         },
       ],
-    ])('should correctly parse chunks and strip out bolt artifacts (%#)', (input, expected) => {
+    ])('should correctly parse chunks (%#)', (input, expected) => {
       runTest(input, expected);
     });
   });
 
   describe('action continuation with same file path', () => {
-    it('should prevent content duplication when second action already contains first action content', () => {
+    it('should handle action content correctly when streamed in chunks', () => {
       const callbacks = {
-        onArtifactOpen: vi.fn<ArtifactCallback>(),
-        onArtifactClose: vi.fn<ArtifactCallback>(),
         onActionOpen: vi.fn<ActionCallback>(),
         onActionStream: vi.fn<ActionCallback>(),
         onActionClose: vi.fn<ActionCallback>(),
       };
 
       const parser = new StreamingMessageParser({
-        artifactElement: () => '',
         callbacks,
       });
 
       // First chunk with incomplete action
-      const firstChunk =
-        '<boltArtifact title="Continue Test" id="artifact_1"><boltAction type="file" filePath="1.txt">Hello';
+      const firstChunk = '<boltAction type="file" filePath="1.txt">Hello';
       parser.parse('message_1', firstChunk);
 
-      // Second chunk with new action that already contains the content from first action
-      const secondChunk = '<boltAction type="file" filePath="1.txt">Hello World</boltAction></boltArtifact>';
+      // Second chunk completing the action
+      const secondChunk = ' World</boltAction>';
       parser.parse('message_1', firstChunk + secondChunk);
 
-      // Check if actions were processed correctly
-      expect(callbacks.onArtifactOpen).toHaveBeenCalledTimes(1);
-      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(2);
+      // Check if action was processed correctly
+      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(1);
 
-      // The first action should have been closed automatically
-      expect(callbacks.onActionClose).toHaveBeenCalledTimes(2);
+      // The action should have been closed
+      expect(callbacks.onActionClose).toHaveBeenCalledTimes(1);
 
-      // Check content wasn't duplicated (should be 'Hello World', not 'HelloHello World')
-      const lastActionCall = callbacks.onActionClose.mock.calls[1][0];
+      // Check content is correct
+      const lastActionCall = callbacks.onActionClose.mock.calls[0][0];
       expect(lastActionCall.action.content).toBe('Hello World\n');
     });
 
-    it('should prevent content duplication when second action already contains first action content as markdown code block', () => {
+    it('should handle action content correctly with markdown code blocks', () => {
       const callbacks = {
-        onArtifactOpen: vi.fn<ArtifactCallback>(),
-        onArtifactClose: vi.fn<ArtifactCallback>(),
         onActionOpen: vi.fn<ActionCallback>(),
         onActionStream: vi.fn<ActionCallback>(),
         onActionClose: vi.fn<ActionCallback>(),
       };
 
       const parser = new StreamingMessageParser({
-        artifactElement: () => '',
         callbacks,
       });
 
       // First chunk with incomplete action
       const firstChunk =
-        '<boltArtifact title="Continue Test" id="artifact_1"><boltAction type="file" filePath="1.txt">// Fire 8 missiles in a radial pattern\n        for (let i =';
+        '<boltAction type="file" filePath="1.txt">// Fire 8 missiles in a radial pattern\n        for (let i =';
       parser.parse('message_1', firstChunk);
 
-      // Second chunk with new action that already contains the content from first action
-      const secondChunk =
-        '<boltAction type="file" filePath="1.txt">```\n// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n\n```</boltAction></boltArtifact>';
+      // Second chunk completing the action
+      const secondChunk = ' 0; i < 8; i++) {\n\n}</boltAction>';
       parser.parse('message_1', firstChunk + secondChunk);
 
-      // Check if actions were processed correctly
-      expect(callbacks.onArtifactOpen).toHaveBeenCalledTimes(1);
-      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(2);
+      // Check if action was processed correctly
+      expect(callbacks.onActionOpen).toHaveBeenCalledTimes(1);
 
-      // The first action should have been closed automatically
-      expect(callbacks.onActionClose).toHaveBeenCalledTimes(2);
+      // The action should have been closed
+      expect(callbacks.onActionClose).toHaveBeenCalledTimes(1);
 
-      // Check content wasn't duplicated
-      const lastActionCall = callbacks.onActionClose.mock.calls[1][0];
+      // Check content is correct
+      const lastActionCall = callbacks.onActionClose.mock.calls[0][0];
       expect(lastActionCall.action.content).toBe(
-        '// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n',
+        '// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n\n}\n',
       );
     });
   });
@@ -243,12 +216,6 @@ function runTest(input: string | string[], outputOrExpectedResult: string | Expe
   }
 
   const callbacks = {
-    onArtifactOpen: vi.fn<ArtifactCallback>((data) => {
-      expect(data).toMatchSnapshot('onArtifactOpen');
-    }),
-    onArtifactClose: vi.fn<ArtifactCallback>((data) => {
-      expect(data).toMatchSnapshot('onArtifactClose');
-    }),
     onActionOpen: vi.fn<ActionCallback>((data) => {
       expect(data).toMatchSnapshot('onActionOpen');
     }),
@@ -258,7 +225,6 @@ function runTest(input: string | string[], outputOrExpectedResult: string | Expe
   };
 
   const parser = new StreamingMessageParser({
-    artifactElement: () => '',
     callbacks,
   });
 

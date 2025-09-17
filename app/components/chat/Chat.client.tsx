@@ -48,7 +48,6 @@ import {
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
 import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { useDiffStore } from '~/lib/stores/useDiffStore';
 import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
@@ -355,9 +354,9 @@ export const ChatImpl = memo(
       await shell.waitTillOscCode('prompt');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
       } else {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
       }
     };
 
@@ -612,9 +611,6 @@ export const ChatImpl = memo(
 
       lastSendMessageTime.current = Date.now();
 
-      // Get current useDiff value
-      const useDiff = useDiffStore.get();
-
       const messageContent = messageInput || input;
 
       if (!messageContent?.trim()) {
@@ -828,7 +824,7 @@ export const ChatImpl = memo(
             {
               id: `1-${new Date().getTime()}`,
               role: 'user',
-              content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[UseDiff: ${useDiffStore.get()}]\n\n[Attachments: ${JSON.stringify(
+              content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
               )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
             },
@@ -923,7 +919,7 @@ export const ChatImpl = memo(
 
         append({
           role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[UseDiff: ${useDiff}]\n\n[Attachments: ${JSON.stringify(
+          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
             attachmentList,
           )}]\n\n${messageContent}`,
         });
@@ -1033,7 +1029,7 @@ export const ChatImpl = memo(
             {
               id: `1-${new Date().getTime()}`,
               role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[UseDiff: ${useDiffStore.get()}]\n\n[Attachments: ${JSON.stringify(
+              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
                 attachmentList,
               )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
             },
