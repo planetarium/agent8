@@ -4,9 +4,11 @@ import {
   type CoreAssistantMessage,
   type CoreSystemMessage,
   type Message,
+  NoSuchToolError,
 } from 'ai';
+import { z } from 'zod';
 import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -102,7 +104,32 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
+
+  /*
+   * Unknown tool handler for graceful error handling
+   * Empty description to prevent LLM from selecting this tool directly
+   */
+  const unknownToolHandler = {
+    description: '', // Intentionally empty to hide from LLM
+    parameters: z.object({
+      originalTool: z.string(),
+      originalArgs: z.any(),
+    }),
+    execute: async ({ originalTool }: { originalTool: string; originalArgs: any }) => {
+      logger.warn(`Unknown tool called: ${originalTool}`);
+      return {
+        result: `Tool '${originalTool}' is not registered. Please use one of the available tools.`,
+      };
+    },
+  };
+
+  let combinedTools: Record<string, any> = {
+    ...tools,
+    ...docTools,
+    ...codebaseTools,
+    ...resourcesTools,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandler,
+  };
 
   if (files) {
     // Add file search tools
@@ -178,6 +205,24 @@ export async function streamText(props: {
     maxSteps: 20,
     messages: coreMessages,
     tools: combinedTools,
+    experimental_repairToolCall: async ({ toolCall, error }) => {
+      // Handle unknown tool calls gracefully
+      if (NoSuchToolError.isInstance(error)) {
+        // Redirect to our unknown tool handler
+        return {
+          toolCallType: 'function',
+          toolCallId: toolCall.toolCallId,
+          toolName: TOOL_NAMES.UNKNOWN_HANDLER,
+          args: JSON.stringify({
+            originalTool: toolCall.toolName,
+            originalArgs: toolCall.args,
+          }),
+        };
+      }
+
+      // For other errors, let AI SDK handle them normally
+      return null;
+    },
     ...options,
   });
 
