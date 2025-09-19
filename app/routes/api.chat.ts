@@ -60,7 +60,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     logger.debug(`Total message length: ${totalMessageContent.split(' ').length} words`);
 
     const messageStream = createUIMessageStream({
-      execute: async ({ writer }) => {
+      async execute({ writer }) {
         let progressCounter = 1;
 
         const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
@@ -140,15 +140,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
+          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
-            if (usage) {
-              cumulativeUsage.promptTokens += usage.inputTokens || 0;
-              cumulativeUsage.completionTokens += (usage.outputTokens || 0) + (usage.reasoningTokens || 0);
-              cumulativeUsage.totalTokens += usage.totalTokens || 0;
+            if (totalUsage) {
+              cumulativeUsage.promptTokens += totalUsage.inputTokens || 0;
+              cumulativeUsage.completionTokens += (totalUsage.outputTokens || 0) + (totalUsage.reasoningTokens || 0);
+              cumulativeUsage.totalTokens += totalUsage.totalTokens || 0;
             }
 
             if (providerMetadata?.anthropic) {
@@ -157,6 +157,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
+
+            console.log('[DEBUG] finishReason', finishReason);
 
             if (finishReason !== 'length') {
               writer.write({
@@ -376,7 +378,16 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       }),
     );
 
-    return createUIMessageStreamResponse({ stream: messageStream });
+    return createUIMessageStreamResponse({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        Connection: 'keep-alive',
+        'Cache-Control': 'no-cache',
+        'Text-Encoding': 'chunked',
+      },
+      stream: messageStream,
+    });
   } catch (error: any) {
     logger.error(error);
 

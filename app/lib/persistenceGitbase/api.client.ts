@@ -7,7 +7,7 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
-import { extractAllTextContent, extractDataContent } from '~/utils/message';
+import { extractAllTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { cleanoutFileContent } from '~/lib/runtime/message-parser';

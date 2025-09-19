@@ -413,7 +413,6 @@ export const ChatImpl = memo(
       regenerate,
       error,
     } = useChat({
-      messages: initialMessages,
       transport,
       onData: (data) => {
         // Ignore empty data
@@ -465,7 +464,7 @@ export const ChatImpl = memo(
           model,
           provider: provider.name,
           usage,
-          messageLength: message.parts?.find((part) => part.type === 'text')?.text?.length || 0,
+          messageLength: message.parts?.find((part) => part.type === 'text' && 'text' in part)?.text?.length || 0,
         });
 
         workbench.onArtifactClose(message.id, async () => {

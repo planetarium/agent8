@@ -136,7 +136,9 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
-    ...convertToModelMessages(processedMessages, { ignoreIncompleteToolCalls: true }).slice(-3),
+
+    // ...convertToModelMessages(processedMessages, { ignoreIncompleteToolCalls: true }).slice(-3),
+    ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
@@ -155,7 +157,28 @@ export async function streamText(props: {
     stopWhen: stepCountIs(20),
     messages: coreMessages,
     tools: combinedTools,
+
+    /*
+     * for test
+     * TODO: remove
+     */
+    temperature: 0,
+    providerOptions: {
+      openai: {
+        include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
+      },
+    },
     ...options,
+    onStepFinish: (result) => {
+      console.log('[DEBUG] streamText stepfinish request', JSON.stringify(result.request).slice(-300));
+      console.log(
+        '[DEBUG] streamText stepfinish response message',
+        JSON.stringify(result.response.messages).slice(-300),
+      );
+    },
+    onError: (error) => {
+      console.log('[DEBUG] streamText onError: ', error);
+    },
   });
 
   (async () => {

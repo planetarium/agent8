@@ -22,7 +22,7 @@ export const extractContent = <T extends Pick<UIMessage, 'parts'>>(
   message: T,
   options: ExtractOptions = {},
 ): string => {
-  const { types = ['text'], dataTypes = [], separator = '' } = options;
+  const { types = ['text'], dataTypes = [], separator = ' ' } = options;
 
   try {
     if (!message.parts || !Array.isArray(message.parts)) {
