@@ -621,6 +621,14 @@ export function get3DStarterPrompt() {
 
 3. If the template already includes basic matching elements, great. Now it's time to impress the user
 
+**CRITICAL 3D PACKAGE RULE**: The most common and critical error is confusing the 3D packages.
+- \`vibe-starter-3d\` is for **basic setup**.
+- \`vibe-starter-3d-environment\` is for **ALL environmental features**.
+- Specifically, \`terrainUtil\` **MUST** be imported from \`vibe-starter-3d-environment\`. Importing it from \`vibe-starter-3d\` is a fatal error.
+- ✅ **CORRECT**: \`import { terrainUtil } from 'vibe-starter-3d-environment';\`
+- ❌ **WRONG**: \`import { terrainUtil } from 'vibe-starter-3d';\`
+- Double-check every 3D import to prevent this error.
+
 The 3D template basically provides player, camera, keyboard and mouse settings. Do not modify this.
 
 In the given template, your task is to decorate the map.
