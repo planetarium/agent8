@@ -85,6 +85,8 @@ export default class OpenAIProvider extends BaseProvider {
       apiKey,
     });
 
-    return openai(model);
+    const modelInstance = model.includes('gpt-5') ? openai.responses(model) : openai(model);
+
+    return modelInstance;
   }
 }

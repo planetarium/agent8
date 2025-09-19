@@ -13,14 +13,12 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
       'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
     parameters: z.object({
       pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
-      caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
+      caseSensitive: z.boolean().describe('Whether the search should be case-sensitive (default: false)'),
       beforeLines: z
         .number()
-        .optional()
         .describe('Number of lines to include before each match, similar to grep -B option (default: 0)'),
       afterLines: z
         .number()
-        .optional()
         .describe('Number of lines to include after each match, similar to grep -A option (default: 0)'),
     }),
     execute: async ({
@@ -34,7 +32,17 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
       beforeLines?: number;
       afterLines?: number;
     }) => {
-      const results = searchFileContentsByPattern(fileMap, pattern, caseSensitive, beforeLines, afterLines);
+      const actualCaseSensitive = caseSensitive ?? false;
+      const actualBeforeLines = beforeLines ?? 0;
+      const actualAfterLines = afterLines ?? 0;
+
+      const results = searchFileContentsByPattern(
+        fileMap,
+        pattern,
+        actualCaseSensitive,
+        actualBeforeLines,
+        actualAfterLines,
+      );
 
       // Format results to be more user-friendly
       return {
