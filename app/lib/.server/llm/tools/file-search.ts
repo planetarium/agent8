@@ -57,6 +57,9 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
  * Tool for getting all contents of a file
  */
 export const createFilesReadTool = (fileMap: FileMap) => {
+  // Track files that have been read in this session to prevent duplicate reads
+  const readFilesInSession = new Set<string>();
+
   return tool({
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
@@ -72,6 +75,19 @@ export const createFilesReadTool = (fileMap: FileMap) => {
       const paths = Array.isArray(pathList) ? pathList : [pathList];
 
       paths.forEach((path) => {
+        // Normalize path for consistent tracking
+        const normalizedPath = path.startsWith(WORK_DIR) ? path : `${WORK_DIR}/${path}`;
+
+        // Check if this file was already read in this session
+        if (readFilesInSession.has(normalizedPath)) {
+          console.warn(`⚠️ DUPLICATE READ: File ${path} was already read in this response`);
+          files[path] = {
+            error: `⚠️ DUPLICATE_READ_ERROR: You already read ${path} in THIS response! Use your mental model of the file instead of re-reading. Re-reading will lose any modifications you made!`,
+          };
+
+          return;
+        }
+
         const content = getFileContents(fileMap, path);
 
         if (content === null) {
@@ -79,12 +95,20 @@ export const createFilesReadTool = (fileMap: FileMap) => {
             error: `File not found or cannot be read: ${path}. The file may not exist, might be a directory, or could be a binary file.`,
           };
         } else {
+          // Mark file as read
+          readFilesInSession.add(normalizedPath);
           files[path] = { content };
         }
       });
 
       return Object.keys(files)
-        .map((name) => `<file name="${name}">\n${files[name].content}\n</file>`)
+        .map((name) => {
+          if (files[name].error) {
+            return `<file name="${name}">\n<error>${files[name].error}</error>\n</file>`;
+          }
+
+          return `<file name="${name}">\n${files[name].content}\n</file>`;
+        })
         .join('\n');
     },
   });
