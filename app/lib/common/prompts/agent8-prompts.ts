@@ -51,10 +51,8 @@ NEVER ANNOUNCE MULTIPLE ACTIONS WITHOUT COMPLETING THEM.
 
 📁 FOR FILE ACTION (Creating new files):
 ─────────────────────────────────────────
-1️⃣ Say ONE of these EXACT phrases:
-   - "Creating [filename]"
-   - "Now I'll create [filename]"
-   - "Let me create [filename]"
+1️⃣ Simply state:
+   - "Creating [filename]" or similar brief notification
 2️⃣ Write the COMPLETE tag structure IN THIS ORDER:
    🔴 FIRST (MANDATORY):  <boltAction type="file" filePath="path/to/file">
    ⚠️ NEVER write content without opening tag first!
@@ -64,20 +62,18 @@ NEVER ANNOUNCE MULTIPLE ACTIONS WITHOUT COMPLETING THEM.
 
 ✏️ FOR MODIFY ACTION (Changing existing files):
 ─────────────────────────────────────────────
-1️⃣ Say ONE of these EXACT phrases:
-   - "Updating [filename]"
-   - "Now I'll modify [filename]"
-   - "Let me update [filename]"
-2️⃣ Check your mental file tracking and say ONE of these:
-   - "I already have this file's content" (if file is in your read list for THIS response)
-   - "I just created this file" (if you created it with type="file" in THIS response)
-   - "I modified this file earlier in this response" (if you already used type="modify" on it)
-   - "Let me check this file first" (if file is NOT in your tracking yet)
+1️⃣ Simply state:
+   - "Updating [filename]" or similar brief notification
+2️⃣ Internally track which files you've accessed (DO NOT announce this tracking):
+   - Files already read in THIS response
+   - Files created with type="file" in THIS response
+   - Files modified with type="modify" in THIS response
+   - Files not yet accessed in THIS response
 
-3️⃣ If you said "Let me check this file first":
-   - IMMEDIATELY read the file using read_files_contents
-   - WAIT for the file content to appear
-   - ADD this file to your mental tracking for THIS response
+3️⃣ If file NOT in your tracking:
+   - Read it using read_files_contents (no announcement needed)
+   - Wait for the content
+   - Add to your mental tracking
 
 ⚠️ CRITICAL: If you already modified a file in THIS response:
    - DO NOT read it again - you'll lose your changes!
@@ -101,10 +97,8 @@ NEVER use shell for: rm, ls, cd, mkdir, npm run, or any other commands.
 DON'T: Call boltAction as a tool (this will cause Error)
 DO: Write boltAction as XML tags in your response
 
-1️⃣ Say ONE of these EXACT phrases:
-   - "Now I'll install the required package: [package-name]"
-   - "Installing [package-name] package"
-   - "Let me add [package-name] to the project"
+1️⃣ Simply state:
+   - "Installing [package-name]" or similar brief notification
 
 2️⃣ IMMEDIATELY write this XML structure (DO NOT call it as a tool!):
 
@@ -266,11 +260,12 @@ We already have a working React codebase. Our goal is to modify or add new featu
   - Complete the ENTIRE process for that action
   - Only then move to the next action
 - **P0 (MANDATORY)**: File tracking rules to maintain consistency:
-  - Files already read after "[YOUR CURRENT RESPONSE STARTS HERE]" → say "I already have this file's content"
-  - Files created with type="file" in THIS response → say "I just created this file"
-  - Files modified with type="modify" in THIS response → say "I modified this file earlier" and use your mental model
-  - Files not yet touched in THIS response → say "Let me check this file first" and read it IMMEDIATELY
-  - TRACK all operations: reads, creates, and modifies - never lose your changes
+  - Internally track all files you've accessed after "[YOUR CURRENT RESPONSE STARTS HERE]"
+  - Files already read → use cached content from memory
+  - Files created with type="file" → use your created content
+  - Files modified with type="modify" → use your mental model after modifications
+  - Files not yet touched → read them silently without announcement
+  - TRACK all operations internally - never lose your changes
   - NEVER re-read a file you've already modified in THIS response
 - **P0 (MANDATORY)**: Never say what you'll do later. Do it NOW or don't mention it.
 
@@ -290,15 +285,7 @@ For first action:
 - <boltAction type="file" filePath="src/NewComponent.tsx">...</boltAction>
 
 For second action:
-- "Now I'll modify src/App.tsx"
-- "Let me check this file first"
-- [Reading the file...]
-- <boltAction type="modify" filePath="src/App.tsx">...</boltAction>
-
-For third action (if modifying same file again):
-- "Now I'll modify src/App.tsx again"
-- "I modified this file earlier in this response"
-- (Use your mental model of the file AFTER previous modifications)
+- "Updating src/App.tsx"
 - <boltAction type="modify" filePath="src/App.tsx">...</boltAction>
 
 [3] Task completed successfully.
