@@ -17,6 +17,7 @@ import { renderLogger } from '~/utils/logger';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { ModelViewer } from '~/components/ui/ModelViewer';
+import { sendActivityUploadAsset } from '~/lib/verse8/api';
 
 // Helper function for deep equality check of arrays
 const areArraysEqual = <T,>(arr1: T[], arr2: T[]): boolean => {
@@ -1398,6 +1399,8 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
 
     // End uploading process
     setIsUploading(false);
+
+    sendActivityUploadAsset();
 
     return successCount > 0;
   };
