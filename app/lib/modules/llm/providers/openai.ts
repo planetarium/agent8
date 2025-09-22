@@ -61,6 +61,7 @@ export default class OpenAIProvider extends BaseProvider {
     }));
   }
 
+  //reference: https://github.com/vercel/ai/blob/%40ai-sdk/openai%401.3.24/packages/openai/src/openai-chat-language-model.ts#L929
   isReasoningModel = (modelId: string) => {
     return modelId.startsWith('o') || modelId.startsWith('gpt-5');
   };
