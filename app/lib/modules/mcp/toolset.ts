@@ -187,21 +187,9 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
         // Replace spaces with dashes due to AI SDK tool name restrictions
         toolName = toolName.replaceAll(' ', '-');
 
-        const inputSchema = tool.inputSchema;
-        const properties = inputSchema.properties ?? {};
-
-        // Ensure all properties are included in required array
-        const propertyKeys = Object.keys(properties);
-        const existingRequired = Array.isArray(inputSchema.required) ? inputSchema.required : [];
-
-        // Add missing properties to required array
-        const missingRequired = propertyKeys.filter((key) => !existingRequired.includes(key));
-        const updatedRequired = [...existingRequired, ...missingRequired];
-
         const parameters = jsonSchema({
-          ...inputSchema,
-          properties,
-          required: updatedRequired,
+          ...tool.inputSchema,
+          properties: tool.inputSchema.properties ?? {},
           additionalProperties: false,
         } as JSONSchema7);
 

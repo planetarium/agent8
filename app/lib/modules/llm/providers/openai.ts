@@ -61,6 +61,10 @@ export default class OpenAIProvider extends BaseProvider {
     }));
   }
 
+  isReasoningModel = (modelId: string) => {
+    return modelId.startsWith('o') || modelId.startsWith('gpt-5');
+  };
+
   getModelInstance(options: {
     model: string;
     serverEnv: Env;
@@ -85,7 +89,7 @@ export default class OpenAIProvider extends BaseProvider {
       apiKey,
     });
 
-    const modelInstance = model.includes('gpt-5') ? openai.responses(model) : openai(model);
+    const modelInstance = this.isReasoningModel(model) ? openai.responses(model) : openai(model);
 
     return modelInstance;
   }

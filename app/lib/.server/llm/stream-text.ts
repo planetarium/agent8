@@ -1,4 +1,10 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
+import {
+  streamText as _streamText,
+  convertToCoreMessages,
+  type CoreSystemMessage,
+  type Message,
+  type ProviderMetadata,
+} from 'ai';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -22,6 +28,10 @@ export type Messages = Message[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model'>;
 
 const logger = createScopedLogger('stream-text');
+
+const DEFAULT_PROVIDER_OPTIONS = {
+  openai: { strictSchemas: false },
+} as const;
 
 export async function streamText(props: {
   messages: Array<Omit<Message, 'id'>>;
@@ -139,6 +149,9 @@ export async function streamText(props: {
     };
   }
 
+  const { providerOptions, ...streamingOptions } = options || {};
+  const mergedProviderOptions = mergeProviderOptions(providerOptions);
+
   const result = await _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
@@ -149,7 +162,8 @@ export async function streamText(props: {
     maxSteps: 20,
     messages: coreMessages,
     tools: combinedTools,
-    ...options,
+    ...streamingOptions,
+    providerOptions: mergedProviderOptions,
   });
 
   (async () => {
@@ -173,4 +187,19 @@ export async function streamText(props: {
   })();
 
   return result;
+}
+
+function mergeProviderOptions(userOptions?: ProviderMetadata) {
+  if (!userOptions) {
+    return DEFAULT_PROVIDER_OPTIONS;
+  }
+
+  return {
+    ...userOptions,
+    ...DEFAULT_PROVIDER_OPTIONS,
+    openai: {
+      ...DEFAULT_PROVIDER_OPTIONS.openai,
+      ...(userOptions.openai || {}),
+    },
+  };
 }
