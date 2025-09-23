@@ -1,7 +1,6 @@
 import {
   streamText as _streamText,
   convertToCoreMessages,
-  type CoreAssistantMessage,
   type CoreSystemMessage,
   type Message,
   NoSuchToolError,
@@ -142,24 +141,6 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  const allMessages = convertToCoreMessages(processedMessages);
-  const previousMessages = allMessages.slice(-3, -1);
-  const latestMessage = allMessages.slice(-1);
-
-  // Create a combined context message to preserve order
-  const contextSeparator = `
-
-========================================
-[PREVIOUS CONTEXT ENDS HERE]
-========================================
-[YOUR CURRENT RESPONSE STARTS HERE]
-- File tracking begins NOW
-- You have read ZERO files in THIS response
-- Any files mentioned above were from PREVIOUS responses
-========================================
-
-`;
-
   const coreMessages = [
     ...[
       systemPrompt,
@@ -181,12 +162,7 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as CoreSystemMessage,
-    ...previousMessages,
-    {
-      role: 'assistant',
-      content: contextSeparator,
-    } as CoreAssistantMessage,
-    ...latestMessage,
+    ...convertToCoreMessages(processedMessages).slice(-3),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
