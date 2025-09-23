@@ -1400,7 +1400,9 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
     // End uploading process
     setIsUploading(false);
 
-    sendActivityUploadAsset();
+    if (successCount > 0) {
+      sendActivityUploadAsset(successCount);
+    }
 
     return successCount > 0;
   };
