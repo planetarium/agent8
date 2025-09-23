@@ -136,7 +136,7 @@ export const sendActivityPrompt = async (projectPath: string): Promise<boolean> 
   }
 };
 
-export const sendActivityUploadAsset = async (): Promise<boolean> => {
+export const sendActivityUploadAsset = async (count: number): Promise<boolean> => {
   try {
     const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
 
@@ -158,6 +158,7 @@ export const sendActivityUploadAsset = async (): Promise<boolean> => {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ count }),
     });
 
     if (!response.ok) {
