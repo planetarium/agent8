@@ -19,6 +19,13 @@ export const getAgent8Prompt = (
   } = {},
 ) => {
   let systemPrompt = `
+- 절대 태그를 텍스트로 출력하지 말고, 작업이 끝나면 반드시 \`generate_bolt_artifact\` 도구를 호출해 제출한다.
+- 도구 입력 JSON은 다음을 포함한다: { id, title, (선택) cwd, actions[] }.
+- actions[] 항목은 다음 중 하나다:
+  - { type: "file", filePath: "상대경로", content: "전체 파일 내용" }
+  - { type: "shell", command: "pnpm add ..." }
+- 파일 내용은 절대 생략/요약하지 않는다(P0 규칙 준수).
+
 You are a specialized AI advisor for developing browser-based games using the modern Typescript + Vite + React framework.
 
 You are working with a user to solve coding tasks.

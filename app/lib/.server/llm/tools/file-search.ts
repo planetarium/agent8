@@ -57,30 +57,54 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
  * Tool for getting all contents of a file
  */
 export const createFilesReadTool = (fileMap: FileMap) => {
+  const seen = new Set<string>();
+
   return tool({
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     inputSchema: z.object({
       pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
     }),
-    execute: async ({ pathList }: { pathList: string[] }) => {
-      const files: Record<string, { content?: string; error?: string }> = {};
+    outputSchema: z.object({
+      files: z.array(
+        z.object({
+          path: z.string(),
+          content: z.string().optional(),
+          error: z.string().optional(),
+          skippedAsDuplicate: z.boolean().optional(),
+        }),
+      ),
+      complete: z.boolean(),
+    }),
+    async execute({ pathList }) {
+      //console.log('#### pathList', pathList);
 
-      pathList.forEach((path) => {
-        const content = getFileContents(fileMap, path);
+      const out: Array<{
+        path: string;
+        content?: string;
+        error?: string;
+        skippedAsDuplicate?: boolean;
+      }> = [];
 
-        if (content === null) {
-          files[path] = {
-            error: `File not found or cannot be read: ${path}. The file may not exist, might be a directory, or could be a binary file.`,
-          };
-        } else {
-          files[path] = { content };
+      for (const path of pathList) {
+        if (seen.has(path)) {
+          out.push({ path, skippedAsDuplicate: true });
+          continue;
         }
-      });
 
-      return Object.keys(files)
-        .map((name) => `<file name="${name}">\n${files[name].content}\n</file>`)
-        .join('\n');
+        seen.add(path);
+
+        const raw = getFileContents(fileMap, path);
+
+        if (raw == null) {
+          out.push({ path, error: `File not found / unreadable: ${path}` });
+          continue;
+        }
+
+        out.push({ path, content: raw });
+      }
+
+      return { files: out, complete: true };
     },
   });
 };

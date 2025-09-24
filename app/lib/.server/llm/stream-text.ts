@@ -2,6 +2,8 @@ import {
   streamText as _streamText,
   convertToModelMessages,
   stepCountIs,
+  hasToolCall,
+  jsonSchema,
   type SystemModelMessage,
   type UIMessage,
 } from 'ai';
@@ -28,6 +30,66 @@ export type Messages = UIMessage[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 const logger = createScopedLogger('stream-text');
+
+const generateBoltArtifactToolName = 'generate_bolt_artifact';
+
+export const generateBoltArtifact = {
+  description: '최종 산출물(아티팩트)을 제출한다. 태그는 출력하지 말고 JSON으로 이 도구를 호출하라.',
+  inputSchema: jsonSchema({
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'kebab-case 식별자(예: platformer-game)' },
+      title: { type: 'string' },
+      actions: {
+        type: 'array',
+        description: '파일/셸 동작 목록',
+        items: {
+          oneOf: [
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'file' },
+                filePath: { type: 'string', description: 'cwd 기준 상대경로' },
+                content: { type: 'string' },
+              },
+              required: ['type', 'filePath', 'content'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'shell' },
+                command: { type: 'string' }, // pnpm add ... 등
+              },
+              required: ['type', 'command'],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+    },
+    required: ['id', 'title', 'actions'],
+    additionalProperties: false,
+  }),
+  async execute(input: {
+    id: string;
+    title: string;
+    actions: Array<{ type: 'file'; filePath: string; content: string } | { type: 'shell'; command: string }>;
+  }) {
+    // (권장) 최소 검증: filePath는 상대경로여야 함
+    for (const a of input.actions) {
+      if (a.type === 'file' && (/^\//.test(a.filePath) || a.filePath.includes('..'))) {
+        throw new Error(`filePath는 cwd 기준 상대경로여야 합니다: ${a.filePath}`);
+      }
+    }
+
+    return {
+      id: input.id,
+      title: input.title,
+      actions: input.actions,
+    };
+  },
+};
 
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
@@ -102,7 +164,13 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
+  let combinedTools: Record<string, any> = {
+    ...tools,
+    ...docTools,
+    ...codebaseTools,
+    ...resourcesTools,
+    [generateBoltArtifactToolName]: generateBoltArtifact,
+  };
 
   if (files) {
     // Add file search tools
@@ -136,8 +204,6 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
-
-    // ...convertToModelMessages(processedMessages, { ignoreIncompleteToolCalls: true }).slice(-3),
     ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
@@ -154,31 +220,15 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: stepCountIs(20),
+    stopWhen: [stepCountIs(15), hasToolCall(generateBoltArtifactToolName)],
     messages: coreMessages,
     tools: combinedTools,
-
-    /*
-     * for test
-     * TODO: remove
-     */
-    temperature: 0,
     providerOptions: {
       openai: {
         include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
       },
     },
     ...options,
-    onStepFinish: (result) => {
-      console.log('[DEBUG] streamText stepfinish request', JSON.stringify(result.request).slice(-300));
-      console.log(
-        '[DEBUG] streamText stepfinish response message',
-        JSON.stringify(result.response.messages).slice(-300),
-      );
-    },
-    onError: (error) => {
-      console.log('[DEBUG] streamText onError: ', error);
-    },
   });
 
   (async () => {
@@ -200,6 +250,55 @@ export async function streamText(props: {
       throw e;
     }
   })();
+
+  /*
+   * (async () => {
+   *   try {
+   *     for await (const part of result.fullStream) {
+   *       if (part.type === 'error') {
+   *         const error: any = (part as any).error;
+   *         logger.error(`stream error: ${error}`);
+   */
+
+  /*
+   *         return;
+   *       }
+   */
+
+  /*
+   *       if (part.type === 'tool-result' && (part as any).toolName === generateBoltArtifactToolName) {
+   *         const raw = (part as any).result;
+   *         const xml = typeof raw === 'string' ? raw : typeof raw?.xml === 'string' ? raw.xml : JSON.stringify(raw);
+   */
+
+  /*
+   *         (result as any).finalBoltArtifact = xml;
+   *         logger.info('✅ Captured <boltArtifact> XML from finalize tool.');
+   */
+
+  /*
+   *         return; // 더 받을 필요 없음
+   *       }
+   *     }
+   */
+
+  /*
+   *     if (!(result as any).finalBoltArtifact) {
+   *       logger.warn(`⚠️ Stream ended without a ${generateBoltArtifactToolName} result.`);
+   *     }
+   *   } catch (e: any) {
+   *     if (e.name === 'AbortError') {
+   *       logger.info('Request aborted.');
+   *       return;
+   *     }
+   */
+
+  /*
+   *     logger.error(e);
+   *     throw e;
+   *   }
+   * })();
+   */
 
   return result;
 }
