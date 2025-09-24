@@ -63,7 +63,7 @@ export const createFilesReadTool = (fileMap: FileMap) => {
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     inputSchema: z.object({
-      pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
+      pathList: z.union([z.array(z.string()), z.string()]).describe('The list of paths to the files you want to read.'),
     }),
     outputSchema: z.object({
       files: z.array(
@@ -77,7 +77,7 @@ export const createFilesReadTool = (fileMap: FileMap) => {
       complete: z.boolean(),
     }),
     async execute({ pathList }) {
-      //console.log('#### pathList', pathList);
+      console.log('#### pathList', pathList);
 
       const out: Array<{
         path: string;
@@ -86,7 +86,9 @@ export const createFilesReadTool = (fileMap: FileMap) => {
         skippedAsDuplicate?: boolean;
       }> = [];
 
-      for (const path of pathList) {
+      const paths = Array.isArray(pathList) ? pathList : [pathList];
+
+      for (const path of paths) {
         if (seen.has(path)) {
           out.push({ path, skippedAsDuplicate: true });
           continue;

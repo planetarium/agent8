@@ -6,9 +6,11 @@ import {
   jsonSchema,
   type SystemModelMessage,
   type UIMessage,
+  NoSuchToolError,
 } from 'ai';
+import { z } from 'zod';
 import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -31,26 +33,42 @@ export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' |
 
 const logger = createScopedLogger('stream-text');
 
-const generateBoltArtifactToolName = 'generate_bolt_artifact';
+/*
+ * Unknown tool handler for graceful error handling
+ * Empty description to prevent LLM from selecting this tool directly
+ */
+const unknownToolHandler = {
+  description: '', // Intentionally empty to hide from LLM
+  parameters: z.object({
+    originalTool: z.string(),
+    originalArgs: z.any(),
+  }),
+  execute: async ({ originalTool }: { originalTool: string; originalArgs: any }) => {
+    logger.warn(`Unknown tool called: ${originalTool}`);
+    return {
+      result: `Tool '${originalTool}' is not registered. Please use one of the available tools.`,
+    };
+  },
+};
 
-export const generateBoltArtifact = {
-  description: '최종 산출물(아티팩트)을 제출한다. 태그는 출력하지 말고 JSON으로 이 도구를 호출하라.',
+const submitArtifactTool = {
+  description: 'Submit the final artifact. Call this tool with JSON instead of outputting tags as text.',
   inputSchema: jsonSchema({
     type: 'object',
     properties: {
-      id: { type: 'string', description: 'kebab-case 식별자(예: platformer-game)' },
-      title: { type: 'string' },
+      id: { type: 'string', description: 'kebab-case identifier (e.g., platformer-game)' },
+      title: { type: 'string', description: 'Descriptive title of the artifact' },
       actions: {
         type: 'array',
-        description: '파일/셸 동작 목록',
+        description: 'List of file/shell actions',
         items: {
           oneOf: [
             {
               type: 'object',
               properties: {
                 type: { const: 'file' },
-                filePath: { type: 'string', description: 'cwd 기준 상대경로' },
-                content: { type: 'string' },
+                filePath: { type: 'string', description: 'Relative path from cwd' },
+                content: { type: 'string', description: 'Complete file content' },
               },
               required: ['type', 'filePath', 'content'],
               additionalProperties: false,
@@ -59,7 +77,7 @@ export const generateBoltArtifact = {
               type: 'object',
               properties: {
                 type: { const: 'shell' },
-                command: { type: 'string' }, // pnpm add ... 등
+                command: { type: 'string', description: 'Shell command to execute' },
               },
               required: ['type', 'command'],
               additionalProperties: false,
@@ -71,24 +89,6 @@ export const generateBoltArtifact = {
     required: ['id', 'title', 'actions'],
     additionalProperties: false,
   }),
-  async execute(input: {
-    id: string;
-    title: string;
-    actions: Array<{ type: 'file'; filePath: string; content: string } | { type: 'shell'; command: string }>;
-  }) {
-    // (권장) 최소 검증: filePath는 상대경로여야 함
-    for (const a of input.actions) {
-      if (a.type === 'file' && (/^\//.test(a.filePath) || a.filePath.includes('..'))) {
-        throw new Error(`filePath는 cwd 기준 상대경로여야 합니다: ${a.filePath}`);
-      }
-    }
-
-    return {
-      id: input.id,
-      title: input.title,
-      actions: input.actions,
-    };
-  },
 };
 
 export async function streamText(props: {
@@ -169,7 +169,8 @@ export async function streamText(props: {
     ...docTools,
     ...codebaseTools,
     ...resourcesTools,
-    [generateBoltArtifactToolName]: generateBoltArtifact,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandler,
+    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactTool,
   };
 
   if (files) {
@@ -213,16 +214,34 @@ export async function streamText(props: {
     };
   }
 
-  const result = await _streamText({
+  const result = _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15), hasToolCall(generateBoltArtifactToolName)],
+    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
+    experimental_repairToolCall: async ({ toolCall, error }) => {
+      // Handle unknown tool calls gracefully
+      if (NoSuchToolError.isInstance(error)) {
+        // Redirect to our unknown tool handler
+        return {
+          type: 'tool-call',
+          toolCallId: toolCall.toolCallId,
+          toolName: TOOL_NAMES.UNKNOWN_HANDLER,
+          input: JSON.stringify({
+            originalTool: toolCall.toolName,
+            originalArgs: toolCall.input,
+          }),
+        };
+      }
+
+      // For other errors, let AI SDK handle them normally
+      return null;
+    },
     providerOptions: {
       openai: {
         include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
@@ -250,55 +269,6 @@ export async function streamText(props: {
       throw e;
     }
   })();
-
-  /*
-   * (async () => {
-   *   try {
-   *     for await (const part of result.fullStream) {
-   *       if (part.type === 'error') {
-   *         const error: any = (part as any).error;
-   *         logger.error(`stream error: ${error}`);
-   */
-
-  /*
-   *         return;
-   *       }
-   */
-
-  /*
-   *       if (part.type === 'tool-result' && (part as any).toolName === generateBoltArtifactToolName) {
-   *         const raw = (part as any).result;
-   *         const xml = typeof raw === 'string' ? raw : typeof raw?.xml === 'string' ? raw.xml : JSON.stringify(raw);
-   */
-
-  /*
-   *         (result as any).finalBoltArtifact = xml;
-   *         logger.info('✅ Captured <boltArtifact> XML from finalize tool.');
-   */
-
-  /*
-   *         return; // 더 받을 필요 없음
-   *       }
-   *     }
-   */
-
-  /*
-   *     if (!(result as any).finalBoltArtifact) {
-   *       logger.warn(`⚠️ Stream ended without a ${generateBoltArtifactToolName} result.`);
-   *     }
-   *   } catch (e: any) {
-   *     if (e.name === 'AbortError') {
-   *       logger.info('Request aborted.');
-   *       return;
-   *     }
-   */
-
-  /*
-   *     logger.error(e);
-   *     throw e;
-   *   }
-   * })();
-   */
 
   return result;
 }

@@ -353,9 +353,9 @@ export const ChatImpl = memo(
       await shell.waitTillOscCode('prompt');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
       } else {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
       }
     };
 
@@ -962,6 +962,22 @@ export const ChatImpl = memo(
           }
         }
 
+        // Clean up existing messages to prevent tool re-execution
+        const cleanedMessages = messages.map((msg) => {
+          if (msg.role === 'assistant' && msg.parts) {
+            return {
+              ...msg,
+              parts: msg.parts.filter((part) => part.type === 'text'),
+            };
+          }
+
+          return msg;
+        });
+
+        // Update messages to cleaned version
+        setMessages(cleanedMessages);
+
+        // Send new message immediately - useChat will use the latest state
         sendChatMessage({
           role: 'user',
           parts: [
