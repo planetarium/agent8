@@ -33,10 +33,6 @@ export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' |
 
 const logger = createScopedLogger('stream-text');
 
-/*
- * Unknown tool handler for graceful error handling
- * Empty description to prevent LLM from selecting this tool directly
- */
 const unknownToolHandler = {
   description: '', // Intentionally empty to hide from LLM
   parameters: z.object({
