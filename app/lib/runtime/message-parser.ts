@@ -1,6 +1,7 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
+import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
@@ -53,6 +54,10 @@ interface MessageState {
 }
 
 export function cleanoutFileContent(content: string, filePath: string): string {
+  return cleanoutContent(content, filePath) + '\n';
+}
+
+export function cleanoutContent(content: string, filePath: string): string {
   let processedContent = content.trim();
 
   // Remove markdown code block syntax if present and file is not markdown
@@ -61,22 +66,19 @@ export function cleanoutFileContent(content: string, filePath: string): string {
     processedContent = cleanEscapedTags(processedContent);
   }
 
-  processedContent += '\n';
-
   return processedContent;
 }
 
 function cleanoutCodeblockSyntax(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
 
-  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
+  const markdownMatch = content.match(markdownCodeBlockRegex);
 
-  if (match) {
-    return match[1];
-  } else {
-    return content;
+  if (markdownMatch) {
+    return markdownMatch[1];
   }
+
+  return extractFromCDATA(content);
 }
 
 function cleanEscapedTags(content: string) {
@@ -140,6 +142,8 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content = cleanoutFileContent(content, currentAction.filePath);
+            } else if ('type' in currentAction && currentAction.type === 'modify') {
+              content = cleanoutContent(content, currentAction.filePath);
             }
 
             currentAction.content = content;
