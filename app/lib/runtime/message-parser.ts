@@ -37,7 +37,7 @@ interface ElementFactoryProps {
   messageId: string;
 }
 
-type ElementFactory = (props: ElementFactoryProps) => string;
+type ElementFactory = (props: ElementFactoryProps, artifactId: string) => string;
 
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
@@ -148,10 +148,12 @@ export class StreamingMessageParser {
 
             currentAction.content = content;
 
+            const closeActionId = String(state.actionId - 1);
+
             this._options.callbacks?.onActionClose?.({
               artifactId: currentArtifact.id,
               messageId,
-              actionId: String(state.actionId - 1),
+              actionId: closeActionId,
               action: currentAction as BoltAction,
             });
 
@@ -179,13 +181,16 @@ export class StreamingMessageParser {
                 action: previousAction as BoltAction,
               });
 
+              const openActionId = String(state.actionId);
+
               this._options.callbacks?.onActionOpen?.({
                 artifactId: currentArtifact.id,
                 messageId,
-                actionId: String(state.actionId++),
+                actionId: openActionId,
                 action: state.currentAction as BoltAction,
               });
 
+              state.actionId++;
               i = newActionEndIndex + 1;
             } else {
               break;
@@ -205,10 +210,12 @@ export class StreamingMessageParser {
 
             currentAction.content = content;
 
+            const closeActionId = String(state.actionId - 1);
+
             this._options.callbacks?.onActionClose?.({
               artifactId: currentArtifact.id,
               messageId,
-              actionId: String(state.actionId - 1),
+              actionId: closeActionId,
               action: currentAction as BoltAction,
             });
 
@@ -250,13 +257,16 @@ export class StreamingMessageParser {
 
               state.currentAction = this.#parseActionTag(input, actionOpenIndex, actionEndIndex);
 
+              const openActionId = String(state.actionId);
+
               this._options.callbacks?.onActionOpen?.({
                 artifactId: currentArtifact.id,
                 messageId,
-                actionId: String(state.actionId++),
+                actionId: openActionId,
                 action: state.currentAction as BoltAction,
               });
 
+              state.actionId++;
               i = actionEndIndex + 1;
             } else {
               break;
@@ -295,7 +305,7 @@ export class StreamingMessageParser {
 
               const artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
               const type = this.#extractAttribute(artifactTag, 'type') as string;
-              const artifactId = this.#extractAttribute(artifactTag, 'id') as string;
+              let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
                 logger.warn('Artifact title missing');
@@ -303,6 +313,10 @@ export class StreamingMessageParser {
 
               if (!artifactId) {
                 logger.warn('Artifact id missing');
+                artifactId = `${messageId}:fallback-artifact-${i}`;
+              } else {
+                // if artifactId is not unique, add the index to make it unique
+                artifactId = `${messageId}:${artifactId}-${i}`;
               }
 
               state.insideArtifact = true;
@@ -319,7 +333,7 @@ export class StreamingMessageParser {
 
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 
-              output += artifactFactory({ messageId });
+              output += artifactFactory({ messageId }, artifactId);
 
               i = openTagEnd + 1;
             } else {
@@ -389,12 +403,13 @@ export class StreamingMessageParser {
   }
 }
 
-const createArtifactElement: ElementFactory = (props) => {
+const createArtifactElement: ElementFactory = (props, artifactId) => {
   const elementProps = [
     'class="__boltArtifact__"',
     ...Object.entries(props).map(([key, value]) => {
       return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
     }),
+    `data-artifact-id=${JSON.stringify(artifactId)}`,
   ];
 
   return `<div ${elementProps.join(' ')}></div>`;
