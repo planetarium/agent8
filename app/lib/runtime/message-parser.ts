@@ -1,6 +1,7 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
+import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
@@ -36,7 +37,7 @@ interface ElementFactoryProps {
   messageId: string;
 }
 
-type ElementFactory = (props: ElementFactoryProps) => string;
+type ElementFactory = (props: ElementFactoryProps, artifactId: string) => string;
 
 export interface StreamingMessageParserOptions {
   callbacks?: ParserCallbacks;
@@ -53,6 +54,10 @@ interface MessageState {
 }
 
 export function cleanoutFileContent(content: string, filePath: string): string {
+  return cleanoutContent(content, filePath) + '\n';
+}
+
+export function cleanoutContent(content: string, filePath: string): string {
   let processedContent = content.trim();
 
   // Remove markdown code block syntax if present and file is not markdown
@@ -61,22 +66,19 @@ export function cleanoutFileContent(content: string, filePath: string): string {
     processedContent = cleanEscapedTags(processedContent);
   }
 
-  processedContent += '\n';
-
   return processedContent;
 }
 
 function cleanoutCodeblockSyntax(content: string) {
   const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const xmlCodeBlockRegex = /^\s*<\!\[CDATA\[([\s\S]*?)\n\s*\]\]>\s*$/;
 
-  const match = content.match(markdownCodeBlockRegex) || content.match(xmlCodeBlockRegex);
+  const markdownMatch = content.match(markdownCodeBlockRegex);
 
-  if (match) {
-    return match[1];
-  } else {
-    return content;
+  if (markdownMatch) {
+    return markdownMatch[1];
   }
+
+  return extractFromCDATA(content);
 }
 
 function cleanEscapedTags(content: string) {
@@ -140,14 +142,18 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content = cleanoutFileContent(content, currentAction.filePath);
+            } else if ('type' in currentAction && currentAction.type === 'modify') {
+              content = cleanoutContent(content, currentAction.filePath);
             }
 
             currentAction.content = content;
 
+            const closeActionId = String(state.actionId - 1);
+
             this._options.callbacks?.onActionClose?.({
               artifactId: currentArtifact.id,
               messageId,
-              actionId: String(state.actionId - 1),
+              actionId: closeActionId,
               action: currentAction as BoltAction,
             });
 
@@ -175,13 +181,16 @@ export class StreamingMessageParser {
                 action: previousAction as BoltAction,
               });
 
+              const openActionId = String(state.actionId);
+
               this._options.callbacks?.onActionOpen?.({
                 artifactId: currentArtifact.id,
                 messageId,
-                actionId: String(state.actionId++),
+                actionId: openActionId,
                 action: state.currentAction as BoltAction,
               });
 
+              state.actionId++;
               i = newActionEndIndex + 1;
             } else {
               break;
@@ -201,10 +210,12 @@ export class StreamingMessageParser {
 
             currentAction.content = content;
 
+            const closeActionId = String(state.actionId - 1);
+
             this._options.callbacks?.onActionClose?.({
               artifactId: currentArtifact.id,
               messageId,
-              actionId: String(state.actionId - 1),
+              actionId: closeActionId,
               action: currentAction as BoltAction,
             });
 
@@ -246,13 +257,16 @@ export class StreamingMessageParser {
 
               state.currentAction = this.#parseActionTag(input, actionOpenIndex, actionEndIndex);
 
+              const openActionId = String(state.actionId);
+
               this._options.callbacks?.onActionOpen?.({
                 artifactId: currentArtifact.id,
                 messageId,
-                actionId: String(state.actionId++),
+                actionId: openActionId,
                 action: state.currentAction as BoltAction,
               });
 
+              state.actionId++;
               i = actionEndIndex + 1;
             } else {
               break;
@@ -291,7 +305,7 @@ export class StreamingMessageParser {
 
               const artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
               const type = this.#extractAttribute(artifactTag, 'type') as string;
-              const artifactId = this.#extractAttribute(artifactTag, 'id') as string;
+              let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
                 logger.warn('Artifact title missing');
@@ -299,6 +313,10 @@ export class StreamingMessageParser {
 
               if (!artifactId) {
                 logger.warn('Artifact id missing');
+                artifactId = `${messageId}:fallback-artifact-${i}`;
+              } else {
+                // if artifactId is not unique, add the index to make it unique
+                artifactId = `${messageId}:${artifactId}-${i}`;
               }
 
               state.insideArtifact = true;
@@ -315,7 +333,7 @@ export class StreamingMessageParser {
 
               const artifactFactory = this._options.artifactElement ?? createArtifactElement;
 
-              output += artifactFactory({ messageId });
+              output += artifactFactory({ messageId }, artifactId);
 
               i = openTagEnd + 1;
             } else {
@@ -385,12 +403,13 @@ export class StreamingMessageParser {
   }
 }
 
-const createArtifactElement: ElementFactory = (props) => {
+const createArtifactElement: ElementFactory = (props, artifactId) => {
   const elementProps = [
     'class="__boltArtifact__"',
     ...Object.entries(props).map(([key, value]) => {
       return `data-${camelToDashCase(key)}=${JSON.stringify(value)}`;
     }),
+    `data-artifact-id=${JSON.stringify(artifactId)}`,
   ];
 
   return `<div ${elementProps.join(' ')}></div>`;

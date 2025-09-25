@@ -10,10 +10,21 @@ import { filesToArtifactsNoContent } from '~/utils/fileUtils';
 import { extractAllTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
-import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('persistenceGitbase');
+const MAX_ASSISTANT_MESSAGE_SIZE = 20 * 1024; // 20KB for assistant message content
+
+const truncateMessage = (message: string, maxSize: number): string => {
+  if (message.length <= maxSize) {
+    return message;
+  }
+
+  const truncated = message.substring(0, maxSize - 20) + '\n...(truncated)';
+  logger.warn(`Assistant message truncated from ${message.length} to ${truncated.length} bytes (max: ${maxSize})`);
+
+  return truncated;
+};
 
 export const isEnabledGitbasePersistence =
   import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
@@ -35,6 +46,8 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
   const taskBranch = repoStore.get().taskBranch || 'develop';
   const title = repoStore.get().title;
   const isFirstCommit = !projectPath;
+
+  logger.info(`Starting commit process - Project: ${projectName}, Path: ${projectPath}, Branch: ${taskBranch}`);
 
   // Get revertTo from URL query parameters
   const url = new URL(window.location.href);
@@ -71,43 +84,34 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
     const matches = [...content.matchAll(regex)];
     const container = await workbenchStore.container;
 
+    // Use Map to store unique files
+    const fileMap = new Map<string, string>();
+
+    // Add default files first
     const envFile = await container.fs.readFile(`.env`, 'utf-8');
 
     if (envFile) {
-      files.push({ path: '.env', content: envFile });
+      fileMap.set('.env', envFile);
     }
 
     const packageJsonFile = await container.fs.readFile(`package.json`, 'utf-8');
 
     if (packageJsonFile) {
-      files.push({ path: 'package.json', content: packageJsonFile });
+      fileMap.set('package.json', packageJsonFile);
     }
 
-    files = [
-      ...files,
-      ...(await Promise.all(
-        matches.map(async (match) => {
-          const filePath = match[1];
-          const contentFromMatch = match[2];
-          const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
-          const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+    // Add files from matches (skip if already in fileMap)
+    for (const match of matches) {
+      const filePath = match[1];
 
-          // The workbench file sync is delayed. So I use the remote container file.
+      // Only read and add if not already in fileMap
+      if (!fileMap.has(filePath)) {
+        const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+        fileMap.set(filePath, remoteContainerFile);
+      }
+    }
 
-          if (cleanedContent !== remoteContainerFile) {
-            logger.error(
-              `Content mismatch for ${filePath}:`,
-              JSON.stringify({
-                fromMatch: cleanedContent,
-                fromRemoteContainer: remoteContainerFile,
-              }),
-            );
-          }
-
-          return { path: filePath, content: remoteContainerFile || cleanedContent };
-        }),
-      )),
-    ];
+    files = Array.from(fileMap.entries()).map(([path, content]) => ({ path, content }));
 
     if (files.length === 0) {
       // If no files are found, create a temporary file
@@ -123,9 +127,13 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
 ${userMessage}
 </V8UserMessage>
 <V8AssistantMessage>
-${content
-  .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
-  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
+${truncateMessage(
+  content
+    .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
+    .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')
+    .replace(/(<boltAction type="modify"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3'),
+  MAX_ASSISTANT_MESSAGE_SIZE,
+)}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋

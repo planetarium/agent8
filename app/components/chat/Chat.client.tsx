@@ -467,11 +467,11 @@ export const ChatImpl = memo(
           messageLength: message.parts?.find((part) => part.type === 'text' && 'text' in part)?.text?.length || 0,
         });
 
-        workbench.onArtifactClose(message.id, async () => {
+        workbench.onMessageClose(message.id, async () => {
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
-          workbench.offArtifactClose(message.id);
+          workbench.offMessageClose(message.id);
         });
 
         setFakeLoading(false);

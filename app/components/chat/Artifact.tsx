@@ -24,15 +24,21 @@ if (import.meta.hot) {
 
 interface ArtifactProps {
   messageId: string;
+  artifactId: string;
 }
 
-export const Artifact = memo(({ messageId }: ArtifactProps) => {
+export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
   const [allActionFinished, setAllActionFinished] = useState(false);
 
   const artifacts = useWorkbenchArtifacts();
-  const artifact = artifacts[messageId];
+  const artifact = artifacts[artifactId];
+
+  // Return early if artifact is not found
+  if (!artifact) {
+    return null;
+  }
 
   const actions = useStore(
     computed(artifact.runner.actions, (actions) => {
@@ -201,6 +207,16 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                 {type === 'file' ? (
                   <div>
                     Create{' '}
+                    <code
+                      className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
+                      onClick={() => openArtifactInWorkbench(action.filePath)}
+                    >
+                      {action.filePath}
+                    </code>
+                  </div>
+                ) : type === 'modify' ? (
+                  <div>
+                    Modify{' '}
                     <code
                       className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
                       onClick={() => openArtifactInWorkbench(action.filePath)}
