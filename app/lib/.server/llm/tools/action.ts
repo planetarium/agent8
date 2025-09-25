@@ -1,8 +1,5 @@
 import { jsonSchema } from 'ai';
 import { TOOL_NAMES } from '~/utils/constants';
-import { createScopedLogger } from '~/utils/logger';
-
-const logger = createScopedLogger('submit-action-tool');
 
 export const createSubmitArtifactActionTool = () => {
   return {
@@ -44,10 +41,6 @@ export const createSubmitArtifactActionTool = () => {
         required: ['id', 'title', 'actions'],
         additionalProperties: false,
       }),
-      execute: async () => {
-        logger.debug('Submit artifact action tool completed');
-        return null;
-      },
     },
   };
 };

@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
+import { createUIMessageStream, createUIMessageStreamResponse, generateId, getToolName, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
 import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
@@ -42,6 +42,8 @@ ${body}
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
+
+const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
 
 const logger = createScopedLogger('api.chat');
 
@@ -297,8 +299,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           const submitArtifactCallIds = new Set<string>();
 
           return (chunk, controller) => {
-            controller.enqueue(chunk);
-
             const messageType = chunk.type;
 
             // reasoning message
@@ -426,6 +426,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   type: 'text-end',
                   id: toolResult.toolCallId,
                 });
+                break;
+              }
+
+              default: {
+                if (IGNORE_TOOL_TYPES.includes(messageType)) {
+                } else {
+                  controller.enqueue(chunk);
+                }
+
                 break;
               }
             }
