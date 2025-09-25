@@ -510,9 +510,7 @@ class RemoteContainerConnection {
             type: 'heartbeat',
           },
         });
-        logger.debug('💓 Heartbeat sent');
         await Promise.race([heartbeatPromise, timeoutPromise]);
-        logger.debug('💓 Heartbeat response received');
       } catch (error) {
         logger.error('💓 Heartbeat send failed:', error);
         this._handleHeartbeatError();
