@@ -11,6 +11,35 @@ import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
+import { TOOL_NAMES } from '~/utils/constants';
+
+function toBoltArtifactXML(a: any) {
+  const body = a.actions
+    .filter((act: any) => (act.content && act.filePath) || (act.type === 'shell' && act.command && !act.filePath))
+    .sort((a: any, b: any) => {
+      if (a.type === 'shell' && b.type !== 'shell') {
+        return -1;
+      }
+
+      if (a.type !== 'shell' && b.type === 'shell') {
+        return 1;
+      }
+
+      return 0;
+    })
+    .map((act: any) => {
+      if (act.filePath) {
+        return `  <boltAction type="file" filePath="${act.filePath}">${act.content}</boltAction>`;
+      }
+
+      return `  <boltAction type="shell">${act.command}</boltAction>`;
+    })
+    .join('\n');
+
+  return `<boltArtifact id="${a.id || 'unknown'}" title="${a.title}">
+${body}
+</boltArtifact>`;
+}
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
@@ -267,6 +296,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
+          const submitArtifactCallIds = new Set<string>();
+
           return (chunk, controller) => {
             const messageType = chunk.type;
 
@@ -315,35 +346,64 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool call message
               case 'tool-input-available': {
-                const toolCall = {
-                  toolCallId: chunk.toolCallId,
-                  toolName: chunk.toolName,
-                  input: chunk.input,
-                };
+                if (chunk.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
+                  submitArtifactCallIds.add(chunk.toolCallId);
 
-                const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+                  const artifactData = chunk.input;
 
-                controller.enqueue({
-                  type: 'text-start',
-                  id: toolCall.toolCallId,
-                });
+                  const xmlContent = toBoltArtifactXML(artifactData);
 
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: toolCall.toolCallId,
-                  delta: divString,
-                });
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: chunk.toolCallId,
+                  });
 
-                controller.enqueue({
-                  type: 'text-end',
-                  id: toolCall.toolCallId,
-                });
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.toolCallId,
+                    delta: '\n' + xmlContent + '\n',
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: chunk.toolCallId,
+                  });
+                } else {
+                  const toolCall = {
+                    toolCallId: chunk.toolCallId,
+                    toolName: chunk.toolName,
+                    input: chunk.input,
+                  };
+
+                  const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: toolCall.toolCallId,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: toolCall.toolCallId,
+                    delta: divString,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: toolCall.toolCallId,
+                  });
+                }
 
                 break;
               }
 
               // tool result message
               case 'tool-output-available': {
+                if (submitArtifactCallIds.has(chunk.toolCallId)) {
+                  submitArtifactCallIds.delete(chunk.toolCallId);
+                  break;
+                }
+
                 const toolResult = {
                   toolCallId: chunk.toolCallId,
                   result: chunk.output,

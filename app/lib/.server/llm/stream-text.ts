@@ -2,11 +2,15 @@ import {
   streamText as _streamText,
   convertToModelMessages,
   stepCountIs,
+  hasToolCall,
+  jsonSchema,
   type SystemModelMessage,
   type UIMessage,
+  NoSuchToolError,
 } from 'ai';
+import { z } from 'zod';
 import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -28,6 +32,64 @@ export type Messages = UIMessage[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 const logger = createScopedLogger('stream-text');
+
+/*
+ * Unknown tool handler for graceful error handling
+ * Empty description to prevent LLM from selecting this tool directly
+ */
+const unknownToolHandler = {
+  description: '', // Intentionally empty to hide from LLM
+  parameters: z.object({
+    originalTool: z.string(),
+    originalArgs: z.any(),
+  }),
+  execute: async ({ originalTool }: { originalTool: string; originalArgs: any }) => {
+    logger.warn(`Unknown tool called: ${originalTool}`);
+    return {
+      result: `Tool '${originalTool}' is not registered. Please use one of the available tools.`,
+    };
+  },
+};
+
+const submitArtifactTool = {
+  description: 'Submit the final artifact. Call this tool with JSON instead of outputting tags as text.',
+  inputSchema: jsonSchema({
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'kebab-case identifier (e.g., platformer-game)' },
+      title: { type: 'string', description: 'Descriptive title of the artifact' },
+      actions: {
+        type: 'array',
+        description: 'List of file/shell actions',
+        items: {
+          oneOf: [
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'file' },
+                filePath: { type: 'string', description: 'Relative path from cwd' },
+                content: { type: 'string', description: 'Complete file content' },
+              },
+              required: ['type', 'filePath', 'content'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'shell' },
+                command: { type: 'string', description: 'Shell command to execute' },
+              },
+              required: ['type', 'command'],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+    },
+    required: ['id', 'title', 'actions'],
+    additionalProperties: false,
+  }),
+};
 
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
@@ -102,7 +164,14 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
+  let combinedTools: Record<string, any> = {
+    ...tools,
+    ...docTools,
+    ...codebaseTools,
+    ...resourcesTools,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandler,
+    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactTool,
+  };
 
   if (files) {
     // Add file search tools
@@ -136,8 +205,6 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
-
-    // ...convertToModelMessages(processedMessages, { ignoreIncompleteToolCalls: true }).slice(-3),
     ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
@@ -147,38 +214,40 @@ export async function streamText(props: {
     };
   }
 
-  const result = await _streamText({
+  const result = _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: stepCountIs(20),
+    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
+    experimental_repairToolCall: async ({ toolCall, error }) => {
+      // Handle unknown tool calls gracefully
+      if (NoSuchToolError.isInstance(error)) {
+        // Redirect to our unknown tool handler
+        return {
+          type: 'tool-call',
+          toolCallId: toolCall.toolCallId,
+          toolName: TOOL_NAMES.UNKNOWN_HANDLER,
+          input: JSON.stringify({
+            originalTool: toolCall.toolName,
+            originalArgs: toolCall.input,
+          }),
+        };
+      }
 
-    /*
-     * for test
-     * TODO: remove
-     */
-    temperature: 0,
+      // For other errors, let AI SDK handle them normally
+      return null;
+    },
     providerOptions: {
       openai: {
         include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
       },
     },
     ...options,
-    onStepFinish: (result) => {
-      console.log('[DEBUG] streamText stepfinish request', JSON.stringify(result.request).slice(-300));
-      console.log(
-        '[DEBUG] streamText stepfinish response message',
-        JSON.stringify(result.response.messages).slice(-300),
-      );
-    },
-    onError: (error) => {
-      console.log('[DEBUG] streamText onError: ', error);
-    },
   });
 
   (async () => {

@@ -82,6 +82,13 @@ export const STARTER_TEMPLATES: Template[] = [
   },
 ];
 
+// Tool configurations
+export const TOOL_NAMES = {
+  // Internal system tool - prefixed to avoid conflicts with user tools
+  UNKNOWN_HANDLER: '__system_unknownToolHandler',
+  SUBMIT_ARTIFACT: 'submit_artifact',
+} as const;
+
 export const ATTACHMENT_EXTS = [
   '.png',
   '.jpg',
