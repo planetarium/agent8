@@ -1,4 +1,4 @@
-import type { ActionType, BoltAction, BoltActionData, FileAction, ShellAction } from '~/types/actions';
+import type { ActionType, BoltAction, BoltActionData, FileAction, ModifyAction, ShellAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { extractFromCDATA } from '~/utils/stringUtils';
@@ -142,8 +142,8 @@ export class StreamingMessageParser {
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content = cleanoutFileContent(content, currentAction.filePath);
-            } else if ('type' in currentAction && currentAction.type === 'modify') {
-              content = cleanoutContent(content, currentAction.filePath);
+            } else {
+              content = extractFromCDATA(content);
             }
 
             currentAction.content = content;
@@ -382,19 +382,23 @@ export class StreamingMessageParser {
       content: '',
     };
 
-    if (actionType === 'file') {
+    if (actionType === 'file' || actionType === 'modify') {
       const filePath = this.#extractAttribute(actionTag, 'filePath') as string;
 
       if (!filePath) {
         logger.debug('File path not specified');
       }
 
-      (actionAttributes as FileAction).filePath = filePath;
+      if (actionType === 'file') {
+        (actionAttributes as FileAction).filePath = filePath;
+      } else {
+        (actionAttributes as ModifyAction).filePath = filePath;
+      }
     } else if (!['shell', 'start'].includes(actionType)) {
       logger.warn(`Unknown action type '${actionType}'`);
     }
 
-    return actionAttributes as FileAction | ShellAction;
+    return actionAttributes as FileAction | ShellAction | ModifyAction;
   }
 
   #extractAttribute(tag: string, attributeName: string): string | undefined {

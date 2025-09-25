@@ -186,6 +186,10 @@ export class ActionRunner {
           await this.#runFileAction(action);
           break;
         }
+        case 'modify': {
+          await this.#runModifyAction(action);
+          break;
+        }
         case 'build': {
           const buildOutput = await this.#runBuildAction(action);
 

@@ -3,10 +3,12 @@ import {
   convertToModelMessages,
   stepCountIs,
   hasToolCall,
+  jsonSchema,
   type SystemModelMessage,
   type UIMessage,
   NoSuchToolError,
 } from 'ai';
+import { z } from 'zod';
 import { MAX_TOKENS, type FileMap } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
@@ -24,14 +26,88 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
-import { createSubmitArtifactActionTool } from './tools/action';
-import { createUnknownToolHandler } from './tools/error-handle';
 
 export type Messages = UIMessage[];
 
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 const logger = createScopedLogger('stream-text');
+
+const unknownToolHandler = {
+  description: '', // Intentionally empty to hide from LLM
+  parameters: z.object({
+    originalTool: z.string(),
+    originalArgs: z.any(),
+  }),
+  execute: async ({ originalTool }: { originalTool: string; originalArgs: any }) => {
+    logger.warn(`Unknown tool called: ${originalTool}`);
+    return {
+      result: `Tool '${originalTool}' is not registered. Please use one of the available tools.`,
+    };
+  },
+};
+
+const submitArtifactTool = {
+  description: 'Submit the final artifact. Call this tool with JSON instead of outputting tags as text.',
+  inputSchema: jsonSchema({
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'kebab-case identifier (e.g., platformer-game)' },
+      title: { type: 'string', description: 'Descriptive title of the artifact' },
+      actions: {
+        type: 'array',
+        description: 'List of file/shell actions',
+        items: {
+          oneOf: [
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'file' },
+                filePath: { type: 'string', description: 'Relative path from cwd' },
+                content: { type: 'string', description: 'Complete file content' },
+              },
+              required: ['type', 'filePath', 'content'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'modify' },
+                filePath: { type: 'string', description: 'Relative path from cwd' },
+                modifications: {
+                  type: 'array',
+                  description: 'List of text replacements',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      before: { type: 'string', description: 'Exact text to find in file' },
+                      after: { type: 'string', description: 'New text to replace with' },
+                    },
+                    required: ['before', 'after'],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ['type', 'filePath', 'modifications'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
+                type: { const: 'shell' },
+                command: { type: 'string', description: 'Shell command to execute' },
+              },
+              required: ['type', 'command'],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+    },
+    required: ['id', 'title', 'actions'],
+    additionalProperties: false,
+  }),
+};
 
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
@@ -106,16 +182,13 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const submitArtifactActionTool = createSubmitArtifactActionTool();
-  const unknownToolHandlerTool = createUnknownToolHandler();
-
   let combinedTools: Record<string, any> = {
     ...tools,
     ...docTools,
     ...codebaseTools,
     ...resourcesTools,
-    ...submitArtifactActionTool,
-    ...unknownToolHandlerTool,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandler,
+    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactTool,
   };
 
   if (files) {

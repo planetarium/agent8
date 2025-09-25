@@ -15,7 +15,12 @@ import { TOOL_NAMES } from '~/utils/constants';
 
 function toBoltArtifactXML(a: any) {
   const body = a.actions
-    .filter((act: any) => (act.content && act.filePath) || (act.type === 'shell' && act.command && !act.filePath))
+    .filter(
+      (act: any) =>
+        (act.content && act.filePath) ||
+        (act.type === 'modify' && act.filePath && act.modifications) ||
+        (act.type === 'shell' && act.command && !act.filePath),
+    )
     .sort((a: any, b: any) => {
       if (a.type === 'shell' && b.type !== 'shell') {
         return -1;
@@ -28,7 +33,11 @@ function toBoltArtifactXML(a: any) {
       return 0;
     })
     .map((act: any) => {
-      if (act.filePath) {
+      if (act.type === 'modify' && act.modifications) {
+        return `  <boltAction type="modify" filePath="${act.filePath}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+      }
+
+      if (act.filePath && act.content !== undefined) {
         return `  <boltAction type="file" filePath="${act.filePath}">${act.content}</boltAction>`;
       }
 
@@ -187,6 +196,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
 
+            console.log('[DEBUG] finishReason', finishReason);
+
             if (finishReason !== 'length') {
               writer.write({
                 type: 'finish',
@@ -297,8 +308,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           const submitArtifactCallIds = new Set<string>();
 
           return (chunk, controller) => {
-            controller.enqueue(chunk);
-
             const messageType = chunk.type;
 
             // reasoning message
@@ -426,6 +435,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   type: 'text-end',
                   id: toolResult.toolCallId,
                 });
+                break;
+              }
+              default: {
+                controller.enqueue(chunk);
                 break;
               }
             }
