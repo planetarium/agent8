@@ -41,18 +41,58 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
 
         if (className?.includes('__toolCall__')) {
           try {
-            const content = (children as React.ReactElement<any, 'code'>).props.children;
+            let content: string;
+
+            try {
+              content = (children as React.ReactElement<any, 'code'>).props.children;
+            } catch {
+              // Fallback if the original approach fails
+              if (typeof children === 'string') {
+                content = children;
+              } else {
+                content = String(children);
+              }
+            }
+
+            // Remove backticks if they wrap the JSON
+            content = content.trim();
+
+            if (content.startsWith('`') && content.endsWith('`')) {
+              content = content.slice(1, -1);
+            }
+
             return <ToolCall toolCall={JSON.parse(content)} id={props.id!} />;
-          } catch {
+          } catch (error) {
+            logger.error(`Error parsing tool call: ${error}`);
             return <pre>{children}</pre>;
           }
         }
 
         if (className?.includes('__toolResult__')) {
           try {
-            const content = (children as React.ReactElement<any, 'code'>).props.children;
+            let content: string;
+
+            try {
+              content = (children as React.ReactElement<any, 'code'>).props.children;
+            } catch {
+              // Fallback if the original approach fails
+              if (typeof children === 'string') {
+                content = children;
+              } else {
+                content = String(children);
+              }
+            }
+
+            // Remove backticks if they wrap the JSON
+            content = content.trim();
+
+            if (content.startsWith('`') && content.endsWith('`')) {
+              content = content.slice(1, -1);
+            }
+
             return <ToolResult toolResult={JSON.parse(content)} id={props.id!} />;
-          } catch {
+          } catch (error) {
+            logger.error(`Error parsing tool result: ${error}`);
             return <pre>{children}</pre>;
           }
         }
