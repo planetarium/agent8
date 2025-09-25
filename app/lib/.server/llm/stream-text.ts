@@ -76,6 +76,28 @@ const submitArtifactTool = {
             {
               type: 'object',
               properties: {
+                type: { const: 'modify' },
+                filePath: { type: 'string', description: 'Relative path from cwd' },
+                modifications: {
+                  type: 'array',
+                  description: 'List of text replacements',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      before: { type: 'string', description: 'Exact text to find in file' },
+                      after: { type: 'string', description: 'New text to replace with' },
+                    },
+                    required: ['before', 'after'],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ['type', 'filePath', 'modifications'],
+              additionalProperties: false,
+            },
+            {
+              type: 'object',
+              properties: {
                 type: { const: 'shell' },
                 command: { type: 'string', description: 'Shell command to execute' },
               },
