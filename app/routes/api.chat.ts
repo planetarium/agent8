@@ -187,8 +187,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
 
-            console.log('[DEBUG] finishReason', finishReason);
-
             if (finishReason !== 'length') {
               writer.write({
                 type: 'finish',
@@ -299,6 +297,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           const submitArtifactCallIds = new Set<string>();
 
           return (chunk, controller) => {
+            controller.enqueue(chunk);
+
             const messageType = chunk.type;
 
             // reasoning message
@@ -426,10 +426,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   type: 'text-end',
                   id: toolResult.toolCallId,
                 });
-                break;
-              }
-              default: {
-                controller.enqueue(chunk);
                 break;
               }
             }

@@ -89,6 +89,10 @@ const submitArtifactTool = {
     required: ['id', 'title', 'actions'],
     additionalProperties: false,
   }),
+  execute: async () => {
+    logger.info('SubmitArtifactTool execute');
+    return {};
+  },
 };
 
 export async function streamText(props: {

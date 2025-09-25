@@ -6,7 +6,7 @@ import { useStore } from '@nanostores/react';
 import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
@@ -395,15 +395,6 @@ export const ChatImpl = memo(
       bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
     }, [apiKeys, files, promptId, contextOptimizationEnabled]);
 
-    const transport = useMemo(
-      () =>
-        new DefaultChatTransport({
-          api: '/api/chat',
-          body: () => bodyRef.current,
-        }),
-      [],
-    );
-
     const {
       messages,
       status,
@@ -413,7 +404,10 @@ export const ChatImpl = memo(
       regenerate,
       error,
     } = useChat({
-      transport,
+      transport: new DefaultChatTransport({
+        api: '/api/chat',
+        body: () => bodyRef.current,
+      }),
       onData: (data) => {
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -961,21 +955,6 @@ export const ChatImpl = memo(
             setMessages(() => []);
           }
         }
-
-        // Clean up existing messages to prevent tool re-execution
-        const cleanedMessages = messages.map((msg) => {
-          if (msg.role === 'assistant' && msg.parts) {
-            return {
-              ...msg,
-              parts: msg.parts.filter((part) => part.type === 'text'),
-            };
-          }
-
-          return msg;
-        });
-
-        // Update messages to cleaned version
-        setMessages(cleanedMessages);
 
         // Send new message immediately - useChat will use the latest state
         sendChatMessage({

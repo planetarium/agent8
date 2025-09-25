@@ -77,8 +77,6 @@ export const createFilesReadTool = (fileMap: FileMap) => {
       complete: z.boolean(),
     }),
     async execute({ pathList }) {
-      console.log('#### pathList', pathList);
-
       const out: Array<{
         path: string;
         content?: string;
