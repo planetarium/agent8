@@ -6,6 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
+import { extractFromCDATA } from '~/utils/stringUtils';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -92,6 +93,10 @@ export class ActionRunner {
     return this.#pendingActionsCount > 0;
   }
 
+  resetPendingActionsCount() {
+    this.#pendingActionsCount = 0;
+  }
+
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
 
@@ -120,7 +125,11 @@ export class ActionRunner {
     });
 
     this.#currentExecutionPromise.then(() => {
-      this.#updateAction(actionId, { status: 'running' });
+      const action = this.actions.get()[actionId];
+
+      if (action && action.status === 'pending') {
+        this.#updateAction(actionId, { status: 'running' });
+      }
     });
   }
 
@@ -136,7 +145,7 @@ export class ActionRunner {
       return; // No return value here
     }
 
-    if (isStreaming && action.type !== 'file') {
+    if (isStreaming) {
       return; // No return value here
     }
 
@@ -156,6 +165,10 @@ export class ActionRunner {
     await this.#currentExecutionPromise;
 
     return;
+  }
+
+  markActionAsRunning(actionId: string) {
+    this.#updateAction(actionId, { status: 'running' });
   }
 
   async #executeAction(actionId: string, isStreaming: boolean = false) {
@@ -279,6 +292,12 @@ export class ActionRunner {
       unreachable('Shell terminal not found');
     }
 
+    const currentState = shell.executionState?.get();
+
+    if (currentState?.active) {
+      shell.terminal.input('\x03');
+    }
+
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);
       action.abort();
@@ -286,6 +305,7 @@ export class ActionRunner {
     logger.debug(`${action.type} Shell Response: [exit code:${resp?.exitCode}]`);
 
     if (resp?.exitCode != 0) {
+      logger.warn(`Failed To Execute Shell Command content: ${action.content}`);
       throw new ActionCommandError(`Failed To Execute Shell Command`, resp?.output || 'No Output Available');
     }
   }
@@ -343,11 +363,138 @@ export class ActionRunner {
 
     try {
       await container.fs.writeFile(relativePath, action.content);
-
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
     }
+  }
+
+  async #runModifyAction(action: ActionState) {
+    if (action.type !== 'modify') {
+      unreachable('Expected modify action');
+    }
+
+    const container = await this.#container;
+    const relativePath = nodePath.relative(container.workdir, action.filePath);
+
+    logger.info(`✏️ [Modify] Starting modifications for: ${relativePath}`);
+    logger.info(`✏️ [Modify] raw content:\n${action.content}`);
+
+    try {
+      // Read current file content
+      let currentFileContent = (await container.fs.readFile(relativePath, 'utf-8')) as string;
+      const originalFileSize = Buffer.byteLength(currentFileContent, 'utf-8');
+
+      // Extract the JSON content from CDATA if present
+      const jsonContent = extractFromCDATA(action.content.trim());
+
+      // Calculate total size of modifications
+      const modificationsSize = Buffer.byteLength(jsonContent, 'utf-8');
+
+      // Parse the modify instructions from action.content
+      const modifications = this.#parseModifications(jsonContent);
+
+      logger.info(`📝 [Modify] Found ${modifications.length} modification(s) to apply`);
+
+      // Apply each modification in order
+      for (let i = 0; i < modifications.length; i++) {
+        const mod = modifications[i];
+        logger.debug(`🔍 [Modify] Applying modification ${i + 1}/${modifications.length}`);
+
+        // Check if the text to find exists
+        if (!currentFileContent.includes(mod.before)) {
+          throw new Error(`Text not found in file: ${mod.before}`);
+        }
+
+        // Check if text appears multiple times
+        const occurrences = (
+          currentFileContent.match(new RegExp(mod.before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []
+        ).length;
+
+        if (occurrences > 1) {
+          logger.warn(`⚠️ [Modify] Text appears ${occurrences} times in file. Only first occurrence will be replaced.`);
+        }
+
+        currentFileContent = currentFileContent.replace(mod.before, mod.after);
+
+        logger.debug(`🔍 [Modify] Replaced\nbefore:\n"${mod.before}"\n-----------------------\nafter:\n"${mod.after}"`);
+        logger.debug(`✅ [Modify] Replacement ${i + 1} successful`);
+      }
+
+      // Write the updated content back
+      await container.fs.writeFile(relativePath, currentFileContent);
+
+      // Calculate final file size and savings
+      const finalFileSize = Buffer.byteLength(currentFileContent, 'utf-8');
+      const savedBytes = finalFileSize - modificationsSize;
+      const savingsPercentage = ((savedBytes / finalFileSize) * 100).toFixed(1);
+
+      logger.info(`✅ [Modify] Successfully applied ${modifications.length} modification(s) to: ${relativePath}`);
+      logger.info(`📊 [Modify] File size comparison:`);
+      logger.info(`   - Original file: ${originalFileSize} bytes`);
+      logger.info(`   - Final file: ${finalFileSize} bytes`);
+      logger.info(`   - Modifications sent: ${modificationsSize} bytes`);
+      logger.info(`   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`);
+    } catch (error) {
+      logger.error(`❌ [Modify] Failed to apply modifications to ${relativePath}:`, error);
+    }
+  }
+
+  #unescapeString(content: string): string {
+    return content
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+  }
+
+  #parseModifications(content: string): Array<{ before: string; after: string }> {
+    const modifications: Array<{ before: string; after: string }> = [];
+
+    try {
+      // Parse the JSON
+      const parsed = JSON.parse(content);
+
+      // Ensure it's an array
+      const modArray = Array.isArray(parsed) ? parsed : [parsed];
+
+      // Process each modification
+      for (const mod of modArray) {
+        if (mod && typeof mod === 'object' && 'before' in mod && 'after' in mod) {
+          modifications.push({
+            before: String(mod.before),
+            after: String(mod.after),
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to parse JSON:', error);
+      logger.debug('Raw content:\n', content);
+
+      // fallback to regex if json parsing fails
+      const regex = /"before"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"after"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+      const reverseRegex = /"after"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"before"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[1]),
+          after: this.#unescapeString(match[2]),
+        });
+      }
+
+      while ((match = reverseRegex.exec(content)) !== null) {
+        modifications.push({
+          before: this.#unescapeString(match[2]),
+          after: this.#unescapeString(match[1]),
+        });
+      }
+    }
+
+    return modifications;
   }
 
   #updateAction(id: string, newState: ActionStateUpdate) {

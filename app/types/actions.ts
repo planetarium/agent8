@@ -11,6 +11,11 @@ export interface FileAction extends BaseAction {
   filePath: string;
 }
 
+export interface ModifyAction extends BaseAction {
+  type: 'modify';
+  filePath: string;
+}
+
 export interface ShellAction extends BaseAction {
   type: 'shell';
 }
@@ -23,7 +28,7 @@ export interface BuildAction extends BaseAction {
   type: 'build';
 }
 
-export type BoltAction = FileAction | ShellAction | StartAction | BuildAction;
+export type BoltAction = FileAction | ShellAction | StartAction | BuildAction | ModifyAction;
 
 export type BoltActionData = BoltAction | BaseAction;
 

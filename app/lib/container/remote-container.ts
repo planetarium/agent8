@@ -510,9 +510,7 @@ class RemoteContainerConnection {
             type: 'heartbeat',
           },
         });
-        logger.debug('💓 Heartbeat sent');
         await Promise.race([heartbeatPromise, timeoutPromise]);
-        logger.debug('💓 Heartbeat response received');
       } catch (error) {
         logger.error('💓 Heartbeat send failed:', error);
         this._handleHeartbeatError();
@@ -1313,6 +1311,12 @@ export class RemoteContainer implements Container {
         if (!currentTerminal) {
           throw new Error('No terminal attached to session');
         }
+
+        /*
+         * Clear global output buffer to avoid confusion with previous command outputs
+         * This ensures we only wait for OSC codes from the current command execution
+         */
+        _globalOutputBuffer = '';
 
         // Interrupt current execution
         currentTerminal.input('\x03');
