@@ -41,12 +41,6 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     userSelectable: true,
   },
   {
-    label: 'GPT-4.1',
-    providerName: 'OpenRouter',
-    modelName: 'openai/gpt-4.1',
-    userSelectable: true,
-  },
-  {
     label: 'GPT-o4-mini',
     providerName: 'OpenRouter',
     modelName: 'openai/o4-mini',
