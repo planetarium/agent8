@@ -114,8 +114,8 @@ export async function streamText(props: {
     ...docTools,
     ...codebaseTools,
     ...resourcesTools,
-    ...submitArtifactActionTool,
-    ...unknownToolHandlerTool,
+    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
 
   if (files) {
