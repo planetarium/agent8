@@ -1,6 +1,6 @@
-import { z } from 'zod/v4';
 import { createScopedLogger } from '~/utils/logger';
 import { TOOL_NAMES } from '~/utils/constants';
+import { jsonSchema } from 'ai';
 
 const logger = createScopedLogger('error-handle-tool');
 
@@ -8,9 +8,14 @@ export const createUnknownToolHandler = () => {
   return {
     [TOOL_NAMES.UNKNOWN_HANDLER]: {
       description: '', // Intentionally empty to hide from LLM
-      parameters: z.object({
-        originalTool: z.string(),
-        originalArgs: z.any(),
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          originalTool: { type: 'string' },
+          originalArgs: { type: 'string', description: 'JSON string representation of the dynamic object' },
+        },
+        required: ['originalTool', 'originalArgs'],
+        additionalProperties: false,
       }),
       execute: async ({ originalTool }: { originalTool: string; originalArgs: any }) => {
         logger.warn(`Unknown tool called: ${originalTool}`);

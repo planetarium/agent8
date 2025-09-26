@@ -179,7 +179,7 @@ export async function streamText(props: {
           toolName: TOOL_NAMES.UNKNOWN_HANDLER,
           input: JSON.stringify({
             originalTool: toolCall.toolName,
-            originalArgs: toolCall.input,
+            originalArgs: JSON.stringify(toolCall.input),
           }),
         };
       }
