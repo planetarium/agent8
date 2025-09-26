@@ -98,16 +98,31 @@ function AccessControlledChat() {
     const handleMessage = async (event: MessageEvent) => {
       if (event.data && event.data.type === 'INIT') {
         const token = event.data.payload?.accessToken;
+        const containerReady = workbenchStore.containerReady;
+
+        console.log('🎯 _index.tsx: INIT event received', {
+          timestamp: Date.now(),
+          containerReady,
+          hasToken: !!token,
+        });
 
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
 
-          // Reinitialize container with the new token to recover from potential failures
+          // Ignore if container is already ready
+          if (containerReady) {
+            console.log('🚫 _index.tsx: Container is already ready, skipping container initialization');
+
+            return;
+          }
+
           try {
+            console.log('🔄 _index.tsx: Container is not ready, reinitializeContainer called');
             await workbenchStore.reinitializeContainer(token);
+            console.log('✅ _index.tsx: reinitializeContainer completed');
           } catch (error) {
-            console.error('Failed to reinitialize container:', error);
+            console.error('❌ _index.tsx: Failed to reinitialize container:', error);
           }
         }
       }
