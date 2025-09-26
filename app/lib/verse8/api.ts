@@ -135,3 +135,39 @@ export const sendActivityPrompt = async (projectPath: string): Promise<boolean> 
     return false;
   }
 };
+
+export const sendActivityUploadAsset = async (count: number): Promise<boolean> => {
+  try {
+    const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
+
+    if (!v8ApiEndpoint) {
+      logger.warn('V8 API endpoint not configured');
+      return false;
+    }
+
+    const accessToken = Cookies.get(V8_ACCESS_TOKEN_KEY) || localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+    if (!accessToken) {
+      logger.warn('No V8 access token found');
+      return false;
+    }
+
+    const response = await fetch(v8ApiEndpoint + `/v1/activity/upload-asset`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ count }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to upload asset activity: ${response.status}`);
+    }
+
+    return true;
+  } catch (error) {
+    logger.error('Failed to upload asset activity', error);
+    return false;
+  }
+};

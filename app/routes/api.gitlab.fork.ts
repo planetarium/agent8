@@ -46,45 +46,53 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
     if (!isOwner) {
       // If not the owner, check verse permissions
       if (!metadata?.fromVerseId) {
-        return json(
-          {
-            success: false,
-            message: 'You can only fork your own projects or projects with verse remix permission',
-          },
-          { status: 403 },
-        );
-      }
+        try {
+          const visibility = await gitlabService.getProjectVisibility(projectPath);
 
-      // Fetch and validate verse data
-      verseData = await fetchVerse(metadata.fromVerseId, env);
+          if (visibility !== 'public') {
+            throw new Error('Project is not public');
+          }
+        } catch {
+          return json(
+            {
+              success: false,
+              message: 'You can only fork your own projects, public projects, or projects with verse remix permission',
+            },
+            { status: 403 },
+          );
+        }
+      } else {
+        // Fetch and validate verse data
+        verseData = await fetchVerse(metadata.fromVerseId, env);
 
-      if (!verseData) {
-        return json({ success: false, message: 'Verse not found or not accessible' }, { status: 400 });
-      }
+        if (!verseData) {
+          return json({ success: false, message: 'Verse not found or not accessible' }, { status: 400 });
+        }
 
-      // Check if remix is allowed
-      if (!verseData.allowRemix) {
-        return json({ success: false, message: 'This verse does not allow remixing' }, { status: 403 });
-      }
+        // Check if remix is allowed
+        if (!verseData.allowRemix) {
+          return json({ success: false, message: 'This verse does not allow remixing' }, { status: 403 });
+        }
 
-      // Extract and validate project info from verse playUrl
-      const { projectPath: verseProjectPath, sha: verseSha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
+        // Extract and validate project info from verse playUrl
+        const { projectPath: verseProjectPath, sha: verseSha } = extractProjectInfoFromPlayUrl(verseData.playUrl);
 
-      // Validate that the requested projectPath matches the verse's project
-      if (projectPath !== verseProjectPath) {
-        return json({ success: false, message: 'Project path does not match verse project' }, { status: 400 });
-      }
+        // Validate that the requested projectPath matches the verse's project
+        if (projectPath !== verseProjectPath) {
+          return json({ success: false, message: 'Project path does not match verse project' }, { status: 400 });
+        }
 
-      /*
-       * If commitSha is provided, validate it matches the verse's SHA
-       * if (commitSha && commitSha !== verseSha) {
-       *   return json({ success: false, message: 'Commit SHA does not match verse version' }, { status: 400 });
-       * }
-       */
+        /*
+         * If commitSha is provided, validate it matches the verse's SHA
+         * if (commitSha && commitSha !== verseSha) {
+         *   return json({ success: false, message: 'Commit SHA does not match verse version' }, { status: 400 });
+         * }
+         */
 
-      // Use verse SHA if no commitSha provided
-      if (!commitSha) {
-        commitSha = verseSha;
+        // Use verse SHA if no commitSha provided
+        if (!commitSha) {
+          commitSha = verseSha;
+        }
       }
     } else if (metadata?.fromVerseId) {
       // If owner is forking their own project with verse metadata, still validate verse

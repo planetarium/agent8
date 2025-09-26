@@ -762,12 +762,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               </p>
                             </div>,
                             {
-                              position: 'bottom-center',
                               autoClose: 5000,
                               hideProgressBar: false,
                               closeOnClick: true,
                               pauseOnHover: true,
-                              draggable: true,
                               icon: () => <div className="i-ph:arrow-fat-lines-right text-xl" />,
                             },
                           );

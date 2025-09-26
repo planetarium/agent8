@@ -11,9 +11,9 @@ import type { IconType } from 'react-icons';
 import { BiChip } from 'react-icons/bi';
 import { TbBrandOpenai } from 'react-icons/tb';
 import { providerBaseUrlEnvKeys } from '~/utils/constants';
-import { useToast } from '~/components/ui/use-toast';
 import { Progress } from '~/components/ui/Progress';
 import OllamaModelInstaller from './OllamaModelInstaller';
+import { toast } from 'react-toastify';
 
 // Add type for provider names to ensure type safety
 type ProviderName = 'Ollama' | 'LMStudio' | 'OpenAILike';
@@ -78,7 +78,6 @@ export default function LocalProvidersTab() {
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
-  const { toast } = useToast();
 
   // Effect to filter and sort providers
   useEffect(() => {
@@ -239,7 +238,7 @@ export default function LocalProvidersTab() {
       filteredProviders.forEach((provider) => {
         updateProviderSettings(provider.name, { ...provider.settings, enabled });
       });
-      toast(enabled ? 'All local providers enabled' : 'All local providers disabled');
+      toast.info(enabled ? 'All local providers enabled' : 'All local providers disabled');
     },
     [filteredProviders, updateProviderSettings],
   );
@@ -252,10 +251,10 @@ export default function LocalProvidersTab() {
 
     if (enabled) {
       logStore.logProvider(`Provider ${provider.name} enabled`, { provider: provider.name });
-      toast(`${provider.name} enabled`);
+      toast.info(`${provider.name} enabled`);
     } else {
       logStore.logProvider(`Provider ${provider.name} disabled`, { provider: provider.name });
-      toast(`${provider.name} disabled`);
+      toast.info(`${provider.name} disabled`);
     }
   };
 
@@ -264,7 +263,7 @@ export default function LocalProvidersTab() {
       ...provider.settings,
       baseUrl: newBaseUrl,
     });
-    toast(`${provider.name} base URL updated`);
+    toast.info(`${provider.name} base URL updated`);
     setEditingProvider(null);
   };
 
@@ -272,9 +271,9 @@ export default function LocalProvidersTab() {
     const updateSuccess = await updateOllamaModel(modelName);
 
     if (updateSuccess) {
-      toast(`Updated ${modelName}`);
+      toast.info(`Updated ${modelName}`);
     } else {
-      toast(`Failed to update ${modelName}`);
+      toast.info(`Failed to update ${modelName}`);
     }
   };
 
@@ -293,11 +292,11 @@ export default function LocalProvidersTab() {
       }
 
       setOllamaModels((current) => current.filter((m) => m.name !== modelName));
-      toast(`Deleted ${modelName}`);
+      toast.info(`Deleted ${modelName}`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error(`Error deleting ${modelName}:`, errorMessage);
-      toast(`Failed to delete ${modelName}`);
+      toast.info(`Failed to delete ${modelName}`);
     }
   };
 

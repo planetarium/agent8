@@ -33,6 +33,12 @@ export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' |
 
 const logger = createScopedLogger('stream-text');
 
+const DEFAULT_PROVIDER_OPTIONS: StreamingOptions = {
+  providerOptions: {
+    openai: { strictSchemas: false },
+  },
+} as const;
+
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
   env?: Env;
