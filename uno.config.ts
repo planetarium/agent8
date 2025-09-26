@@ -341,7 +341,7 @@ export default defineConfig({
     },
     breakpoints: {
       mobile: '360px',
-      tablet: '768px',
+      tablet: '760px',
       'tablet-wide': '960px',
       laptop: '1024px',
       'laptop-narrow': '1176px',
