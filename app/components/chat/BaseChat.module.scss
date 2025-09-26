@@ -16,9 +16,13 @@
 
 .Chat {
   opacity: 1;
-  margin-right: 10px;
+  margin-right: 0px;
   padding-right: 0px;
   box-sizing: border-box;
+}
+
+.Chat.chatStarted {
+  margin-right: 10px;
 }
 
 .PromptEffectContainer {

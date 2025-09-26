@@ -140,8 +140,8 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
   return (
     <div
       className={classNames('w-full mx-auto', {
-        'max-w-chat': chatStarted,
-        'max-w-chat-before-start': !chatStarted,
+        'tablet:max-w-chat': chatStarted,
+        'tablet:max-w-chat-before-start': !chatStarted,
       })}
     >
       <div className="flex items-center justify-between flex-wrap self-stretch relative">

@@ -30,18 +30,17 @@ export const ColorTab: React.FC<ColorTabProps> = ({
   };
 
   const sizeClasses = {
-    sm: 'h-[40px] min-h-[40px] px-[12px] text-heading-2xs',
-    md: 'h-[48px] min-h-[48px] px-[16px] text-heading-sm',
-    lg: 'h-[56px] min-h-[56px] px-[20px] text-heading-sm',
+    sm: 'min-w-[80px] px-[4px] py-[8px] text-heading-2xs flex-col gap-[4px] flex-[1_0_0]',
+    md: 'h-[48px] min-h-[48px] px-[16px] text-heading-sm gap-[8px]',
+    lg: 'h-[56px] min-h-[56px] px-[20px] text-heading-sm gap-[8px]',
   };
 
   return (
     <div
       className={classNames(
-        'flex justify-center items-center gap-[8px] flex-shrink-0 relative',
+        'flex justify-center items-center flex-shrink-0 self-stretch relative',
         'rounded-[8px]',
         'text-interactive-neutral',
-        'transition-all duration-200',
         'cursor-pointer',
         'border',
         'hover:elevation-light-3',

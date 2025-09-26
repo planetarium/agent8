@@ -16,11 +16,13 @@ import { toast } from 'react-toastify';
 import { handleChatError } from '~/utils/errorNotification';
 import { motion } from 'framer-motion';
 
+import { useMobileView } from '~/lib/hooks/useMobileView';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 
 import FilePreview from './FilePreview';
+import MainBackground from '~/components/ui/MainBackground';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
 import type { ActionAlert } from '~/types/actions';
@@ -48,7 +50,7 @@ import {
   PlayCircleIcon,
 } from '~/components/ui/Icons';
 
-const TEXTAREA_MIN_HEIGHT = 76;
+const TEXTAREA_MIN_HEIGHT = 40;
 const MAX_ATTACHMENTS = 10;
 
 export interface ChatAttachment {
@@ -103,6 +105,8 @@ interface BaseChatProps {
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
   customProgressAnnotations?: ProgressAnnotation[];
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -149,6 +153,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       loadBefore,
       loadingBefore,
       customProgressAnnotations = [],
+      isAuthenticated = true,
+      onAuthRequired,
     },
     ref,
   ) => {
@@ -165,6 +171,31 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [selectedVideoTab, setSelectedVideoTab] = useState<'top-down' | 'tps' | 'story' | 'puzzle'>('top-down');
     const [isVideoHovered, setIsVideoHovered] = useState<boolean>(false);
     const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false);
+
+    const isMobileView = useMobileView();
+
+    // Optimized color tab handlers
+    const handleColorTabClick = useCallback(
+      (tab: 'top-down' | 'tps' | 'story' | 'puzzle', prompt: string) => {
+        // Prevent unnecessary re-renders if same tab is clicked
+        if (selectedVideoTab === tab) {
+          return;
+        }
+
+        // Use startTransition to mark this as a non-urgent update
+        React.startTransition(() => {
+          setSelectedVideoTab(tab);
+
+          if (handleInputChange) {
+            const syntheticEvent = {
+              target: { value: prompt },
+            } as React.ChangeEvent<HTMLTextAreaElement>;
+            handleInputChange(syntheticEvent);
+          }
+        });
+      },
+      [handleInputChange, selectedVideoTab],
+    );
 
     // Define video sources for each tab
     const videoSources = {
@@ -189,10 +220,20 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
     };
 
-    // Reset pause state when video tab changes
+    // Reset pause state when video tab changes and handle smooth video transition
     useEffect(() => {
       setIsVideoPaused(false);
-    }, [selectedVideoTab]);
+
+      // Optimize video loading for mobile to reduce flickering
+      if (!isMobileView) {
+        // Only preload on non-mobile devices
+        const video = document.querySelector('video');
+
+        if (video) {
+          video.load(); // Reload the video with new source
+        }
+      }
+    }, [selectedVideoTab, isMobileView]);
 
     useEffect(() => {
       const progressFromData = data
@@ -284,6 +325,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     }, []);
 
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
+      if (!isAuthenticated) {
+        onAuthRequired?.();
+        return;
+      }
+
       if (sendMessage) {
         lastActionStore.set({ action: 'SEND_MESSAGE' });
         sendMessage(event, messageInput);
@@ -570,143 +616,204 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             }}
             className={classNames(
               styles.Chat,
-              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-y-auto chat-container',
+              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full chat-container',
+              {
+                'overflow-y-auto': chatStarted,
+                [styles.chatStarted]: chatStarted,
+              },
             )}
           >
             {!chatStarted && (
-              <div className="flex flex-col items-center gap-4 flex-shrink-0 h-[85vh] relative">
-                <div id="intro" className="max-w-chat-before-start mx-auto text-center">
+              <div className="flex flex-col items-center max-w-[632px] w-full gap-4 flex-shrink-0 tablet:h-[85vh] tablet:px-0 relative tablet:max-w-none mx-auto">
+                <MainBackground zIndex={1} isMobileView={isMobileView} />
+                {/* Background Image */}
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-center bg-no-repeat" />
+                <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
                   <div className="flex justify-center">
-                    <span className="text-heading-4xl text-elevation-shadow-3">Game Creation, Simplified</span>
+                    <span className="text-heading-lg tablet:text-heading-4xl text-elevation-shadow-3">
+                      Game Creation, Simplified
+                    </span>
                   </div>
                 </div>
-                <span className="flex justify-center text-heading-sm text-secondary self-stretch">
-                  Start here — or make your own. What do you want to create?
+                <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm px-2 tablet:px-0 text-secondary self-stretch z-2">
+                  Start here — or make your own.{isMobileView && <br />} What do you want to create?
                 </span>
-                <div
-                  className="flex flex-col items-start flex-shrink-0 border border-primary aspect-[16/9] rounded-[24px] max-w-[1151px] max-h-[58vh] relative cursor-pointer"
-                  onMouseEnter={() => setIsVideoHovered(true)}
-                  onMouseLeave={() => setIsVideoHovered(false)}
-                >
-                  <video
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="w-full h-full object-cover rounded-[24px]"
-                    key={selectedVideoTab}
-                    onClick={handleVideoClick}
-                  >
-                    <source src={videoSources[selectedVideoTab]} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
 
-                  {/* Video icon overlay */}
-                  {(isVideoHovered || isVideoPaused) && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="flex items-center justify-center w-25 h-25 flex-shrink-0 aspect-square opacity-90">
-                        {isVideoPaused ? (
-                          <PlayCircleIcon color="#FFFFFF" size={100} />
-                        ) : (
-                          <PauseCircleIcon color="#FFFFFF" size={100} />
-                        )}
+                {/* Mobile: ColorTabs above video */}
+                <div className="flex max-w-[632px] px-4 w-full tablet:hidden items-start justify-center tablet:px-0 gap-2 self-stretch z-1">
+                  <ColorTab
+                    color="cyan"
+                    size="sm"
+                    selected={selectedVideoTab === 'top-down'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'top-down',
+                        'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
+                      )
+                    }
+                  >
+                    <TopDownIcon size={24} className="flex-shrink-0" />
+                    <span>Top-Down</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="brown"
+                    size="sm"
+                    selected={selectedVideoTab === 'tps'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'tps',
+                        'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+                      )
+                    }
+                  >
+                    <TpsIcon size={24} />
+                    <span className="uppercase">tps</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="magenta"
+                    size="sm"
+                    selected={selectedVideoTab === 'story'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'story',
+                        'A simple Japanese-style visual novel about everyday life in a high school.',
+                      )
+                    }
+                  >
+                    <StoryIcon size={24} />
+                    <span>Story</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="green"
+                    size="sm"
+                    selected={selectedVideoTab === 'puzzle'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'puzzle',
+                        'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
+                      )
+                    }
+                  >
+                    <PuzzleIcon size={24} />
+                    <span>Puzzle</span>
+                  </ColorTab>
+                </div>
+
+                <div className="w-full max-w-[632px] px-4 tablet:w-auto tablet:max-w-[1151px]">
+                  <div
+                    className={classNames('flex flex-col items-start flex-shrink-0 relative cursor-pointer z-1', {
+                      'aspect-[16/9] max-h-[58vh] border border-primary rounded-[24px]': !isMobileView,
+                      'aspect-[16/9] rounded-[8px]': isMobileView,
+                    })}
+                    onMouseEnter={() => setIsVideoHovered(true)}
+                    onMouseLeave={() => setIsVideoHovered(false)}
+                  >
+                    <video
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className={classNames('w-full h-full object-cover', {
+                        'rounded-[24px]': !isMobileView,
+                        'rounded-[8px]': isMobileView,
+                      })}
+                      src={videoSources[selectedVideoTab]}
+                      onClick={handleVideoClick}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+
+                    {/* Video icon overlay */}
+                    {(isVideoHovered || isVideoPaused) && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="flex items-center justify-center w-25 h-25 flex-shrink-0 aspect-square opacity-90">
+                          {isVideoPaused ? (
+                            <PlayCircleIcon color="#FFFFFF" size={100} />
+                          ) : (
+                            <PauseCircleIcon color="#FFFFFF" size={100} />
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tablet+: ColorTabs on video overlay */}
+                    <div className="hidden tablet:block">
+                      <div
+                        className={classNames('absolute top-0 left-0 w-full h-[100px] flex-shrink-0 opacity-80', {
+                          'rounded-t-[24px]': !isMobileView,
+                          'rounded-t-[8px]': isMobileView,
+                        })}
+                        style={{
+                          background:
+                            'linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.98) 4.7%, rgba(0, 0, 0, 0.96) 8.9%, rgba(0, 0, 0, 0.93) 12.8%, rgba(0, 0, 0, 0.90) 16.56%, rgba(0, 0, 0, 0.86) 20.37%, rgba(0, 0, 0, 0.82) 24.4%, rgba(0, 0, 0, 0.77) 28.83%, rgba(0, 0, 0, 0.71) 33.84%, rgba(0, 0, 0, 0.65) 39.6%, rgba(0, 0, 0, 0.57) 46.3%, rgba(0, 0, 0, 0.48) 54.1%, rgba(0, 0, 0, 0.38) 63.2%, rgba(0, 0, 0, 0.27) 73.76%, rgba(0, 0, 0, 0.14) 85.97%, rgba(0, 0, 0, 0.00) 100%)',
+                        }}
+                      />
+                      <div className="absolute flex items-center justify-center gap-3 top-4 left-1/2 -translate-x-1/2">
+                        <ColorTab
+                          color="cyan"
+                          size="md"
+                          selected={selectedVideoTab === 'top-down'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'top-down',
+                              'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
+                            )
+                          }
+                        >
+                          <TopDownIcon size={24} className="flex-shrink-0" />
+                          <span>Top-Down</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="brown"
+                          size="md"
+                          selected={selectedVideoTab === 'tps'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'tps',
+                              'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+                            )
+                          }
+                        >
+                          <TpsIcon size={24} />
+                          <span className="uppercase">tps</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="magenta"
+                          size="md"
+                          selected={selectedVideoTab === 'story'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'story',
+                              'A simple Japanese-style visual novel about everyday life in a high school.',
+                            )
+                          }
+                        >
+                          <StoryIcon size={24} />
+                          <span>Story</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="green"
+                          size="md"
+                          selected={selectedVideoTab === 'puzzle'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'puzzle',
+                              'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
+                            )
+                          }
+                        >
+                          <PuzzleIcon size={24} />
+                          <span>Puzzle</span>
+                        </ColorTab>
                       </div>
                     </div>
-                  )}
-                  <div
-                    className="absolute top-0 left-0 w-full h-[100px] flex-shrink-0 rounded-t-[24px] opacity-80"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.98) 4.7%, rgba(0, 0, 0, 0.96) 8.9%, rgba(0, 0, 0, 0.93) 12.8%, rgba(0, 0, 0, 0.90) 16.56%, rgba(0, 0, 0, 0.86) 20.37%, rgba(0, 0, 0, 0.82) 24.4%, rgba(0, 0, 0, 0.77) 28.83%, rgba(0, 0, 0, 0.71) 33.84%, rgba(0, 0, 0, 0.65) 39.6%, rgba(0, 0, 0, 0.57) 46.3%, rgba(0, 0, 0, 0.48) 54.1%, rgba(0, 0, 0, 0.38) 63.2%, rgba(0, 0, 0, 0.27) 73.76%, rgba(0, 0, 0, 0.14) 85.97%, rgba(0, 0, 0, 0.00) 100%)',
-                    }}
-                  />
-                  <div className="absolute flex items-center gap-3 top-4 left-1/2 -translate-x-1/2">
-                    <ColorTab
-                      color="cyan"
-                      size="md"
-                      selected={selectedVideoTab === 'top-down'}
-                      onClick={() => {
-                        setSelectedVideoTab('top-down');
-
-                        if (handleInputChange) {
-                          const prompt =
-                            'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
-                          const syntheticEvent = {
-                            target: { value: prompt },
-                          } as React.ChangeEvent<HTMLTextAreaElement>;
-                          handleInputChange(syntheticEvent);
-                        }
-                      }}
-                    >
-                      <TopDownIcon size={24} />
-                      <span>Top-Down</span>
-                    </ColorTab>
-                    <ColorTab
-                      color="brown"
-                      size="md"
-                      selected={selectedVideoTab === 'tps'}
-                      onClick={() => {
-                        setSelectedVideoTab('tps');
-
-                        if (handleInputChange) {
-                          const prompt =
-                            'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.';
-                          const syntheticEvent = {
-                            target: { value: prompt },
-                          } as React.ChangeEvent<HTMLTextAreaElement>;
-                          handleInputChange(syntheticEvent);
-                        }
-                      }}
-                    >
-                      <TpsIcon size={24} />
-                      <span className="uppercase">tps</span>
-                    </ColorTab>
-                    <ColorTab
-                      color="magenta"
-                      size="md"
-                      selected={selectedVideoTab === 'story'}
-                      onClick={() => {
-                        setSelectedVideoTab('story');
-
-                        if (handleInputChange) {
-                          const prompt = 'A simple Japanese-style visual novel about everyday life in a high school.';
-                          const syntheticEvent = {
-                            target: { value: prompt },
-                          } as React.ChangeEvent<HTMLTextAreaElement>;
-                          handleInputChange(syntheticEvent);
-                        }
-                      }}
-                    >
-                      <StoryIcon size={24} />
-                      <span>Story</span>
-                    </ColorTab>
-                    <ColorTab
-                      color="green"
-                      size="md"
-                      selected={selectedVideoTab === 'puzzle'}
-                      onClick={() => {
-                        setSelectedVideoTab('puzzle');
-
-                        if (handleInputChange) {
-                          const prompt =
-                            'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.';
-                          const syntheticEvent = {
-                            target: { value: prompt },
-                          } as React.ChangeEvent<HTMLTextAreaElement>;
-                          handleInputChange(syntheticEvent);
-                        }
-                      }}
-                    >
-                      <PuzzleIcon size={24} />
-                      <span>Puzzle</span>
-                    </ColorTab>
                   </div>
                 </div>
               </div>
             )}
 
             <div
-              className={classNames('pt-4 px-2 sm:px-6 relative', {
+              className={classNames('pt-0 min-w-[376px] tablet:pt-4 tablet:px-6 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -761,9 +868,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div
                 className={classNames('flex flex-col gap-3 w-full mx-auto z-prompt', {
                   'sticky bottom-4': chatStarted,
-                  'max-w-chat': chatStarted,
-                  'max-w-chat-before-start': !chatStarted,
-                  'absolute bottom-0 left-1/2 transform -translate-x-1/2': !chatStarted,
+                  'tablet:max-w-chat': chatStarted,
+                  'tablet:max-w-chat-before-start': !chatStarted,
+                  'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
+                  'tablet:absolute tablet:bottom-[200%] tablet:left-1/2 tablet:transform tablet:-translate-x-1/2':
+                    !chatStarted,
+                  'fixed bottom-[3.5%] z-[9999] translate-x-[-50%] left-1/2':
+                    !chatStarted && attachmentList.length > 0 && isMobileView,
                 })}
               >
                 <div className="bg-bolt-elements-background-depth-2">
@@ -801,8 +912,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   className={classNames(
                     'flex flex-col self-stretch px-4 pt-[6px] pb-4 relative w-full mx-auto z-prompt',
                     {
-                      'max-w-chat': chatStarted,
-                      'max-w-chat-before-start bottom-4': !chatStarted,
+                      'tablet:max-w-chat': chatStarted,
+                      'tablet:max-w-chat-before-start': !chatStarted,
                       'bg-primary': !chatStarted,
                       [styles.promptInputActive]: chatStarted,
                     },
@@ -811,7 +922,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     !chatStarted
                       ? {
                           borderRadius: 'var(--border-radius-16, 16px)',
-                          boxShadow: '0 2px 8px 2px rgba(26, 220, 217, 0.12), 0 8px 56px 8px rgba(148, 250, 239, 0.16)',
+                          boxShadow: isMobileView
+                            ? '0 1px 4px 1px rgba(26, 220, 217, 0.12), 0 2px 20px 4px rgba(148, 250, 239, 0.16)'
+                            : '0 2px 8px 2px rgba(26, 220, 217, 0.12), 0 8px 56px 8px rgba(148, 250, 239, 0.16)',
                         }
                       : {}
                   }
@@ -840,18 +953,25 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full outline-none resize-none bg-transparent font-primary text-[16px] font-medium font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
+                        'w-full outline-none resize-none bg-transparent text-[14px] font-medium text-primary placeholder-text-subtle',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
-                        'flex-1',
+                        {
+                          'flex-1': !isMobileView,
+                        },
                       )}
                       style={{
-                        // fontStyle: 'normal',
-                        lineHeight: '160%',
+                        fontFamily: '"Instrument Sans"',
+                        fontSize: '14px',
+                        fontStyle: 'normal',
+                        fontWeight: 500,
+                        lineHeight: '142.9%',
                         minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
-                        maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
+                        maxHeight: isMobileView ? `${TEXTAREA_MIN_HEIGHT}px` : `${TEXTAREA_MAX_HEIGHT}px`,
+                        height: isMobileView ? `${TEXTAREA_MIN_HEIGHT}px` : undefined,
                         border: '1px solid transparent',
-                        overflowY: 'scroll',
+                        overflowY: isMobileView ? 'auto' : 'scroll',
+                        resize: 'none',
                       }}
                       onDragEnter={(e) => {
                         e.preventDefault();
@@ -929,11 +1049,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         handleInputChange?.(event);
                       }}
                       onPaste={handlePaste}
-                      placeholder=""
+                      placeholder="What kind of game do you want to make?"
                       translate="no"
                     />
                   </div>
-                  <div className="flex justify-between items-center self-stretch text-sm mt-auto">
+                  <div className="flex justify-between items-center self-stretch text-sm mt-4">
                     <div className="flex items-center gap-[4.8px]">
                       <div
                         className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200"
@@ -1024,6 +1144,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           <SendButton
                             show={true}
                             isStreaming={isStreaming}
+                            isAuthenticated={isAuthenticated}
                             disabled={
                               !providerList ||
                               providerList.length === 0 ||
@@ -1062,7 +1183,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
             {!chatStarted && (
               <motion.div
-                className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-10"
+                className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-10 hidden tablet:block"
                 animate={{
                   y: [0, -6, 0],
                 }}

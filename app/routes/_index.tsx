@@ -2,6 +2,8 @@ import { json, type MetaFunction } from '@remix-run/cloudflare';
 import { useLoaderData } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
+import Cookies from 'js-cookie';
+
 import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
@@ -42,10 +44,24 @@ function DirectChatAccess() {
  * 접근 제어 기능이 있는 컴포넌트
  */
 function AccessControlledChat() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
-  const [loadedContainer, setLoadedContainer] = useState(false);
+  const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
+
+  // Helper function to send postMessage to allowed parent origins
+  const sendMessageToParent = (message: any) => {
+    if (window.parent && window.parent !== window) {
+      const allowedOriginsEnv = import.meta.env.VITE_ALLOWED_PARENT_ORIGINS;
+      const allowedOrigins = allowedOriginsEnv
+        ? allowedOriginsEnv.split(',').map((origin: string) => origin.trim())
+        : ['https://verse8.io']; // fallback
+      const parentOrigin = document.referrer ? new URL(document.referrer).origin : null;
+      const targetOrigin = parentOrigin && allowedOrigins.includes(parentOrigin) ? parentOrigin : allowedOrigins[0];
+
+      window.parent.postMessage(message, targetOrigin);
+    }
+  };
 
   useEffect(() => {
     if (accessToken) {
@@ -76,6 +92,9 @@ function AccessControlledChat() {
         }
       };
       verifyToken();
+    } else {
+      setIsLoading(false);
+      setIsActivated(false);
     }
   }, [accessToken]);
 
@@ -83,14 +102,9 @@ function AccessControlledChat() {
     // RemoteContainer는 항상 사용 가능
     setLoadedContainer(true);
 
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        {
-          type: 'REQUEST_AUTH',
-        },
-        '*',
-      );
-    }
+    sendMessageToParent({
+      type: 'REQUEST_AUTH',
+    });
   }, []);
 
   useEffect(() => {
@@ -108,6 +122,13 @@ function AccessControlledChat() {
           } catch (error) {
             console.error('Failed to reinitialize container:', error);
           }
+        } else {
+          // Handle logout when token is null/undefined
+          localStorage.removeItem(V8_ACCESS_TOKEN_KEY);
+          Cookies.remove(V8_ACCESS_TOKEN_KEY);
+          setAccessToken(null);
+          setIsActivated(false);
+          v8UserStore.set({ loading: false, user: null });
         }
       }
     };
@@ -128,38 +149,11 @@ function AccessControlledChat() {
     };
   }, [isLoading, accessToken]);
 
-  // 로딩 화면 컴포넌트
-  const LoadingScreen = () => (
-    <div className="flex flex-col items-center justify-center h-full w-full">
-      <p className="mt-4 text-lg text-gray-600"></p>
-    </div>
-  );
-
-  // 접근 제한 화면 컴포넌트
-  const AccessRestricted = () => {
-    useEffect(() => {
-      const interval = setInterval(() => {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(
-            {
-              type: 'REQUEST_AUTH',
-            },
-            '*',
-          );
-        }
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }, []);
-
-    return (
-      <div className="flex flex-col items-center justify-center h-full w-full text-center px-4">
-        <div className="bg-gradient-to-br from-cyan-700 to-sky-900 p-8 rounded-lg border border-cyan-500 max-w-md shadow-lg shadow-cyan-700/30">
-          <h2 className="text-2xl font-bold text-cyan-200 mb-3">Authenticating...</h2>
-          <p className="text-cyan-300 mb-4">Please wait while we verify your access.</p>
-        </div>
-      </div>
-    );
+  const handleAuthRequired = () => {
+    sendMessageToParent({
+      type: 'AUTH_REQUIRED',
+      action: 'SHOW_LOGIN_MODAL',
+    });
   };
 
   // 컨테이너가 로딩되지 않았을 때 표시할 컴포넌트
@@ -224,14 +218,14 @@ function AccessControlledChat() {
     <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
       <Header />
 
-      {isLoading ? (
-        <LoadingScreen />
-      ) : isActivated === false ? (
-        <AccessRestricted />
-      ) : !loadedContainer ? (
+      {!loadedContainer ? (
         <NotLoadedContainer />
       ) : (
-        <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
+        <ClientOnly fallback={<BaseChat />}>
+          {() => {
+            return <Chat isAuthenticated={isActivated === true} onAuthRequired={handleAuthRequired} />;
+          }}
+        </ClientOnly>
       )}
     </div>
   );

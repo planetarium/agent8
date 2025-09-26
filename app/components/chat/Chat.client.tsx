@@ -9,6 +9,7 @@ import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
+import { useMobileView } from '~/lib/hooks/useMobileView';
 import { chatStore } from '~/lib/stores/chat';
 import {
   useWorkbenchFiles,
@@ -115,7 +116,12 @@ function sendEventToParent(type: string, payload: any) {
   }
 }
 
-export function Chat() {
+interface ChatComponentProps {
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
+}
+
+export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
   const {
@@ -231,6 +237,8 @@ export function Chat() {
           hasMore={hasMore}
           loadBefore={loadBefore}
           loadingBefore={loadingBefore}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={onAuthRequired}
         />
       )}
       <ToastContainer />
@@ -263,6 +271,8 @@ interface ChatProps {
   hasMore: boolean;
   loadBefore: () => Promise<void>;
   loadingBefore: boolean;
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export const ChatImpl = memo(
@@ -279,9 +289,12 @@ export const ChatImpl = memo(
     hasMore,
     loadBefore,
     loadingBefore,
+    isAuthenticated,
+    onAuthRequired,
   }: ChatProps) => {
     useShortcuts();
 
+    const isMobileView = useMobileView();
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer(); // Container 인스턴스 구독
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -547,6 +560,10 @@ export const ChatImpl = memo(
     };
 
     useEffect(() => {
+      if (isMobileView) {
+        return;
+      }
+
       const textarea = textareaRef.current;
 
       if (textarea) {
@@ -575,6 +592,12 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // 인증 체크 - 인증되지 않은 경우 부모에게 알리고 리턴
+      if (!isAuthenticated) {
+        onAuthRequired?.();
+        return;
+      }
+
       if (lastSendMessageTime.current && Date.now() - lastSendMessageTime.current < 1000) {
         return;
       }
@@ -1235,6 +1258,8 @@ export const ChatImpl = memo(
         loadBefore={loadBefore}
         loadingBefore={loadingBefore}
         customProgressAnnotations={customProgressAnnotations}
+        isAuthenticated={isAuthenticated}
+        onAuthRequired={onAuthRequired}
       />
     );
   },
