@@ -12,7 +12,7 @@ export const createUnknownToolHandler = () => {
         type: 'object',
         properties: {
           originalTool: { type: 'string' },
-          originalArgs: { type: 'string', description: 'JSON string representation of the dynamic object' },
+          originalArgs: { type: 'string' },
         },
         required: ['originalTool', 'originalArgs'],
         additionalProperties: false,
