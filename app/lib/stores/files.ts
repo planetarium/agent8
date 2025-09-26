@@ -1,14 +1,11 @@
 import type { Container, PathWatcherEvent } from '~/lib/container/interfaces';
-import { getEncoding } from 'istextorbinary';
-import isBinaryPath from 'is-binary-path';
-import { fileTypeFromBuffer } from 'file-type';
 import { map, type MapStore } from 'nanostores';
-import { Buffer } from 'node:buffer';
 import { path } from '~/utils/path';
 import { bufferWatchEvents } from '~/utils/buffer';
 import { WORK_DIR } from '~/utils/constants';
 import { computeFileModifications } from '~/utils/diff';
 import { createScopedLogger } from '~/utils/logger';
+import { detectBinaryFile } from '~/utils/fileUtils';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -16,10 +13,32 @@ const utf8TextDecoder = new TextDecoder('utf-8', { fatal: true });
 
 export interface File {
   type: 'file';
+
+  /**
+   * 파일의 텍스트 내용
+   * - 텍스트 파일: 실제 파일 내용 (UTF-8 문자열)
+   * - 바이너리 파일: 빈 문자열 '' (기존 코드 호환성 유지)
+   */
   content: string;
+
+  /**
+   * 바이너리 파일 여부를 나타내는 플래그
+   * true: 바이너리 파일 (이미지, 실행파일 등)
+   * false: 텍스트 파일 (코드, 문서 등)
+   */
   isBinary: boolean;
   mimeType?: string;
   fileFormat?: string;
+
+  /**
+   * 바이너리 파일의 원본 데이터
+   * - 바이너리 파일: 실제 Uint8Array 데이터
+   * - 텍스트 파일: undefined
+   *
+   * 설계 이유: content 필드를 string | Uint8Array로 변경하지 않고
+   * 별도 buffer 필드를 추가하여 기존 코드의 변경을 최소화
+   */
+  buffer?: Uint8Array;
 }
 
 export interface Folder {
@@ -187,23 +206,33 @@ export class FilesStore {
           let content = '';
 
           /**
-           * @note Enhanced binary file detection using path-based and content-based analysis.
-           * This provides more accurate detection than the previous method and supports
-           * a wider range of file formats including 3D models, images, and other binary formats.
+           * @note Enhanced binary file detection using unified utility function
            */
           const binaryDetectionResult = await detectBinaryFile(sanitizedPath, buffer);
           const isBinary = binaryDetectionResult.isBinary;
 
+          /**
+           * 파일 타입별 데이터 저장:
+           * - 바이너리 파일: buffer에 원본 Uint8Array 저장, content는 빈 문자열
+           * - 텍스트 파일: content에 UTF-8 문자열 저장, buffer는 undefined
+           *
+           * content 필드를 string | Uint8Array로 변경하지 않고 별도 buffer 필드를 추가한 이유:
+           * 기존 코드에서 content를 string으로 사용하는 부분의 변경을 최소화
+           */
           if (!isBinary) {
+            // 텍스트 파일: 문자열로 디코딩하여 content에 저장
             content = this.#decodeFileContent(buffer);
           }
 
+          // 바이너리 파일: content는 빈 문자열로 유지, buffer에 원본 데이터 보존
+
           this.files.setKey(sanitizedPath, {
             type: 'file',
-            content,
+            content, // 바이너리: '', 텍스트: 실제 내용
             isBinary,
             mimeType: binaryDetectionResult.mimeType,
             fileFormat: binaryDetectionResult.fileFormat,
+            buffer: isBinary ? buffer : undefined, // 바이너리: 실제 데이터, 텍스트: undefined
           });
 
           break;
@@ -233,195 +262,4 @@ export class FilesStore {
       return '';
     }
   }
-}
-
-/**
- * Enhanced binary file detection using is-binary-path + file-type combination
- * Provides accurate detection for various file formats including 3D models, images, etc.
- */
-async function detectBinaryFile(
-  filePath: string,
-  buffer?: Uint8Array,
-): Promise<{
-  isBinary: boolean;
-  mimeType?: string;
-  fileFormat?: string;
-  confidence: 'high' | 'medium' | 'low';
-}> {
-  // Step 1: Quick path-based detection using is-binary-path
-  if (isBinaryPath(filePath)) {
-    return {
-      isBinary: true,
-      confidence: 'high',
-      fileFormat: getFileFormatFromPath(filePath),
-    };
-  }
-
-  // Step 2: Content-based detection using file-type
-  if (buffer && buffer.length > 0) {
-    try {
-      const fileType = await fileTypeFromBuffer(buffer.slice(0, 4100));
-
-      if (fileType) {
-        const isBinary = !fileType.mime.startsWith('text/');
-        return {
-          isBinary,
-          mimeType: fileType.mime,
-          fileFormat: fileType.ext.toUpperCase(),
-          confidence: 'high',
-        };
-      }
-    } catch (error) {
-      // file-type failed, fall back to content analysis
-      logger.debug('file-type detection failed:', error);
-    }
-
-    // Step 3: Content analysis as fallback
-    const contentResult = analyzeFileContent(buffer);
-
-    if (contentResult.confidence === 'high') {
-      return contentResult;
-    }
-
-    // Step 4: Enhanced content analysis with istextorbinary as final fallback
-    const isTextOrBinary = getEncoding(convertToBuffer(buffer), { chunkLength: 100 });
-
-    if (isTextOrBinary === 'binary') {
-      return {
-        isBinary: true,
-        confidence: 'medium',
-      };
-    }
-  }
-
-  // Default: assume text file
-  return {
-    isBinary: false,
-    confidence: 'low',
-  };
-}
-
-/**
- * Analyzes file content to determine if it's binary
- */
-function analyzeFileContent(buffer: Uint8Array): {
-  isBinary: boolean;
-  confidence: 'high' | 'medium' | 'low';
-} {
-  if (buffer.length === 0) {
-    return { isBinary: false, confidence: 'high' };
-  }
-
-  const sampleSize = Math.min(8000, buffer.length);
-  let nullBytes = 0;
-  let highBytes = 0;
-  let controlChars = 0;
-
-  for (let i = 0; i < sampleSize; i++) {
-    const byte = buffer[i];
-
-    if (byte === 0) {
-      nullBytes++;
-    } else if (byte > 127) {
-      highBytes++;
-    } else if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
-      controlChars++;
-    }
-  }
-
-  // Presence of null bytes is a strong indicator of binary content
-  if (nullBytes > 0) {
-    return { isBinary: true, confidence: 'high' };
-  }
-
-  // High ratio of control characters or high bytes suggests binary
-  const suspiciousRatio = (controlChars + highBytes) / sampleSize;
-
-  if (suspiciousRatio > 0.3) {
-    return { isBinary: true, confidence: 'high' };
-  } else if (suspiciousRatio > 0.1) {
-    return { isBinary: true, confidence: 'medium' };
-  }
-
-  return { isBinary: false, confidence: 'medium' };
-}
-
-/**
- * Extracts file format from file path
- */
-function getFileFormatFromPath(filePath: string): string {
-  const extension = filePath.toLowerCase().split('.').pop();
-
-  if (!extension) {
-    return 'UNKNOWN';
-  }
-
-  // Map common extensions to readable formats
-  const formatMap: Record<string, string> = {
-    // Images
-    png: 'PNG',
-    jpg: 'JPEG',
-    jpeg: 'JPEG',
-    gif: 'GIF',
-    webp: 'WebP',
-    svg: 'SVG',
-    bmp: 'BMP',
-    tiff: 'TIFF',
-    ico: 'ICO',
-
-    // 3D Models
-    glb: 'GLB',
-    gltf: 'glTF',
-    obj: 'OBJ',
-    fbx: 'FBX',
-    dae: 'Collada',
-    stl: 'STL',
-    '3ds': '3DS',
-    blend: 'Blender',
-    max: '3ds Max',
-
-    // Documents
-    pdf: 'PDF',
-    doc: 'Word',
-    docx: 'Word',
-    xls: 'Excel',
-    xlsx: 'Excel',
-    ppt: 'PowerPoint',
-    pptx: 'PowerPoint',
-
-    // Archives
-    zip: 'ZIP',
-    rar: 'RAR',
-    '7z': '7-Zip',
-    tar: 'TAR',
-    gz: 'GZIP',
-
-    // Executables
-    exe: 'Executable',
-    dll: 'DLL',
-    so: 'Shared Library',
-    dylib: 'Dynamic Library',
-
-    // Audio/Video
-    mp3: 'MP3',
-    wav: 'WAV',
-    mp4: 'MP4',
-    avi: 'AVI',
-    mov: 'QuickTime',
-    mkv: 'MKV',
-    flac: 'FLAC',
-    ogg: 'OGG',
-  };
-
-  return formatMap[extension] || extension.toUpperCase();
-}
-
-/**
- * Converts a `Uint8Array` into a Node.js `Buffer` by copying the prototype.
- * The goal is to  avoid expensive copies. It does create a new typed array
- * but that's generally cheap as long as it uses the same underlying
- * array buffer.
- */
-function convertToBuffer(view: Uint8Array): Buffer {
-  return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
 }

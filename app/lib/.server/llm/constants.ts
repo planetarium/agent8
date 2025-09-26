@@ -8,6 +8,9 @@ export interface File {
   type: 'file';
   content: string;
   isBinary: boolean;
+  mimeType?: string;
+  fileFormat?: string;
+  buffer?: Uint8Array; // 바이너리 파일의 원본 데이터 보존
 }
 
 export interface Folder {

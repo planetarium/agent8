@@ -2,7 +2,7 @@ import { stripIndents } from '~/utils/stripIndent';
 import { WORK_DIR, TOOL_NAMES, VIBE_STARTER_3D_PACKAGE_NAME } from '~/utils/constants';
 import { IGNORE_PATTERNS } from '~/utils/fileUtils';
 import ignore from 'ignore';
-import path from 'path';
+import { path } from '~/utils/path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, is3dProject, resolvePackageVersion } from '~/lib/utils';
 
 const vibeStarter3dSpec: Record<string, Record<string, string>> = {};
@@ -99,7 +99,7 @@ Note:
 * Status.md changes with every interaction - contains all dynamic information
 * Focus updates on the files that actually changed
 ---
-  
+
 **P0 (MANDATORY)**:
 1. Update PROJECT/*.md whenever you make changes to the codebase (except bug fixes)
 2. Keep documentation synchronized with actual code
@@ -276,7 +276,7 @@ There are tools available to resolve coding tasks. Please follow these guideline
 
 **P0 (MANDATORY)**: Be concise. Do NOT be verbose or explain unless the user specifically asks for more information.
 
-**CRITICAL COMMUNICATION RULE**: 
+**CRITICAL COMMUNICATION RULE**:
 - NEVER mention tool names like "${TOOL_NAMES.SUBMIT_ARTIFACT}", "${TOOL_NAMES.READ_FILES_CONTENTS}", "${TOOL_NAMES.SEARCH_FILE_CONTENTS}", etc. in your responses
 - Use natural language instead: "I'll save the changes", "I'll read the file", "I'll search for the code"
 - Your responses should sound natural to users, not like technical tool calls
@@ -575,7 +575,7 @@ export function getResourceSystemPrompt(files: any) {
 
 
 **P0 (MANDATORY)**: Follow these strict resource management rules to prevent application errors:
-  
+
 1. If appropriate resources are not available in assets.json:
    - Never create images using base64 or create URLs not provided in context
    - For 2D games: Create visual elements using CSS or programmatic rendering in Phaser
@@ -586,7 +586,7 @@ export function getResourceSystemPrompt(files: any) {
 2. Resource reference pattern:
    \`\`\`js
    import Assets from './assets.json'
-   
+
    // Correct way to use assets
    const knightImageUrl = Assets.character.knight.url;
    \`\`\`

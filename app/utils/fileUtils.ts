@@ -2,6 +2,10 @@ import type { FileNode, FileSystemTree, DirectoryNode } from '~/lib/container/in
 import ignore from 'ignore';
 import { WORK_DIR } from './constants';
 import type { FileMap } from '~/lib/.server/llm/constants';
+import isBinaryPath from 'is-binary-path';
+import { fileTypeFromBuffer } from 'file-type';
+import { getEncoding } from 'istextorbinary';
+import { Buffer } from 'node:buffer';
 
 // Common patterns to ignore, similar to .gitignore
 export const IGNORE_PATTERNS = [
@@ -26,19 +30,199 @@ export const ig = ignore().add(IGNORE_PATTERNS);
 
 export const generateId = () => Math.random().toString(36).substring(2, 15);
 
-export const isBinaryFile = async (file: File): Promise<boolean> => {
-  const chunkSize = 1024;
-  const buffer = new Uint8Array(await file.slice(0, chunkSize).arrayBuffer());
+export interface BinaryDetectionResult {
+  isBinary: boolean;
+  mimeType?: string;
+  fileFormat?: string;
+}
 
-  for (let i = 0; i < buffer.length; i++) {
-    const byte = buffer[i];
+/**
+ * Enhanced binary file detection using path-based and content-based analysis
+ * Supports various file formats including 3D models, images, etc.
+ */
+export async function detectBinaryFile(filePath: string, buffer?: Uint8Array): Promise<BinaryDetectionResult> {
+  // Step 1: Quick path-based detection using is-binary-path
+  if (isBinaryPath(filePath)) {
+    return {
+      isBinary: true,
+      fileFormat: getFileFormatFromPath(filePath),
+    };
+  }
 
-    if (byte === 0 || (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13)) {
-      return true;
+  // Step 2: Content-based detection using file-type
+  if (buffer && buffer.length > 0) {
+    try {
+      const fileType = await fileTypeFromBuffer(buffer.slice(0, 4100));
+
+      if (fileType) {
+        const isBinary = !fileType.mime.startsWith('text/');
+        return {
+          isBinary,
+          mimeType: fileType.mime,
+          fileFormat: fileType.ext.toUpperCase(),
+        };
+      }
+    } catch (error) {
+      // file-type failed, fall back to content analysis
+      console.debug('file-type detection failed:', error);
+    }
+
+    // Step 3: Content analysis as fallback
+    const contentResult = analyzeFileContent(buffer);
+
+    if (contentResult.confidence === 'high') {
+      return contentResult;
+    }
+
+    // Step 4: Enhanced content analysis with istextorbinary as final fallback
+    const nodeBuffer = convertToBuffer(buffer);
+    const isTextOrBinary = getEncoding(nodeBuffer, { chunkLength: 100 });
+
+    if (isTextOrBinary === 'binary') {
+      return {
+        isBinary: true,
+      };
     }
   }
 
-  return false;
+  // Default: assume text file
+  return {
+    isBinary: false,
+  };
+}
+
+/**
+ * Analyzes file content to determine if it's binary
+ */
+function analyzeFileContent(buffer: Uint8Array): {
+  isBinary: boolean;
+  confidence: 'high' | 'medium' | 'low';
+} {
+  if (buffer.length === 0) {
+    return { isBinary: false, confidence: 'high' };
+  }
+
+  const sampleSize = Math.min(8000, buffer.length);
+  let nullBytes = 0;
+  let highBytes = 0;
+  let controlChars = 0;
+
+  for (let i = 0; i < sampleSize; i++) {
+    const byte = buffer[i];
+
+    if (byte === 0) {
+      nullBytes++;
+    } else if (byte > 127) {
+      highBytes++;
+    } else if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
+      controlChars++;
+    }
+  }
+
+  // Presence of null bytes is a strong indicator of binary content
+  if (nullBytes > 0) {
+    return { isBinary: true, confidence: 'high' };
+  }
+
+  // High ratio of control characters or high bytes suggests binary
+  const suspiciousRatio = (controlChars + highBytes) / sampleSize;
+
+  if (suspiciousRatio > 0.3) {
+    return { isBinary: true, confidence: 'high' };
+  } else if (suspiciousRatio > 0.1) {
+    return { isBinary: true, confidence: 'medium' };
+  }
+
+  return { isBinary: false, confidence: 'medium' };
+}
+
+/**
+ * Extracts file format from file path
+ */
+function getFileFormatFromPath(filePath: string): string {
+  const extension = filePath.toLowerCase().split('.').pop();
+
+  if (!extension) {
+    return 'UNKNOWN';
+  }
+
+  // Map common extensions to readable formats
+  const formatMap: Record<string, string> = {
+    // Images
+    png: 'PNG',
+    jpg: 'JPEG',
+    jpeg: 'JPEG',
+    gif: 'GIF',
+    webp: 'WebP',
+    svg: 'SVG',
+    bmp: 'BMP',
+    tiff: 'TIFF',
+    ico: 'ICO',
+
+    // 3D Models
+    glb: 'GLB',
+    gltf: 'glTF',
+    obj: 'OBJ',
+    fbx: 'FBX',
+    dae: 'Collada',
+    stl: 'STL',
+    '3ds': '3DS',
+    blend: 'Blender',
+    max: '3ds Max',
+
+    // Documents
+    pdf: 'PDF',
+    doc: 'Word',
+    docx: 'Word',
+    xls: 'Excel',
+    xlsx: 'Excel',
+    ppt: 'PowerPoint',
+    pptx: 'PowerPoint',
+
+    // Archives
+    zip: 'ZIP',
+    rar: 'RAR',
+    '7z': '7-Zip',
+    tar: 'TAR',
+    gz: 'GZIP',
+
+    // Executables
+    exe: 'Executable',
+    dll: 'DLL',
+    so: 'Shared Library',
+    dylib: 'Dynamic Library',
+
+    // Audio/Video
+    mp3: 'MP3',
+    wav: 'WAV',
+    mp4: 'MP4',
+    avi: 'AVI',
+    mov: 'QuickTime',
+    mkv: 'MKV',
+    flac: 'FLAC',
+    ogg: 'OGG',
+  };
+
+  return formatMap[extension] || extension.toUpperCase();
+}
+
+/**
+ * Converts a `Uint8Array` into a Node.js `Buffer` by copying the prototype.
+ * The goal is to avoid expensive copies. It does create a new typed array
+ * but that's generally cheap as long as it uses the same underlying
+ * array buffer.
+ */
+export function convertToBuffer(view: Uint8Array): Buffer {
+  return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+}
+
+// Legacy function for backwards compatibility - now uses enhanced detection
+export const isBinaryFile = async (file: File): Promise<boolean> => {
+  const chunkSize = 4100; // Increased chunk size for better detection
+  const buffer = new Uint8Array(await file.slice(0, chunkSize).arrayBuffer());
+  const result = await detectBinaryFile(file.name, buffer);
+
+  return result.isBinary;
 };
 
 export const shouldIncludeFile = (path: string): boolean => {
@@ -202,11 +386,34 @@ export function convertFileMapToFileSystemTree(fileMap: FileMap): FileSystemTree
       }
 
       // 파일 추가
-      currentTree[fileName] = {
-        file: {
-          contents: fileMap[path]!.content || '',
-        },
-      } as FileNode;
+      const fileData = fileMap[path]!;
+
+      /**
+       * FileMap → FileSystemTree 변환:
+       * - 바이너리 파일: fileData.buffer (Uint8Array) → contents (number[])
+       * - 텍스트 파일: fileData.content (string) → contents (string)
+       *
+       * Uint8Array를 number[]로 변환하는 이유: JSON 직렬화 시 Uint8Array는
+       * 올바르게 직렬화되지 않으므로 일반 배열로 변환하여 전송
+       */
+      if (fileData.isBinary && fileData.buffer) {
+        // 바이너리 파일: Uint8Array를 number[]로 변환 (JSON 직렬화 대응)
+        currentTree[fileName] = {
+          file: {
+            contents: Array.from(fileData.buffer), // Uint8Array → number[]
+            isBinary: true,
+            mimeType: fileData.mimeType,
+          },
+        } as FileNode;
+      } else {
+        // 텍스트 파일: 문자열 그대로 사용
+        currentTree[fileName] = {
+          file: {
+            contents: fileData.content || '', // string → string
+            isBinary: false,
+          },
+        } as FileNode;
+      }
     }
   });
 
