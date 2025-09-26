@@ -4,10 +4,6 @@ import { TOOL_NAMES } from '~/utils/constants';
 
 const logger = createScopedLogger('error-handle-tool');
 
-/*
- * Unknown tool handler for graceful error handling
- * Empty description to prevent LLM from selecting this tool directly
- */
 export const createUnknownToolHandler = () => {
   return {
     [TOOL_NAMES.UNKNOWN_HANDLER]: {
