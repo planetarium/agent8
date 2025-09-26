@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { createUIMessageStream, createUIMessageStreamResponse, generateId, getToolName, type UIMessage } from 'ai';
+import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
 import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
@@ -15,7 +15,12 @@ import { TOOL_NAMES } from '~/utils/constants';
 
 function toBoltArtifactXML(a: any) {
   const body = a.actions
-    .filter((act: any) => (act.content && act.filePath) || (act.type === 'shell' && act.command && !act.filePath))
+    .filter(
+      (act: any) =>
+        (act.content && act.filePath) ||
+        (act.type === 'modify' && act.filePath && act.modifications) ||
+        (act.type === 'shell' && act.command && !act.filePath),
+    )
     .sort((a: any, b: any) => {
       if (a.type === 'shell' && b.type !== 'shell') {
         return -1;
@@ -28,7 +33,11 @@ function toBoltArtifactXML(a: any) {
       return 0;
     })
     .map((act: any) => {
-      if (act.filePath) {
+      if (act.type === 'modify' && act.modifications) {
+        return `  <boltAction type="modify" filePath="${act.filePath}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+      }
+
+      if (act.filePath && act.content !== undefined) {
         return `  <boltAction type="file" filePath="${act.filePath}">${act.content}</boltAction>`;
       }
 
