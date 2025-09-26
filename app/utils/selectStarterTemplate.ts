@@ -160,40 +160,36 @@ export const selectStarterTemplate = async (options: { message: string }) => {
     throw new Error(errorMessage);
   }
 
-  // AI SDK v5 네이티브 구조 처리
   const respJson = (await response.json()) as {
     steps?: Array<{
       content?: Array<{ type: string; text?: string }>;
-      finishReason?: string;
-      usage?: any;
-      providerMetadata?: any;
     }>;
   };
 
-  // Extract text from v5 structure: iterate through all steps to find text
-  let text = '';
   const textChunks: string[] = [];
 
-  if (respJson.steps && Array.isArray(respJson.steps) && respJson.steps.length > 0) {
-    for (let i = 0; i < respJson.steps.length; i++) {
-      const step = respJson.steps[i];
+  if (respJson?.steps && Array.isArray(respJson.steps) && respJson.steps.length > 0) {
+    for (const step of respJson.steps) {
+      if (!step?.content || !Array.isArray(step.content)) {
+        continue;
+      }
 
-      if (step.content && Array.isArray(step.content)) {
-        const textParts = step.content.filter((c: any) => c && c.type === 'text' && c.text);
+      for (const content of step.content) {
+        if (content && typeof content === 'object' && content.type === 'text' && typeof content.text === 'string') {
+          const trimmedText = content.text.trim();
 
-        textParts.forEach((textPart: any) => {
-          if (textPart.text.trim()) {
-            textChunks.push(textPart.text.trim());
+          if (trimmedText) {
+            textChunks.push(trimmedText);
           }
-        });
+        }
       }
     }
-
-    // Combine all text chunks
-    text = textChunks.join('\n').trim();
   }
 
-  const selectedTemplate = parseSelectedTemplate(text);
+  // Combine all text chunks
+  const combinedText = textChunks.join('\n').trim();
+
+  const selectedTemplate = parseSelectedTemplate(combinedText);
 
   if (!selectedTemplate) {
     console.log('No template selected, using blank template');
