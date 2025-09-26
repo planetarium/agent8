@@ -95,6 +95,10 @@ export default function Spin() {
 
     // Initialize container if access control is disabled and we have a token
     if (!import.meta.env.VITE_ACCESS_CONTROL_ENABLED && accessToken) {
+      console.log('🔄 spin.tsx: useEffect accessToken 변경으로 initializeContainer 호출', {
+        accessToken: accessToken?.substring(0, 10) + '...',
+        timestamp: Date.now(),
+      });
       workbenchStore.initializeContainer(accessToken);
     }
   }, [accessToken]);
@@ -104,16 +108,31 @@ export default function Spin() {
     const handleMessage = async (event: MessageEvent) => {
       if (event.data && event.data.type === 'INIT') {
         const token = event.data.payload?.accessToken;
+        const containerReady = workbenchStore.containerReady;
+
+        console.log('🎯 spin.tsx: INIT event received', {
+          timestamp: Date.now(),
+          containerReady,
+          hasToken: !!token,
+        });
 
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
 
-          // Reinitialize container with the new token to recover from potential failures
+          // Ignore if container is already ready
+          if (containerReady) {
+            console.log('🚫 spin.tsx: Container is already ready, skipping container initialization');
+
+            return;
+          }
+
           try {
+            console.log('🔄 spin.tsx: Container is not ready, reinitializeContainer called');
             await workbenchStore.reinitializeContainer(token);
+            console.log('✅ spin.tsx: reinitializeContainer completed');
           } catch (error) {
-            console.error('Failed to reinitialize container:', error);
+            console.error('❌ spin.tsx: Failed to reinitialize container:', error);
           }
         }
       }
