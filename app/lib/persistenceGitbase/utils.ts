@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
+import { detectBinaryFile, type BinaryDetectionResult } from '~/utils/fileUtils';
 
 export function isCommitHash(id: string | undefined) {
   return id?.length === 40 && /^[0-9a-fA-F]+$/.test(id);
@@ -47,12 +48,9 @@ export async function unzipCode(zipBlob: Buffer) {
 
   const promises: Promise<void>[] = [];
 
-  // 파일 처리
   zip.forEach((relativePath, zipEntry) => {
     if (!zipEntry.dir) {
       const promise = async () => {
-        const content = await zipEntry.async('string');
-
         // 경로에서 첫 번째 폴더(프로젝트 루트)를 제거
         const pathParts = relativePath.split('/');
 
@@ -62,11 +60,19 @@ export async function unzipCode(zipBlob: Buffer) {
 
         const filePath = pathParts.join('/');
 
-        // FileMap에 추가
+        const binaryDetectionResult = await detectBinaryFileInZip(filePath, zipEntry);
+        let content = '';
+
+        if (!binaryDetectionResult.isBinary) {
+          content = await zipEntry.async('string');
+        }
+
         fileMap[filePath] = {
           type: 'file',
           content,
-          isBinary: false,
+          isBinary: binaryDetectionResult.isBinary,
+          mimeType: binaryDetectionResult.mimeType,
+          fileFormat: binaryDetectionResult.fileFormat,
         };
       };
 
@@ -77,4 +83,14 @@ export async function unzipCode(zipBlob: Buffer) {
   await Promise.all(promises);
 
   return fileMap;
+}
+
+/**
+ * ZIP 파일 내부의 파일에 대한 바이너리 감지
+ * 통합된 detectBinaryFile 함수를 사용
+ */
+async function detectBinaryFileInZip(filePath: string, zipEntry: JSZip.JSZipObject): Promise<BinaryDetectionResult> {
+  // ZIP 파일에서 버퍼를 읽어서 통합된 함수에 전달
+  const buffer = await zipEntry.async('uint8array');
+  return detectBinaryFile(filePath, buffer);
 }
