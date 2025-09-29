@@ -107,6 +107,7 @@ interface BaseChatProps {
   customProgressAnnotations?: ProgressAnnotation[];
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  textareaExpanded?: boolean;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -155,6 +156,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       customProgressAnnotations = [],
       isAuthenticated = true,
       onAuthRequired,
+      textareaExpanded = false,
     },
     ref,
   ) => {
@@ -466,7 +468,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const verse = 'current';
         formData.append('verse', verse);
 
-        toast.info(`Uploading ${file.name}...`);
+        // toast.info(`Uploading ${file.name}...`);
 
         // For image files, get dimensions before uploading
         let imageMetadata = undefined;
@@ -514,7 +516,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               prev.map((attachment) => (attachment.url === `uploading://${tempId}` ? finalAttachment : attachment)),
             );
 
-            toast.success(`Uploaded ${file.name}`);
+            // toast.success(`Uploaded ${file.name}`);
           } else {
             throw new Error(result.error || 'Unknown error during upload');
           }
@@ -627,7 +629,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="flex flex-col items-center max-w-[632px] w-full gap-4 flex-shrink-0 tablet:h-[85vh] tablet:px-0 relative tablet:max-w-none mx-auto">
                 <MainBackground zIndex={1} isMobileView={isMobileView} />
                 {/* Background Image */}
-                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-center bg-no-repeat" />
+                <div
+                  className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
+                  style={{
+                    backgroundPosition: '50% -25%',
+                    animation: isMobileView
+                      ? 'slideDownBackground 1s ease-in-out'
+                      : 'slideDownBackgroundDesktop 1s ease-in-out',
+                  }}
+                />
                 <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
                   <div className="flex justify-center">
                     <span className="text-heading-lg tablet:text-heading-4xl text-elevation-shadow-3">
@@ -813,7 +823,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
 
             <div
-              className={classNames('pt-0 min-w-[376px] tablet:pt-4 tablet:px-6 relative', {
+              className={classNames('pt-0 tablet:pt-4 tablet:px-6 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -866,16 +876,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </ClientOnly>
 
               <div
-                className={classNames('flex flex-col gap-3 w-full mx-auto z-prompt', {
-                  'sticky bottom-4': chatStarted,
-                  'tablet:max-w-chat': chatStarted,
-                  'tablet:max-w-chat-before-start': !chatStarted,
-                  'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
-                  'tablet:absolute tablet:bottom-[200%] tablet:left-1/2 tablet:transform tablet:-translate-x-1/2':
-                    !chatStarted,
-                  'fixed bottom-[3.5%] z-[9999] translate-x-[-50%] left-1/2':
-                    !chatStarted && attachmentList.length > 0 && isMobileView,
-                })}
+                className={classNames(
+                  'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
+                  {
+                    'sticky bottom-4': chatStarted,
+                    'tablet:max-w-chat': chatStarted,
+                    'tablet:max-w-chat-before-start': !chatStarted,
+                    'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
+                    'tablet:absolute tablet:bottom-[200%] tablet:left-1/2 tablet:transform tablet:-translate-x-1/2':
+                      !chatStarted,
+                    'fixed bottom-[5%] z-[9999] translate-x-[-50%] left-1/2':
+                      !chatStarted && (attachmentList.length > 0 || textareaExpanded) && isMobileView,
+                  },
+                )}
               >
                 <div className="bg-bolt-elements-background-depth-2">
                   {!isStreaming &&
@@ -943,13 +956,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   />
 
-                  <div
-                    className={classNames(
-                      'relative shadow-xs backdrop-blur rounded-lg flex-1',
-                      attachmentList && attachmentList.length > 0 ? 'mb-12 mt-4' : '',
-                      'flex',
-                    )}
-                  >
+                  <div className={classNames('relative shadow-xs backdrop-blur rounded-lg flex-1', 'flex')}>
                     <textarea
                       ref={textareaRef}
                       className={classNames(
@@ -967,10 +974,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         fontWeight: 500,
                         lineHeight: '142.9%',
                         minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
-                        maxHeight: isMobileView ? `${TEXTAREA_MIN_HEIGHT}px` : `${TEXTAREA_MAX_HEIGHT}px`,
-                        height: isMobileView ? `${TEXTAREA_MIN_HEIGHT}px` : undefined,
+                        maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
-                        overflowY: isMobileView ? 'auto' : 'scroll',
+                        overflowY: 'scroll',
                         resize: 'none',
                       }}
                       onDragEnter={(e) => {

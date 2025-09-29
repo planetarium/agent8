@@ -9,7 +9,6 @@ import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
-import { useMobileView } from '~/lib/hooks/useMobileView';
 import { chatStore } from '~/lib/stores/chat';
 import {
   useWorkbenchFiles,
@@ -294,7 +293,6 @@ export const ChatImpl = memo(
   }: ChatProps) => {
     useShortcuts();
 
-    const isMobileView = useMobileView();
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer(); // Container 인스턴스 구독
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -349,9 +347,10 @@ export const ChatImpl = memo(
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
-    const [fakeLoading, setFakeLoading] = useState(false);
-    const [installNpm, setInstallNpm] = useState(false);
+    const [fakeLoading, setFakeLoading] = useState<boolean>(false);
+    const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
+    const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -471,7 +470,7 @@ export const ChatImpl = memo(
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
 
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const TEXTAREA_MAX_HEIGHT = 200;
 
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
@@ -560,10 +559,6 @@ export const ChatImpl = memo(
     };
 
     useEffect(() => {
-      if (isMobileView) {
-        return;
-      }
-
       const textarea = textareaRef.current;
 
       if (textarea) {
@@ -573,6 +568,10 @@ export const ChatImpl = memo(
 
         textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
         textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+
+        // Check if textarea is expanded beyond minimum height
+        const isExpanded = scrollHeight > 40; // TEXTAREA_MIN_HEIGHT = 40
+        setTextareaExpanded(isExpanded);
       }
     }, [input, textareaRef]);
 
@@ -1260,6 +1259,7 @@ export const ChatImpl = memo(
         customProgressAnnotations={customProgressAnnotations}
         isAuthenticated={isAuthenticated}
         onAuthRequired={onAuthRequired}
+        textareaExpanded={textareaExpanded}
       />
     );
   },
