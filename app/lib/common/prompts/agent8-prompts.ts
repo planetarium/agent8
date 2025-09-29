@@ -612,9 +612,9 @@ export function getProjectPackagesPrompt(files: any) {
 export function getResourceSystemPrompt(files: any) {
   let resourceContext = '';
 
-  if (files && files['/home/project/src/assets.json']) {
+  if (files && files[`${WORK_DIR}/src/assets.json`]) {
     const assetFile: any = {};
-    assetFile['/home/project/src/assets.json'] = files['/home/project/src/assets.json'];
+    assetFile[`${WORK_DIR}/src/assets.json`] = files[`${WORK_DIR}/src/assets.json`];
 
     const assetContext = createFilesContext(assetFile, true);
     resourceContext += `\n${assetContext}\n`;

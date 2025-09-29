@@ -439,6 +439,11 @@ export function searchFilesByName(
   return results;
 }
 
+export function getFullPath(path: string): string {
+  // Normalize path to ensure it includes WORK_DIR
+  return path.startsWith(WORK_DIR) ? path : `${WORK_DIR}/${path}`;
+}
+
 /**
  * Get full contents of a file by path
  * @param fileMap FileMap containing all files
@@ -446,10 +451,7 @@ export function searchFilesByName(
  * @returns File content or null if file not found or is a directory
  */
 export function getFileContents(fileMap: FileMap, path: string): string | null {
-  // Normalize path to ensure it includes WORK_DIR
-  const fullPath = path.startsWith(WORK_DIR) ? path : `${WORK_DIR}/${path}`;
-
-  const file = fileMap[fullPath];
+  const file = fileMap[getFullPath(path)];
 
   // Check if file exists and is not a directory
   if (!file || file.type === 'folder' || file.isBinary) {

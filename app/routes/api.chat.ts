@@ -305,7 +305,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          const submitArtifactCallIds = new Set<string>();
+          const submitArtifactInputs = new Map<string, unknown>();
 
           return (chunk, controller) => {
             const messageType = chunk.type;
@@ -356,11 +356,44 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               // tool call message
               case 'tool-input-available': {
                 if (chunk.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
-                  submitArtifactCallIds.add(chunk.toolCallId);
+                  submitArtifactInputs.set(chunk.toolCallId, chunk.input);
 
-                  const artifactData = chunk.input;
+                  break;
+                }
 
+                const toolCall = {
+                  toolCallId: chunk.toolCallId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                };
+
+                const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: toolCall.toolCallId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: toolCall.toolCallId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: toolCall.toolCallId,
+                });
+
+                break;
+              }
+
+              // tool result message
+              case 'tool-output-available': {
+                if (submitArtifactInputs.has(chunk.toolCallId)) {
+                  const artifactData = submitArtifactInputs.get(chunk.toolCallId);
                   const xmlContent = toBoltArtifactXML(artifactData);
+                  submitArtifactInputs.delete(chunk.toolCallId);
 
                   controller.enqueue({
                     type: 'text-start',
@@ -377,39 +410,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                     type: 'text-end',
                     id: chunk.toolCallId,
                   });
-                } else {
-                  const toolCall = {
-                    toolCallId: chunk.toolCallId,
-                    toolName: chunk.toolName,
-                    input: chunk.input,
-                  };
 
-                  const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
-
-                  controller.enqueue({
-                    type: 'text-start',
-                    id: toolCall.toolCallId,
-                  });
-
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: toolCall.toolCallId,
-                    delta: divString,
-                  });
-
-                  controller.enqueue({
-                    type: 'text-end',
-                    id: toolCall.toolCallId,
-                  });
-                }
-
-                break;
-              }
-
-              // tool result message
-              case 'tool-output-available': {
-                if (submitArtifactCallIds.has(chunk.toolCallId)) {
-                  submitArtifactCallIds.delete(chunk.toolCallId);
                   break;
                 }
 
@@ -435,12 +436,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   type: 'text-end',
                   id: toolResult.toolCallId,
                 });
+
                 break;
               }
 
               default: {
-                if (IGNORE_TOOL_TYPES.includes(messageType)) {
-                } else {
+                const isSubmitArtifactError =
+                  messageType === 'tool-output-error' && submitArtifactInputs.has(chunk.toolCallId);
+
+                if (!IGNORE_TOOL_TYPES.includes(messageType) && !isSubmitArtifactError) {
                   controller.enqueue(chunk);
                 }
 
