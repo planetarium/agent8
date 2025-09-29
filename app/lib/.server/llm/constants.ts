@@ -18,6 +18,11 @@ type Dirent = File | Folder;
 
 export type FileMap = Record<string, Dirent | undefined>;
 
+export type Orchestration = {
+  readSet: Set<string>;
+  submitted: boolean;
+};
+
 export const IGNORE_PATTERNS = [
   'node_modules/**',
   '.git/**',

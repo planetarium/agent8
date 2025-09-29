@@ -87,6 +87,8 @@ export const TOOL_NAMES = {
   // Internal system tool - prefixed to avoid conflicts with user tools
   UNKNOWN_HANDLER: '__system_unknownToolHandler',
   SUBMIT_ARTIFACT: 'submit_artifact',
+  SEARCH_FILE_CONTENTS: 'search_file_contents',
+  READ_FILES_CONTENTS: 'read_files_contents',
 } as const;
 
 export const ATTACHMENT_EXTS = [

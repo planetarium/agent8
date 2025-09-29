@@ -2,12 +2,11 @@ import {
   streamText as _streamText,
   convertToModelMessages,
   stepCountIs,
-  hasToolCall,
   type SystemModelMessage,
   type UIMessage,
   NoSuchToolError,
 } from 'ai';
-import { MAX_TOKENS, type FileMap } from './constants';
+import { MAX_TOKENS, type FileMap, type Orchestration } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
@@ -31,6 +30,10 @@ export type Messages = UIMessage[];
 
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
+function createOrchestration(): Orchestration {
+  return { readSet: new Set(), submitted: false };
+}
+
 const logger = createScopedLogger('stream-text');
 
 export async function streamText(props: {
@@ -44,6 +47,8 @@ export async function streamText(props: {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
+
+  const orchestration = createOrchestration();
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
@@ -106,7 +111,7 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const submitArtifactActionTool = createSubmitArtifactActionTool();
+  const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
   let combinedTools: Record<string, any> = {
@@ -120,7 +125,7 @@ export async function streamText(props: {
 
   if (files) {
     // Add file search tools
-    const fileSearchTools = createFileSearchTools(files);
+    const fileSearchTools = createFileSearchTools(files, orchestration);
     combinedTools = {
       ...combinedTools,
       ...fileSearchTools,
@@ -166,7 +171,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
+    stopWhen: [stepCountIs(15)],
     messages: coreMessages,
     tools: combinedTools,
     experimental_repairToolCall: async ({ toolCall, error }) => {
@@ -184,13 +189,21 @@ export async function streamText(props: {
         };
       }
 
-      // For other errors, let AI SDK handle them normally
       return null;
     },
     providerOptions: {
       openai: {
         include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
       },
+    },
+    prepareStep: async () => {
+      if (orchestration.submitted) {
+        return {
+          activeTools: [],
+        };
+      }
+
+      return undefined;
     },
     ...options,
   });
