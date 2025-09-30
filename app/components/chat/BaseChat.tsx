@@ -169,6 +169,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
+    const [modelSelectorDropdownOpen, setModelSelectorDropdownOpen] = useState<boolean>(false);
 
     const [selectedVideoTab, setSelectedVideoTab] = useState<'top-down' | 'tps' | 'story' | 'puzzle'>('top-down');
     const [isVideoHovered, setIsVideoHovered] = useState<boolean>(false);
@@ -1116,7 +1117,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <div className="flex items-center hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
                         <ClientOnly>
                           {() => (
-                            <Tooltip.Root>
+                            <Tooltip.Root open={modelSelectorDropdownOpen ? false : undefined}>
                               <Tooltip.Trigger asChild>
                                 <div>
                                   <ModelSelector
@@ -1125,6 +1126,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                                     provider={provider}
                                     setProvider={setProvider}
                                     providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
+                                    onDropdownOpenChange={setModelSelectorDropdownOpen}
                                   />
                                 </div>
                               </Tooltip.Trigger>
