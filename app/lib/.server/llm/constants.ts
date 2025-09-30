@@ -23,6 +23,10 @@ export type Orchestration = {
   submitted: boolean;
 };
 
+export const TOOL_ERROR = {
+  MISSING_FILE_CONTEXT: 'MISSING_FILE_CONTEXT',
+} as const;
+
 export const IGNORE_PATTERNS = [
   'node_modules/**',
   '.git/**',

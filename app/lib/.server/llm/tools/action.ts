@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
-import { tool } from 'ai';
-import type { FileMap, Orchestration } from '~/lib/.server/llm/constants';
+import { InvalidToolInputError, tool } from 'ai';
+import { TOOL_ERROR, type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
 import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 
@@ -53,11 +53,11 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
           )
           .describe('List of file/modify/shell actions'),
       })
-      .superRefine((val, ctx) => {
+      .superRefine((arg, _ctx) => {
         const need = new Set<string>();
 
         if (fileMap) {
-          for (const action of val.actions) {
+          for (const action of arg.actions) {
             if (action.type === 'file' && action.path && action.content) {
               if (needReadFile(fileMap, action.path)) {
                 need.add(action.path);
@@ -73,19 +73,11 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
         const missingPaths = [...need].filter((p) => !orchestration.readSet.has(p));
 
         if (missingPaths.length) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['actions'],
-            message: JSON.stringify({
-              name: 'NEED_READ_FILES',
-              reason: 'You attempted to submit without reading all existing files referenced by file/modify actions.',
-              missingPaths,
-              nextAction: {
-                tool: TOOL_NAMES.READ_FILES_CONTENTS,
-                args: { paths: missingPaths },
-                then: `call ${TOOL_NAMES.SUBMIT_ARTIFACT} again with the same payload, adding any newly read file contents if needed.`,
-              },
-            }),
+          throw new InvalidToolInputError({
+            toolInput: '',
+            toolName: TOOL_NAMES.SUBMIT_ARTIFACT,
+            cause: TOOL_ERROR.MISSING_FILE_CONTEXT,
+            message: JSON.stringify({ name: TOOL_ERROR.MISSING_FILE_CONTEXT, paths: missingPaths }),
           });
         }
       }),

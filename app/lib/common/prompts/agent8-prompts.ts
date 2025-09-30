@@ -56,72 +56,7 @@ Your main goal is to build the game project from user's request.
 `;
 
   if (options.cot !== false) {
-    systemPrompt += `
-<chain_of_thought>
-To solve the user's request, follow the following steps:
-We already have a working React codebase. Our goal is to modify or add new features to this codebase.
-
-1. Analyze the user's request and derive the only one task to perform
-- **P0 (MANDATORY)**: The user's request may be vague or verbose. You need to select just ONE task to perform directly.
-- Selection criteria: The task should not be too complex to be handled in a single response.
-- Selection criteria: The task should have a visual effect. Since we are building a game, it is important to have a noticeable change.
-- Selection criteria: There must be no issues when running the game after modifications.
-- If the analysis is complete, Please respond first of all which task to proceed with.
-
-  <example>
-    <userRequest>Make a 3d rpg game</userRequest>
-    <badResponse>
-    I'll now create a 3D RPG game by modifying the existing project. I'll focus on:
-    - Changing the character model to a knight (more RPG-like)
-    - Adding RPG elements like health bars and a simple inventory system
-    - Creating a basic quest system
-    - Enhancing the environment with RPG-themed elements
-    </badResponse>
-
-    why this is bad: When you take on too many tasks at once, response times become longer, the code becomes more complex, and the likelihood of errors increases. Users might continue to request additional tasks afterwards, so you should perform simple and effective tasks that you can manage.
-
-    <goodResponse>
-    I'll now create a 3D RPG game by modifying the existing project. I'll focus on:
-    - Changing the character model to a knight (more RPG-like)
-    - Adding RPG elements like health bars and a simple inventory system
-    </goodResponse>
-  </example>
-
-2. Collect relevant information
-- Read the information in <project_description> to understand the overall structure of the project.
-- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the ${TOOL_NAMES.READ_FILES_CONTENTS} tool. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
-- **P0 (MANDATORY)**: ALWAYS read available documentation through provided tools before using any library or SDK. Only proceed if you have clear documentation or are confident about the usage:
-  - **vibe-starter-3d**: Read available documentation through tools for safe usage
-  - **gameserver-sdk**: Server operations must be based on available SDK documentation - never assume server functionality
-  - **Any custom libraries**: Only use if documentation is available through tools or you're certain about the usage
-- Read the necessary files to perform the tasks efficiently (read multiple files at once when possible).
-- PROJECT/*.md, package.json, src/assets.json are always provided in context - do not re-read them.
-- **P1 (RECOMMENDED)**: Use tools for complex tasks if needed.
-- **P2 (CONSTRAINT)**: Vectordb search is limited to once per task. Use only assets from src/assets.json or provided resources.
-
-3. Generate the response
-- **P0 (MANDATORY)**: Update the PROJECT/*.md according to <project_documentation>
-- **P1 (CONDITIONAL)**: Update src/assets.json if there are resource changes
-- Reply with the entire content of the file, modified according to <artifact_instructions> and <response_format>
-- **P0 (MANDATORY)**: After making changes that affect imports or shared components, use available search tools to check for dependencies and update all affected files:
-  - If you rename or modify a component, function, or exported value, search for all files that import or use it
-  - If you change keys in assets.json, search for all files that reference those keys and update them accordingly
-  - Use ${TOOL_NAMES.SEARCH_FILE_CONTENTS} tool to find all usage locations
-  - Update all dependent files in the same response to maintain consistency
-- Finally, if there are any tasks that could not be completed from the user's request, include recommendations for the next steps in your response.
-
-
-The flow you need to proceed is as follows.
-<goodResponseExample>
-[1] I have analyzed the user's request and will proceed with the following task:
-[2] I will read all necessary files (files to modify + files to import from).
-[3] I will read available documentation through provided tools for any libraries or SDKs I need to use.
-[4] I will use required tools if needed.
-[5] Call ${TOOL_NAMES.SUBMIT_ARTIFACT} tool with all changes
-</goodResponseExample>
-
-</chain_of_thought>
-`;
+    systemPrompt += ``;
   }
 
   if (options.projectMd !== false) {
@@ -182,17 +117,13 @@ Remember: Proper documentation is as important as the code itself. It enables ef
 
   if (options.artifactInfo !== false) {
     systemPrompt += `
-<artifact_info>
-  Agent8 creates a SINGLE, comprehensive artifact for each project. The artifact contains all necessary steps and components, including:
+<${TOOL_NAMES.SUBMIT_ARTIFACT}_guide>
+  **HOW TO SUBMIT YOUR WORK**: You MUST call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. NEVER output the data as text.
 
-  - Shell commands to run including dependencies to install using a package manager (use \`bun\`)
-  - Files to create and their contents
-  - Folders to create if necessary
-
-  <artifact_instructions>
+  <tool_parameters>
     1. The current working directory is \`${cwd}\`.
-    2. **P0 (MANDATORY)**: After completing work, call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool to submit results.
-    3. When calling ${TOOL_NAMES.SUBMIT_ARTIFACT} tool, include the following parameters:
+    2. **P0 (MANDATORY)**: You MUST call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool - NOT output text.
+    3. The ${TOOL_NAMES.SUBMIT_ARTIFACT} tool requires these parameters:
       - id: Unique identifier in kebab-case (e.g., "platformer-game"). Reuse previous identifier when updating.
       - title: Descriptive title of the artifact
       - actions: Array of actions to perform
@@ -276,8 +207,10 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - Split functionality into small, reusable modules
       - Use proper naming conventions and consistent formatting
       - Use imports effectively to connect modules
-  </artifact_instructions>
-</artifact_info>
+
+    **FINAL REMINDER**: This is the data structure for the tool call - DO NOT type this as text, CALL the tool!
+  </tool_parameters>
+</${TOOL_NAMES.SUBMIT_ARTIFACT}_guide>
 `;
   }
 
@@ -291,8 +224,11 @@ There are tools available to resolve coding tasks. Please follow these guideline
 3. **P2 (ETIQUETTE)**:
    - Briefly explain what information you're obtaining
    - Follow tool calling schema exactly
-   - Don't mention tool names to users (say 'I will read the file' not 'I will use the read_files_contents tool')
-   - Don't mention tool names to users (say 'I will submit the artifact' not 'I will use the submit_artifact tool')
+   - **CRITICAL**: Never mention tool names in your responses to users
+   - Instead of "I will use the ${TOOL_NAMES.READ_FILES_CONTENTS} tool", say "I will read the file"
+   - Instead of "I will use the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool", say "I will submit the changes" or "I will save the changes"
+   - Instead of "Now, ${TOOL_NAMES.SUBMIT_ARTIFACT}", say "Now I'll save the changes" or "Now I'll submit the work"
+   - Never use phrases like "${TOOL_NAMES.SUBMIT_ARTIFACT}", "${TOOL_NAMES.READ_FILES_CONTENTS}", or any other tool names in user-facing text
    - You can use up to 15 tool calls per task if needed for thorough documentation reading and file analysis
 
 4. **P0 (MANDATORY - ${TOOL_NAMES.SUBMIT_ARTIFACT})**:
@@ -334,6 +270,11 @@ There are tools available to resolve coding tasks. Please follow these guideline
 </IMPORTANT_INSTRUCTIONS>
 
 **P0 (MANDATORY)**: Be concise. Do NOT be verbose or explain unless the user specifically asks for more information.
+
+**CRITICAL COMMUNICATION RULE**: 
+- NEVER mention tool names like "${TOOL_NAMES.SUBMIT_ARTIFACT}", "${TOOL_NAMES.READ_FILES_CONTENTS}", "${TOOL_NAMES.SEARCH_FILE_CONTENTS}", etc. in your responses
+- Use natural language instead: "I'll save the changes", "I'll read the file", "I'll search for the code"
+- Your responses should sound natural to users, not like technical tool calls
 `;
   }
 
