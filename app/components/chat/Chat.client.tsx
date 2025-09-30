@@ -43,6 +43,7 @@ import { playCompletionSound } from '~/utils/sound';
 import {
   commitChanges,
   createTaskBranch,
+  fetchProjectFiles,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
@@ -610,8 +611,44 @@ export const ChatImpl = memo(
       }
 
       if (chatStarted && Object.keys(files).length === 0) {
-        handleChatError('Files are not loaded. Please try again later.', undefined, 'sendMessage - files check');
-        return;
+        let recoverySuccessful = false;
+        const containerInstance = await workbench.container;
+
+        const fileRecoveryStrategies = [
+          {
+            name: 'Workbench',
+            getFiles: () => workbench.files.get(),
+            logSuccess: () => console.log('files recovery from workbench successful'),
+          },
+          {
+            name: 'Gitbase',
+            getFiles: async () => {
+              const projectPath = repoStore.get().path;
+              return projectPath ? await fetchProjectFiles(projectPath) : {};
+            },
+            logSuccess: () => console.log('files recovery from gitbase successful'),
+          },
+        ];
+
+        for (const strategy of fileRecoveryStrategies) {
+          try {
+            const files = await strategy.getFiles();
+
+            if (Object.keys(files).length > 0) {
+              await containerInstance.mount(convertFileMapToFileSystemTree(files));
+              strategy.logSuccess();
+              recoverySuccessful = true;
+              break;
+            }
+          } catch (error) {
+            console.error(`${strategy.name} recovery failed:`, error);
+          }
+        }
+
+        if (!recoverySuccessful) {
+          handleChatError('Files are not loaded. Please try again later.', undefined, 'sendMessage - files check');
+          return;
+        }
       }
 
       if (isLoading) {
