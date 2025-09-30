@@ -47,3 +47,53 @@
     transform: translateY(6px);
   }
 }
+
+@keyframes slideDown {
+  from {
+    transform: translateX(-50%);
+    opacity: 0;
+    clippath: circle(0% at center);
+  }
+
+  to {
+    transform: translateX(-50%);
+    opacity: 0.8;
+    clippath: circle(100% at center);
+  }
+}
+
+@keyframes slideDownBackground {
+  from {
+    opacity: 0;
+    clippath: circle(0% at center);
+  }
+
+  to {
+    opacity: 0.6;
+    clippath: circle(100% at center);
+  }
+}
+
+@keyframes slideDownDesktop {
+  from {
+    opacity: 0;
+    clippath: circle(0% at center);
+  }
+
+  to {
+    opacity: 1;
+    clippath: circle(100% at center);
+  }
+}
+
+@keyframes slideDownBackgroundDesktop {
+  from {
+    opacity: 0;
+    clippath: circle(0% at 50% 25%);
+  }
+
+  to {
+    opacity: 0.6;
+    clippath: circle(100% at 50% 25%);
+  }
+}

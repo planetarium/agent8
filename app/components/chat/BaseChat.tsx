@@ -14,12 +14,15 @@ import { SendButton } from './SendButton.client';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { toast } from 'react-toastify';
 import { handleChatError } from '~/utils/errorNotification';
+import { motion } from 'framer-motion';
 
+import { useMobileView } from '~/lib/hooks/useMobileView';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
 
 import FilePreview from './FilePreview';
+import MainBackground from '~/components/ui/MainBackground';
 import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
 import type { ActionAlert } from '~/types/actions';
@@ -35,9 +38,19 @@ import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
-import { sendMessageToParent } from '~/utils/postMessageUtils';
 
-const TEXTAREA_MIN_HEIGHT = 76;
+import { ColorTab } from '~/components/ui/ColorTab';
+import {
+  TopDownIcon,
+  TpsIcon,
+  StoryIcon,
+  PuzzleIcon,
+  ChevronDoubleDownIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
+} from '~/components/ui/Icons';
+
+const TEXTAREA_MIN_HEIGHT = 40;
 const MAX_ATTACHMENTS = 10;
 
 export interface ChatAttachment {
@@ -92,6 +105,9 @@ interface BaseChatProps {
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
   customProgressAnnotations?: ProgressAnnotation[];
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
+  textareaExpanded?: boolean;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -138,6 +154,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       loadBefore,
       loadingBefore,
       customProgressAnnotations = [],
+      isAuthenticated = true,
+      onAuthRequired,
+      textareaExpanded = false,
     },
     ref,
   ) => {
@@ -150,38 +169,74 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
+    const [modelSelectorDropdownOpen, setModelSelectorDropdownOpen] = useState<boolean>(false);
 
-    const prompts = [
-      'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.',
-      'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
-      'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above.',
-      'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
-      'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural voxel world generation, block placement, and first-person movement.',
-      'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.',
-    ];
-    const [currentPromptIndex, setCurrentPromptIndex] = useState<number>(0);
-    const [animationDirection, setAnimationDirection] = useState('in');
+    const [selectedVideoTab, setSelectedVideoTab] = useState<'top-down' | 'tps' | 'story' | 'puzzle'>('top-down');
+    const [isVideoHovered, setIsVideoHovered] = useState<boolean>(false);
+    const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false);
 
-    useEffect(() => {
-      if (!chatStarted) {
-        const rotatePrompt = () => {
-          setAnimationDirection('out');
+    const isMobileView = useMobileView();
 
-          setTimeout(() => {
-            setCurrentPromptIndex((prevIndex) => {
-              return (prevIndex + 1) % prompts.length;
-            });
-            setAnimationDirection('in');
-          }, 500);
-        };
+    // Optimized color tab handlers
+    const handleColorTabClick = useCallback(
+      (tab: 'top-down' | 'tps' | 'story' | 'puzzle', prompt: string) => {
+        // Prevent unnecessary re-renders if same tab is clicked
+        if (selectedVideoTab === tab) {
+          return;
+        }
 
-        const promptTimer = setInterval(rotatePrompt, 4000);
+        // Use startTransition to mark this as a non-urgent update
+        React.startTransition(() => {
+          setSelectedVideoTab(tab);
 
-        return () => clearInterval(promptTimer);
+          if (handleInputChange) {
+            const syntheticEvent = {
+              target: { value: prompt },
+            } as React.ChangeEvent<HTMLTextAreaElement>;
+            handleInputChange(syntheticEvent);
+          }
+        });
+      },
+      [handleInputChange, selectedVideoTab],
+    );
+
+    // Define video sources for each tab
+    const videoSources = {
+      'top-down': '/videos/top-down-game.mp4',
+      tps: '/videos/tps-game.mp4',
+      story: '/videos/story-game.mp4',
+      puzzle: '/videos/puzzle-game.mp4',
+    };
+
+    // Toggle video play/pause function
+    const handleVideoClick = (event: React.MouseEvent<HTMLVideoElement>) => {
+      event.preventDefault();
+
+      const video = event.currentTarget;
+
+      if (isVideoPaused) {
+        video.play();
+        setIsVideoPaused(false);
+      } else {
+        video.pause();
+        setIsVideoPaused(true);
       }
+    };
 
-      return undefined;
-    }, [chatStarted, prompts.length]);
+    // Reset pause state when video tab changes and handle smooth video transition
+    useEffect(() => {
+      setIsVideoPaused(false);
+
+      // Optimize video loading for mobile to reduce flickering
+      if (!isMobileView) {
+        // Only preload on non-mobile devices
+        const video = document.querySelector('video');
+
+        if (video) {
+          video.load(); // Reload the video with new source
+        }
+      }
+    }, [selectedVideoTab, isMobileView]);
 
     useEffect(() => {
       const progressFromData = data
@@ -273,6 +328,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     }, []);
 
     const handleSendMessage = (event: React.UIEvent, messageInput?: string) => {
+      if (!isAuthenticated) {
+        onAuthRequired?.();
+        return;
+      }
+
       if (sendMessage) {
         lastActionStore.set({ action: 'SEND_MESSAGE' });
         sendMessage(event, messageInput);
@@ -319,7 +379,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
       for (const item of items) {
         if (item.type.startsWith('image/')) {
-          // 이미지 파일인 경우만 이벤트 기본 동작 방지
+          // Prevent default event behavior only for image files
           e.preventDefault();
 
           const file = item.getAsFile();
@@ -331,7 +391,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           break;
         }
 
-        // 이미지가 아닌 경우에는 기본 붙여넣기 동작 허용 (preventDefault 호출 안 함)
+        // Allow default paste behavior for non-image files (don't call preventDefault)
       }
     };
 
@@ -387,19 +447,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           return;
         }
 
-        // 생성한 임시 ID
+        // Generate temporary ID
         const tempId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-        // 임시 첨부 파일 객체 생성 (업로드 중 상태)
+        // Create temporary attachment object (uploading state)
         const tempAttachment: ChatAttachment = {
           filename: fileName,
-          url: `uploading://${tempId}`, // 특수 프로토콜 사용
+          url: `uploading://${tempId}`, // Use special protocol
           features: `Uploading ${fileType} file...`,
           details: `Uploading ${fileName}`,
           ext: fileExt,
         };
 
-        // 임시 첨부 파일을 리스트에 추가
+        // Add temporary attachment to list
         setAttachmentList?.((prev) => [...prev, tempAttachment]);
 
         const formData = new FormData();
@@ -409,7 +469,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         const verse = 'current';
         formData.append('verse', verse);
 
-        toast.info(`Uploading ${file.name}...`);
+        // toast.info(`Uploading ${file.name}...`);
 
         // For image files, get dimensions before uploading
         let imageMetadata = undefined;
@@ -436,7 +496,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           const result = (await response.json()) as { success: boolean; url: string; error?: string };
 
           if (result.success && result.url) {
-            // 업로드 성공 시 실제 첨부 파일 객체 생성
+            // Create actual attachment object on successful upload
             const finalAttachment: ChatAttachment = {
               filename: fileName,
               url: result.url,
@@ -452,17 +512,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               finalAttachment.details = `Type: ${fileType} Ext: ${fileExt} Size: ${imageMetadata.width}x${imageMetadata.height}`;
             }
 
-            // 임시 첨부 파일을 실제 첨부 파일로 교체
+            // Replace temporary attachment with actual attachment
             setAttachmentList?.((prev) =>
               prev.map((attachment) => (attachment.url === `uploading://${tempId}` ? finalAttachment : attachment)),
             );
 
-            toast.success(`Uploaded ${file.name}`);
+            // toast.success(`Uploaded ${file.name}`);
           } else {
             throw new Error(result.error || 'Unknown error during upload');
           }
         } catch (error: any) {
-          // 업로드 실패 시 임시 첨부 파일을 에러 상태로 변경
+          // Change temporary attachment to error state on upload failure
           setAttachmentList?.((prev) =>
             prev.map((attachment) =>
               attachment.url === `uploading://${tempId}`
@@ -479,7 +539,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           console.error('Error uploading file:', error);
           handleChatError(`Upload failed: ${error.message}`, error, 'uploadFileAndAddToAttachmentList - upload error');
 
-          // 3초 후 에러 상태의 첨부 파일 제거
+          // Remove error state attachment after 3 seconds
           setTimeout(() => {
             setAttachmentList?.((prev) => prev.filter((attachment) => attachment.url !== `error://${tempId}`));
           }, 3000);
@@ -548,7 +608,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
 
-        <div className="flex flex-col lg:flex-row w-full h-full">
+        <div className="flex flex-col lg:flex-row w-full h-full bg-primary">
           <div
             ref={(node) => {
               setScrollElement(node);
@@ -559,32 +619,212 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             }}
             className={classNames(
               styles.Chat,
-              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full overflow-y-auto chat-container',
+              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full chat-container',
+              {
+                'overflow-y-auto': chatStarted,
+                [styles.chatStarted]: chatStarted,
+              },
             )}
           >
             {!chatStarted && (
-              <>
-                <div id="intro" className="mt-[30px] max-w-chat-before-start mx-auto text-center px-4 lg:px-0">
-                  <div className="flex justify-center mb-4">
-                    <img src="/title/Title.svg" alt="Agent8 Title" className="max-w-full h-auto" />
+              <div className="flex flex-col items-center max-w-[632px] w-full gap-4 flex-shrink-0 tablet:h-[85vh] tablet:px-0 relative tablet:max-w-none mx-auto">
+                <MainBackground zIndex={1} isMobileView={isMobileView} />
+                {/* Background Image */}
+                <div
+                  className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
+                  style={{
+                    backgroundPosition: '50% -25%',
+                    animation: isMobileView
+                      ? 'slideDownBackground 1s ease-in-out'
+                      : 'slideDownBackgroundDesktop 1s ease-in-out',
+                  }}
+                />
+                <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
+                  <div className="flex justify-center">
+                    <span className="text-heading-lg tablet:text-heading-4xl text-elevation-shadow-3">
+                      Game Creation, Simplified
+                    </span>
                   </div>
                 </div>
-                <div className="text-center border border-[#4c5354] rounded-lg w-full h-18 max-w-chat-before-start mx-auto flex items-center justify-between px-4 bg-gradient-to-r from-[#111315] to-[#123135] mt-8 -mb-3">
-                  <div className="flex items-center gap-3">
-                    <img src="/icons/tutorial.svg" alt="Tutorial" className="w-5 h-5 mt-1" />
-                    <span className="text-white font-semibold">Learn how to make a game with Verse8</span>
-                  </div>
-                  <button
-                    className="text-white bg-[#1A92A4] rounded font-semibold py-2 px-4 text-sm hover:bg-[#1A92A4]/80 active:bg-[#1A92A4]/60 transition-all duration-200"
-                    onClick={() => sendMessageToParent('GOTO_TUTORIAL', {})}
+                <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm px-2 tablet:px-0 text-secondary self-stretch z-2">
+                  Start here — or make your own.{isMobileView && <br />} What do you want to create?
+                </span>
+
+                {/* Mobile: ColorTabs above video */}
+                <div className="flex max-w-[632px] px-4 w-full tablet:hidden items-start justify-center tablet:px-0 gap-2 self-stretch z-1">
+                  <ColorTab
+                    color="cyan"
+                    size="sm"
+                    selected={selectedVideoTab === 'top-down'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'top-down',
+                        'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
+                      )
+                    }
                   >
-                    View Tutorial
-                  </button>
+                    <TopDownIcon size={24} className="flex-shrink-0" />
+                    <span>Top-Down</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="brown"
+                    size="sm"
+                    selected={selectedVideoTab === 'tps'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'tps',
+                        'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+                      )
+                    }
+                  >
+                    <TpsIcon size={24} />
+                    <span className="uppercase">tps</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="magenta"
+                    size="sm"
+                    selected={selectedVideoTab === 'story'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'story',
+                        'A simple Japanese-style visual novel about everyday life in a high school.',
+                      )
+                    }
+                  >
+                    <StoryIcon size={24} />
+                    <span>Story</span>
+                  </ColorTab>
+                  <ColorTab
+                    color="green"
+                    size="sm"
+                    selected={selectedVideoTab === 'puzzle'}
+                    onClick={() =>
+                      handleColorTabClick(
+                        'puzzle',
+                        'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
+                      )
+                    }
+                  >
+                    <PuzzleIcon size={24} />
+                    <span>Puzzle</span>
+                  </ColorTab>
                 </div>
-              </>
+
+                <div className="w-full max-w-[632px] px-4 tablet:w-auto tablet:max-w-[1151px]">
+                  <div
+                    className={classNames('flex flex-col items-start flex-shrink-0 relative cursor-pointer z-1', {
+                      'aspect-[16/9] max-h-[58vh] border border-primary rounded-[24px]': !isMobileView,
+                      'aspect-[16/9] rounded-[8px]': isMobileView,
+                    })}
+                    onMouseEnter={() => setIsVideoHovered(true)}
+                    onMouseLeave={() => setIsVideoHovered(false)}
+                  >
+                    <video
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className={classNames('w-full h-full object-cover', {
+                        'rounded-[24px]': !isMobileView,
+                        'rounded-[8px]': isMobileView,
+                      })}
+                      src={videoSources[selectedVideoTab]}
+                      onClick={handleVideoClick}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+
+                    {/* Video icon overlay */}
+                    {(isVideoHovered || isVideoPaused) && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="flex items-center justify-center w-25 h-25 flex-shrink-0 aspect-square opacity-90">
+                          {isVideoPaused ? (
+                            <PlayCircleIcon color="#FFFFFF" size={100} />
+                          ) : (
+                            <PauseCircleIcon color="#FFFFFF" size={100} />
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tablet+: ColorTabs on video overlay */}
+                    <div className="hidden tablet:block">
+                      <div
+                        className={classNames('absolute top-0 left-0 w-full h-[100px] flex-shrink-0 opacity-80', {
+                          'rounded-t-[24px]': !isMobileView,
+                          'rounded-t-[8px]': isMobileView,
+                        })}
+                        style={{
+                          background:
+                            'linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.98) 4.7%, rgba(0, 0, 0, 0.96) 8.9%, rgba(0, 0, 0, 0.93) 12.8%, rgba(0, 0, 0, 0.90) 16.56%, rgba(0, 0, 0, 0.86) 20.37%, rgba(0, 0, 0, 0.82) 24.4%, rgba(0, 0, 0, 0.77) 28.83%, rgba(0, 0, 0, 0.71) 33.84%, rgba(0, 0, 0, 0.65) 39.6%, rgba(0, 0, 0, 0.57) 46.3%, rgba(0, 0, 0, 0.48) 54.1%, rgba(0, 0, 0, 0.38) 63.2%, rgba(0, 0, 0, 0.27) 73.76%, rgba(0, 0, 0, 0.14) 85.97%, rgba(0, 0, 0, 0.00) 100%)',
+                        }}
+                      />
+                      <div className="absolute flex items-center justify-center gap-3 top-4 left-1/2 -translate-x-1/2">
+                        <ColorTab
+                          color="cyan"
+                          size="md"
+                          selected={selectedVideoTab === 'top-down'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'top-down',
+                              'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
+                            )
+                          }
+                        >
+                          <TopDownIcon size={24} className="flex-shrink-0" />
+                          <span>Top-Down</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="brown"
+                          size="md"
+                          selected={selectedVideoTab === 'tps'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'tps',
+                              'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+                            )
+                          }
+                        >
+                          <TpsIcon size={24} />
+                          <span className="uppercase">tps</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="magenta"
+                          size="md"
+                          selected={selectedVideoTab === 'story'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'story',
+                              'A simple Japanese-style visual novel about everyday life in a high school.',
+                            )
+                          }
+                        >
+                          <StoryIcon size={24} />
+                          <span>Story</span>
+                        </ColorTab>
+                        <ColorTab
+                          color="green"
+                          size="md"
+                          selected={selectedVideoTab === 'puzzle'}
+                          onClick={() =>
+                            handleColorTabClick(
+                              'puzzle',
+                              'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
+                            )
+                          }
+                        >
+                          <PuzzleIcon size={24} />
+                          <span>Puzzle</span>
+                        </ColorTab>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
+
             <div
-              className={classNames('pt-4 px-2 sm:px-6 relative', {
+              className={classNames('pt-0 tablet:pt-4 tablet:px-6 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -637,11 +877,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </ClientOnly>
 
               <div
-                className={classNames('flex flex-col gap-3 w-full mx-auto z-prompt', {
-                  'sticky bottom-4': chatStarted,
-                  'max-w-chat': chatStarted,
-                  'max-w-chat-before-start': !chatStarted,
-                })}
+                className={classNames(
+                  'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
+                  {
+                    'sticky bottom-4': chatStarted,
+                    'tablet:max-w-chat': chatStarted,
+                    'tablet:max-w-chat-before-start': !chatStarted,
+                    'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
+                    'tablet:absolute tablet:bottom-[200%] tablet:left-1/2 tablet:transform tablet:-translate-x-1/2':
+                      !chatStarted,
+                    'fixed bottom-[5%] z-[9999] translate-x-[-50%] left-1/2':
+                      !chatStarted && (attachmentList.length > 0 || textareaExpanded) && isMobileView,
+                  },
+                )}
               >
                 <div className="bg-bolt-elements-background-depth-2">
                   {!isStreaming &&
@@ -675,29 +923,31 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
                 <div
-                  className={classNames('flex flex-col self-stretch p-5 relative w-full mx-auto z-prompt relative', {
-                    'max-w-chat': chatStarted,
-                    'max-w-chat-before-start': !chatStarted,
-                    'bg-primary': !chatStarted,
-                    [styles.promptInputActive]: chatStarted,
-                  })}
+                  className={classNames(
+                    'flex flex-col self-stretch px-4 pt-[6px] pb-4 relative w-full mx-auto z-prompt',
+                    {
+                      'tablet:max-w-chat': chatStarted,
+                      'tablet:max-w-chat-before-start': !chatStarted,
+                      'bg-primary': !chatStarted,
+                      [styles.promptInputActive]: chatStarted,
+                    },
+                  )}
                   style={
                     !chatStarted
                       ? {
-                          boxShadow: '0 0 15px rgba(63, 210, 232, 0.05)',
+                          borderRadius: 'var(--border-radius-16, 16px)',
+                          boxShadow: isMobileView
+                            ? '0 1px 4px 1px rgba(26, 220, 217, 0.12), 0 2px 20px 4px rgba(148, 250, 239, 0.16)'
+                            : '0 2px 8px 2px rgba(26, 220, 217, 0.12), 0 8px 56px 8px rgba(148, 250, 239, 0.16)',
                         }
                       : {}
                   }
                 >
-                  {!chatStarted && (
-                    <div className={classNames(styles.PromptEffectContainer)}>
-                      <span className={classNames(styles.PromptEffectInner)}></span>
-                    </div>
-                  )}
-
-                  <div className="mb-3 relative">
+                  <div className="mb-[6px] relative">
                     <McpServerManager chatStarted={chatStarted} />
                   </div>
+
+                  <div className="border-b border-tertiary mx-[-16px] mb-4" />
 
                   <FilePreview
                     attachmentUrlList={attachmentList ? attachmentList.map((attachment) => attachment.url) : []}
@@ -707,28 +957,28 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     }}
                   />
 
-                  <div
-                    className={classNames(
-                      'relative shadow-xs backdrop-blur rounded-lg flex-1',
-                      attachmentList && attachmentList.length > 0 ? 'mb-12 mt-4' : '',
-                      'flex',
-                    )}
-                  >
+                  <div className={classNames('relative shadow-xs backdrop-blur rounded-lg flex-1', 'flex')}>
                     <textarea
                       ref={textareaRef}
                       className={classNames(
-                        'w-full outline-none resize-none bg-transparent font-primary text-[16px] font-medium font-feature-stylistic text-bolt-color-textPrimary placeholder-bolt-color-textTertiary',
+                        'w-full outline-none resize-none bg-transparent text-[14px] font-medium text-primary placeholder-text-subtle',
                         'transition-all duration-200',
                         'hover:border-bolt-elements-focus',
-                        'flex-1',
+                        {
+                          'flex-1': !isMobileView,
+                        },
                       )}
                       style={{
-                        // fontStyle: 'normal',
-                        lineHeight: '160%',
+                        fontFamily: '"Instrument Sans"',
+                        fontSize: '14px',
+                        fontStyle: 'normal',
+                        fontWeight: 500,
+                        lineHeight: '142.9%',
                         minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
                         maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
                         border: '1px solid transparent',
                         overflowY: 'scroll',
+                        resize: 'none',
                       }}
                       onDragEnter={(e) => {
                         e.preventDefault();
@@ -806,26 +1056,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         handleInputChange?.(event);
                       }}
                       onPaste={handlePaste}
-                      placeholder=""
+                      placeholder="What kind of game do you want to make?"
                       translate="no"
                     />
-
-                    {!chatStarted && input.length === 0 && (
-                      <div
-                        className={classNames(
-                          'absolute left-0 top-0 w-full font-primary text-[16px] font-semibold font-feature-stylistic text-bolt-color-textTertiary pointer-events-none p-[inherit]',
-                          animationDirection === 'in' ? styles.placeholderAnimationIn : styles.placeholderAnimationOut,
-                        )}
-                        style={{
-                          lineHeight: '160%',
-                          padding: 'inherit',
-                        }}
-                      >
-                        {prompts[currentPromptIndex]}
-                      </div>
-                    )}
                   </div>
-                  <div className="flex justify-between items-center self-stretch text-sm mt-auto">
+                  <div className="flex justify-between items-center self-stretch text-sm mt-4">
                     <div className="flex items-center gap-[4.8px]">
                       <div
                         className="hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200"
@@ -848,7 +1083,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             <Tooltip.Content
                               className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
                               sideOffset={5}
-                              side={chatStarted ? 'top' : 'bottom'}
+                              side="top"
                             >
                               {chatStarted ? 'Upload a file' : 'Upload a file or import a project'}
                               <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
@@ -882,7 +1117,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <div className="flex items-center hover:bg-bolt-elements-item-backgroundActive rounded-radius-4 transition-all duration-200">
                         <ClientOnly>
                           {() => (
-                            <Tooltip.Root>
+                            <Tooltip.Root open={modelSelectorDropdownOpen ? false : undefined}>
                               <Tooltip.Trigger asChild>
                                 <div>
                                   <ModelSelector
@@ -891,6 +1126,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                                     provider={provider}
                                     setProvider={setProvider}
                                     providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
+                                    onDropdownOpenChange={setModelSelectorDropdownOpen}
                                   />
                                 </div>
                               </Tooltip.Trigger>
@@ -916,6 +1152,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           <SendButton
                             show={true}
                             isStreaming={isStreaming}
+                            isAuthenticated={isAuthenticated}
                             disabled={
                               !providerList ||
                               providerList.length === 0 ||
@@ -939,132 +1176,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 </div>
               </div>
             </div>
-            {!chatStarted && (
-              <div className="flex flex-col justify-center items-start gap-3 self-stretch w-full mx-auto max-w-chat-before-start mt-[36px] mb-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-left font-primary text-secondary text-sm font-medium leading-[142.9%] not-italic">
-                    What do you want to create? Try it
-                  </p>
-                  <img src="/icons/Magic.svg" alt="Magic" />
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 self-stretch w-full">
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Create a basic Three.js FPS game inspired by Call of Duty, where the player navigates a 3D maze and shoots targets from a first-person view.';
 
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Fps.svg" alt="Fps" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      First-Person Shooter
-                    </span>
-                  </button>
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Build a simple Three.js third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.';
-
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Tps.svg" alt="Tps" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      Third-Person Shooter
-                    </span>
-                  </button>
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Make a basic Three.js top-down game like League of Legends, where the player controls a character from above.';
-
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Topdown.svg" alt="Topdown" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      Top-Down Action
-                    </span>
-                  </button>
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.';
-
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Puzzle.svg" alt="Puzzle" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      Puzzle & Logic
-                    </span>
-                  </button>
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Build a voxel-based sandbox game like Minecraft in Three.js, with procedural voxel world generation, block placement, and first-person movement.';
-
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Voxel.svg" alt="Voxel" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      Voxel Sandbox Builder
-                    </span>
-                  </button>
-                  <button
-                    className="flex py-spacing-20 px-spacing-8 justify-center items-center gap-spacing-8 rounded-radius-8 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed transition-colors duration-200 cursor-pointer"
-                    onClick={() => {
-                      const prompt =
-                        'Make a minimalist flight simulator in Three.js inspired by Peter Levels game, with a low-poly plane.';
-
-                      if (handleInputChange) {
-                        const syntheticEvent = {
-                          target: { value: prompt },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleInputChange(syntheticEvent);
-                      }
-                    }}
-                  >
-                    <img src="/icons/Flight.svg" alt="Flight" />
-                    <span className="text-interactive-neutral font-feature-stylistic font-primary text-[12.5px] not-italic font-semibold leading-[142.9%]">
-                      Flight Simulator
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
             <div className="flex flex-col justify-center gap-5">
               {!chatStarted &&
                 ExamplePrompts((event, messageInput) => {
@@ -1075,8 +1187,24 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                   handleSendMessage?.(event, messageInput);
                 })}
-              {/* <StarterTemplates /> */}
             </div>
+
+            {!chatStarted && (
+              <motion.div
+                className="fixed bottom-0 left-1/2 transform -translate-x-1/2 z-10 hidden tablet:block"
+                animate={{
+                  y: [0, -6, 0],
+                }}
+                transition={{
+                  duration: 1.5,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                }}
+              >
+                <ChevronDoubleDownIcon size={24} color="rgba(255, 255, 255, 0.4)" />
+              </motion.div>
+            )}
           </div>
           <ClientOnly>
             {() => (

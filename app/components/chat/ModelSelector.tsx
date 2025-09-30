@@ -12,12 +12,20 @@ interface ModelSelectorProps {
   provider?: ProviderInfo;
   setProvider?: (provider: ProviderInfo) => void;
   providerList: ProviderInfo[];
+  onDropdownOpenChange?: (isOpen: boolean) => void;
 }
 
 // Special model name for Auto mode
 const AUTO_MODEL_NAME = 'auto';
 
-export const ModelSelector = ({ model, setModel, provider, setProvider, providerList }: ModelSelectorProps) => {
+export const ModelSelector = ({
+  model,
+  setModel,
+  provider,
+  setProvider,
+  providerList,
+  onDropdownOpenChange,
+}: ModelSelectorProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -32,13 +40,14 @@ export const ModelSelector = ({ model, setModel, provider, setProvider, provider
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
         setSearchQuery('');
+        onDropdownOpenChange?.(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
 
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [onDropdownOpenChange]);
 
   // 사용 가능한 화이트리스트 항목 만들기
   const whitelistOptions = MODEL_WHITELIST.filter((item) => {
@@ -252,11 +261,19 @@ export const ModelSelector = ({ model, setModel, provider, setProvider, provider
             'flex items-center text-bolt-elements-textSecondary text-xs cursor-pointer hover:text-bolt-elements-textPrimary transition-colors gap-1.5 py-2 px-4',
             isDropdownOpen ? 'text-bolt-elements-textPrimary' : '',
           )}
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          onClick={() => {
+            const newState = !isDropdownOpen;
+            setIsDropdownOpen(newState);
+            onDropdownOpenChange?.(newState);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setIsDropdownOpen(!isDropdownOpen);
+
+              const newState = !isDropdownOpen;
+
+              setIsDropdownOpen(newState);
+              onDropdownOpenChange?.(newState);
             }
           }}
           role="combobox"

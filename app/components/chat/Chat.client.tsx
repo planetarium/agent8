@@ -115,7 +115,12 @@ function sendEventToParent(type: string, payload: any) {
   }
 }
 
-export function Chat() {
+interface ChatComponentProps {
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
+}
+
+export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
   const {
@@ -231,6 +236,8 @@ export function Chat() {
           hasMore={hasMore}
           loadBefore={loadBefore}
           loadingBefore={loadingBefore}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={onAuthRequired}
         />
       )}
       <ToastContainer />
@@ -263,6 +270,8 @@ interface ChatProps {
   hasMore: boolean;
   loadBefore: () => Promise<void>;
   loadingBefore: boolean;
+  isAuthenticated?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export const ChatImpl = memo(
@@ -279,6 +288,8 @@ export const ChatImpl = memo(
     hasMore,
     loadBefore,
     loadingBefore,
+    isAuthenticated,
+    onAuthRequired,
   }: ChatProps) => {
     useShortcuts();
 
@@ -336,9 +347,10 @@ export const ChatImpl = memo(
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
-    const [fakeLoading, setFakeLoading] = useState(false);
-    const [installNpm, setInstallNpm] = useState(false);
+    const [fakeLoading, setFakeLoading] = useState<boolean>(false);
+    const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
+    const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -458,7 +470,7 @@ export const ChatImpl = memo(
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
 
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const TEXTAREA_MAX_HEIGHT = 200;
 
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
@@ -556,6 +568,10 @@ export const ChatImpl = memo(
 
         textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
         textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+
+        // Check if textarea is expanded beyond minimum height
+        const isExpanded = scrollHeight > 40; // TEXTAREA_MIN_HEIGHT = 40
+        setTextareaExpanded(isExpanded);
       }
     }, [input, textareaRef]);
 
@@ -575,6 +591,12 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // 인증 체크 - 인증되지 않은 경우 부모에게 알리고 리턴
+      if (!isAuthenticated) {
+        onAuthRequired?.();
+        return;
+      }
+
       if (lastSendMessageTime.current && Date.now() - lastSendMessageTime.current < 1000) {
         return;
       }
@@ -1235,6 +1257,9 @@ export const ChatImpl = memo(
         loadBefore={loadBefore}
         loadingBefore={loadingBefore}
         customProgressAnnotations={customProgressAnnotations}
+        isAuthenticated={isAuthenticated}
+        onAuthRequired={onAuthRequired}
+        textareaExpanded={textareaExpanded}
       />
     );
   },

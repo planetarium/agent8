@@ -1,4 +1,4 @@
 export function isMobile() {
-  // we use sm: as the breakpoint for mobile. It's currently set to 640px
-  return globalThis.innerWidth < 640;
+  // we use sm: as the breakpoint for mobile. It's currently set to 768px
+  return globalThis.innerWidth < 760;
 }
