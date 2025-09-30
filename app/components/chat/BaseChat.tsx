@@ -223,20 +223,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
     };
 
-    // Reset pause state when video tab changes and handle smooth video transition
+    // Reset pause state when video tab changes
     useEffect(() => {
       setIsVideoPaused(false);
-
-      // Optimize video loading for mobile to reduce flickering
-      if (!isMobileView) {
-        // Only preload on non-mobile devices
-        const video = document.querySelector('video');
-
-        if (video) {
-          video.load(); // Reload the video with new source
-        }
-      }
-    }, [selectedVideoTab, isMobileView]);
+    }, [selectedVideoTab]);
 
     useEffect(() => {
       const progressFromData = data
