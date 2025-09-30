@@ -216,7 +216,7 @@ export const TaskMessages = forwardRef<HTMLDivElement, TaskMessagesProps>(
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.8, delay: 1 }}
-                className="flex items-center justify-between px-2 sticky bottom-[245px] bg-black z-[100] py-4"
+                className="flex items-center justify-between px-2 sticky bg-black z-[100] py-4"
               >
                 <span className="text-[15px] text-white">
                   Will you confirm this version and proceed with additional work?
