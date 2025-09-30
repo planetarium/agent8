@@ -264,7 +264,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
-            writer.merge(result.toUIMessageStream());
+            writer.merge(result.toUIMessageStream({ sendReasoning: false }));
 
             return;
           },
@@ -291,7 +291,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           abortSignal: request.signal,
         });
 
-        writer.merge(result.toUIMessageStream());
+        writer.merge(result.toUIMessageStream({ sendReasoning: false }));
       },
       onError: (error: unknown) => {
         const message = (error as Error).message;
