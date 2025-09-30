@@ -17,9 +17,9 @@ function toBoltArtifactXML(a: any) {
   const body = a.actions
     .filter(
       (act: any) =>
-        (act.content && act.filePath) ||
-        (act.type === 'modify' && act.filePath && act.modifications) ||
-        (act.type === 'shell' && act.command && !act.filePath),
+        (act.content && act.path) ||
+        (act.type === 'modify' && act.path && act.modifications) ||
+        (act.type === 'shell' && act.command && !act.path),
     )
     .sort((a: any, b: any) => {
       if (a.type === 'shell' && b.type !== 'shell') {
@@ -34,11 +34,11 @@ function toBoltArtifactXML(a: any) {
     })
     .map((act: any) => {
       if (act.type === 'modify' && act.modifications) {
-        return `  <boltAction type="modify" filePath="${act.filePath}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
       }
 
-      if (act.filePath && act.content !== undefined) {
-        return `  <boltAction type="file" filePath="${act.filePath}">${act.content}</boltAction>`;
+      if (act.path && act.content !== undefined) {
+        return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
       }
 
       return `  <boltAction type="shell">${act.command}</boltAction>`;

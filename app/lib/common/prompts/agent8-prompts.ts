@@ -30,9 +30,9 @@ Tool Structure (${TOOL_NAMES.SUBMIT_ARTIFACT}):
 - id: Unique identifier in kebab-case (e.g., "platformer-game", "feature-update")
 - title: Descriptive title of what was accomplished
 - actions: Array containing ALL operations:
-  * File creation/update: { type: "file", filePath: "relative-path", content: "complete content" }
+  * File creation/update: { type: "file", path: "relative-path", content: "complete content" }
     → Use for: New files, complete rewrites, or when you haven't read the file
-  * File modification: { type: "modify", filePath: "relative-path", modifications: [{ before: "exact text", after: "replacement" }] }
+  * File modification: { type: "modify", path: "relative-path", modifications: [{ before: "exact text", after: "replacement" }] }
     → PREFERRED for: Small edits to existing files (saves bandwidth and is more precise)
   * Package installation: { type: "shell", command: "bun add <package>" }
 
@@ -129,74 +129,33 @@ The flow you need to proceed is as follows.
 <project_documentation>
 **P0 (MANDATORY)**: You MUST maintain a PROJECT/*.md file in the root directory of every project. This file serves as the central documentation for the entire project and must be kept up-to-date with every change.
 
-Please only use the following format to generate the summary:
----
-<boltAction type="file" filePath="PROJECT/Context.md">
-# Project Context
-## Overview
-- **Project**: {project_name} - {brief_description}
-- **Tech Stack**: {languages}, {frameworks}, {key_dependencies}
-- **Environment**: {critical_env_details}
+Please include these PROJECT/*.md files in your ${TOOL_NAMES.SUBMIT_ARTIFACT} tool call:
 
-## User Context
-- **Technical Level**: {expertise_level}
-- **Preferences**: {coding_style_preferences}
-- **Communication**: {preferred_explanation_style}
-
-## Critical Memory
-- **Must Preserve**: {crucial_technical_context}
-- **Core Architecture**: {fundamental_design_decisions}
-</boltAction>
-
-<boltAction type="file" filePath="PROJECT/Structure.md">
-# File Structure
-## Core Files
-- src/main.tsx : Entry point for the application, Sets up React rendering and global providers
-- src/components/Game.tsx : Main game component, Handles game state and rendering logic, Implements [specific functionality]
-- src/utils/physics.ts : Contains utility functions for game physics calculations, Implements collision detection algorithms
-
-## Architecture Notes
-- **Component Structure**: {component_organization}
-- **Data Flow**: {state_management_pattern}
-- **Key Dependencies**: {important_libraries_and_their_roles}
-- **Integration Points**: {how_components_connect}
-</boltAction>
-
-<boltAction type="file" filePath="PROJECT/Requirements.md">
-# Requirements & Patterns
-## Requirements
-- **Implemented**: {completed_features}
-- **In Progress**: {current_focus}
-- **Pending**: {upcoming_features}
-- **Technical Constraints**: {critical_constraints}
-
-## Known Issues
-- **Documented Problems**: {documented_problems}
-- **Workarounds**: {current_solutions}
-
-## Patterns
-- **Working Approaches**: {successful_approaches}
-- **Failed Approaches**: {attempted_solutions_that_failed}
-</boltAction>
-
-<boltAction type="file" filePath="PROJECT/Status.md">
-# Current Status
-## Active Work
-- **Current Feature**: {feature_in_development}
-- **Progress**: {what_works_and_what_doesn't}
-- **Blockers**: {current_challenges}
-
-## Recent Activity
-- **Last Topic**: {main_discussion_point}
-- **Key Decisions**: {important_decisions_made}
-- **Latest Changes**: {recent_code_changes}
-- **Impact**: {effects_of_changes}
-
-## Next Steps
-- **Immediate**: {next_steps}
-- **Open Questions**: {unresolved_issues}
-</boltAction>
----
+Example structure for the actions array:
+\`\`\`json
+[
+  {
+    "type": "file",
+    "path": "PROJECT/Context.md",
+    "content": "# Project Context\n## Overview\n- **Project**: {project_name} - {brief_description}\n- **Tech Stack**: {languages}, {frameworks}, {key_dependencies}\n- **Environment**: {critical_env_details}\n\n## User Context\n- **Technical Level**: {expertise_level}\n- **Preferences**: {coding_style_preferences}\n- **Communication**: {preferred_explanation_style}\n\n## Critical Memory\n- **Must Preserve**: {crucial_technical_context}\n- **Core Architecture**: {fundamental_design_decisions}"
+  },
+  {
+    "type": "file",
+    "path": "PROJECT/Structure.md",
+    "content": "# File Structure\n## Core Files\n- src/main.tsx : Entry point for the application, Sets up React rendering and global providers\n- src/components/Game.tsx : Main game component, Handles game state and rendering logic, Implements [specific functionality]\n- src/utils/physics.ts : Contains utility functions for game physics calculations, Implements collision detection algorithms\n\n## Architecture Notes\n- **Component Structure**: {component_organization}\n- **Data Flow**: {state_management_pattern}\n- **Key Dependencies**: {important_libraries_and_their_roles}\n- **Integration Points**: {how_components_connect}"
+  },
+  {
+    "type": "file",
+    "path": "PROJECT/Requirements.md",
+    "content": "# Requirements & Patterns\n## Requirements\n- **Implemented**: {completed_features}\n- **In Progress**: {current_focus}\n- **Pending**: {upcoming_features}\n- **Technical Constraints**: {critical_constraints}\n\n## Known Issues\n- **Documented Problems**: {documented_problems}\n- **Workarounds**: {current_solutions}\n\n## Patterns\n- **Working Approaches**: {successful_approaches}\n- **Failed Approaches**: {attempted_solutions_that_failed}"
+  },
+  {
+    "type": "file",
+    "path": "PROJECT/Status.md",
+    "content": "# Current Status\n## Active Work\n- **Current Feature**: {feature_in_development}\n- **Progress**: {what_works_and_what_doesn't}\n- **Blockers**: {current_challenges}\n\n## Recent Activity\n- **Last Topic**: {main_discussion_point}\n- **Key Decisions**: {important_decisions_made}\n- **Latest Changes**: {recent_code_changes}\n- **Impact**: {effects_of_changes}\n\n## Next Steps\n- **Immediate**: {next_steps}\n- **Open Questions**: {unresolved_issues}"
+  }
+]
+\`\`\`
 Note:
 * Context.md and Structure.md rarely change - only update when fundamental changes occur
 * Requirements.md changes when new features are added or issues are discovered
@@ -238,8 +197,8 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - title: Descriptive title of the artifact
       - actions: Array of actions to perform
     4. Each item in the actions array must be one of these formats:
-      - File operation: { type: "file", filePath: "relative-path", content: "complete file content" }
-      - Modify operation: { type: "modify", filePath: "relative-path", modifications: "list of text replacements" }
+      - File operation: { type: "file", path: "relative-path", content: "complete file content" }
+      - Modify operation: { type: "modify", path: "relative-path", modifications: "list of text replacements" }
       - Shell command: { type: "shell", command: "bun add <package-name>" }
     5. Shell command guidelines:
       - Use shell type only for installing new packages (bun add <pkg>)
@@ -587,9 +546,9 @@ export function getProjectMdPrompt(files: any) {
     ${projectFiles
       .map(
         (file) => `
-    <boltAction type="file" filePath="PROJECT/${file.path}">
+    <existing_file path="PROJECT/${file.path}">
       ${file.content}
-    </boltAction>`,
+    </existing_file>`,
       )
       .join('\n')}
 </PROJECT_DESCRIPTION>
@@ -602,9 +561,9 @@ export function getProjectPackagesPrompt(files: any) {
   return `
 <PROJECT_DESCRIPTION>
     This is a package.json that configures the project. Please do not edit it directly. If you want to make changes, use command \`bun add <pkg>\`. The contents are always up-to-date, so please do not read this file through tools.
-    <boltAction type="file" filePath="package.json">
+    <existing_file path="package.json">
       ${packageJson?.type === 'file' ? packageJson.content : ''}
-    </boltAction>
+    </existing_file>
 </PROJECT_DESCRIPTION>
 `;
 }
@@ -739,8 +698,8 @@ function createFilesContext(files: any, useRelativePath?: boolean) {
         filePath = path.replace('/home/project/', '');
       }
 
-      return `<boltAction type="file" filePath="${filePath}">${codeWithLinesNumbers}</boltAction>`;
+      return `<existing_file path="${filePath}">${codeWithLinesNumbers}</existing_file>`;
     });
 
-  return `<boltArtifact id="code-content" title="Code Content" >\n${fileContexts.join('\n')}\n</boltArtifact>`;
+  return `<existing_files>\n${fileContexts.join('\n')}\n</existing_files>`;
 }

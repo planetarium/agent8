@@ -30,12 +30,12 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
             z.union([
               z.object({
                 type: z.literal('file'),
-                filePath: z.string().describe('Relative path from cwd'),
+                path: z.string().describe('Relative path from cwd'),
                 content: z.string().describe('Complete file content'),
               }),
               z.object({
                 type: z.literal('modify'),
-                filePath: z.string().describe('Relative path from cwd'),
+                path: z.string().describe('Relative path from cwd'),
                 modifications: z
                   .array(
                     z.object({
@@ -58,13 +58,13 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
 
         if (fileMap) {
           for (const action of val.actions) {
-            if (action.type === 'file' && action.filePath && action.content) {
-              if (needReadFile(fileMap, action.filePath)) {
-                need.add(action.filePath);
+            if (action.type === 'file' && action.path && action.content) {
+              if (needReadFile(fileMap, action.path)) {
+                need.add(action.path);
               }
-            } else if (action.type === 'modify' && action.filePath && action.modifications) {
-              if (needReadFile(fileMap, action.filePath)) {
-                need.add(action.filePath);
+            } else if (action.type === 'modify' && action.path && action.modifications) {
+              if (needReadFile(fileMap, action.path)) {
+                need.add(action.path);
               }
             }
           }
