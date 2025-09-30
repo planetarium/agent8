@@ -1,8 +1,8 @@
 import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
-import type { FileMap } from '~/lib/.server/llm/constants';
+import type { FileMap, Orchestration } from '~/lib/.server/llm/constants';
 import { tool } from 'ai';
-import { WORK_DIR } from '~/utils/constants';
+import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 
 /**
  * Tool for searching file contents with pattern matching (similar to grep)
@@ -56,8 +56,8 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
 /**
  * Tool for getting all contents of a file
  */
-export const createFilesReadTool = (fileMap: FileMap) => {
-  const seen = new Set<string>();
+export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestration) => {
+  const seen = orchestration.readSet;
 
   return tool({
     description:
@@ -112,9 +112,9 @@ export const createFilesReadTool = (fileMap: FileMap) => {
 /**
  * Creates all file search tools with the provided FileMap
  */
-export const createFileSearchTools = (fileMap: FileMap) => {
+export const createFileSearchTools = (fileMap: FileMap, orchestration: Orchestration) => {
   return {
-    search_file_contents: createFileContentSearchTool(fileMap),
-    read_files_contents: createFilesReadTool(fileMap),
+    [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(fileMap),
+    [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(fileMap, orchestration),
   };
 };
