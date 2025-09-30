@@ -20,7 +20,7 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
 
 export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
   return tool({
-    description: 'Submit the final artifact. Call this tool with JSON instead of outputting tags as text.',
+    description: 'Submit the final artifact. Must call this tool.',
     inputSchema: z
       .object({
         id: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
