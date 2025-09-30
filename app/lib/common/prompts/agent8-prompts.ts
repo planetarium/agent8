@@ -89,7 +89,7 @@ We already have a working React codebase. Our goal is to modify or add new featu
 
 2. Collect relevant information
 - Read the information in <project_description> to understand the overall structure of the project.
-- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the read_file tool. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
+- **P0 (MANDATORY)**: Before modifying ANY file, you MUST read that file using the ${TOOL_NAMES.READ_FILES_CONTENTS} tool. If you respond without reading the file, the project will likely break. Before importing from ANY file, you MUST read that file to understand its exports, types, and interfaces.
 - **P0 (MANDATORY)**: ALWAYS read available documentation through provided tools before using any library or SDK. Only proceed if you have clear documentation or are confident about the usage:
   - **vibe-starter-3d**: Read available documentation through tools for safe usage
   - **gameserver-sdk**: Server operations must be based on available SDK documentation - never assume server functionality
@@ -106,7 +106,7 @@ We already have a working React codebase. Our goal is to modify or add new featu
 - **P0 (MANDATORY)**: After making changes that affect imports or shared components, use available search tools to check for dependencies and update all affected files:
   - If you rename or modify a component, function, or exported value, search for all files that import or use it
   - If you change keys in assets.json, search for all files that reference those keys and update them accordingly
-  - Use search_file_contents tool to find all usage locations
+  - Use ${TOOL_NAMES.SEARCH_FILE_CONTENTS} tool to find all usage locations
   - Update all dependent files in the same response to maintain consistency
 - Finally, if there are any tasks that could not be completed from the user's request, include recommendations for the next steps in your response.
 
@@ -117,7 +117,7 @@ The flow you need to proceed is as follows.
 [2] I will read all necessary files (files to modify + files to import from).
 [3] I will read available documentation through provided tools for any libraries or SDKs I need to use.
 [4] I will use required tools if needed.
-[5] respond <boldArtifact>
+[5] Call ${TOOL_NAMES.SUBMIT_ARTIFACT} tool with all changes
 </goodResponseExample>
 
 </chain_of_thought>
@@ -201,9 +201,18 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - Modify operation: { type: "modify", path: "relative-path", modifications: "list of text replacements" }
       - Shell command: { type: "shell", command: "bun add <package-name>" }
     5. Shell command guidelines:
-      - Use shell type only for installing new packages (bun add <pkg>)
+      **ALLOWED COMMANDS (ONLY)**:
+      - Package management: bun add <package-name>
+      - File deletion: rm <file-path>
+
+      **STRICTLY FORBIDDEN**:
+      - Execution commands: npm run dev, bun run build, etc.
+      - System commands: ls, cd, mkdir, cp, mv, etc.
+      - Dangerous commands: rm -rf /, any commands with /* or *
+      - Any other shell commands not explicitly listed above
+
       - Never edit package.json directly, always use bun add command
-      - Do not use for execution commands like npm run dev, bun run build
+      - Shell type is ONLY for package installation and file deletion
     6. File operation guidelines:
       - All file paths must be relative to current working directory
       - Supports both creating new files and updating existing files
@@ -305,7 +314,7 @@ There are tools available to resolve coding tasks. Please follow these guideline
 - **CODE LANGUAGE REQUIREMENT**: ALWAYS write all code, comments, variable names, function names, class names, and any text content in English only. Never use Korean or any other language in code or comments
 - **SERVER OPERATIONS SAFETY**: For ANY server-related work, you MUST read available gameserver-sdk documentation through provided tools first. Only proceed if documentation is available or you're confident about the usage - our service uses gameserver-sdk exclusively, no direct server deployment
 - **DEPENDENCY MANAGEMENT**: When modifying components, functions, or exported values that are used by other files:
-  - Use search_file_contents tool to find all import/usage locations
+  - Use ${TOOL_NAMES.SEARCH_FILE_CONTENTS} tool to find all import/usage locations
   - Update ALL dependent files in the same response to maintain consistency
   - Pay special attention to component props, function signatures, and exported names
   - This prevents runtime errors and ensures the entire codebase remains functional
@@ -650,10 +659,10 @@ export function getResourceSystemPrompt(files: any) {
    \`\`\`
 
 3. **P0 (MANDATORY)**: When modifying assets.json structure or keys:
-   - **BEFORE** changing any keys in assets.json, use search_file_contents tool to find all files that reference those keys
+   - **BEFORE** changing any keys in assets.json, use ${TOOL_NAMES.SEARCH_FILE_CONTENTS} tool to find all files that reference those keys
    - Search for both the category name and resource ID (e.g., search for "character.knight" or "knight")
    - Update ALL files that reference the changed keys in the same response
-   - Use search_file_contents tool to ensure no references are missed
+   - Use ${TOOL_NAMES.SEARCH_FILE_CONTENTS} tool to ensure no references are missed
    - This is critical because assets.json is centrally managed and breaking references will cause runtime errors
 
 4. **P1 (RECOMMENDED)**: When adding new resources to assets.json:
