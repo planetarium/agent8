@@ -24,11 +24,6 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
         model,
         serverEnv: env,
       }),
-      providerOptions: {
-        openai: {
-          include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
-        },
-      },
       messages: [
         {
           role: 'system',

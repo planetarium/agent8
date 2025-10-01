@@ -4,6 +4,28 @@ import { TOOL_ERROR, type FileMap, type Orchestration } from '~/lib/.server/llm/
 import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 
+const ACTION_SCHEMA = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('file'),
+    path: z.string().describe('Relative path from cwd'),
+    content: z.string().describe('Complete file content'),
+  }),
+  z.object({
+    type: z.literal('modify'),
+    path: z.string().describe('Relative path from cwd'),
+    modifications: z.array(
+      z.object({
+        before: z.string().describe('Exact text to find in file'),
+        after: z.string().describe('New text to replace with'),
+      }),
+    ),
+  }),
+  z.object({
+    type: z.literal('shell'),
+    command: z.string().describe('Shell command to execute'),
+  }),
+]);
+
 function needReadFile(fileMap: FileMap, path: string): boolean {
   const fullPath = getFullPath(path);
 
@@ -20,38 +42,12 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
 
 export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
   return tool({
-    description: 'Submit the final artifact. Must call this tool.',
+    description: 'Submit the result or artifact for the request. Must be called.',
     inputSchema: z
       .object({
         id: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
         title: z.string().optional().describe('Descriptive title of the artifact'),
-        actions: z
-          .array(
-            z.union([
-              z.object({
-                type: z.literal('file'),
-                path: z.string().describe('Relative path from cwd'),
-                content: z.string().describe('Complete file content'),
-              }),
-              z.object({
-                type: z.literal('modify'),
-                path: z.string().describe('Relative path from cwd'),
-                modifications: z
-                  .array(
-                    z.object({
-                      before: z.string().describe('Exact text to find in file'),
-                      after: z.string().describe('New text to replace with'),
-                    }),
-                  )
-                  .describe('List of text replacements'),
-              }),
-              z.object({
-                type: z.literal('shell'),
-                command: z.string().describe('Shell command to execute'),
-              }),
-            ]),
-          )
-          .describe('List of file/modify/shell actions'),
+        actions: z.array(ACTION_SCHEMA).describe('List of file/modify/shell actions'),
       })
       .superRefine((arg, _ctx) => {
         const need = new Set<string>();

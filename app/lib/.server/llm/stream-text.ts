@@ -176,6 +176,7 @@ export async function streamText(props: {
     stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
+    toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
     experimental_repairToolCall: async ({ toolCall, error }) => {
       // Handle unknown tool calls gracefully
       if (NoSuchToolError.isInstance(error)) {
@@ -212,11 +213,6 @@ export async function streamText(props: {
       }
 
       return null;
-    },
-    providerOptions: {
-      openai: {
-        include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
-      },
     },
     prepareStep: async () => {
       if (orchestration.submitted) {
