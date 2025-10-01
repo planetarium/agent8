@@ -180,8 +180,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
       (tab: 'top-down' | 'tps' | 'story' | 'puzzle', prompt: string) => {
-        // Prevent unnecessary re-renders if same tab is clicked
-        if (selectedVideoTab === tab) {
+        // Prevent unnecessary re-renders if same tab is clicked AND input already matches
+        if (selectedVideoTab === tab && input === prompt) {
           return;
         }
 
@@ -631,7 +631,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 />
                 <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
                   <div className="flex justify-center">
-                    <span className="text-heading-lg tablet:text-heading-4xl text-elevation-shadow-3">
+                    <span
+                      className="text-heading-lg tablet:text-heading-4xl"
+                      style={{
+                        background: 'linear-gradient(90deg, var(--color-text-primary, #FFF) 0%, #72E7F8 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
                       Game Creation, Simplified
                     </span>
                   </div>
