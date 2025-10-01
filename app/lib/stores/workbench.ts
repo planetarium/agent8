@@ -1009,7 +1009,7 @@ export class WorkbenchStore {
       await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
+      const buildResult = await this.#runShellCommand(shell, 'pnpm run build --base ./');
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);

@@ -24,9 +24,9 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'claude-sonnet-4-20250514',
   },
   {
-    label: 'Claude 4 Sonnet',
+    label: 'Claude 4.5 Sonnet',
     providerName: 'OpenRouter',
-    modelName: 'anthropic/claude-sonnet-4',
+    modelName: 'anthropic/claude-sonnet-4.5',
     userSelectable: true,
   },
   {
