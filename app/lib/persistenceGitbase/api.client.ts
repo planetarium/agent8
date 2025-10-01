@@ -119,6 +119,33 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
     }
   }
 
+  // Parse shell rm commands for file deletion
+  const deletedFilesSet = new Set<string>();
+  const shellRmRegex = /<boltAction[^>]*type="shell"[^>]*>([\s\S]*?)<\/boltAction>/g;
+  const rmMatches = [...content.matchAll(shellRmRegex)];
+
+  for (const match of rmMatches) {
+    const shellContent = match[1].trim();
+
+    // Only process "rm filename" pattern (single file, no flags)
+    const rmMatch = /^rm\s+([^\s]+)$/.exec(shellContent);
+
+    if (rmMatch) {
+      const filePath = rmMatch[1];
+
+      // Safety checks: ignore wildcards, directories, and paths with flags
+      if (!filePath.includes('*') && !filePath.endsWith('/') && !shellContent.includes('-')) {
+        // Add only if not already in the set (avoid duplicates)
+        if (!deletedFilesSet.has(filePath)) {
+          deletedFilesSet.add(filePath);
+          logger.info(`Detected file deletion: ${filePath}`);
+        }
+      }
+    }
+  }
+
+  const deletedFiles = Array.from(deletedFilesSet);
+
   const prompt = (message as any).parts?.find((part: any) => part.type === 'data-prompt')?.data?.prompt || null;
   const userMessage = prompt || 'Commit changes';
   const commitMessage = `${stripMetadata(userMessage)}
@@ -142,6 +169,7 @@ ${truncateMessage(
     isFirstCommit,
     description: title,
     files,
+    deletedFiles,
     commitMessage,
     baseCommit: revertTo,
     branch: taskBranch,
