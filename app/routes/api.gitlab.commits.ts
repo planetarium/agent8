@@ -97,6 +97,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
       path: string;
       content: string;
     }[];
+    deletedFiles?: string[];
   };
   const projectName = requestData.projectName;
   const isFirstCommit = requestData.isFirstCommit;
@@ -105,6 +106,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
   const branch = requestData.branch || 'develop';
   const baseCommit = requestData.baseCommit;
   const files = requestData.files;
+  const deletedFiles = requestData.deletedFiles;
 
   if (!projectName && !isFirstCommit) {
     return json({ success: false, message: 'Project name is required' }, { status: 400 });
@@ -133,7 +135,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
     logger.info('project', project);
 
     // Commit files
-    const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch, baseCommit);
+    const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch, baseCommit, deletedFiles);
 
     return json({
       success: true,
