@@ -157,6 +157,10 @@ export async function streamText(props: {
     tools: combinedTools,
     ...DEFAULT_PROVIDER_OPTIONS,
     ...options,
+    experimental_repairToolCall: async ({ toolCall, error }) => {
+      const tool = combinedTools[toolCall.toolName];
+      return tool?.repair?.(toolCall, error) || null;
+    },
   });
 
   (async () => {

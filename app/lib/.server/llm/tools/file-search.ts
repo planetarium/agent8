@@ -1,42 +1,125 @@
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { tool } from 'ai';
 import { WORK_DIR } from '~/utils/constants';
+import type { LanguageModelV1FunctionToolCall } from '@ai-sdk/provider';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('file-search-tools');
+
+/**
+ * Regex error message constants for pattern repair
+ * These are matched case-insensitively for defensive programming
+ */
+const REGEX_ERROR_MESSAGES = {
+  NOTHING_TO_REPEAT: 'nothing to repeat',
+  UNTERMINATED_CHARACTER_CLASS: 'unterminated character class',
+  UNTERMINATED_GROUP: 'unterminated group',
+} as const;
+
+/**
+ * Repairs invalid regex patterns in tool calls
+ */
+function repairRegexPattern(toolCall: LanguageModelV1FunctionToolCall, error: unknown) {
+  const zodError = (error as any).cause?.cause;
+
+  if (!(zodError instanceof ZodError)) {
+    logger.warn('The error is not a ZodError instance. cannot perform regex pattern repair.');
+    return null;
+  }
+
+  const regexIssue = zodError.issues.find((issue) => {
+    const isInvalidString = issue.code === 'invalid_string';
+    const isRegexValidation = 'validation' in issue && issue.validation === 'regex';
+    const isPatternField = issue.path?.includes('pattern');
+
+    return isInvalidString && isRegexValidation && isPatternField;
+  });
+
+  if (!regexIssue) {
+    logger.warn('The error is not related to a regex pattern issue');
+    return null;
+  }
+
+  const errorMessage = (regexIssue.message || '').toLowerCase();
+
+  try {
+    const args = JSON.parse(toolCall.args);
+    const pattern = args.pattern;
+
+    // Case 1: Leading quantifier
+    if (errorMessage.includes(REGEX_ERROR_MESSAGES.NOTHING_TO_REPEAT) && pattern.match(/^[*+?]/)) {
+      const fixedPattern = '.' + pattern;
+      return {
+        ...toolCall,
+        args: JSON.stringify({ ...args, pattern: fixedPattern }),
+      };
+    }
+
+    // Case 2: Unclosed bracket (assumed to be intended as a literal)
+    if (errorMessage.includes(REGEX_ERROR_MESSAGES.UNTERMINATED_CHARACTER_CLASS)) {
+      const fixedPattern = pattern.replace(/\[/g, '\\[');
+      return {
+        ...toolCall,
+        args: JSON.stringify({ ...args, pattern: fixedPattern }),
+      };
+    }
+
+    // Case 3: Unclosed parenthesis (assumed to be intended as a literal)
+    if (errorMessage.includes(REGEX_ERROR_MESSAGES.UNTERMINATED_GROUP)) {
+      const fixedPattern = pattern.replace(/\(/g, '\\(');
+      return {
+        ...toolCall,
+        args: JSON.stringify({ ...args, pattern: fixedPattern }),
+      };
+    }
+
+    // Ambiguous case - cannot determine how to repair
+    logger.warn('The error is an ambiguous regex repair case', {
+      pattern,
+      error: errorMessage,
+    });
+
+    return null;
+  } catch (error) {
+    logger.error('Failed to repair regex pattern:', {
+      toolCallArgs: toolCall.args,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return null;
+  }
+}
 
 /**
  * Tool for searching file contents with pattern matching (similar to grep)
  */
 export const createFileContentSearchTool = (fileMap: FileMap) => {
-  return tool({
-    description:
-      'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
-    parameters: z.object({
-      pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
-      caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
-      beforeLines: z
-        .number()
-        .optional()
-        .describe('Number of lines to include before each match, similar to grep -B option (default: 0)'),
-      afterLines: z
-        .number()
-        .optional()
-        .describe('Number of lines to include after each match, similar to grep -A option (default: 0)'),
-    }),
-    execute: async ({
-      pattern,
-      caseSensitive,
-      beforeLines,
-      afterLines,
-    }: {
-      pattern: string;
-      caseSensitive?: boolean;
-      beforeLines?: number;
-      afterLines?: number;
-    }) => {
+  const searchTool = tool({
+    description: '...',
+    parameters: z
+      .object({
+        pattern: z.string(),
+        caseSensitive: z.boolean().optional(),
+        beforeLines: z.number().optional(),
+        afterLines: z.number().optional(),
+      })
+      .superRefine((data, ctx) => {
+        try {
+          new RegExp(data.pattern, data.caseSensitive ? 'g' : 'gi');
+        } catch (error) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.invalid_string,
+            validation: 'regex',
+            message: `Invalid regex pattern: "${data.pattern}". ${error instanceof Error ? error.message : String(error)}`,
+            path: ['pattern'],
+          });
+        }
+      }),
+    execute: async ({ pattern, caseSensitive, beforeLines, afterLines }) => {
       const results = searchFileContentsByPattern(fileMap, pattern, caseSensitive, beforeLines, afterLines);
 
-      // Format results to be more user-friendly
       return {
         pattern,
         totalMatches: results.length,
@@ -51,6 +134,9 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
       };
     },
   });
+
+  // add repair function
+  return Object.assign(searchTool, { repair: repairRegexPattern });
 };
 
 /**
