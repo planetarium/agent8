@@ -5,8 +5,10 @@ import {
   type SystemModelMessage,
   type UIMessage,
   NoSuchToolError,
+  InvalidToolInputError,
+  hasToolCall,
 } from 'ai';
-import { MAX_TOKENS, type FileMap, type Orchestration } from './constants';
+import { MAX_TOKENS, TOOL_ERROR, type FileMap, type Orchestration } from './constants';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
@@ -171,9 +173,10 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15)],
+    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
+    toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
     experimental_repairToolCall: async ({ toolCall, error }) => {
       // Handle unknown tool calls gracefully
       if (NoSuchToolError.isInstance(error)) {
@@ -187,14 +190,29 @@ export async function streamText(props: {
             originalArgs: JSON.stringify(toolCall.input),
           }),
         };
+      } else if (
+        InvalidToolInputError.isInstance(error) &&
+        toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT &&
+        error.message
+      ) {
+        const match = error.message.match(/Error message:\s*({.*})/);
+
+        if (match) {
+          const errorData = match[1];
+          const parsedError = JSON.parse(errorData);
+
+          if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
+            return {
+              type: 'tool-call',
+              toolCallId: toolCall.toolCallId,
+              toolName: TOOL_NAMES.READ_FILES_CONTENTS,
+              input: JSON.stringify({ pathList: parsedError.paths }),
+            };
+          }
+        }
       }
 
       return null;
-    },
-    providerOptions: {
-      openai: {
-        include: [], // reasoning.encrypted_content 제외하여 thoughtSignature 제거
-      },
     },
     prepareStep: async () => {
       if (orchestration.submitted) {

@@ -981,7 +981,7 @@ export class WorkbenchStore {
     try {
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, 'pnpm update');
+      await this.#runShellCommand(shell, 'bun update');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
@@ -995,7 +995,7 @@ export class WorkbenchStore {
       await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, 'pnpm run build');
+      const buildResult = await this.#runShellCommand(shell, 'bun run build --base ./');
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);

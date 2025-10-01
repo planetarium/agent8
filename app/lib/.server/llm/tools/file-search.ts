@@ -83,7 +83,6 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         error?: string;
         skippedAsDuplicate?: boolean;
       }> = [];
-
       const paths = Array.isArray(pathList) ? pathList : [pathList];
 
       for (const path of paths) {
