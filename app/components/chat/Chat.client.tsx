@@ -446,10 +446,10 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
+          workbench.offMessageClose(message.id);
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
-          workbench.offMessageClose(message.id);
         });
 
         setFakeLoading(false);
