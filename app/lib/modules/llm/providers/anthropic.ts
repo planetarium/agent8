@@ -1,6 +1,6 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createScopedLogger } from '~/utils/logger';
@@ -66,7 +66,7 @@ export default class AnthropicProvider extends BaseProvider {
     serverEnv: Env;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
-  }) => LanguageModelV1 = (options) => {
+  }) => LanguageModel = (options) => {
     const { serverEnv, model } = options;
     const apiKey = serverEnv.ANTHROPIC_API_KEY;
     const anthropic = createAnthropic({

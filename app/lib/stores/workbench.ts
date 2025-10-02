@@ -53,6 +53,12 @@ function ensureUnsavedFilesSet(value: any): Set<string> {
   return new Set<string>();
 }
 
+interface ActionQueueItem {
+  data: ActionCallbackData;
+  executeAction: () => void;
+  next?: ActionQueueItem;
+}
+
 export interface ArtifactState {
   id: string;
   title: string;
@@ -77,7 +83,7 @@ export class WorkbenchStore {
   #filesStore: FilesStore;
   #editorStore: EditorStore;
   #terminalStore: TerminalStore;
-  #artifactCloseCallbacks: Map<string, Array<() => void>> = new Map();
+  #messageCloseCallbacks: Map<string, Array<() => void>> = new Map();
 
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
@@ -98,10 +104,11 @@ export class WorkbenchStore {
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
+  #messageToArtifactIds: Map<string, string[]> = new Map();
   #globalExecutionQueue = Promise.resolve();
-  #shellActionRunning = false;
-  #shellActionPromise: Promise<void> | null = null;
   #connectionLostNotified = false;
+  #messageToActionQueue: Map<string, ActionQueueItem | null> = new Map();
+  #shellCommandQueue: Promise<any> = Promise.resolve();
 
   // Container initialization state management
   #initializationState: 'idle' | 'initializing' | 'reinitializing' = 'idle';
@@ -381,10 +388,6 @@ export class WorkbenchStore {
     }
   }
 
-  addToExecutionQueue(callback: () => Promise<void>) {
-    this.#globalExecutionQueue = this.#globalExecutionQueue.then(() => callback());
-  }
-
   get previews() {
     return this.#previewsStore.previews;
   }
@@ -573,17 +576,24 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(messageId);
+    const artifact = this.#getArtifact(id);
 
     if (artifact) {
       return;
     }
 
-    if (!this.artifactIdList.includes(messageId)) {
-      this.artifactIdList.push(messageId);
+    if (!this.artifactIdList.includes(id)) {
+      this.artifactIdList.push(id);
     }
 
-    this.artifacts.setKey(messageId, {
+    // Track artifacts by messageId for message-level operations
+    if (!this.#messageToArtifactIds.has(messageId)) {
+      this.#messageToArtifactIds.set(messageId, []);
+    }
+
+    this.#messageToArtifactIds.get(messageId)!.push(id);
+
+    this.artifacts.setKey(id, {
       id,
       title,
       closed: false,
@@ -602,26 +612,46 @@ export class WorkbenchStore {
     });
   }
 
-  offArtifactClose(messageId: string) {
-    this.#artifactCloseCallbacks.delete(messageId);
+  offMessageClose(messageId: string) {
+    this.#messageCloseCallbacks.delete(messageId);
   }
 
-  onArtifactClose(messageId: string, callback: () => Promise<void>) {
-    if (!this.#artifactCloseCallbacks.has(messageId)) {
-      this.#artifactCloseCallbacks.set(messageId, []);
+  async #processMessageClose(messageId: string) {
+    // Trigger registered callbacks for this messageId if all artifacts are closed
+    const callbacks = this.#messageCloseCallbacks.get(messageId);
+
+    if (callbacks && callbacks.length > 0) {
+      // Check if all artifacts for this message are closed
+      const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
+
+      const allClosed = compositeIds.every((compositeId) => {
+        const artifact = this.#getArtifact(compositeId);
+
+        return artifact?.closed;
+      });
+
+      // Check if action queue is empty for this message
+      const queueExists = this.#messageToActionQueue.has(messageId);
+
+      // Only trigger callbacks if artifacts are closed AND queue is empty
+      if (allClosed && !queueExists) {
+        await Promise.all(callbacks.map((callback) => callback()));
+      }
+    }
+  }
+
+  onMessageClose(messageId: string, callback: () => Promise<void>) {
+    if (!this.#messageCloseCallbacks.has(messageId)) {
+      this.#messageCloseCallbacks.set(messageId, []);
     }
 
-    this.#artifactCloseCallbacks.get(messageId)?.push(callback);
+    this.#messageCloseCallbacks.get(messageId)?.push(callback);
 
-    const artifact = this.#getArtifact(messageId);
-
-    if (artifact?.closed) {
-      callback();
-    }
+    this.#processMessageClose(messageId);
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
-    const artifact = this.#getArtifact(data.messageId);
+    const artifact = this.#getArtifact(data.id);
 
     if (artifact?.closed) {
       return;
@@ -634,41 +664,31 @@ export class WorkbenchStore {
       return;
     }
 
-    // shell 액션이 실행 중인 경우 완료를 기다림
-    if (this.#shellActionRunning && this.#shellActionPromise) {
-      await this.#shellActionPromise;
-    }
-
     this.updateArtifact(data, { closed: true });
 
     const { messageId } = data;
 
-    // Trigger registered callbacks for this messageId
-    const callbacks = this.#artifactCloseCallbacks.get(messageId);
-
-    if (callbacks && callbacks.length > 0) {
-      await Promise.all(callbacks.map((callback) => callback()));
-    }
+    this.#processMessageClose(messageId);
   }
 
-  updateArtifact({ messageId }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
-    const artifact = this.#getArtifact(messageId);
+  updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
+    const artifact = this.#getArtifact(id);
 
     if (!artifact) {
       return;
     }
 
-    this.artifacts.setKey(messageId, { ...artifact, ...state });
+    this.artifacts.setKey(id, { ...artifact, ...state });
   }
+
   addAction(data: ActionCallbackData) {
-    // this._addAction(data);
-
-    this.addToExecutionQueue(() => this._addAction(data));
+    this._addAction(data);
   }
-  async _addAction(data: ActionCallbackData) {
-    const { messageId } = data;
 
-    const artifact = this.#getArtifact(messageId);
+  _addAction(data: ActionCallbackData) {
+    const { artifactId } = data;
+
+    const artifact = this.#getArtifact(artifactId);
 
     if (!artifact) {
       unreachable('Artifact not found');
@@ -681,30 +701,12 @@ export class WorkbenchStore {
     if (isStreaming) {
       this.actionStreamSampler(data, isStreaming);
     } else {
-      this.addToExecutionQueue(() => this._runAction(data, isStreaming));
+      this._runAction(data, isStreaming);
     }
   }
 
-  async runActionAndWait(data: ActionCallbackData, isStreaming: boolean = false): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      this.addToExecutionQueue(async () => {
-        try {
-          await this._runAction(data, isStreaming);
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-  }
-  async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
+  async #executeQueuedAction(data: ActionCallbackData, artifact: ArtifactState, isStreaming: boolean = false) {
     const { messageId } = data;
-
-    const artifact = this.#getArtifact(messageId);
-
-    if (!artifact) {
-      unreachable('Artifact not found');
-    }
 
     const action = artifact.runner.actions.get()[data.actionId];
 
@@ -712,16 +714,15 @@ export class WorkbenchStore {
       return;
     }
 
-    // shell 액션이 아닌 경우, 현재 실행 중인 shell 액션 완료를 기다림
-    if (data.action.type !== 'shell' && this.#shellActionRunning && this.#shellActionPromise) {
-      await this.#shellActionPromise;
-    }
-
     // Don't run the action if it's a reload
     if (isCommitedMessage(messageId)) {
       artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+
       return;
     }
+
+    // Wait for any ongoing shell commands (setupDeployConfig, publish, etc.) to complete
+    await this.#shellCommandQueue;
 
     if (data.action.type === 'file') {
       const wc = await this.container;
@@ -747,27 +748,113 @@ export class WorkbenchStore {
         await artifact.runner.runAction(data);
         this.resetAllFileModifications();
       }
-    } else if (data.action.type === 'shell') {
-      // shell 액션의 경우 실행 상태 추적
-      this.#shellActionRunning = true;
-      this.#shellActionPromise = artifact.runner.runAction(data).finally(() => {
-        this.#shellActionRunning = false;
-        this.#shellActionPromise = null;
-      });
+    } else if (data.action.type === 'modify') {
+      // Handle modify action similar to file action but let ActionRunner apply the modifications
+      const wc = await this.container;
+      const fullPath = path.join(wc.workdir, data.action.filePath);
 
-      await this.#shellActionPromise;
+      if (this.selectedFile.value !== fullPath) {
+        this.setSelectedFile(fullPath);
+      }
+
+      if (this.currentView.value !== 'code') {
+        this.currentView.set('code');
+      }
+
+      await artifact.runner.runAction(data);
+
+      // Refresh the editor to show updated content
+      const relativePath = data.action.filePath.replace(/^\/home\/project\//, '');
+
+      const updatedContent = (await wc.fs.readFile(relativePath, 'utf-8')) as string;
+      this.#editorStore.updateFile(fullPath, updatedContent);
+
+      this.resetAllFileModifications();
+    } else if (data.action.type === 'shell') {
+      // Shell commands are now queued, so just execute them directly here
+      await artifact.runner.runAction(data);
     } else {
       await artifact.runner.runAction(data);
     }
+  }
+
+  async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
+    const { artifactId, messageId } = data;
+
+    const artifact = this.#getArtifact(artifactId);
+
+    if (!artifact) {
+      unreachable('Artifact not found');
+    }
+
+    const action = artifact.runner.actions.get()[data.actionId];
+
+    if (!action || action.executed) {
+      return;
+    }
+
+    // Don't run the action if it's a reload
+    if (isCommitedMessage(messageId)) {
+      artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+
+      return;
+    }
+
+    // Queue all actions for sequential execution per message
+    this.#queueAction(data, artifact, isStreaming);
   }
 
   actionStreamSampler = createSampler(async (data: ActionCallbackData, isStreaming: boolean = false) => {
     return await this._runAction(data, isStreaming);
   }, 100); // TODO: remove this magic number to have it configurable
 
-  #getArtifact(id: string) {
+  #getArtifact(compositeId: string) {
     const artifacts = this.artifacts.get();
-    return artifacts[id];
+    return artifacts[compositeId];
+  }
+
+  #queueAction(data: ActionCallbackData, artifact: ArtifactState, isStreaming: boolean = false) {
+    artifact.runner.markActionAsRunning(data.actionId);
+
+    const newItem: ActionQueueItem = {
+      data,
+      executeAction: () => {
+        this.#executeQueuedAction(newItem.data, artifact, isStreaming).finally(() => {
+          if (newItem.next) {
+            const nextArtifact = this.#getArtifact(newItem.next.data.artifactId);
+
+            if (nextArtifact) {
+              this.#executeActionItem(newItem.next);
+            }
+          } else {
+            // No more items, clear the queue
+            this.#messageToActionQueue.delete(data.messageId);
+
+            // Check if all artifacts are closed now that queue is empty
+            this.#processMessageClose(data.messageId);
+          }
+        });
+      },
+    };
+
+    const currentQueue = this.#messageToActionQueue.get(data.messageId);
+
+    if (!currentQueue) {
+      this.#executeActionItem(newItem);
+    } else {
+      let tail = currentQueue;
+
+      while (tail.next) {
+        tail = tail.next;
+      }
+      tail.next = newItem;
+    }
+  }
+
+  #executeActionItem(item: ActionQueueItem) {
+    this.#messageToActionQueue.set(item.data.messageId, item);
+
+    item.executeAction();
   }
 
   async generateZip() {
@@ -875,8 +962,7 @@ export class WorkbenchStore {
     try {
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
       await wc.fs.writeFile('.secret', setupScript);
-      await shell.executeCommand(Date.now().toString(), 'source ./.secret && rm -f ./.secret');
-      await shell.waitTillOscCode('prompt');
+      await this.#runShellCommand(shell, 'source ./.secret && rm -f ./.secret');
     } catch {
       throw new Error('Failed to inject user data into the shell.');
     } finally {
@@ -995,7 +1081,7 @@ export class WorkbenchStore {
     try {
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, 'pnpm update');
+      await this.#runShellCommand(shell, 'bun update');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
@@ -1009,7 +1095,7 @@ export class WorkbenchStore {
       await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, 'pnpm run build --base ./');
+      const buildResult = await this.#runShellCommand(shell, 'bun run build --base ./');
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);
@@ -1055,10 +1141,15 @@ export class WorkbenchStore {
 
   // Helper methods for publish
   async #runShellCommand(shell: BoltShell, command: string) {
-    const result = await shell.executeCommand(Date.now().toString(), command);
-    await shell.waitTillOscCode('prompt');
+    // Queue all shell commands to prevent interference
+    this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
+      const result = await shell.executeCommand(Date.now().toString(), command);
+      await shell.waitTillOscCode('prompt');
 
-    return result;
+      return result;
+    });
+
+    return this.#shellCommandQueue;
   }
 
   #handleBuildError(output: string) {

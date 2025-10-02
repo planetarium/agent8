@@ -160,10 +160,36 @@ export const selectStarterTemplate = async (options: { message: string }) => {
     throw new Error(errorMessage);
   }
 
-  const respJson: { text: string } = await response.json();
+  const respJson = (await response.json()) as {
+    steps?: Array<{
+      content?: Array<{ type: string; text?: string }>;
+    }>;
+  };
 
-  const { text } = respJson;
-  const selectedTemplate = parseSelectedTemplate(text);
+  const textChunks: string[] = [];
+
+  if (respJson?.steps && Array.isArray(respJson.steps) && respJson.steps.length > 0) {
+    for (const step of respJson.steps) {
+      if (!step?.content || !Array.isArray(step.content)) {
+        continue;
+      }
+
+      for (const content of step.content) {
+        if (content && typeof content === 'object' && content.type === 'text' && typeof content.text === 'string') {
+          const trimmedText = content.text.trim();
+
+          if (trimmedText) {
+            textChunks.push(trimmedText);
+          }
+        }
+      }
+    }
+  }
+
+  // Combine all text chunks
+  const combinedText = textChunks.join('\n').trim();
+
+  const selectedTemplate = parseSelectedTemplate(combinedText);
 
   if (!selectedTemplate) {
     console.log('No template selected, using blank template');
@@ -225,6 +251,7 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
         const filePath = `${data.path}`;
         fileMap[filePath] = {
           type: 'file',
+
           content,
           isBinary: false,
         };

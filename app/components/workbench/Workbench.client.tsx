@@ -430,12 +430,9 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     await shell.waitTillOscCode('prompt');
 
     if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+      await shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
     } else {
-      await shell.executeCommand(
-        Date.now().toString(),
-        'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev',
-      );
+      await shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
     }
   }, [workbench.boltTerminal]);
 

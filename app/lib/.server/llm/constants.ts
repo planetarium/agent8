@@ -18,7 +18,13 @@ type Dirent = File | Folder;
 
 export type FileMap = Record<string, Dirent | undefined>;
 
+export type Orchestration = {
+  readSet: Set<string>;
+  submitted: boolean;
+};
+
 export const TOOL_ERROR = {
+  MISSING_FILE_CONTEXT: 'MISSING_FILE_CONTEXT',
   INVALID_REGEX_PATTERN: 'INVALID_REGEX_PATTERN',
 } as const;
 

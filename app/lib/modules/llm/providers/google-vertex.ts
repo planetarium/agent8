@@ -1,7 +1,7 @@
 import { BaseProvider } from '~/lib/modules/llm/base-provider';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex/edge';
 
 interface VertexCredentials {
@@ -36,7 +36,7 @@ export default class GoogleVertexProvider extends BaseProvider {
     serverEnv?: any;
     apiKeys?: Record<string, string>;
     providerSettings?: Record<string, IProviderSetting>;
-  }): LanguageModelV1 {
+  }): LanguageModel {
     const { model, serverEnv } = options;
 
     this._validateEnvironment();

@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
-import { type FileMap, TOOL_ERROR } from '~/lib/.server/llm/constants';
-import { InvalidToolArgumentsError, tool } from 'ai';
+import { type FileMap, type Orchestration, TOOL_ERROR } from '~/lib/.server/llm/constants';
+import { InvalidToolInputError, tool } from 'ai';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 
 /**
@@ -11,20 +11,26 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
   return tool({
     description:
       'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
-    parameters: z
+    inputSchema: z
       .object({
-        pattern: z.string(),
-        caseSensitive: z.boolean().optional(),
-        beforeLines: z.number().optional(),
-        afterLines: z.number().optional(),
+        pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
+        caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
+        beforeLines: z
+          .number()
+          .optional()
+          .describe('Number of lines to include before each match, similar to grep -B option (default: 0)'),
+        afterLines: z
+          .number()
+          .optional()
+          .describe('Number of lines to include after each match, similar to grep -A option (default: 0)'),
       })
       .superRefine((data) => {
         try {
           new RegExp(data.pattern, data.caseSensitive ? 'g' : 'gi');
         } catch (error) {
-          throw new InvalidToolArgumentsError({
-            toolArgs: JSON.stringify(data),
+          throw new InvalidToolInputError({
             toolName: TOOL_NAMES.SEARCH_FILE_CONTENTS,
+            toolInput: JSON.stringify(data),
             cause: error,
             message: JSON.stringify({
               name: TOOL_ERROR.INVALID_REGEX_PATTERN,
@@ -33,7 +39,17 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
           });
         }
       }),
-    execute: async ({ pattern, caseSensitive, beforeLines, afterLines }) => {
+    execute: async ({
+      pattern,
+      caseSensitive,
+      beforeLines,
+      afterLines,
+    }: {
+      pattern: string;
+      caseSensitive?: boolean;
+      beforeLines?: number;
+      afterLines?: number;
+    }) => {
       const results = searchFileContentsByPattern(fileMap, pattern, caseSensitive, beforeLines, afterLines);
 
       return {
@@ -55,31 +71,54 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
 /**
  * Tool for getting all contents of a file
  */
-export const createFilesReadTool = (fileMap: FileMap) => {
+export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestration) => {
+  const seen = orchestration.readSet;
+
   return tool({
     description:
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
-    parameters: z.object({
-      pathList: z.array(z.string()).describe('The list of paths to the files you want to read.'),
+    inputSchema: z.object({
+      pathList: z.union([z.array(z.string()), z.string()]).describe('The list of paths to the files you want to read.'),
     }),
-    execute: async ({ pathList }: { pathList: string[] }) => {
-      const files: Record<string, { content?: string; error?: string }> = {};
+    outputSchema: z.object({
+      files: z.array(
+        z.object({
+          path: z.string(),
+          content: z.string().optional(),
+          error: z.string().optional(),
+          skippedAsDuplicate: z.boolean().optional(),
+        }),
+      ),
+      complete: z.boolean(),
+    }),
+    async execute({ pathList }) {
+      const out: Array<{
+        path: string;
+        content?: string;
+        error?: string;
+        skippedAsDuplicate?: boolean;
+      }> = [];
+      const paths = Array.isArray(pathList) ? pathList : [pathList];
 
-      pathList.forEach((path) => {
-        const content = getFileContents(fileMap, path);
-
-        if (content === null) {
-          files[path] = {
-            error: `File not found or cannot be read: ${path}. The file may not exist, might be a directory, or could be a binary file.`,
-          };
-        } else {
-          files[path] = { content };
+      for (const path of paths) {
+        if (seen.has(path)) {
+          out.push({ path, skippedAsDuplicate: true });
+          continue;
         }
-      });
 
-      return Object.keys(files)
-        .map((name) => `<file name="${name}">\n${files[name].content}\n</file>`)
-        .join('\n');
+        seen.add(path);
+
+        const raw = getFileContents(fileMap, path);
+
+        if (raw == null) {
+          out.push({ path, error: `File not found / unreadable: ${path}` });
+          continue;
+        }
+
+        out.push({ path, content: raw });
+      }
+
+      return { files: out, complete: true };
     },
   });
 };
@@ -87,9 +126,9 @@ export const createFilesReadTool = (fileMap: FileMap) => {
 /**
  * Creates all file search tools with the provided FileMap
  */
-export const createFileSearchTools = (fileMap: FileMap) => {
+export const createFileSearchTools = (fileMap: FileMap, orchestration: Orchestration) => {
   return {
-    search_file_contents: createFileContentSearchTool(fileMap),
-    read_files_contents: createFilesReadTool(fileMap),
+    [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(fileMap),
+    [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(fileMap, orchestration),
   };
 };

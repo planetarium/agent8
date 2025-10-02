@@ -3,7 +3,7 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import { useStore } from '@nanostores/react';
-import { type Message } from 'ai';
+import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -141,7 +141,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     error,
   } = useGitbaseChatHistory();
 
-  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
@@ -248,9 +248,9 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
 
 const processSampledMessages = createSampler(
   (options: {
-    messages: Message[];
+    messages: UIMessage[];
     isLoading: boolean;
-    parseMessages: (messages: Message[], isLoading: boolean) => void;
+    parseMessages: (messages: UIMessage[], isLoading: boolean) => void;
   }) => {
     const { messages, isLoading, parseMessages } = options;
     parseMessages(messages, isLoading);
@@ -260,8 +260,8 @@ const processSampledMessages = createSampler(
 
 interface ChatProps {
   loading: boolean;
-  initialMessages: Message[];
-  setInitialMessages: (messages: Message[]) => void;
+  initialMessages: UIMessage[];
+  setInitialMessages: (messages: UIMessage[]) => void;
   description?: string;
   taskBranches: any[];
   enabledTaskMode: boolean;
@@ -295,10 +295,10 @@ export const ChatImpl = memo(
     useShortcuts();
 
     const workbench = useWorkbenchStore();
-    const container = useWorkbenchContainer(); // Container 인스턴스 구독
+    const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const runAndPreview = async (message: Message) => {
+    const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
 
       const content = extractTextContent(message);
@@ -336,9 +336,9 @@ export const ChatImpl = memo(
       await shell.waitTillOscCode('prompt');
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
       } else {
-        shell.executeCommand(Date.now().toString(), 'pnpm update && npx -y @agent8/deploy --preview && pnpm run dev');
+        shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
       }
     };
 
@@ -370,29 +370,50 @@ export const ChatImpl = memo(
     const [animationScope, animate] = useAnimate();
 
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+    const [input, setInput] = useState(() => {
+      return initialMessages.length > 0
+        ? Cookies.get(PROMPT_COOKIE_KEY) || ''
+        : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+    });
+    const [chatData, setChatData] = useState<any[]>([]);
+
+    const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
+
+    useEffect(() => {
+      bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
+    }, [apiKeys, files, promptId, contextOptimizationEnabled]);
 
     const {
       messages,
-      isLoading,
-      input,
-      handleInputChange,
-      setInput,
+      status,
       stop,
-      append,
+      sendMessage: sendChatMessage,
       setMessages,
-      reload,
+      regenerate,
       error,
-      data: chatData,
-      setData,
     } = useChat({
-      api: '/api/chat',
-      body: {
-        apiKeys,
-        files,
-        promptId,
-        contextOptimization: contextOptimizationEnabled,
+      transport: new DefaultChatTransport({
+        api: '/api/chat',
+        body: () => bodyRef.current,
+      }),
+      onData: (data) => {
+        // Ignore empty data
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+          return;
+        }
+
+        // Extract the inner 'data' property if it exists
+        const extractedData = data?.data || data;
+
+        // Keep only the latest data of each type to prevent memory bloat
+        setChatData((prev) => {
+          const hasType = (obj: any): obj is { type: string } => obj && typeof obj === 'object' && 'type' in obj;
+          const extractedType = hasType(extractedData) ? extractedData.type : null;
+          const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
+
+          return [...filtered, extractedData];
+        });
       },
-      sendExtraMessageFields: true,
       onError: (e) => {
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
@@ -401,42 +422,50 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
+        const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           e,
-          'useChat onError callback, model: ' + model + ', provider: ' + provider.name,
+          'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
         );
         setFakeLoading(false);
       },
-      onFinish: async (message, response) => {
-        const usage = response.usage;
-        setData(undefined);
 
-        if (usage) {
-          logStore.logProvider('Chat response completed', {
-            component: 'Chat',
-            action: 'response',
-            model,
-            provider: provider.name,
-            usage,
-            messageLength: message.content.length,
-          });
-        }
+      onFinish: async ({ message }) => {
+        const usage =
+          message.metadata &&
+          typeof message.metadata === 'object' &&
+          'type' in message.metadata &&
+          message.metadata.type === 'usage' &&
+          'value' in message.metadata
+            ? message.metadata.value
+            : null;
 
-        workbench.onArtifactClose(message.id, async () => {
+        logStore.logProvider('Chat response completed', {
+          component: 'Chat',
+          action: 'response',
+          model,
+          provider: provider.name,
+          usage,
+          messageLength: message.parts?.find((part) => part.type === 'text' && 'text' in part)?.text?.length || 0,
+        });
+
+        workbench.onMessageClose(message.id, async () => {
+          workbench.offMessageClose(message.id);
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
-          workbench.offArtifactClose(message.id);
         });
 
         setFakeLoading(false);
 
         logger.debug('Finished streaming');
       },
-      initialMessages,
-      initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
     });
+
+    // Derived state for loading status
+    const isLoading = status === 'streaming' || status === 'submitted';
+
     useEffect(() => {
       const prompt = searchParams.get('prompt');
       const autorun = searchParams.get('run');
@@ -478,7 +507,9 @@ export const ChatImpl = memo(
     }, []);
 
     useEffect(() => {
-      setMessages(initialMessages);
+      if (!isLoading) {
+        setMessages(initialMessages);
+      }
     }, [initialMessages]);
 
     useEffect(() => {
@@ -491,7 +522,7 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       setInstallNpm(false);
-    }, [container]); // Container 변경 시 트리거
+    }, [container]);
 
     useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
@@ -504,15 +535,15 @@ export const ChatImpl = memo(
       }
     }, [files, installNpm]);
 
-    const handleCommit = async (message: Message) => {
+    const handleCommit = async (message: UIMessage) => {
       if (!isEnabledGitbasePersistence) {
         return;
       }
 
       try {
         await commitChanges(message, (commitHash) => {
-          setMessages((prev: Message[]) => {
-            const newMessages = prev.map((m: Message) => {
+          setMessages((prev: UIMessage[]) => {
+            const newMessages = prev.map((m: UIMessage) => {
               if (m.id === message.id) {
                 return {
                   ...m,
@@ -548,6 +579,7 @@ export const ChatImpl = memo(
     const abort = () => {
       stop();
       setFakeLoading(false);
+      setChatData([]);
       chatStore.setKey('aborted', true);
       workbench.abortAllActions();
 
@@ -603,6 +635,9 @@ export const ChatImpl = memo(
       }
 
       lastSendMessageTime.current = Date.now();
+
+      // Clear chat data at the start of new message
+      setChatData([]);
 
       const messageContent = messageInput || input;
 
@@ -853,12 +888,17 @@ export const ChatImpl = memo(
             {
               id: `1-${new Date().getTime()}`,
               role: 'user',
-              content: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-                attachmentList,
-              )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+              parts: [
+                {
+                  type: 'text',
+                  text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                    attachmentList,
+                  )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+                },
+              ],
             },
           ]);
-          reload();
+          regenerate();
 
           setInput('');
           Cookies.remove(PROMPT_COOKIE_KEY);
@@ -919,12 +959,17 @@ export const ChatImpl = memo(
           const commit = await workbench.commitModifiedFiles();
 
           if (commit) {
-            setMessages((prev: Message[]) => [
+            setMessages((prev: UIMessage[]) => [
               ...prev,
               {
                 id: commit.id,
                 role: 'assistant',
-                content: commit.message || 'The user changed the files.',
+                parts: [
+                  {
+                    type: 'text',
+                    text: commit.message || 'The user changed the files.',
+                  },
+                ],
               },
             ]);
           }
@@ -946,11 +991,17 @@ export const ChatImpl = memo(
           }
         }
 
-        append({
+        // Send new message immediately - useChat will use the latest state
+        sendChatMessage({
           role: 'user',
-          content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-            attachmentList,
-          )}]\n\n${messageContent}`,
+          parts: [
+            {
+              type: 'text',
+              text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                attachmentList,
+              )}]\n\n${messageContent}`,
+            },
+          ],
         });
 
         setInput('');
@@ -980,7 +1031,7 @@ export const ChatImpl = memo(
         provider &&
         model &&
         !enhancingPrompt &&
-        (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure files are loaded
+        (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure workbenchFiles are loaded
       ) {
         autorunRequested.current = false;
 
@@ -996,20 +1047,31 @@ export const ChatImpl = memo(
      * @param event - The change event from the textarea.
      */
     const onTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      handleInputChange(event);
+      setInput(event.target.value);
     };
 
     /**
      * Debounced function to cache the prompt in cookies.
      * Caches the trimmed value of the textarea input after a delay to optimize performance.
+     * Only saves to cookies after chat has started.
      */
     const debouncedCachePrompt = useCallback(
       debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const trimmedValue = event.target.value.trim();
-        Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+        if (chatStarted) {
+          const trimmedValue = event.target.value.trim();
+          Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+        }
       }, 1000),
-      [],
+      [chatStarted],
     );
+
+    // Reset input to default prompt when returning to pre-chat state
+    useEffect(() => {
+      if (!chatStarted && initialMessages.length === 0) {
+        Cookies.remove(PROMPT_COOKIE_KEY);
+        setInput('Create a top-down action game with a character controlled by WASD keys and mouse clicks.');
+      }
+    }, [chatStarted, initialMessages.length, setInput]);
 
     const [messageRef, scrollRef] = useSnapScroll();
 
@@ -1058,16 +1120,26 @@ export const ChatImpl = memo(
             {
               id: `1-${new Date().getTime()}`,
               role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
-                attachmentList,
-              )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+              parts: [
+                {
+                  type: 'text',
+                  text: `[Model: ${model}]\n\n[Provider: ${provider.name}]\n\n[Attachments: ${JSON.stringify(
+                    attachmentList,
+                  )}]\n\nI want to import the following files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+                },
+              ],
             },
             {
               id: `2-${new Date().getTime()}`,
               role: 'assistant',
-              content: `I will import the files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+              parts: [
+                {
+                  type: 'text',
+                  text: `I will import the files from the ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`,
+                },
+              ],
             },
-          ] as Message[];
+          ] as UIMessage[];
 
           setInitialMessages(messages);
 
@@ -1094,7 +1166,7 @@ export const ChatImpl = memo(
       await handleTemplateImport({ type: 'zip', title }, fileMap);
     };
 
-    const handleFork = async (message: Message) => {
+    const handleFork = async (message: UIMessage) => {
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
@@ -1142,7 +1214,7 @@ export const ChatImpl = memo(
       }
     };
 
-    const handleRevert = async (message: Message) => {
+    const handleRevert = async (message: UIMessage) => {
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
@@ -1156,7 +1228,7 @@ export const ChatImpl = memo(
       revertTo(commitHash);
     };
 
-    const handleRetry = async (message: Message, prevMessage?: Message) => {
+    const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       workbench.currentView.set('code');
 
       // Use prevMessage if provided, otherwise find the previous message
@@ -1202,7 +1274,7 @@ export const ChatImpl = memo(
       setInput(stripMetadata(extractTextContent(message)));
     };
 
-    const handleViewDiff = async (message: Message) => {
+    const handleViewDiff = async (message: UIMessage) => {
       try {
         const commitHash = message.id?.split('-').pop();
 
@@ -1267,10 +1339,21 @@ export const ChatImpl = memo(
             return message;
           }
 
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
+          const parsedContent = parsedMessages[i];
+
+          if (parsedContent) {
+            return {
+              ...message,
+              parts: [
+                {
+                  type: 'text' as const,
+                  text: parsedContent,
+                },
+              ],
+            } satisfies UIMessage;
+          }
+
+          return message;
         })}
         enhancePrompt={() => {
           enhancePrompt(

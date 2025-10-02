@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useSettings } from '~/lib/hooks/useSettings';
 import { classNames } from '~/utils/classNames';
+import { useMobileView } from '~/lib/hooks/useMobileView';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 // MCP Server Manager Component
@@ -10,6 +11,8 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
   const { mcpServers, toggleMCPServer, toggleMCPServerV8Auth, addMCPServer, removeMCPServer } = useSettings();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const triggerContainerRef = useRef<HTMLDivElement>(null);
+  const isMobileView = useMobileView();
 
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [newServer, setNewServer] = useState<{ name: string; url: string }>({
@@ -71,8 +74,8 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
         showServerManager &&
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
+        triggerContainerRef.current &&
+        !triggerContainerRef.current.contains(event.target as Node)
       ) {
         setShowServerManager(false);
       }
@@ -147,7 +150,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
       <div className="flex items-center justify-between flex-wrap self-stretch relative">
         {hasActiveTools && <span className="text-subtle text-heading-xs">Tools Active</span>}
 
-        <div className="flex items-center justify-center gap-3 ">
+        <div ref={triggerContainerRef} className="flex items-center justify-center gap-3">
           {mcpServers
             .map((server, index) => ({ server, index }))
             .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
@@ -192,7 +195,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           </Tooltip.Root>
         </div>
 
-        {showServerManager && (
+        {showServerManager && !isMobileView && (
           <motion.div
             ref={dropdownRef}
             className={classNames(
@@ -209,7 +212,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
           >
             {mcpServers.length > 0 ? (
               <div className="w-full">
-                <div className="max-h-[364.95px] overflow-y-auto">
+                <div className="max-h-[325px] tablet:max-h-[364.95px] overflow-y-auto">
                   {mcpServers
                     .map((server, index) => ({ server, index }))
                     .filter((item) => !isDisabledServer(item.server.name))
@@ -218,7 +221,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                         key={index}
                         className={classNames(
                           'flex items-center justify-between w-full',
-                          'px-4 py-3.2',
+                          'px-4 py-[10px] tablet:py-3.2',
                           'transition-all duration-200 cursor-pointer',
                           server.enabled
                             ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
@@ -298,10 +301,10 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                     ))}
                 </div>
 
-                <div className="w-full flex justify-end px-2 pt-3">
+                <div className="w-full flex justify-end px-2 pt-2 tablet:pt-3">
                   <button
                     onClick={() => setShowAddForm(true)}
-                    className="text-[var(--color-text-interactive-primary,#11B9D2)] hover:text-[var(--color-text-interactive-primary-hovered,#1A92A4)] active:text-[var(--color-text-interactive-primary-pressed,#1A7583)] focus:text-[var(--color-text-interactive-primary,#11B9D2)] font-primary bg-transparent border-none text-[14px] font-semibold leading-[142.9%] font-feature-[ss10] px-[14px] py-[10px] transition-colors duration-200"
+                    className="text-[var(--color-text-interactive-primary,#11B9D2)] hover:text-[var(--color-text-interactive-primary-hovered,#1A92A4)] active:text-[var(--color-text-interactive-primary-pressed,#1A7583)] focus:text-[var(--color-text-interactive-primary,#11B9D2)] font-primary bg-transparent border-none text-[13px] tablet:text-[14px] font-semibold leading-[142.9%] font-feature-[ss10] px-[14px] py-[6px] tablet:py-[10px] transition-colors duration-200"
                   >
                     Add Custom MCP Tool
                   </button>
@@ -314,6 +317,140 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
             )}
           </motion.div>
         )}
+
+        {/* Mobile dropdown using portal */}
+        {showServerManager &&
+          isMobileView &&
+          createPortal(
+            <div className="fixed inset-0 z-[1100]" onClick={() => setShowServerManager(false)}>
+              <motion.div
+                ref={dropdownRef}
+                className="fixed bottom-1/3 left-4 right-4 flex w-auto max-w-[330px] mx-auto py-[6.4px] px-0 flex-col items-start rounded-[8px] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-[var(--color-bg-interactive-neutral,#222428)] z-10"
+                style={{
+                  boxShadow: '0px 8px 16px 0px rgba(0, 0, 0, 0.32), 0px 0px 8px 0px rgba(0, 0, 0, 0.28)',
+                }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {mcpServers.length > 0 ? (
+                  <div className="w-full">
+                    <div className="max-h-[325px] tablet:max-h-[364.95px] overflow-y-auto">
+                      {mcpServers
+                        .map((server, index) => ({ server, index }))
+                        .filter((item) => !isDisabledServer(item.server.name))
+                        .map(({ server, index }) => (
+                          <div
+                            key={index}
+                            className={classNames(
+                              'flex items-center justify-between w-full',
+                              'px-4 py-[10px] tablet:py-3.2',
+                              'transition-all duration-200 cursor-pointer',
+                              server.enabled
+                                ? 'bg-[var(--color-bg-interactive-selected,rgba(17,185,210,0.20))] hover:bg-[rgba(17,185,210,0.30)]'
+                                : 'hover:bg-bolt-elements-item-backgroundActive active:bg-[var(--color-bg-interactive-neutral-pressed,#464C54)]',
+                            )}
+                            onClick={() => handleToggleServer(index, !server.enabled)}
+                          >
+                            <div className="flex items-center gap-4.8">
+                              <button
+                                type="button"
+                                className={classNames(
+                                  'flex w-4 h-4 p-[var(--spacing-0,0px)] flex-col items-start gap-[var(--spacing-0,0px)] aspect-square rounded-[var(--border-radius-2,2px)] cursor-pointer',
+                                  server.enabled
+                                    ? 'bg-[var(--color-bg-interactive-primary,#1A92A4)]'
+                                    : 'bg-[#383838] border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))]',
+                                )}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleServer(index, !server.enabled);
+                                }}
+                                aria-pressed={server.enabled}
+                                aria-label={`${server.enabled ? 'Disable' : 'Enable'} ${server.name} server`}
+                              >
+                                {server.enabled && (
+                                  <img src="/icons/Check.svg" alt="Selected" className="w-full h-full" />
+                                )}
+                              </button>
+
+                              <div className="flex flex-col justify-center items-start gap-1.6 flex-1 min-w-0">
+                                <div className="flex items-center gap-1.6 self-stretch min-w-0">
+                                  {server.name === 'All-in-one' ||
+                                  !['Image', 'Skybox', 'Cinematic', 'Audio', 'UI'].includes(server.name) ? (
+                                    <img
+                                      src={getServerIcon(server.name)}
+                                      alt={server.name}
+                                      className={classNames(
+                                        'w-5 h-5 flex-shrink-0',
+                                        server.enabled ? '' : 'opacity-60',
+                                      )}
+                                    />
+                                  ) : (
+                                    <img
+                                      src={getServerIcon(server.name)}
+                                      alt={server.name}
+                                      className={classNames(
+                                        'w-5 h-5 flex-shrink-0',
+                                        server.enabled ? '' : 'opacity-60',
+                                      )}
+                                    />
+                                  )}
+
+                                  <div className="flex items-center gap-1.2 flex-1 min-w-0">
+                                    <h4 className="text-[var(--color-text-primary,#FFF)] font-primary text-[14px] font-medium leading-[150%] break-all min-w-0 line-clamp-1">
+                                      {server.name}
+                                    </h4>
+                                    {isDefaultServer(server.name) && (
+                                      <span className="text-[var(--color-text-accent-secondary,#FFCB48)] font-primary text-[14px] font-medium leading-[142.9%] flex-shrink-0">
+                                        {getServerCredit(server.name)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="w-full min-w-0">
+                                  <p className="text-[12px] font-primary font-medium leading-[142.9%] text-[var(--color-text-tertiary,#99A2B0)] break-all w-full line-clamp-3">
+                                    {isDefaultServer(server.name) ? server.description : server.url}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {!isDefaultServer(server.name) && (
+                              <button
+                                className="ml-2 p-1 bg-transparent flex-shrink-0 min-w-[28px] min-h-[28px] flex items-center justify-center"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveServer(index);
+                                }}
+                                aria-label={`Remove ${server.name} server`}
+                              >
+                                <img src="/icons/Close.svg" alt="Remove" className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+
+                    <div className="w-full flex justify-end px-2 pt-2 tablet:pt-3">
+                      <button
+                        onClick={() => setShowAddForm(true)}
+                        className="text-[var(--color-text-interactive-primary,#11B9D2)] hover:text-[var(--color-text-interactive-primary-hovered,#1A92A4)] active:text-[var(--color-text-interactive-primary-pressed,#1A7583)] focus:text-[var(--color-text-interactive-primary,#11B9D2)] font-primary bg-transparent border-none text-[13px] tablet:text-[14px] font-semibold leading-[142.9%] font-feature-[ss10] px-[14px] py-[6px] tablet:py-[10px] transition-colors duration-200"
+                      >
+                        Add Custom MCP Tool
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full text-center py-3.2 px-3.2 text-bolt-elements-textSecondary text-[11.2px]">
+                    No MCP servers registered. Add a new server to get started.
+                  </div>
+                )}
+              </motion.div>
+            </div>,
+            document.body,
+          )}
       </div>
 
       {showAddForm &&

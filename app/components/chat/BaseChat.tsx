@@ -1,8 +1,4 @@
-/*
- * @ts-nocheck
- * Preventing TS checks with files presented in the video for a better presentation.
- */
-import type { JSONValue, Message } from 'ai';
+import type { JSONValue, UIMessage } from 'ai';
 import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
@@ -70,7 +66,7 @@ interface BaseChatProps {
   chatStarted?: boolean;
   isStreaming?: boolean;
   onStreamingChange?: (streaming: boolean) => void;
-  messages?: Message[];
+  messages?: UIMessage[];
   description?: string;
   enhancingPrompt?: boolean;
   promptEnhanced?: boolean;
@@ -97,10 +93,10 @@ interface BaseChatProps {
   data?: JSONValue[] | undefined;
   actionRunner?: ActionRunner;
   onProjectZipImport?: (title: string, zipFile: File) => void;
-  handleRetry?: (message: Message) => void;
-  handleFork?: (message: Message) => void;
-  handleRevert?: (message: Message) => void;
-  onViewDiff?: (message: Message) => void;
+  handleRetry?: (message: UIMessage) => void;
+  handleFork?: (message: UIMessage) => void;
+  handleRevert?: (message: UIMessage) => void;
+  onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
   loadingBefore?: boolean;
@@ -180,8 +176,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
       (tab: 'top-down' | 'tps' | 'story' | 'puzzle', prompt: string) => {
-        // Prevent unnecessary re-renders if same tab is clicked
-        if (selectedVideoTab === tab) {
+        // Prevent unnecessary re-renders if same tab is clicked AND input already matches
+        if (selectedVideoTab === tab && input === prompt) {
           return;
         }
 
@@ -223,20 +219,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
     };
 
-    // Reset pause state when video tab changes and handle smooth video transition
+    // Reset pause state when video tab changes
     useEffect(() => {
       setIsVideoPaused(false);
-
-      // Optimize video loading for mobile to reduce flickering
-      if (!isMobileView) {
-        // Only preload on non-mobile devices
-        const video = document.querySelector('video');
-
-        if (video) {
-          video.load(); // Reload the video with new source
-        }
-      }
-    }, [selectedVideoTab, isMobileView]);
+    }, [selectedVideoTab]);
 
     useEffect(() => {
       const progressFromData = data
@@ -247,6 +233,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       const allProgressAnnotations = [...customProgressAnnotations, ...progressFromData];
       setProgressAnnotations(allProgressAnnotations);
     }, [data, customProgressAnnotations]);
+
     useEffect(() => {
       console.log(transcript);
     }, [transcript]);
@@ -641,7 +628,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 />
                 <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
                   <div className="flex justify-center">
-                    <span className="text-heading-lg tablet:text-heading-4xl text-elevation-shadow-3">
+                    <span
+                      className="text-heading-lg tablet:text-heading-4xl"
+                      style={{
+                        background: 'linear-gradient(90deg, var(--color-text-primary, #FFF) 0%, #72E7F8 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
                       Game Creation, Simplified
                     </span>
                   </div>
@@ -842,6 +837,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           reloadTaskBranches={reloadTaskBranches}
                           className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
+                          annotations={data}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
                           onFork={handleFork}
@@ -856,6 +852,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           ref={messageRef}
                           className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
                           messages={messages}
+                          annotations={data}
                           isStreaming={isStreaming}
                           onRetry={handleRetry}
                           onFork={handleFork}

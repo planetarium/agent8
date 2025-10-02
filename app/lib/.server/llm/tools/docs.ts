@@ -1,5 +1,5 @@
 import { tool } from 'ai';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { createClient } from '@supabase/supabase-js';
 import { createScopedLogger } from '~/utils/logger';
 import path from 'path';
@@ -52,7 +52,7 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
       if (toolName.match(/^[a-zA-Z_][a-zA-Z0-9_-]{1,63}$/)) {
         tools[toolName] = tool({
           description: doc.description,
-          parameters: z.object({}), // No parameters needed as these are simple documentation responses
+          inputSchema: z.object({}), // No parameters needed as these are simple documentation responses
           execute: async () => {
             return { content: doc.response };
           },

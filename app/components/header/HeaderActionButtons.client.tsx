@@ -68,7 +68,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
         actionId,
         action: {
           type: 'build' as const,
-          content: 'pnpm run build',
+          content: 'bun run build',
         },
       };
 

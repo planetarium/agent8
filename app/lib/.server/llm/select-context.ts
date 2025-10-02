@@ -1,4 +1,4 @@
-import { generateText, type CoreTool, type GenerateTextResult, type Message } from 'ai';
+import { generateText, type UIMessage, type GenerateTextResult } from 'ai';
 import ignore from 'ignore';
 import type { IProviderSetting } from '~/types/model';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
@@ -14,7 +14,7 @@ const ig = ignore().add(IGNORE_PATTERNS);
 const logger = createScopedLogger('select-context');
 
 export async function selectContext(props: {
-  messages: Message[];
+  messages: UIMessage[];
   env?: Env;
   apiKeys?: Record<string, string>;
   files: FileMap;
@@ -22,7 +22,7 @@ export async function selectContext(props: {
   promptId?: string;
   contextOptimization?: boolean;
   summary: string;
-  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
+  onFinish?: (resp: GenerateTextResult<{}, void>) => void;
   abortSignal?: AbortSignal;
 }) {
   const { messages, env: serverEnv, apiKeys, files, providerSettings, summary, onFinish, abortSignal } = props;
@@ -30,20 +30,23 @@ export async function selectContext(props: {
   let currentProvider = DEFAULT_PROVIDER.name;
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content } = extractPropertiesFromMessage(message);
+      const { model, provider, parts } = extractPropertiesFromMessage(message);
       currentModel = model;
       currentProvider = provider;
 
-      return { ...message, content };
+      return { ...message, parts };
     } else if (message.role == 'assistant') {
-      let content = message.content;
+      const parts = [...(message.parts || [])];
 
-      content = simplifyBoltActions(content);
+      for (const part of parts) {
+        if (part.type === 'text') {
+          part.text = simplifyBoltActions(part.text);
+          part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
+          part.text = part.text.replace(/<think>.*?<\/think>/s, '');
+        }
+      }
 
-      content = content.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
-      content = content.replace(/<think>.*?<\/think>/s, '');
-
-      return { ...message, content };
+      return { ...message, parts };
     }
 
     return message;

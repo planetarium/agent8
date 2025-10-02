@@ -121,7 +121,11 @@ export class FilesStore {
       }
 
       // we immediately update the file and don't rely on the `change` event coming from the watcher
-      this.files.setKey(filePath, { type: 'file', content, isBinary: false });
+      this.files.setKey(filePath, {
+        type: 'file',
+        content,
+        isBinary: false,
+      });
 
       logger.info('File updated');
     } catch (error) {
@@ -190,7 +194,11 @@ export class FilesStore {
             content = this.#decodeFileContent(buffer);
           }
 
-          this.files.setKey(sanitizedPath, { type: 'file', content, isBinary });
+          this.files.setKey(sanitizedPath, {
+            type: 'file',
+            content,
+            isBinary,
+          });
 
           break;
         }
@@ -215,7 +223,7 @@ export class FilesStore {
     try {
       return utf8TextDecoder.decode(buffer);
     } catch (error) {
-      console.log(error);
+      console.error('Failed to decode file content\n\n', error);
       return '';
     }
   }

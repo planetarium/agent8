@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { JSONValue, UIMessage } from 'ai';
 import { forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import { Messages } from './Messages.client';
@@ -19,11 +19,12 @@ interface TaskMessagesProps {
   taskBranches?: any[];
   currentTaskBranch?: any;
   reloadTaskBranches?: (projectPath: string) => void;
-  messages?: Message[];
-  onRetry?: (message: Message) => void;
-  onFork?: (message: Message) => void;
-  onRevert?: (message: Message) => void;
-  onViewDiff?: (message: Message) => void;
+  messages?: UIMessage[];
+  annotations?: JSONValue[];
+  onRetry?: (message: UIMessage) => void;
+  onFork?: (message: UIMessage) => void;
+  onRevert?: (message: UIMessage) => void;
+  onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;

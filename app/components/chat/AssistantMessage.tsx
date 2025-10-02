@@ -9,6 +9,7 @@ import React from 'react';
 interface AssistantMessageProps {
   content: string;
   annotations?: JSONValue[];
+  metadata?: unknown;
   forceExpanded?: boolean;
 }
 
@@ -36,7 +37,7 @@ function normalizedFilePath(path: string) {
   return normalizedPath;
 }
 
-export const AssistantMessage = memo(({ content, annotations, forceExpanded }: AssistantMessageProps) => {
+export const AssistantMessage = memo(({ content, annotations, metadata, forceExpanded }: AssistantMessageProps) => {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -44,26 +45,22 @@ export const AssistantMessage = memo(({ content, annotations, forceExpanded }: A
   }, [forceExpanded]);
 
   const filteredAnnotations = (annotations?.filter(
-    (annotation: JSONValue) => annotation && typeof annotation === 'object' && Object.keys(annotation).includes('type'),
+    (data: JSONValue) => data && typeof data === 'object' && Object.keys(data).includes('type'),
   ) || []) as { type: string; value: any } & { [key: string]: any }[];
 
-  let chatSummary: string | undefined = undefined;
+  // Find annotations once and reuse results to avoid duplicate find operations
+  const chatSummaryAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary');
+  const codeContextAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'codeContext');
+  const usageMetadata =
+    metadata && typeof metadata === 'object' && 'type' in metadata && metadata.type === 'usage' ? metadata : null;
 
-  if (filteredAnnotations.find((annotation) => annotation.type === 'chatSummary')) {
-    chatSummary = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary')?.summary;
-  }
-
-  let codeContext: string[] | undefined = undefined;
-
-  if (filteredAnnotations.find((annotation) => annotation.type === 'codeContext')) {
-    codeContext = filteredAnnotations.find((annotation) => annotation.type === 'codeContext')?.files;
-  }
-
+  const chatSummary: string | undefined = chatSummaryAnnotation?.summary;
+  const codeContext: string[] | undefined = codeContextAnnotation?.files;
   const usage: {
     completionTokens: number;
     promptTokens: number;
     totalTokens: number;
-  } = filteredAnnotations.find((annotation) => annotation.type === 'usage')?.value;
+  } = (usageMetadata as any)?.value;
 
   const toggleExpanded = () => {
     setExpanded(!expanded);
@@ -119,7 +116,6 @@ export const AssistantMessage = memo(({ content, annotations, forceExpanded }: A
           )}
         </div>
       </>
-
       <div className="markdown-container">
         <div
           className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}

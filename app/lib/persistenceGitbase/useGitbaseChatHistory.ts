@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import type { FileMap } from '~/lib/stores/files';
 import { repoStore } from '~/lib/stores/repo';
 import {
@@ -57,7 +57,7 @@ export function useGitbaseChatHistory() {
     name: '',
     description: '',
   });
-  const [chats, setChats] = useState<Message[]>([]);
+  const [chats, setChats] = useState<UIMessage[]>([]);
   const [enabledTaskMode, setEnabledTaskMode] = useState(true);
   const [files, setFiles] = useState<FileMap>({});
   const [taskBranches, setTaskBranches] = useState<any[]>([]);
@@ -293,8 +293,8 @@ export function useGitbaseChatHistory() {
   };
 }
 
-const parseCommitMessages = (commits: Commit[]): Message[] => {
-  const messages: Message[] = [];
+const parseCommitMessages = (commits: Commit[]): UIMessage[] => {
+  const messages: UIMessage[] = [];
 
   commits.forEach((commit) => {
     // Use regex to extract assistant message
@@ -308,14 +308,15 @@ const parseCommitMessages = (commits: Commit[]): Message[] => {
         messages.push({
           id: `${commit.id}`,
           role: 'assistant',
-          content: assistantContent,
           parts: [
             {
               type: 'text',
               text: assistantContent,
             },
           ],
-          createdAt: new Date(commit.created_at),
+          metadata: {
+            createdAt: new Date(commit.created_at),
+          },
         });
       }
     }
@@ -330,14 +331,15 @@ const parseCommitMessages = (commits: Commit[]): Message[] => {
         messages.push({
           id: `user-${commit.id}`,
           role: 'user',
-          content: userContent,
           parts: [
             {
               type: 'text',
               text: userContent,
             },
           ],
-          createdAt: new Date(commit.created_at),
+          metadata: {
+            createdAt: new Date(commit.created_at),
+          },
         });
       }
     }
@@ -350,15 +352,16 @@ const parseCommitMessages = (commits: Commit[]): Message[] => {
       messages.push({
         id: `commit-${commit.id}`,
         role: 'assistant',
-        content: commit.message,
         parts: [
           {
             type: 'text',
             text: commit.message,
           },
         ],
-        createdAt: new Date(commit.created_at),
-        annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
+        metadata: {
+          createdAt: new Date(commit.created_at),
+          annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
+        },
       });
     }
   });
