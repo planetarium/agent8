@@ -709,12 +709,25 @@ export class WorkbenchStore {
   }
 
   async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    const { artifactId } = data;
+    const { artifactId, messageId } = data;
 
     const artifact = this.#getArtifact(artifactId);
 
     if (!artifact) {
       unreachable('Artifact not found');
+    }
+
+    const action = artifact.runner.actions.get()[data.actionId];
+
+    if (!action || action.executed) {
+      return;
+    }
+
+    // Don't run the action if it's a reload
+    if (isCommitedMessage(messageId)) {
+      artifact.runner.actions.setKey(data.actionId, { ...action, executed: true, status: 'complete' });
+
+      return;
     }
 
     // Queue all actions for sequential execution per message
