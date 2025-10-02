@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR,
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
-import { createFileContentSearchTool, createFileSearchTools, createFilesReadTool } from './tools/file-search';
+import { createFileContentSearchTool, createFilesReadTool } from './tools/file-search';
 import {
   getResourceSystemPrompt,
   getProjectFilesPrompt,

@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
 import { type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
-import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
+import { WORK_DIR } from '~/utils/constants';
 import { tool } from 'ai';
 
 /**
