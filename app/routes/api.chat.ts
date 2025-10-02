@@ -1,25 +1,60 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { createDataStream, generateId } from 'ai';
+import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
 import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
-import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { createScopedLogger } from '~/utils/logger';
-import type { ProgressAnnotation } from '~/types/context';
-import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
-import { withV8AuthUser, type ContextConsumeUserCredit, type ContextUser } from '~/lib/verse8/middleware';
+import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
+import type { ProgressAnnotation } from '~/types/context';
+import { extractTextContent } from '~/utils/message';
+import SwitchableStream from '~/lib/.server/llm/switchable-stream';
+import { TOOL_NAMES } from '~/utils/constants';
+
+function toBoltArtifactXML(a: any) {
+  const body = a.actions
+    .filter(
+      (act: any) =>
+        (act.content && act.path) ||
+        (act.type === 'modify' && act.path && act.modifications) ||
+        (act.type === 'shell' && act.command && !act.path),
+    )
+    .sort((a: any, b: any) => {
+      if (a.type === 'shell' && b.type !== 'shell') {
+        return -1;
+      }
+
+      if (a.type !== 'shell' && b.type === 'shell') {
+        return 1;
+      }
+
+      return 0;
+    })
+    .map((act: any) => {
+      if (act.type === 'modify' && act.modifications) {
+        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+      }
+
+      if (act.path && act.content !== undefined) {
+        return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
+      }
+
+      return `  <boltAction type="shell">${act.command}</boltAction>`;
+    })
+    .join('\n');
+
+  return `<boltArtifact id="${a.id || 'unknown'}" title="${a.title}">
+${body}
+</boltArtifact>`;
+}
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
-const logger = createScopedLogger('api.chat');
+const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
 
-// See also https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
-const TEXT_PART_PREFIX = '0';
-const REASONING_PART_PREFIX = 'g';
-const TOOL_CALL_PART_PREFIX = '9';
-const TOOL_RESULT_PART_PREFIX = 'a';
+const logger = createScopedLogger('api.chat');
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
@@ -41,8 +76,19 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     cacheRead: 0,
     totalTokens: 0,
   };
-  const encoder: TextEncoder = new TextEncoder();
-  let progressCounter: number = 1;
+
+  const extractTextPartsToStringify = (message: UIMessage) => {
+    try {
+      if (message.parts && Array.isArray(message.parts)) {
+        return message.parts.map((part) => JSON.stringify(part)).join(' ');
+      }
+
+      return '';
+    } catch (error) {
+      console.error('extractTextPartsToStringify error:', error, message);
+      return '';
+    }
+  };
 
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
@@ -50,25 +96,27 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     const mcpTools = mcpToolset.tools;
     logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
 
-    const totalMessageContent = messages.reduce((acc, message) => acc + message.content, '');
-    logger.debug(`Total message length: ${totalMessageContent.split(' ').length}, words`);
+    const totalMessageContent = messages.reduce((acc, message) => acc + extractTextPartsToStringify(message), '');
+    logger.debug(`Total message length: ${totalMessageContent.split(' ').length} words`);
 
-    let lastChunk: string | undefined = undefined;
+    const messageStream = createUIMessageStream({
+      async execute({ writer }) {
+        let progressCounter = 1;
 
-    const dataStream = createDataStream({
-      async execute(dataStream) {
-        const lastUserMessage = messages.filter((x) => x.role == 'user').pop();
+        const lastUserMessage = messages.filter((x) => x.role === 'user').pop();
 
         if (lastUserMessage) {
-          dataStream.writeMessageAnnotation({
-            type: 'prompt',
-            prompt: lastUserMessage.content,
-          } as any);
+          writer.write({
+            type: 'data-prompt',
+            data: {
+              role: 'user',
+              prompt: extractTextContent(lastUserMessage),
+            },
+          });
         }
 
         // Track unsubscribe functions to clean up later if needed
         const progressUnsubscribers: Array<() => void> = [];
-
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
         for (const toolName in mcpTools) {
@@ -82,29 +130,41 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 const { type, data, toolName } = event;
 
                 if (type === 'start') {
-                  dataStream.writeData({
-                    type: 'progress',
-                    status: 'in-progress',
-                    order: progressCounter++,
-                    message: `Tool '${toolName}' execution started`,
-                  } as any);
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: 'in-progress',
+                      order: progressCounter++,
+                      message: `Tool '${toolName}' execution started`,
+                    } as any,
+                  });
                 } else if (type === 'progress') {
-                  dataStream.writeData({
-                    type: 'progress',
-                    status: 'in-progress',
-                    order: progressCounter++,
-                    message: `Tool '${toolName}' executing: ${data.status || ''}`,
-                    percentage: data.percentage ? Number(data.percentage) : undefined,
-                  } as any);
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: 'in-progress',
+                      order: progressCounter++,
+                      message: `Tool '${toolName}' executing: ${data.status || ''}`,
+                      percentage: data.percentage ? Number(data.percentage) : undefined,
+                    } as any,
+                  });
                 } else if (type === 'complete') {
-                  dataStream.writeData({
-                    type: 'progress',
-                    status: data.status === 'failed' ? 'failed' : 'complete',
-                    order: progressCounter++,
-                    message:
-                      data.status === 'failed'
-                        ? `Tool '${toolName}' execution failed}`
-                        : `Tool '${toolName}' execution completed`,
+                  writer.write({
+                    type: 'data-progress',
+                    transient: true,
+                    data: {
+                      type: 'progress',
+                      status: data.status === 'failed' ? 'failed' : 'complete',
+                      order: progressCounter++,
+                      message:
+                        data.status === 'failed'
+                          ? `Tool '${toolName}' execution failed`
+                          : `Tool '${toolName}' execution completed`,
+                    },
                   } as any);
 
                   // Automatically unsubscribe after complete
@@ -112,27 +172,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 }
               });
 
-              // Store unsubscribe function for cleanup
               progressUnsubscribers.push(unsubscribe);
-
               logger.info(`Subscribed to progress events for tool: ${toolName}`);
             }
           }
         }
 
-        // Stream the text
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, usage, providerMetadata }) => {
-            logger.debug('usage', JSON.stringify(usage));
-
+          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
+
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
-            if (usage) {
-              cumulativeUsage.completionTokens += usage.completionTokens || 0;
-              cumulativeUsage.promptTokens += usage.promptTokens || 0;
-              cumulativeUsage.totalTokens += usage.totalTokens || 0;
+            if (totalUsage) {
+              cumulativeUsage.promptTokens += totalUsage.inputTokens || 0;
+              cumulativeUsage.completionTokens += (totalUsage.outputTokens || 0) + (totalUsage.reasoningTokens || 0);
+              cumulativeUsage.totalTokens += totalUsage.totalTokens || 0;
             }
 
             if (providerMetadata?.anthropic) {
@@ -143,24 +199,31 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
 
             if (finishReason !== 'length') {
-              dataStream.writeMessageAnnotation({
-                type: 'usage',
-                value: {
-                  completionTokens: cumulativeUsage.completionTokens,
-                  promptTokens: cumulativeUsage.promptTokens,
-                  totalTokens: cumulativeUsage.totalTokens,
-                  cacheWrite: cumulativeUsage.cacheWrite,
-                  cacheRead: cumulativeUsage.cacheRead,
+              writer.write({
+                type: 'finish',
+                messageMetadata: {
+                  type: 'usage',
+                  value: {
+                    completionTokens: cumulativeUsage.completionTokens,
+                    promptTokens: cumulativeUsage.promptTokens,
+                    totalTokens: cumulativeUsage.totalTokens,
+                    cacheWrite: cumulativeUsage.cacheWrite,
+                    cacheRead: cumulativeUsage.cacheRead,
+                  },
                 },
               });
 
-              dataStream.writeData({
-                type: 'progress',
-                label: 'response',
-                status: 'complete',
-                order: progressCounter++,
-                message: 'Response Generated',
-              } satisfies ProgressAnnotation);
+              writer.write({
+                type: 'data-progress',
+                transient: true,
+                data: {
+                  type: 'progress',
+                  label: 'response',
+                  status: 'complete',
+                  order: progressCounter++,
+                  message: 'Response Generated',
+                } as ProgressAnnotation,
+              });
               await new Promise((resolve) => setTimeout(resolve, 0));
 
               const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
@@ -185,11 +248,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-            messages.push({ id: generateId(), role: 'assistant', content });
+            messages.push({ id: generateId(), role: 'assistant', parts: [{ type: 'text', text: content }] });
             messages.push({
               id: generateId(),
               role: 'user',
-              content: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n${CONTINUE_PROMPT}`,
+              parts: [{ type: 'text', text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n${CONTINUE_PROMPT}` }],
             });
 
             const result = await streamText({
@@ -201,19 +264,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
-            result.mergeIntoDataStream(dataStream);
+            writer.merge(result.toUIMessageStream({ sendReasoning: false }));
 
             return;
           },
         };
 
-        dataStream.writeData({
-          type: 'progress',
-          label: 'response',
-          status: 'in-progress',
-          order: progressCounter++,
-          message: 'Generating Response',
-        } satisfies ProgressAnnotation);
+        writer.write({
+          type: 'data-progress',
+          transient: true,
+          data: {
+            type: 'progress',
+            label: 'response',
+            status: 'in-progress',
+            order: progressCounter++,
+            message: 'Generating Response',
+          } as ProgressAnnotation,
+        });
 
         const result = await streamText({
           messages,
@@ -223,12 +290,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           tools: mcpTools,
           abortSignal: request.signal,
         });
-        result.mergeIntoDataStream(dataStream);
-      },
-      onError: (error: any) => {
-        const message = error.message;
 
-        if (message.includes('Overloaded')) {
+        writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+      },
+      onError: (error: unknown) => {
+        const message = (error as Error).message;
+
+        if (message?.includes('Overloaded')) {
           return `Custom error: ${message}. Please try changing the model.`;
         }
 
@@ -236,71 +304,159 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       },
     }).pipeThrough(
       new TransformStream({
-        transform: (chunk, controller) => {
-          if (!lastChunk) {
-            lastChunk = ' ';
-          }
+        transform: (() => {
+          const submitArtifactInputs = new Map<string, unknown>();
 
-          if (typeof chunk === 'string') {
-            if (chunk.startsWith(REASONING_PART_PREFIX) && !lastChunk.startsWith(REASONING_PART_PREFIX)) {
-              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"<div class=\\"__boltThought__\\">"\n`));
-            }
+          return (chunk, controller) => {
+            const messageType = chunk.type;
 
-            if (lastChunk.startsWith(REASONING_PART_PREFIX) && !chunk.startsWith(REASONING_PART_PREFIX)) {
-              controller.enqueue(encoder.encode(`${TEXT_PART_PREFIX}:"</div>\\n"\n`));
-            }
-          }
+            // reasoning message
+            switch (messageType) {
+              case 'reasoning-start': {
+                controller.enqueue({
+                  type: 'text-start',
+                  id: chunk.id,
+                });
 
-          lastChunk = chunk;
-
-          let transformedChunk = chunk;
-
-          if (typeof chunk === 'string') {
-            if (chunk.startsWith(REASONING_PART_PREFIX)) {
-              let content = chunk.split(':').slice(1).join(':');
-
-              if (content.endsWith('\n')) {
-                content = content.slice(0, content.length - 1);
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: '<div class="__boltThought__">',
+                });
+                break;
               }
 
-              transformedChunk = `${TEXT_PART_PREFIX}:${content}\n`;
-            }
+              case 'reasoning-delta': {
+                const sanitizedDelta = chunk.delta.replace(/\[REDACTED\]/g, '');
 
-            if (chunk.startsWith(TOOL_CALL_PART_PREFIX)) {
-              let content = chunk.split(':').slice(1).join(':');
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: sanitizedDelta,
+                });
 
-              if (content.endsWith('\n')) {
-                content = content.slice(0, content.length - 1);
+                break;
               }
 
-              const { toolCallId } = JSON.parse(content);
-              const divString = `\n<toolCall><div class="__toolCall__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+              case 'reasoning-end': {
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: chunk.id,
+                  delta: '</div>\n',
+                });
 
-              transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
-            }
+                controller.enqueue({
+                  type: 'text-end',
+                  id: chunk.id,
+                });
 
-            if (chunk.startsWith(TOOL_RESULT_PART_PREFIX)) {
-              let content = chunk.split(':').slice(1).join(':');
-
-              if (content.endsWith('\n')) {
-                content = content.slice(0, content.length - 1);
+                break;
               }
 
-              const { toolCallId } = JSON.parse(content);
-              const divString = `\n<toolResult><div class="__toolResult__" id="${toolCallId}">\`${content.replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+              // tool call message
+              case 'tool-input-available': {
+                if (chunk.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
+                  submitArtifactInputs.set(chunk.toolCallId, chunk.input);
 
-              transformedChunk = `${TEXT_PART_PREFIX}:${JSON.stringify(divString)}\n`;
+                  break;
+                }
+
+                const toolCall = {
+                  toolCallId: chunk.toolCallId,
+                  toolName: chunk.toolName,
+                  input: chunk.input,
+                };
+
+                const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: toolCall.toolCallId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: toolCall.toolCallId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: toolCall.toolCallId,
+                });
+
+                break;
+              }
+
+              // tool result message
+              case 'tool-output-available': {
+                if (submitArtifactInputs.has(chunk.toolCallId)) {
+                  const artifactData = submitArtifactInputs.get(chunk.toolCallId);
+                  const xmlContent = toBoltArtifactXML(artifactData);
+                  submitArtifactInputs.delete(chunk.toolCallId);
+
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: chunk.toolCallId,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.toolCallId,
+                    delta: '\n' + xmlContent + '\n',
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: chunk.toolCallId,
+                  });
+
+                  break;
+                }
+
+                const toolResult = {
+                  toolCallId: chunk.toolCallId,
+                  result: chunk.output,
+                };
+
+                const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: toolResult.toolCallId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: toolResult.toolCallId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: toolResult.toolCallId,
+                });
+
+                break;
+              }
+
+              default: {
+                const isSubmitArtifactError =
+                  messageType === 'tool-output-error' && submitArtifactInputs.has(chunk.toolCallId);
+
+                if (!IGNORE_TOOL_TYPES.includes(messageType) && !isSubmitArtifactError) {
+                  controller.enqueue(chunk);
+                }
+
+                break;
+              }
             }
-          }
-
-          // Convert the string stream to a byte stream
-          const str = typeof transformedChunk === 'string' ? transformedChunk : JSON.stringify(transformedChunk);
-          controller.enqueue(encoder.encode(str));
-        },
+          };
+        })(),
       }),
     );
 
-    return new Response(dataStream, {
+    return createUIMessageStreamResponse({
       status: 200,
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
@@ -308,6 +464,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         'Cache-Control': 'no-cache',
         'Text-Encoding': 'chunked',
       },
+      stream: messageStream,
     });
   } catch (error: any) {
     logger.error(error);

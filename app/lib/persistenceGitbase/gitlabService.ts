@@ -191,6 +191,7 @@ export class GitlabService {
     commitMessage: string,
     branch: string = 'develop',
     baseCommit?: string,
+    deletedFiles?: string[],
   ): Promise<GitlabCommit> {
     try {
       try {
@@ -270,6 +271,24 @@ export class GitlabService {
           content: file.content,
         };
         actions.push(action);
+      }
+
+      // Process file deletions
+      if (deletedFiles && deletedFiles.length > 0) {
+        for (const filePath of deletedFiles) {
+          const fileExists = await this._existsFile(projectId, filePath, branch);
+
+          if (fileExists) {
+            const action: CommitAction = {
+              action: 'delete' as const,
+              filePath,
+            };
+            actions.push(action);
+            logger.info(`Added delete action for file: ${filePath}`);
+          } else {
+            logger.warn(`Skipped delete action for non-existent file: ${filePath}`);
+          }
+        }
       }
 
       let result;

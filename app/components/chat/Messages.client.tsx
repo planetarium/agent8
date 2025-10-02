@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { JSONValue, UIMessage } from 'ai';
 import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
@@ -12,16 +12,18 @@ import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import Lottie from 'lottie-react';
 import { loadingAnimationData } from '~/utils/animationData';
+import { extractAllTextContent } from '~/utils/message';
 
 interface MessagesProps {
   id?: string;
   className?: string;
   isStreaming?: boolean;
-  messages?: Message[];
-  onRetry?: (message: Message, prevMessage?: Message) => void;
-  onFork?: (message: Message) => void;
-  onRevert?: (message: Message) => void;
-  onViewDiff?: (message: Message) => void;
+  messages?: UIMessage[];
+  annotations?: JSONValue[];
+  onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
+  onFork?: (message: UIMessage) => void;
+  onRevert?: (message: UIMessage) => void;
+  onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -33,6 +35,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       id,
       isStreaming = false,
       messages = [],
+      annotations = [],
       onRetry,
       onFork,
       onRevert,
@@ -69,12 +72,14 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         )}
         {messages.length > 0
           ? messages.map((message, index) => {
-              const { role, id: messageId, annotations } = message;
+              const { role, id: messageId } = message;
+              const messageText = extractAllTextContent(message);
+              const messageMetadata = message.metadata as any;
+              const isHidden = messageMetadata?.annotations?.includes('hidden');
               const isUserMessage = role === 'user';
               const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
-              const isHidden = annotations?.includes('hidden');
-              const isMergeMessage = message.content.includes('Merge task');
+              const isMergeMessage = messageText.includes('Merge task');
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
@@ -107,11 +112,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   )}
                   <div className="grid grid-col-1 w-full">
                     {isUserMessage ? (
-                      <UserMessage content={message.content} />
+                      <UserMessage content={messageText} />
                     ) : (
                       <AssistantMessage
-                        content={message.content}
-                        annotations={message.annotations}
+                        content={messageText}
+                        annotations={annotations}
+                        metadata={messageMetadata}
                         forceExpanded={isLast}
                       />
                     )}

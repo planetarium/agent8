@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import axios from 'axios';
 import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -7,13 +7,24 @@ import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
 import { filesToArtifactsNoContent } from '~/utils/fileUtils';
-import { extractTextContent } from '~/utils/message';
+import { extractAllTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { SETTINGS_KEYS } from '~/lib/stores/settings';
-import { cleanoutFileContent } from '~/lib/runtime/message-parser';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('persistenceGitbase');
+const MAX_ASSISTANT_MESSAGE_SIZE = 20 * 1024; // 20KB for assistant message content
+
+const truncateMessage = (message: string, maxSize: number): string => {
+  if (message.length <= maxSize) {
+    return message;
+  }
+
+  const truncated = message.substring(0, maxSize - 20) + '\n...(truncated)';
+  logger.warn(`Assistant message truncated from ${message.length} to ${truncated.length} bytes (max: ${maxSize})`);
+
+  return truncated;
+};
 
 export const isEnabledGitbasePersistence =
   import.meta.env.VITE_GITLAB_PERSISTENCE_ENABLED === 'true' &&
@@ -29,12 +40,14 @@ export const getCommit = async (projectPath: string, commitHash: string) => {
   return response.data;
 };
 
-export const commitChanges = async (message: Message, callback?: (commitHash: string) => void) => {
+export const commitChanges = async (message: UIMessage, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
   const taskBranch = repoStore.get().taskBranch || 'develop';
   const title = repoStore.get().title;
   const isFirstCommit = !projectPath;
+
+  logger.info(`Starting commit process - Project: ${projectName}, Path: ${projectPath}, Branch: ${taskBranch}`);
 
   // Get revertTo from URL query parameters
   const url = new URL(window.location.href);
@@ -42,7 +55,7 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
   const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
   let files = [];
-  const content = extractTextContent(message);
+  const content = extractAllTextContent(message);
 
   if (isFirstCommit) {
     // If repositoryName is not set, commit all files
@@ -71,43 +84,34 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     const matches = [...content.matchAll(regex)];
     const container = await workbenchStore.container;
 
+    // Use Map to store unique files
+    const fileMap = new Map<string, string>();
+
+    // Add default files first
     const envFile = await container.fs.readFile(`.env`, 'utf-8');
 
     if (envFile) {
-      files.push({ path: '.env', content: envFile });
+      fileMap.set('.env', envFile);
     }
 
     const packageJsonFile = await container.fs.readFile(`package.json`, 'utf-8');
 
     if (packageJsonFile) {
-      files.push({ path: 'package.json', content: packageJsonFile });
+      fileMap.set('package.json', packageJsonFile);
     }
 
-    files = [
-      ...files,
-      ...(await Promise.all(
-        matches.map(async (match) => {
-          const filePath = match[1];
-          const contentFromMatch = match[2];
-          const cleanedContent = cleanoutFileContent(contentFromMatch, filePath);
-          const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+    // Add files from matches (skip if already in fileMap)
+    for (const match of matches) {
+      const filePath = match[1];
 
-          // The workbench file sync is delayed. So I use the remote container file.
+      // Only read and add if not already in fileMap
+      if (!fileMap.has(filePath)) {
+        const remoteContainerFile = await container.fs.readFile(filePath, 'utf-8');
+        fileMap.set(filePath, remoteContainerFile);
+      }
+    }
 
-          if (cleanedContent !== remoteContainerFile) {
-            logger.error(
-              `Content mismatch for ${filePath}:`,
-              JSON.stringify({
-                fromMatch: cleanedContent,
-                fromRemoteContainer: remoteContainerFile,
-              }),
-            );
-          }
-
-          return { path: filePath, content: remoteContainerFile || cleanedContent };
-        }),
-      )),
-    ];
+    files = Array.from(fileMap.entries()).map(([path, content]) => ({ path, content }));
 
     if (files.length === 0) {
       // If no files are found, create a temporary file
@@ -115,18 +119,48 @@ export const commitChanges = async (message: Message, callback?: (commitHash: st
     }
   }
 
-  const promptAnnotation = message.annotations?.find((annotation: any) => annotation.type === 'prompt') as any;
-  const userMessage = promptAnnotation?.prompt || 'Commit changes';
+  // Parse shell rm commands for file deletion
+  const deletedFilesSet = new Set<string>();
+  const shellRmRegex = /<boltAction[^>]*type="shell"[^>]*>([\s\S]*?)<\/boltAction>/g;
+  const rmMatches = [...content.matchAll(shellRmRegex)];
 
+  for (const match of rmMatches) {
+    const shellContent = match[1].trim();
+
+    // Only process "rm filename" pattern (single file, no flags)
+    const rmMatch = /^rm\s+([^\s]+)$/.exec(shellContent);
+
+    if (rmMatch) {
+      const filePath = rmMatch[1];
+
+      // Safety checks: ignore wildcards, directories, and paths with flags
+      if (!filePath.includes('*') && !filePath.endsWith('/') && !shellContent.includes('-')) {
+        // Add only if not already in the set (avoid duplicates)
+        if (!deletedFilesSet.has(filePath)) {
+          deletedFilesSet.add(filePath);
+          logger.info(`Detected file deletion: ${filePath}`);
+        }
+      }
+    }
+  }
+
+  const deletedFiles = Array.from(deletedFilesSet);
+
+  const prompt = (message as any).parts?.find((part: any) => part.type === 'data-prompt')?.data?.prompt || null;
+  const userMessage = prompt || 'Commit changes';
   const commitMessage = `${stripMetadata(userMessage)}
 <V8Metadata>${JSON.stringify({ taskBranch })}</V8Metadata>
 <V8UserMessage>
 ${userMessage}
 </V8UserMessage>
 <V8AssistantMessage>
-${content
-  .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
-  .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')}
+${truncateMessage(
+  content
+    .replace(/(<toolResult><div[^>]*?>)(.*?)(<\/div><\/toolResult>)/gs, '$1`{"result":"(truncated)"}`$3')
+    .replace(/(<boltAction type="file"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3')
+    .replace(/(<boltAction type="modify"[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '$1(truncated)$3'),
+  MAX_ASSISTANT_MESSAGE_SIZE,
+)}
 </V8AssistantMessage>`;
 
   // API 호출하여 변경사항 커밋
@@ -135,6 +169,7 @@ ${content
     isFirstCommit,
     description: title,
     files,
+    deletedFiles,
     commitMessage,
     baseCommit: revertTo,
     branch: taskBranch,

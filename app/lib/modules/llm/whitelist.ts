@@ -36,8 +36,8 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
   },
   {
     label: 'GPT-5',
-    providerName: 'OpenAI',
-    modelName: 'gpt-5',
+    providerName: 'OpenRouter',
+    modelName: 'openai/gpt-5',
     userSelectable: true,
   },
   {

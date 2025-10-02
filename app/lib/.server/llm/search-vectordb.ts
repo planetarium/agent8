@@ -1,4 +1,4 @@
-import { embed, generateText, type CoreTool, type GenerateTextResult, type Message } from 'ai';
+import { embed, generateText, type UIMessage, type GenerateTextOnStepFinishCallback } from 'ai';
 import ignore from 'ignore';
 import type { IProviderSetting } from '~/types/model';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
@@ -22,7 +22,7 @@ async function extractRequirements(props: {
   summary: string;
   model: any;
   contextFiles: FileMap;
-  onStepFinish?: (resp: any) => void;
+  onStepFinish?: GenerateTextOnStepFinishCallback<{}>;
 }) {
   const { userMessage, summary, model, contextFiles, onStepFinish } = props;
 
@@ -172,7 +172,7 @@ async function filterRelevantExamples(props: {
   summary: string;
   model: any;
   contextFiles: FileMap;
-  onStepFinish?: (resp: any) => void;
+  onStepFinish?: GenerateTextOnStepFinishCallback<{}>;
 }) {
   const { requirements, examples, userMessage, summary, model, contextFiles, onStepFinish } = props;
 
@@ -267,7 +267,7 @@ async function filterRelevantExamples(props: {
 }
 
 export async function searchVectorDB(props: {
-  messages: Message[];
+  messages: UIMessage[];
   env?: Env;
   apiKeys?: Record<string, string>;
   files: FileMap;
@@ -276,7 +276,7 @@ export async function searchVectorDB(props: {
   contextOptimization?: boolean;
   contextFiles?: FileMap;
   summary: string;
-  onFinish?: (resp: GenerateTextResult<Record<string, CoreTool<any, any>>, never>) => void;
+  onFinish?: (resp: any) => void;
 }) {
   const { messages, env: serverEnv, apiKeys, providerSettings, summary, onFinish, contextFiles } = props;
   const supabase = createClient(
@@ -293,13 +293,13 @@ export async function searchVectorDB(props: {
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
-      const { model, provider, content } = extractPropertiesFromMessage(message);
+      const { model, provider, parts } = extractPropertiesFromMessage(message);
       currentModel = model;
       currentProvider = provider;
 
-      return { ...message, content };
+      return { ...message, parts };
     } else if (message.role == 'assistant') {
-      let content = message.content;
+      let content = extractTextContent(message);
 
       content = simplifyBoltActions(content);
       content = content.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
@@ -387,9 +387,9 @@ export async function searchVectorDB(props: {
       contextFiles: contextFiles || {},
       onStepFinish: (resp) => {
         if (resp.usage) {
-          cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-          cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-          cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+          cumulativeUsage.completionTokens += resp.usage.outputTokens ?? 0;
+          cumulativeUsage.promptTokens += resp.usage.inputTokens ?? 0;
+          cumulativeUsage.totalTokens += resp.usage.totalTokens ?? 0;
         }
       },
     });
@@ -416,9 +416,9 @@ export async function searchVectorDB(props: {
       contextFiles: contextFiles || {},
       onStepFinish: (resp) => {
         if (resp.usage) {
-          cumulativeUsage.completionTokens += resp.usage.completionTokens || 0;
-          cumulativeUsage.promptTokens += resp.usage.promptTokens || 0;
-          cumulativeUsage.totalTokens += resp.usage.totalTokens || 0;
+          cumulativeUsage.completionTokens += resp.usage.outputTokens ?? 0;
+          cumulativeUsage.promptTokens += resp.usage.inputTokens ?? 0;
+          cumulativeUsage.totalTokens += resp.usage.totalTokens ?? 0;
         }
       },
     });

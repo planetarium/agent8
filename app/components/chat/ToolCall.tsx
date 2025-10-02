@@ -1,10 +1,11 @@
 import { useStore } from '@nanostores/react';
 import { toolUIStore } from '~/lib/stores/toolUI';
 import classNames from 'clsx';
+import { TOOL_NAMES } from '~/utils/constants';
 export interface ToolCall {
   toolName: string;
   toolCallId: string;
-  args: Record<string, any>;
+  input: Record<string, any>;
 }
 
 interface ToolCallProps {
@@ -15,6 +16,11 @@ interface ToolCallProps {
 export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
   const toolUI = useStore(toolUIStore);
   const currentTool = toolUI.tools?.[id] || {};
+
+  const toolName =
+    toolCall.toolName === TOOL_NAMES.UNKNOWN_HANDLER && toolCall.input?.originalTool
+      ? toolCall.input.originalTool
+      : toolCall.toolName;
 
   return (
     <>
@@ -35,7 +41,7 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
           ) : (
             <div className="i-svg-spinners:90-ring-with-bg"></div>
           )}
-          <span className="ml-2">{toolCall.toolName}</span>
+          <span className="ml-2">{toolName}</span>
           <span
             className={classNames(
               'ml-1 text-xs mt-0.5',
@@ -48,7 +54,7 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
             <div className="text-sm">
               <strong className="text-sm text-gray-300">Parameters:</strong>
               <pre className="block p-2 mt-2 rounded-md bg-gray-800 text-sm overflow-auto max-h-64">
-                {JSON.stringify(toolCall.args, null, 2)}
+                {JSON.stringify(toolCall.input, null, 2)}
               </pre>
             </div>
           </div>

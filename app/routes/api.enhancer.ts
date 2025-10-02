@@ -70,7 +70,6 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
 
           if (providerMetadata?.anthropic) {
             const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
-
             cacheRead += Number(cacheReadInputTokens || 0);
             cacheWrite += Number(cacheCreationInputTokens || 0);
           }
@@ -78,8 +77,8 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
           const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
           consumeUserCredit({
             model: { provider: provider.name, name: model },
-            inputTokens: usage.promptTokens,
-            outputTokens: usage.completionTokens,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
             cacheRead,
             cacheWrite,
             description: 'Prompt Enhancer',

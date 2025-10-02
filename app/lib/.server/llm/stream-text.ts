@@ -1,6 +1,15 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
-import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import {
+  streamText as _streamText,
+  convertToModelMessages,
+  stepCountIs,
+  type SystemModelMessage,
+  type UIMessage,
+  NoSuchToolError,
+  InvalidToolInputError,
+  hasToolCall,
+} from 'ai';
+import { MAX_TOKENS, TOOL_ERROR, type FileMap, type Orchestration } from './constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -16,21 +25,21 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
+import { createSubmitArtifactActionTool } from './tools/action';
+import { createUnknownToolHandler } from './tools/error-handle';
 
-export type Messages = Message[];
+export type Messages = UIMessage[];
 
-export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model'>;
+export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
+
+function createOrchestration(): Orchestration {
+  return { readSet: new Set(), submitted: false };
+}
 
 const logger = createScopedLogger('stream-text');
 
-const DEFAULT_PROVIDER_OPTIONS: StreamingOptions = {
-  providerOptions: {
-    openai: { strictSchemas: false },
-  },
-} as const;
-
 export async function streamText(props: {
-  messages: Array<Omit<Message, 'id'>>;
+  messages: Array<Omit<UIMessage, 'id'>>;
   env?: Env;
   options?: StreamingOptions;
   files?: FileMap;
@@ -40,6 +49,8 @@ export async function streamText(props: {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
+
+  const orchestration = createOrchestration();
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
@@ -102,11 +113,21 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
+  const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
+  const unknownToolHandlerTool = createUnknownToolHandler();
+
+  let combinedTools: Record<string, any> = {
+    ...tools,
+    ...docTools,
+    ...codebaseTools,
+    ...resourcesTools,
+    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
+    [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
+  };
 
   if (files) {
     // Add file search tools
-    const fileSearchTools = createFileSearchTools(files);
+    const fileSearchTools = createFileSearchTools(files, orchestration);
     combinedTools = {
       ...combinedTools,
       ...fileSearchTools,
@@ -130,13 +151,13 @@ export async function streamText(props: {
           ({
             role: 'system',
             content,
-          }) as CoreSystemMessage,
+          }) as SystemModelMessage,
       ),
     {
       role: 'system',
       content: getProjectMdPrompt(files),
-    } as CoreSystemMessage,
-    ...convertToCoreMessages(processedMessages).slice(-3),
+    } as SystemModelMessage,
+    ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
   if (modelDetails.name.includes('anthropic')) {
@@ -145,17 +166,63 @@ export async function streamText(props: {
     };
   }
 
-  const result = await _streamText({
+  const result = _streamText({
     model: provider.getModelInstance({
       model: modelDetails.name,
       serverEnv,
     }),
     abortSignal,
-    maxTokens: dynamicMaxTokens,
-    maxSteps: 20,
+    maxOutputTokens: dynamicMaxTokens,
+    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
-    ...DEFAULT_PROVIDER_OPTIONS,
+    toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
+    experimental_repairToolCall: async ({ toolCall, error }) => {
+      // Handle unknown tool calls gracefully
+      if (NoSuchToolError.isInstance(error)) {
+        // Redirect to our unknown tool handler
+        return {
+          type: 'tool-call',
+          toolCallId: toolCall.toolCallId,
+          toolName: TOOL_NAMES.UNKNOWN_HANDLER,
+          input: JSON.stringify({
+            originalTool: toolCall.toolName,
+            originalArgs: JSON.stringify(toolCall.input),
+          }),
+        };
+      } else if (
+        InvalidToolInputError.isInstance(error) &&
+        toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT &&
+        error.message
+      ) {
+        const match = error.message.match(/Error message:\s*({.*})/);
+
+        if (match) {
+          const errorData = match[1];
+          const parsedError = JSON.parse(errorData);
+
+          if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
+            return {
+              type: 'tool-call',
+              toolCallId: toolCall.toolCallId,
+              toolName: TOOL_NAMES.READ_FILES_CONTENTS,
+              input: JSON.stringify({ pathList: parsedError.paths }),
+            };
+          }
+        }
+      }
+
+      return null;
+    },
+    prepareStep: async () => {
+      if (orchestration.submitted) {
+        return {
+          activeTools: [],
+        };
+      }
+
+      return undefined;
+    },
     ...options,
   });
 

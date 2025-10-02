@@ -13,8 +13,8 @@ interface V8AuthUserOptions {
 
 export type ContextConsumeUserCredit = (args: {
   model: { provider: string; name: string };
-  inputTokens: number;
-  outputTokens: number;
+  inputTokens: number | undefined;
+  outputTokens: number | undefined;
   cacheRead?: number;
   cacheWrite?: number;
   description?: string;

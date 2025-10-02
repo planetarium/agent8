@@ -1,4 +1,4 @@
-import type { Message } from 'ai';
+import type { UIMessage } from 'ai';
 import { useCallback, useState } from 'react';
 import { StreamingMessageParser } from '~/lib/runtime/message-parser';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -24,26 +24,23 @@ const messageParser = new StreamingMessageParser({
       logger.trace('onActionOpen', data.action);
 
       // we only add shell actions when when the close tag got parsed because only then we have the content
-      if (data.action.type === 'file') {
+      if (data.action.type !== 'shell') {
         workbenchStore.addAction(data);
       }
     },
     onActionClose: async (data) => {
       logger.trace('onActionClose', data.action);
 
-      if (data.action.type !== 'file') {
+      if (data.action.type === 'shell') {
         workbenchStore.addAction(data);
       }
 
-      if (data.action.type === 'shell') {
-        await workbenchStore.runActionAndWait(data);
-      } else {
-        workbenchStore.runAction(data);
-      }
+      workbenchStore.runAction(data);
     },
     onActionStream: (data) => {
       logger.trace('onActionStream', data.action);
-      workbenchStore.runAction(data, true);
+
+      // workbenchStore.runAction(data, true);
     },
   },
 });
@@ -51,7 +48,7 @@ const messageParser = new StreamingMessageParser({
 export function useMessageParser() {
   const [parsedMessages, setParsedMessages] = useState<{ [key: number]: string }>({});
 
-  const parseMessages = useCallback((messages: Message[]) => {
+  const parseMessages = useCallback((messages: UIMessage[]) => {
     messageParser.reset();
 
     for (const [index, message] of messages.entries()) {
