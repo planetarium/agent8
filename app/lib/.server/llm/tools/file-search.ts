@@ -106,13 +106,3 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
     },
   });
 };
-
-/**
- * Creates all file search tools with the provided FileMap
- */
-export const createFileSearchTools = (fileMap: FileMap, orchestration: Orchestration) => {
-  return {
-    [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(fileMap),
-    [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(fileMap, orchestration),
-  };
-};

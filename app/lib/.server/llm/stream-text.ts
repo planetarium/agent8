@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR,
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
-import { createFileSearchTools } from './tools/file-search';
+import { createFileContentSearchTool, createFileSearchTools, createFilesReadTool } from './tools/file-search';
 import {
   getResourceSystemPrompt,
   getProjectFilesPrompt,
@@ -25,7 +25,7 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
-import { createInvalidToolArgumentsHandler } from './tools/error-handle';
+import { createInvalidToolInputHandler } from './tools/error-handle';
 import { createSubmitArtifactActionTool } from './tools/action';
 import { createUnknownToolHandler } from './tools/error-handle';
 
@@ -117,7 +117,7 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const invalidToolArgumentsHandler = await createInvalidToolArgumentsHandler();
+  const invalidToolArgumentsHandler = await createInvalidToolInputHandler();
   const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
@@ -133,11 +133,10 @@ export async function streamText(props: {
 
   if (files) {
     // Add file search tools
-    const fileSearchTools = createFileSearchTools(files, orchestration);
     combinedTools = {
       ...combinedTools,
-      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: fileSearchTools.search_file_contents,
-      [TOOL_NAMES.READ_FILES_CONTENTS]: fileSearchTools.read_files_contents,
+      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(files),
+      [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(files, orchestration),
     };
   }
 
@@ -198,11 +197,7 @@ export async function streamText(props: {
           }),
         };
       } else if (InvalidToolInputError.isInstance(error)) {
-        if (!error.message) {
-          return null;
-        }
-
-        if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
+        if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT && error.message) {
           const match = error.message.match(/Error message:\s*({.*})/);
 
           if (match) {

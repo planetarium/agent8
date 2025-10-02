@@ -25,7 +25,6 @@ export type Orchestration = {
 
 export const TOOL_ERROR = {
   MISSING_FILE_CONTEXT: 'MISSING_FILE_CONTEXT',
-  INVALID_REGEX_PATTERN: 'INVALID_REGEX_PATTERN',
 } as const;
 
 export const IGNORE_PATTERNS = [
