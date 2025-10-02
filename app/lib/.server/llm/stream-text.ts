@@ -45,6 +45,9 @@ export async function streamText(props: {
   abortSignal?: AbortSignal;
 }) {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
+  const toolRepairAttempts = new Map<string, number>();
+  const MAX_REPAIR_ATTEMPTS = 3;
+
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
@@ -175,6 +178,16 @@ export async function streamText(props: {
     experimental_repairToolCall: async ({ toolCall, error }) => {
       if (InvalidToolArgumentsError.isInstance(error)) {
         if (toolCall.toolName === TOOL_NAMES.SEARCH_FILE_CONTENTS && error.message) {
+          const toolName = toolCall.toolName;
+          const currentAttempts = toolRepairAttempts.get(toolName) || 0;
+
+          if (currentAttempts >= MAX_REPAIR_ATTEMPTS) {
+            logger.warn(`Max repair attempts (${MAX_REPAIR_ATTEMPTS}) reached for toolCallId: ${toolCall.toolCallId}`);
+            return null;
+          }
+
+          toolRepairAttempts.set(toolName, currentAttempts + 1);
+
           const match = error.message.match(/Error message:\s*({.*})/);
 
           if (match) {
