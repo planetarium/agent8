@@ -1,8 +1,8 @@
-import { z, ZodError } from 'zod';
+import { z } from 'zod';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
-import type { FileMap } from '~/lib/.server/llm/constants';
-import { tool } from 'ai';
-import { WORK_DIR } from '~/utils/constants';
+import { type FileMap, TOOL_ERROR } from '~/lib/.server/llm/constants';
+import { InvalidToolArgumentsError, tool } from 'ai';
+import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 import type { LanguageModelV1FunctionToolCall } from '@ai-sdk/provider';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -22,31 +22,23 @@ const REGEX_ERROR_MESSAGES = {
  * Repairs invalid regex patterns in tool calls
  */
 function repairRegexPattern(toolCall: LanguageModelV1FunctionToolCall, error: unknown) {
-  const zodError = (error as any).cause?.cause;
+  const toolArgs = (error as any).toolArgs;
 
-  if (!(zodError instanceof ZodError)) {
-    logger.warn('The error is not a ZodError instance. cannot perform regex pattern repair.');
+  logger.warn('[DEBUG] ### repairRegexPattern 1');
+
+  if (!toolArgs) {
     return null;
   }
 
-  const regexIssue = zodError.issues.find((issue) => {
-    const isInvalidString = issue.code === 'invalid_string';
-    const isRegexValidation = 'validation' in issue && issue.validation === 'regex';
-    const isPatternField = issue.path?.includes('pattern');
-
-    return isInvalidString && isRegexValidation && isPatternField;
-  });
-
-  if (!regexIssue) {
-    logger.warn('The error is not related to a regex pattern issue');
-    return null;
-  }
-
-  const errorMessage = (regexIssue.message || '').toLowerCase();
+  logger.warn('[DEBUG] ### repairRegexPattern 2');
 
   try {
-    const args = JSON.parse(toolCall.args);
+    const args = JSON.parse(toolArgs);
     const pattern = args.pattern;
+
+    // error.cause에 원본 RegExp 에러가 있을 수 있음
+    const cause = (error as any).cause;
+    const errorMessage = cause instanceof Error ? cause.message.toLowerCase() : String(cause).toLowerCase();
 
     // Case 1: Leading quantifier
     if (errorMessage.includes(REGEX_ERROR_MESSAGES.NOTHING_TO_REPEAT) && pattern.match(/^[*+?]/)) {
@@ -78,7 +70,7 @@ function repairRegexPattern(toolCall: LanguageModelV1FunctionToolCall, error: un
     // Ambiguous case - cannot determine how to repair
     logger.warn('The error is an ambiguous regex repair case', {
       pattern,
-      error: errorMessage,
+      errorMessage,
     });
 
     return null;
@@ -96,8 +88,9 @@ function repairRegexPattern(toolCall: LanguageModelV1FunctionToolCall, error: un
  * Tool for searching file contents with pattern matching (similar to grep)
  */
 export const createFileContentSearchTool = (fileMap: FileMap) => {
-  const searchTool = tool({
-    description: '...',
+  return tool({
+    description:
+      'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
     parameters: z
       .object({
         pattern: z.string(),
@@ -105,15 +98,18 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
         beforeLines: z.number().optional(),
         afterLines: z.number().optional(),
       })
-      .superRefine((data, ctx) => {
+      .superRefine((data) => {
         try {
           new RegExp(data.pattern, data.caseSensitive ? 'g' : 'gi');
         } catch (error) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.invalid_string,
-            validation: 'regex',
-            message: `Invalid regex pattern: "${data.pattern}". ${error instanceof Error ? error.message : String(error)}`,
-            path: ['pattern'],
+          throw new InvalidToolArgumentsError({
+            toolArgs: JSON.stringify(data),
+            toolName: TOOL_NAMES.SEARCH_FILE_CONTENTS,
+            cause: error,
+            message: JSON.stringify({
+              name: TOOL_ERROR.INVALID_REGEX_PATTERN,
+              message: error instanceof Error ? error.message : String(error),
+            }),
           });
         }
       }),
@@ -134,9 +130,6 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
       };
     },
   });
-
-  // add repair function
-  return Object.assign(searchTool, { repair: repairRegexPattern });
 };
 
 /**
@@ -176,7 +169,7 @@ export const createFilesReadTool = (fileMap: FileMap) => {
  */
 export const createFileSearchTools = (fileMap: FileMap) => {
   return {
-    search_file_contents: createFileContentSearchTool(fileMap),
-    read_files_contents: createFilesReadTool(fileMap),
+    searchFileContents: createFileContentSearchTool(fileMap),
+    readFilesContents: createFilesReadTool(fileMap),
   };
 };

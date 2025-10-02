@@ -1,6 +1,12 @@
-import { streamText as _streamText, convertToCoreMessages, type CoreSystemMessage, type Message } from 'ai';
-import { MAX_TOKENS, type FileMap } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR } from '~/utils/constants';
+import {
+  streamText as _streamText,
+  convertToCoreMessages,
+  InvalidToolArgumentsError,
+  type CoreSystemMessage,
+  type Message,
+} from 'ai';
+import { MAX_TOKENS, type FileMap, TOOL_ERROR } from './constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -16,6 +22,7 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
+import { createInvalidToolArgumentsHandler } from './tools/error-handle';
 
 export type Messages = Message[];
 
@@ -102,14 +109,22 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  let combinedTools: Record<string, any> = { ...tools, ...docTools, ...codebaseTools, ...resourcesTools };
+  const invalidToolArgumentsHandler = await createInvalidToolArgumentsHandler();
+  let combinedTools: Record<string, any> = {
+    ...tools,
+    ...docTools,
+    ...codebaseTools,
+    ...resourcesTools,
+    [TOOL_NAMES.INVALID_TOOL_ARGUMENTS]: invalidToolArgumentsHandler,
+  };
 
   if (files) {
     // Add file search tools
     const fileSearchTools = createFileSearchTools(files);
     combinedTools = {
       ...combinedTools,
-      ...fileSearchTools,
+      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: fileSearchTools.searchFileContents,
+      [TOOL_NAMES.READ_FILES_CONTENTS]: fileSearchTools.readFilesContents,
     };
   }
 
@@ -158,8 +173,31 @@ export async function streamText(props: {
     ...DEFAULT_PROVIDER_OPTIONS,
     ...options,
     experimental_repairToolCall: async ({ toolCall, error }) => {
-      const tool = combinedTools[toolCall.toolName];
-      return tool?.repair?.(toolCall, error) || null;
+      if (InvalidToolArgumentsError.isInstance(error)) {
+        if (toolCall.toolName === TOOL_NAMES.SEARCH_FILE_CONTENTS && error.message) {
+          const match = error.message.match(/Error message:\s*({.*})/);
+
+          if (match) {
+            const errorData = match[1];
+            const parsedError = JSON.parse(errorData);
+
+            if (parsedError.name === TOOL_ERROR.INVALID_REGEX_PATTERN) {
+              return {
+                toolCallType: 'function',
+                toolCallId: toolCall.toolCallId,
+                toolName: TOOL_NAMES.INVALID_TOOL_ARGUMENTS,
+                args: JSON.stringify({
+                  originalTool: toolCall.toolName,
+                  originalArgs: toolCall.args,
+                  errorMessage: parsedError.message,
+                }),
+              };
+            }
+          }
+        }
+      }
+
+      return null;
     },
   });
 
