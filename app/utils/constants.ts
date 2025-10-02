@@ -85,8 +85,9 @@ export const STARTER_TEMPLATES: Template[] = [
 // Tool configurations
 export const TOOL_NAMES = {
   // Internal system tool - prefixed to avoid conflicts with user tools
-  INVALID_TOOL_ARGUMENTS: '__system_invalidToolArgumentsHandler',
   UNKNOWN_HANDLER: '__system_unknownToolHandler',
+  INVALID_TOOL_ARGUMENTS: '__system_invalidToolArgumentsHandler',
+
   SUBMIT_ARTIFACT: 'submit_artifact',
   SEARCH_FILE_CONTENTS: 'search_file_contents',
   READ_FILES_CONTENTS: 'read_files_contents',

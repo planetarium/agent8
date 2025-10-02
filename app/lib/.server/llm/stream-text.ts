@@ -218,9 +218,7 @@ export async function streamText(props: {
               };
             }
           }
-        }
-
-        if (toolCall.toolName === TOOL_NAMES.SEARCH_FILE_CONTENTS) {
+        } else {
           const toolName = toolCall.toolName;
           const currentAttempts = toolRepairAttempts.get(toolName) || 0;
 
@@ -231,30 +229,20 @@ export async function streamText(props: {
 
           toolRepairAttempts.set(toolName, currentAttempts + 1);
 
-          const match = error.message.match(/Error message:\s*({.*})/);
-
-          if (match) {
-            const errorData = match[1];
-            const parsedError = JSON.parse(errorData);
-
-            if (parsedError.name === TOOL_ERROR.INVALID_REGEX_PATTERN) {
-              return {
-                type: 'tool-call',
-                toolCallId: toolCall.toolCallId,
-                toolName: TOOL_NAMES.INVALID_TOOL_ARGUMENTS,
-                input: JSON.stringify({
-                  originalTool: toolCall.toolName,
-                  originalArgs: toolCall.input,
-                  errorMessage: parsedError.message,
-                }),
-              };
-            }
-          }
+          return {
+            type: 'tool-call',
+            toolCallId: toolCall.toolCallId,
+            toolName: TOOL_NAMES.INVALID_TOOL_ARGUMENTS,
+            input: JSON.stringify({
+              originalTool: toolCall.toolName,
+            }),
+          };
         }
       }
 
       return null;
     },
+
     prepareStep: async () => {
       if (orchestration.submitted) {
         return {

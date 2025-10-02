@@ -24,22 +24,11 @@ export const createInvalidToolArgumentsHandler = () => {
     description: '', // Intentionally empty to hide from LLM
     inputSchema: z.object({
       originalTool: z.string(),
-      originalArgs: z.string(),
-      errorMessage: z.string(),
     }),
-    execute: async ({
-      originalTool,
-      originalArgs,
-      errorMessage,
-    }: {
-      originalTool: string;
-      originalArgs: string;
-      errorMessage: string;
-    }) => {
+    execute: async ({ originalTool }: { originalTool: string }) => {
       logger.warn(`Invalid tool arguments called: ${originalTool}`);
-
       return {
-        result: `An argument error occurred when calling the tool '${originalTool}'. Provided arguments: ${originalArgs}. Error message: ${errorMessage}. Please revise the arguments and try the '${originalTool}' tool again.`,
+        result: `The arguments provided for the '${originalTool}' tool are invalid. Please review the usage instructions for this tool and try again.`,
       };
     },
   };

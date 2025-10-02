@@ -1,8 +1,8 @@
 import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
-import { type FileMap, type Orchestration, TOOL_ERROR } from '~/lib/.server/llm/constants';
-import { InvalidToolInputError, tool } from 'ai';
+import { type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
+import { tool } from 'ai';
 
 /**
  * Tool for searching file contents with pattern matching (similar to grep)
@@ -11,34 +11,18 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
   return tool({
     description:
       'READ ONLY TOOL : Search file contents for specific patterns or text, similar to grep. Use this tool when you need to find specific code patterns, variable definitions, or text within files. These tools only provide read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls.',
-    inputSchema: z
-      .object({
-        pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
-        caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
-        beforeLines: z
-          .number()
-          .optional()
-          .describe('Number of lines to include before each match, similar to grep -B option (default: 0)'),
-        afterLines: z
-          .number()
-          .optional()
-          .describe('Number of lines to include after each match, similar to grep -A option (default: 0)'),
-      })
-      .superRefine((data) => {
-        try {
-          new RegExp(data.pattern, data.caseSensitive ? 'g' : 'gi');
-        } catch (error) {
-          throw new InvalidToolInputError({
-            toolName: TOOL_NAMES.SEARCH_FILE_CONTENTS,
-            toolInput: JSON.stringify(data),
-            cause: error,
-            message: JSON.stringify({
-              name: TOOL_ERROR.INVALID_REGEX_PATTERN,
-              message: error instanceof Error ? error.message : String(error),
-            }),
-          });
-        }
-      }),
+    inputSchema: z.object({
+      pattern: z.string().describe('Text pattern or regular expression to search for in file content'),
+      caseSensitive: z.boolean().optional().describe('Whether the search should be case-sensitive (default: false)'),
+      beforeLines: z
+        .number()
+        .optional()
+        .describe('Number of lines to include before each match, similar to grep -B option (default: 0)'),
+      afterLines: z
+        .number()
+        .optional()
+        .describe('Number of lines to include after each match, similar to grep -A option (default: 0)'),
+    }),
     execute: async ({
       pattern,
       caseSensitive,
