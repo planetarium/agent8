@@ -3,12 +3,6 @@ import { z } from 'zod/v4';
 
 const logger = createScopedLogger('error-handle-tool');
 
-const REGEX_ERROR_MESSAGES = {
-  NOTHING_TO_REPEAT: 'nothing to repeat',
-  UNTERMINATED_CHARACTER_CLASS: 'unterminated character class',
-  UNTERMINATED_GROUP: 'unterminated group',
-} as const;
-
 export const createUnknownToolHandler = () => {
   return {
     description: '', // Intentionally empty to hide from LLM

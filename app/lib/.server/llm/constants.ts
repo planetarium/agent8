@@ -19,7 +19,7 @@ type Dirent = File | Folder;
 export type FileMap = Record<string, Dirent | undefined>;
 
 export const TOOL_ERROR = {
-  INVALID_REGEX_PATTERN: 'invalid_regex_pattern',
+  INVALID_REGEX_PATTERN: 'INVALID_REGEX_PATTERN',
 } as const;
 
 export const IGNORE_PATTERNS = [
