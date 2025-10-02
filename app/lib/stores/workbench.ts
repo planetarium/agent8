@@ -53,10 +53,10 @@ function ensureUnsavedFilesSet(value: any): Set<string> {
   return new Set<string>();
 }
 
-interface ShellQueueItem {
+interface ActionQueueItem {
   data: ActionCallbackData;
   executeAction: () => void;
-  next?: ShellQueueItem;
+  next?: ActionQueueItem;
 }
 
 export interface ArtifactState {
@@ -107,7 +107,8 @@ export class WorkbenchStore {
   #messageToArtifactIds: Map<string, string[]> = new Map();
   #globalExecutionQueue = Promise.resolve();
   #connectionLostNotified = false;
-  #messageToShellQueue: Map<string, ShellQueueItem | null> = new Map();
+  #messageToActionQueue: Map<string, ActionQueueItem | null> = new Map();
+  #shellCommandQueue: Promise<any> = Promise.resolve();
 
   constructor() {
     this.#currentContainer = new Promise<Container>((resolve, reject) => {
@@ -559,7 +560,11 @@ export class WorkbenchStore {
         return artifact?.closed;
       });
 
-      if (allClosed) {
+      // Check if action queue is empty for this message
+      const queueExists = this.#messageToActionQueue.has(messageId);
+
+      // Only trigger callbacks if artifacts are closed AND queue is empty
+      if (allClosed && !queueExists) {
         await Promise.all(callbacks.map((callback) => callback()));
       }
     }
@@ -630,14 +635,8 @@ export class WorkbenchStore {
     }
   }
 
-  async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    const { messageId, artifactId } = data;
-
-    const artifact = this.#getArtifact(artifactId);
-
-    if (!artifact) {
-      unreachable('Artifact not found');
-    }
+  async #executeQueuedAction(data: ActionCallbackData, artifact: ArtifactState, isStreaming: boolean = false) {
+    const { messageId } = data;
 
     const action = artifact.runner.actions.get()[data.actionId];
 
@@ -651,6 +650,9 @@ export class WorkbenchStore {
 
       return;
     }
+
+    // Wait for any ongoing shell commands (setupDeployConfig, publish, etc.) to complete
+    await this.#shellCommandQueue;
 
     if (data.action.type === 'file') {
       const wc = await this.container;
@@ -699,11 +701,24 @@ export class WorkbenchStore {
 
       this.resetAllFileModifications();
     } else if (data.action.type === 'shell') {
-      // Shell commands need to be queued per message for sequential execution
-      this.#queueShellAction(data, artifact);
+      // Shell commands are now queued, so just execute them directly here
+      await artifact.runner.runAction(data);
     } else {
       await artifact.runner.runAction(data);
     }
+  }
+
+  async _runAction(data: ActionCallbackData, isStreaming: boolean = false) {
+    const { artifactId } = data;
+
+    const artifact = this.#getArtifact(artifactId);
+
+    if (!artifact) {
+      unreachable('Artifact not found');
+    }
+
+    // Queue all actions for sequential execution per message
+    this.#queueAction(data, artifact, isStreaming);
   }
 
   actionStreamSampler = createSampler(async (data: ActionCallbackData, isStreaming: boolean = false) => {
@@ -715,31 +730,34 @@ export class WorkbenchStore {
     return artifacts[compositeId];
   }
 
-  #queueShellAction(data: ActionCallbackData, artifact: ArtifactState) {
+  #queueAction(data: ActionCallbackData, artifact: ArtifactState, isStreaming: boolean = false) {
     artifact.runner.markActionAsRunning(data.actionId);
 
-    const newItem: ShellQueueItem = {
+    const newItem: ActionQueueItem = {
       data,
       executeAction: () => {
-        artifact.runner.runAction(newItem.data).finally(() => {
+        this.#executeQueuedAction(newItem.data, artifact, isStreaming).finally(() => {
           if (newItem.next) {
             const nextArtifact = this.#getArtifact(newItem.next.data.artifactId);
 
             if (nextArtifact) {
-              this.#executeShellItem(newItem.next);
+              this.#executeActionItem(newItem.next);
             }
           } else {
             // No more items, clear the queue
-            this.#messageToShellQueue.delete(data.messageId);
+            this.#messageToActionQueue.delete(data.messageId);
+
+            // Check if all artifacts are closed now that queue is empty
+            this.#processMessageClose(data.messageId);
           }
         });
       },
     };
 
-    const currentQueue = this.#messageToShellQueue.get(data.messageId);
+    const currentQueue = this.#messageToActionQueue.get(data.messageId);
 
     if (!currentQueue) {
-      this.#executeShellItem(newItem);
+      this.#executeActionItem(newItem);
     } else {
       let tail = currentQueue;
 
@@ -750,8 +768,8 @@ export class WorkbenchStore {
     }
   }
 
-  #executeShellItem(item: ShellQueueItem) {
-    this.#messageToShellQueue.set(item.data.messageId, item);
+  #executeActionItem(item: ActionQueueItem) {
+    this.#messageToActionQueue.set(item.data.messageId, item);
 
     item.executeAction();
   }
@@ -861,8 +879,7 @@ export class WorkbenchStore {
     try {
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
       await wc.fs.writeFile('.secret', setupScript);
-      await shell.executeCommand(Date.now().toString(), 'source ./.secret && rm -f ./.secret');
-      await shell.waitTillOscCode('prompt');
+      await this.#runShellCommand(shell, 'source ./.secret && rm -f ./.secret');
     } catch {
       throw new Error('Failed to inject user data into the shell.');
     } finally {
@@ -1041,10 +1058,15 @@ export class WorkbenchStore {
 
   // Helper methods for publish
   async #runShellCommand(shell: BoltShell, command: string) {
-    const result = await shell.executeCommand(Date.now().toString(), command);
-    await shell.waitTillOscCode('prompt');
+    // Queue all shell commands to prevent interference
+    this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
+      const result = await shell.executeCommand(Date.now().toString(), command);
+      await shell.waitTillOscCode('prompt');
 
-    return result;
+      return result;
+    });
+
+    return this.#shellCommandQueue;
   }
 
   #handleBuildError(output: string) {
