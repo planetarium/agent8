@@ -418,10 +418,11 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
+        const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           e,
-          'useChat onError callback, model: ' + model + ', provider: ' + provider.name,
+          'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
         );
         setFakeLoading(false);
       },
