@@ -23,10 +23,10 @@ export function Header() {
   return (
     <TooltipProvider>
       <header
-        className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
+        className={classNames('flex items-center p-5 bg-primary border-b h-[var(--header-height)]', {
           'border-transparent': !chat.started,
           'border-bolt-elements-borderColor': chat.started,
-          'mt-[56px]': !chat.started && isEmbedMode,
+          'mt-5': !chat.started && isEmbedMode,
           'mt-2': chat.started && isEmbedMode,
         })}
       >

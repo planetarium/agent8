@@ -71,7 +71,7 @@ export const AttachmentSelector = ({
 
       {isOpen && (
         <div
-          className="absolute top-full mt-1 left-0 flex flex-col items-start w-[185.6px] px-0 py-[var(--spacing-8,6.4px)] z-[9999] rounded-radius-8 border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-interactive-neutral"
+          className="absolute bottom-full mb-1 left-0 flex flex-col items-start w-[185.6px] px-0 py-[var(--spacing-8,6.4px)] z-[9999] rounded-radius-8 border border-solid border-[var(--color-border-tertiary,rgba(255,255,255,0.12))] bg-interactive-neutral"
           style={{
             boxShadow: '0px 8px 16px 0px rgba(0, 0, 0, 0.32), 0px 0px 8px 0px rgba(0, 0, 0, 0.28)',
           }}

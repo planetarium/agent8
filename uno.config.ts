@@ -105,6 +105,31 @@ export default defineConfig({
     'text-bolt-color-textTertiary',
     'text-bolt-color-textPrimary',
     'placeholder-bolt-color-textTertiary',
+
+    // Typography Design System
+    'text-heading-2xs',
+    'text-heading-xs',
+    'text-heading-sm',
+    'text-heading-md',
+    'text-heading-lg',
+    'text-heading-xl',
+    'text-heading-2xl',
+    'text-heading-3xl',
+    'text-heading-4xl',
+    'text-heading-5xl',
+    'text-heading-6xl',
+    'text-body-sm',
+    'text-body-md-regular',
+    'text-body-md-medium',
+    'text-body-lg-regular',
+    'text-body-lg-medium',
+    'text-subtle',
+    'border-tertiary',
+    'animate-shine',
+    'bg-interactive-primary',
+    'hover:bg-interactive-primary-hovered',
+    'active:bg-interactive-primary-pressed',
+    'text-elevation-shadow-3',
   ],
   shortcuts: {
     'bolt-ease-cubic-bezier': 'ease-[cubic-bezier(0.4,0,0.2,1)]',
@@ -116,6 +141,28 @@ export default defineConfig({
     'text-primary': 'text-bolt-color-textPrimary',
     'text-secondary': 'text-bolt-color-textSecondary',
     'text-tertiary': 'text-bolt-color-textTertiary',
+    'text-subtle': 'text-[var(--color-text-subtle)]',
+
+    // Typography Design System
+    'text-heading-2xs': 'font-primary text-[12px] font-semibold leading-[133.4%] not-italic',
+    'text-heading-xs': 'font-primary text-[14px] font-semibold leading-[142.9%] not-italic',
+    'text-heading-sm': 'font-primary text-[16px] font-semibold leading-[150%] not-italic',
+    'text-heading-md': 'font-primary text-[20px] font-semibold leading-[140%] not-italic',
+    'text-heading-lg': 'font-primary text-[24px] font-semibold leading-[133.4%] not-italic',
+    'text-heading-xl': 'font-primary text-[28px] font-semibold leading-[135.8%] not-italic',
+    'text-heading-2xl': 'font-primary text-[36px] font-semibold leading-[133.4%] not-italic',
+    'text-heading-3xl': 'font-primary text-[40px] font-semibold leading-[130%] not-italic',
+    'text-heading-4xl': 'font-primary text-[48px] font-semibold leading-[129%] not-italic',
+    'text-heading-5xl': 'font-primary text-[56px] font-semibold leading-[125%] not-italic',
+    'text-heading-6xl': 'font-primary text-[64px] font-semibold leading-[125%] not-italic',
+
+    // Body Typography
+    'text-body-sm': 'font-primary text-[12px] font-normal leading-[133.4%] not-italic',
+    'text-body-md-regular': 'font-primary text-[14px] font-normal leading-[142.9%] not-italic',
+    'text-body-md-medium': 'font-primary text-[14px] font-medium leading-[142.9%] not-italic',
+    'text-body-lg-regular': 'font-primary text-[16px] font-normal leading-[150%] not-italic',
+    'text-body-lg-medium': 'font-primary text-[16px] font-medium leading-[150%] not-italic',
+
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
     'text-interactive-on-primary': 'text-[var(--color-text-interactive-on-primary)]',
     'bg-interactive-neutral': 'bg-[var(--color-bg-interactive-neutral)]',
@@ -125,6 +172,8 @@ export default defineConfig({
     'hover:border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
     'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
     'disabled:border-disabled': 'disabled:border-[var(--color-border-disabled)]',
+    'border-primary': 'border-[var(--color-border-primary)]',
+    'border-tertiary': 'border-[var(--color-border-tertiary)]',
     'disabled:bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
     'bg-interactive-gradient':
       'bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end)_100%)]',
@@ -132,6 +181,9 @@ export default defineConfig({
       'hover:bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end-hovered)_100%)]',
     'active:bg-interactive-gradient-pressed':
       'active:bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end-pressed)_100%)]',
+    'bg-interactive-primary': 'bg-[var(--color-bg-interactive-primary,#1a92a4)]',
+    'hover:bg-interactive-primary-hovered': 'hover:bg-[var(--color-bg-interactive-primary-hovered,#1a7583)]',
+    'active:bg-interactive-primary-pressed': 'active:bg-[var(--color-bg-interactive-primary-pressed,#1b5862)]',
     'rounded-radius-4': 'rounded-[var(--border-radius-4)]',
     'rounded-radius-8': 'rounded-[var(--border-radius-8)]',
     'border-width-1': 'border-[var(--border-width-1)]',
@@ -141,6 +193,11 @@ export default defineConfig({
     'py-spacing-20': 'py-[var(--spacing-20,20px)]',
     'px-spacing-8': 'px-[var(--spacing-8,8px)]',
     'gap-spacing-8': 'gap-[var(--spacing-8,8px)]',
+    'elevation-light-3': 'shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
+
+    // Gradient text with shadow effect
+    'text-elevation-shadow-3':
+      '[text-shadow:0_8px_16px_rgba(0,0,0,0.32),0_0_8px_rgba(0,0,0,0.28)] bg-[linear-gradient(90deg,var(--color-text-primary,#FFF)_0%,#72E7F8_100%)] bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]',
   },
   rules: [
     /**
@@ -150,6 +207,15 @@ export default defineConfig({
     ['b', {}],
   ],
   theme: {
+    animation: {
+      shine: 'shine 5s linear infinite',
+    },
+    keyframes: {
+      shine: {
+        '0%': { 'background-position': '100%' },
+        '100%': { 'background-position': '-100%' },
+      },
+    },
     colors: {
       ...COLOR_PRIMITIVES,
       bolt: {
@@ -272,6 +338,21 @@ export default defineConfig({
     },
     fontFamily: {
       primary: 'var(--font-primary)',
+    },
+    breakpoints: {
+      mobile: '360px',
+      tablet: '760px',
+      'tablet-wide': '960px',
+      laptop: '1024px',
+      'laptop-narrow': '1176px',
+      'laptop-wide': '1400px',
+      'laptop-sidebar': '1484px',
+      desktop: '1424px',
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
     },
   },
   transformers: [transformerDirectives()],

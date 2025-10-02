@@ -109,6 +109,10 @@ export class WorkbenchStore {
   #connectionLostNotified = false;
   #messageToShellQueue: Map<string, ShellQueueItem | null> = new Map();
 
+  // Container initialization state management
+  #initializationState: 'idle' | 'initializing' | 'reinitializing' = 'idle';
+  #initializationPromise: Promise<Container | null> | null = null;
+
   constructor() {
     this.#currentContainer = new Promise<Container>((resolve, reject) => {
       this.#containerResolver = resolve;
@@ -145,6 +149,37 @@ export class WorkbenchStore {
   }
 
   async initializeContainer(accessToken: string): Promise<Container | null> {
+    // Add debug logging
+    logger.info(`🔍 initializeContainer called - current state: ${this.#initializationState}`);
+
+    // Check if initialization is already in progress
+    if (this.#initializationState !== 'idle') {
+      logger.warn(`🚫 Container ${this.#initializationState} already in progress, waiting for completion...`);
+      return this.#initializationPromise;
+    }
+
+    // Set state and create promise
+    logger.info(`🚀 Starting container initialization...`);
+    this.#initializationState = 'initializing';
+    this.#initializationPromise = this.#doInitializeContainer(accessToken);
+
+    try {
+      const result = await this.#initializationPromise;
+      logger.info(`✅ Container initialization completed successfully`);
+
+      return result;
+    } catch (error) {
+      logger.error(`❌ Container initialization failed:`, error);
+      throw error;
+    } finally {
+      // Reset state
+      logger.info(`🔄 Resetting initialization state to idle`);
+      this.#initializationState = 'idle';
+      this.#initializationPromise = null;
+    }
+  }
+
+  async #doInitializeContainer(accessToken: string): Promise<Container | null> {
     try {
       const containerPromise = ContainerFactory.create({
         coep: 'credentialless',
@@ -182,6 +217,37 @@ export class WorkbenchStore {
   }
 
   async reinitializeContainer(accessToken: string): Promise<Container | null> {
+    // Add debug logging
+    logger.info(`🔍 reinitializeContainer called - current state: ${this.#initializationState}`);
+
+    // Check if any container operation is already in progress
+    if (this.#initializationState !== 'idle') {
+      logger.warn(`🚫 Container ${this.#initializationState} already in progress, waiting for completion...`);
+      return this.#initializationPromise;
+    }
+
+    // Set state and create promise
+    logger.info(`🚀 Starting container reinitialization...`);
+    this.#initializationState = 'reinitializing';
+    this.#initializationPromise = this.#doReinitializeContainer(accessToken);
+
+    try {
+      const result = await this.#initializationPromise;
+      logger.info(`✅ Container reinitialization completed successfully`);
+
+      return result;
+    } catch (error) {
+      logger.error(`❌ Container reinitialization failed:`, error);
+      throw error;
+    } finally {
+      // Reset state
+      logger.info(`🔄 Resetting reinitialization state to idle`);
+      this.#initializationState = 'idle';
+      this.#initializationPromise = null;
+    }
+  }
+
+  async #doReinitializeContainer(accessToken: string): Promise<Container | null> {
     const isPromisePending = async (promise: Promise<any>): Promise<boolean> => {
       const pending = Symbol('pending');
       const result = await Promise.race([
@@ -198,7 +264,7 @@ export class WorkbenchStore {
     const isPending = await isPromisePending(this.#currentContainer);
 
     if (isPending && !this.#containerInitialized) {
-      return this.initializeContainer(accessToken);
+      return this.#doInitializeContainer(accessToken);
     } else {
       logger.info('Forcing container reinitialization...');
 
@@ -226,7 +292,7 @@ export class WorkbenchStore {
       this.#reinitCounter.set(this.#reinitCounter.get() + 1);
       logger.info(`ReinitCounter increased to: ${this.#reinitCounter.get()}`);
 
-      const containerResult = await this.initializeContainer(accessToken);
+      const containerResult = await this.#doInitializeContainer(accessToken);
 
       if (containerResult) {
         try {
@@ -248,6 +314,10 @@ export class WorkbenchStore {
 
   get containerReady(): boolean {
     return this.#containerInitialized;
+  }
+
+  get initializationState(): 'idle' | 'initializing' | 'reinitializing' {
+    return this.#initializationState;
   }
 
   get container(): Promise<Container> {
