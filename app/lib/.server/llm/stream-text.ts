@@ -117,7 +117,7 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const invalidToolArgumentsHandler = await createInvalidToolInputHandler();
+  const invalidToolInputHandler = await createInvalidToolInputHandler();
   const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
@@ -126,7 +126,7 @@ export async function streamText(props: {
     ...docTools,
     ...codebaseTools,
     ...resourcesTools,
-    [TOOL_NAMES.INVALID_TOOL_ARGUMENTS]: invalidToolArgumentsHandler,
+    [TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER]: invalidToolInputHandler,
     [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
     [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
@@ -227,7 +227,7 @@ export async function streamText(props: {
           return {
             type: 'tool-call',
             toolCallId: toolCall.toolCallId,
-            toolName: TOOL_NAMES.INVALID_TOOL_ARGUMENTS,
+            toolName: TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER,
             input: JSON.stringify({
               originalTool: toolCall.toolName,
             }),
