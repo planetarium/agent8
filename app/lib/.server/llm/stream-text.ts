@@ -13,7 +13,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR,
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
-import { createFileSearchTools } from './tools/file-search';
+import { createFileContentSearchTool, createFilesReadTool } from './tools/file-search';
 import {
   getResourceSystemPrompt,
   getProjectFilesPrompt,
@@ -25,6 +25,7 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
+import { createInvalidToolInputHandler } from './tools/error-handle';
 import { createSubmitArtifactActionTool } from './tools/action';
 import { createUnknownToolHandler } from './tools/error-handle';
 
@@ -47,6 +48,9 @@ export async function streamText(props: {
   abortSignal?: AbortSignal;
 }) {
   const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
+  const toolRepairAttempts = new Map<string, number>();
+  const MAX_REPAIR_ATTEMPTS = 3;
+
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
@@ -113,6 +117,7 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
+  const invalidToolInputHandler = await createInvalidToolInputHandler();
   const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
@@ -121,16 +126,17 @@ export async function streamText(props: {
     ...docTools,
     ...codebaseTools,
     ...resourcesTools,
+    [TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER]: invalidToolInputHandler,
     [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
     [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
 
   if (files) {
     // Add file search tools
-    const fileSearchTools = createFileSearchTools(files, orchestration);
     combinedTools = {
       ...combinedTools,
-      ...fileSearchTools,
+      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(files),
+      [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(files, orchestration),
     };
   }
 
@@ -190,30 +196,48 @@ export async function streamText(props: {
             originalArgs: JSON.stringify(toolCall.input),
           }),
         };
-      } else if (
-        InvalidToolInputError.isInstance(error) &&
-        toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT &&
-        error.message
-      ) {
-        const match = error.message.match(/Error message:\s*({.*})/);
+      } else if (InvalidToolInputError.isInstance(error)) {
+        if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT && error.message) {
+          const match = error.message.match(/Error message:\s*({.*})/);
 
-        if (match) {
-          const errorData = match[1];
-          const parsedError = JSON.parse(errorData);
+          if (match) {
+            const errorData = match[1];
+            const parsedError = JSON.parse(errorData);
 
-          if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
-            return {
-              type: 'tool-call',
-              toolCallId: toolCall.toolCallId,
-              toolName: TOOL_NAMES.READ_FILES_CONTENTS,
-              input: JSON.stringify({ pathList: parsedError.paths }),
-            };
+            if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
+              return {
+                type: 'tool-call',
+                toolCallId: toolCall.toolCallId,
+                toolName: TOOL_NAMES.READ_FILES_CONTENTS,
+                input: JSON.stringify({ pathList: parsedError.paths }),
+              };
+            }
           }
+        } else {
+          const toolName = toolCall.toolName;
+          const currentAttempts = toolRepairAttempts.get(toolName) || 0;
+
+          if (currentAttempts >= MAX_REPAIR_ATTEMPTS) {
+            logger.warn(`Max repair attempts (${MAX_REPAIR_ATTEMPTS}) reached for toolCallId: ${toolCall.toolCallId}`);
+            return null;
+          }
+
+          toolRepairAttempts.set(toolName, currentAttempts + 1);
+
+          return {
+            type: 'tool-call',
+            toolCallId: toolCall.toolCallId,
+            toolName: TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER,
+            input: JSON.stringify({
+              originalTool: toolCall.toolName,
+            }),
+          };
         }
       }
 
       return null;
     },
+
     prepareStep: async () => {
       if (orchestration.submitted) {
         return {

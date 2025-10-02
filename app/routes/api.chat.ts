@@ -440,11 +440,39 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 break;
               }
 
-              default: {
-                const isSubmitArtifactError =
-                  messageType === 'tool-output-error' && submitArtifactInputs.has(chunk.toolCallId);
+              case 'tool-output-error': {
+                // Skip submitArtifact.
+                if (submitArtifactInputs.has(chunk.toolCallId)) {
+                  break;
+                }
 
-                if (!IGNORE_TOOL_TYPES.includes(messageType) && !isSubmitArtifactError) {
+                const toolResult = {
+                  toolCallId: chunk.toolCallId,
+                  result: chunk.errorText,
+                };
+
+                const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+
+                controller.enqueue({
+                  type: 'text-start',
+                  id: toolResult.toolCallId,
+                });
+
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: toolResult.toolCallId,
+                  delta: divString,
+                });
+
+                controller.enqueue({
+                  type: 'text-end',
+                  id: toolResult.toolCallId,
+                });
+                break;
+              }
+
+              default: {
+                if (!IGNORE_TOOL_TYPES.includes(messageType)) {
                   controller.enqueue(chunk);
                 }
 

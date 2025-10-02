@@ -1,8 +1,8 @@
 import { z } from 'zod/v4';
 import { searchFileContentsByPattern, getFileContents } from '~/utils/fileUtils';
-import type { FileMap, Orchestration } from '~/lib/.server/llm/constants';
+import { type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
+import { WORK_DIR } from '~/utils/constants';
 import { tool } from 'ai';
-import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 
 /**
  * Tool for searching file contents with pattern matching (similar to grep)
@@ -36,7 +36,6 @@ export const createFileContentSearchTool = (fileMap: FileMap) => {
     }) => {
       const results = searchFileContentsByPattern(fileMap, pattern, caseSensitive, beforeLines, afterLines);
 
-      // Format results to be more user-friendly
       return {
         pattern,
         totalMatches: results.length,
@@ -106,14 +105,4 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
       return { files: out, complete: true };
     },
   });
-};
-
-/**
- * Creates all file search tools with the provided FileMap
- */
-export const createFileSearchTools = (fileMap: FileMap, orchestration: Orchestration) => {
-  return {
-    [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(fileMap),
-    [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(fileMap, orchestration),
-  };
 };

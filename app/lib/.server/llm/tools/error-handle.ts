@@ -18,3 +18,18 @@ export const createUnknownToolHandler = () => {
     },
   };
 };
+
+export const createInvalidToolInputHandler = () => {
+  return {
+    description: '', // Intentionally empty to hide from LLM
+    inputSchema: z.object({
+      originalTool: z.string(),
+    }),
+    execute: async ({ originalTool }: { originalTool: string }) => {
+      logger.warn(`Invalid tool input called: ${originalTool}`);
+      return {
+        result: `The arguments provided for the '${originalTool}' tool are invalid. Please review the usage instructions for this tool and try again.`,
+      };
+    },
+  };
+};

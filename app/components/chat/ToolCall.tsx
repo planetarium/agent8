@@ -17,10 +17,9 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
   const toolUI = useStore(toolUIStore);
   const currentTool = toolUI.tools?.[id] || {};
 
-  const toolName =
-    toolCall.toolName === TOOL_NAMES.UNKNOWN_HANDLER && toolCall.input?.originalTool
-      ? toolCall.input.originalTool
-      : toolCall.toolName;
+  const isSystemTool =
+    toolCall.toolName === TOOL_NAMES.UNKNOWN_HANDLER || toolCall.toolName === TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER;
+  const toolName = isSystemTool && toolCall.input?.originalTool ? toolCall.input.originalTool : toolCall.toolName;
 
   return (
     <>
