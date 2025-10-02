@@ -370,7 +370,11 @@ export const ChatImpl = memo(
     const [animationScope, animate] = useAnimate();
 
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-    const [input, setInput] = useState(() => Cookies.get(PROMPT_COOKIE_KEY) || '');
+    const [input, setInput] = useState(() => {
+      return initialMessages.length > 0
+        ? Cookies.get(PROMPT_COOKIE_KEY) || ''
+        : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+    });
     const [chatData, setChatData] = useState<any[]>([]);
 
     const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
@@ -1059,6 +1063,14 @@ export const ChatImpl = memo(
       }, 1000),
       [chatStarted],
     );
+
+    // Reset input to default prompt when returning to pre-chat state
+    useEffect(() => {
+      if (!chatStarted && initialMessages.length === 0) {
+        Cookies.remove(PROMPT_COOKIE_KEY);
+        setInput('Create a top-down action game with a character controlled by WASD keys and mouse clicks.');
+      }
+    }, [chatStarted, initialMessages.length, setInput]);
 
     const [messageRef, scrollRef] = useSnapScroll();
 
