@@ -435,7 +435,10 @@ export const ChatImpl = memo(
         logger.debug('Finished streaming');
       },
       initialMessages,
-      initialInput: Cookies.get(PROMPT_COOKIE_KEY) || '',
+      initialInput:
+        initialMessages.length > 0
+          ? Cookies.get(PROMPT_COOKIE_KEY) || ''
+          : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
     });
     useEffect(() => {
       const prompt = searchParams.get('prompt');
@@ -1002,13 +1005,16 @@ export const ChatImpl = memo(
     /**
      * Debounced function to cache the prompt in cookies.
      * Caches the trimmed value of the textarea input after a delay to optimize performance.
+     * Only saves to cookies after chat has started.
      */
     const debouncedCachePrompt = useCallback(
       debounce((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const trimmedValue = event.target.value.trim();
-        Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+        if (chatStarted) {
+          const trimmedValue = event.target.value.trim();
+          Cookies.set(PROMPT_COOKIE_KEY, trimmedValue, { expires: 30 });
+        }
       }, 1000),
-      [],
+      [chatStarted],
     );
 
     const [messageRef, scrollRef] = useSnapScroll();

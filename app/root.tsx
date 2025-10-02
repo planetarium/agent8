@@ -40,6 +40,12 @@ export const links: LinksFunction = () => [
     rel: 'stylesheet',
     href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap',
   },
+  {
+    rel: 'preload',
+    href: '/background-gradient.webp',
+    as: 'image',
+    type: 'image/webp',
+  },
 ];
 
 const inlineThemeCode = stripIndents`
