@@ -126,8 +126,8 @@ export async function streamText(props: {
     const fileSearchTools = createFileSearchTools(files);
     combinedTools = {
       ...combinedTools,
-      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: fileSearchTools.searchFileContents,
-      [TOOL_NAMES.READ_FILES_CONTENTS]: fileSearchTools.readFilesContents,
+      [TOOL_NAMES.SEARCH_FILE_CONTENTS]: fileSearchTools.search_file_contents,
+      [TOOL_NAMES.READ_FILES_CONTENTS]: fileSearchTools.read_files_contents,
     };
   }
 

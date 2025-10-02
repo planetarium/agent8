@@ -89,7 +89,7 @@ export const createFilesReadTool = (fileMap: FileMap) => {
  */
 export const createFileSearchTools = (fileMap: FileMap) => {
   return {
-    searchFileContents: createFileContentSearchTool(fileMap),
-    readFilesContents: createFilesReadTool(fileMap),
+    search_file_contents: createFileContentSearchTool(fileMap),
+    read_files_contents: createFilesReadTool(fileMap),
   };
 };
