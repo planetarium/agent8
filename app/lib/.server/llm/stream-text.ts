@@ -182,7 +182,7 @@ export async function streamText(props: {
     stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
-    toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
+    toolChoice: 'auto',
     experimental_repairToolCall: async ({ toolCall, error }) => {
       // Handle unknown tool calls gracefully
       if (NoSuchToolError.isInstance(error)) {

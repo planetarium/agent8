@@ -53,6 +53,7 @@ ${body}
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
+const MAX_SUBMIT_ARTIFACT_RETRIES = 2;
 
 const logger = createScopedLogger('api.chat');
 
@@ -119,6 +120,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const progressUnsubscribers: Array<() => void> = [];
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
+        // Track submit_artifact retry attempts
+        let submitArtifactRetryCount = 0;
+
         for (const toolName in mcpTools) {
           if (mcpTools[toolName]) {
             const tool = mcpTools[toolName];
@@ -180,7 +184,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
+          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
@@ -196,6 +200,60 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
+            }
+
+            // Check if submit_artifact tool was called
+            const hasSubmitArtifact = response?.messages?.some(
+              (msg: any) =>
+                msg.role === 'assistant' &&
+                msg.toolCalls?.some((tc: any) => tc.toolName === TOOL_NAMES.SUBMIT_ARTIFACT),
+            );
+
+            // Retry if tool was not called and response is not empty
+            if (
+              !hasSubmitArtifact &&
+              finishReason === 'stop' &&
+              content.trim().length > 0 &&
+              submitArtifactRetryCount < MAX_SUBMIT_ARTIFACT_RETRIES
+            ) {
+              submitArtifactRetryCount++;
+              logger.warn(
+                `Model finished without calling ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. Retry attempt ${submitArtifactRetryCount}/${MAX_SUBMIT_ARTIFACT_RETRIES}...`,
+              );
+
+              // Add retry messages
+              messages.push({
+                id: generateId(),
+                role: 'assistant',
+                parts: [{ type: 'text', text: content }],
+              });
+              messages.push({
+                id: generateId(),
+                role: 'user',
+                parts: [
+                  {
+                    type: 'text',
+                    text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\nYou described the changes but did not call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. You MUST call it now with the changes you just described. This is MANDATORY.`,
+                  },
+                ],
+              });
+
+              // Retry with forced tool choice
+              const retryResult = await streamText({
+                messages,
+                env,
+                options: {
+                  ...options,
+                  toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
+                },
+                files,
+                tools: mcpTools,
+                abortSignal: request.signal,
+              });
+
+              writer.merge(retryResult.toUIMessageStream({ sendReasoning: false }));
+
+              return;
             }
 
             if (finishReason !== 'length') {
