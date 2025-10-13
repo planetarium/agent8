@@ -290,17 +290,15 @@ export class ActionRunner {
     }
 
     const shell = this.#shellTerminal();
-    await shell.ready;
 
     if (!shell || !shell.terminal || !shell.process) {
       unreachable('Shell terminal not found');
     }
 
-    const currentState = shell.executionState?.get();
+    await shell.ready;
 
-    if (currentState?.active) {
-      shell.terminal.input('\x03');
-    }
+    // Interrupt any currently running command
+    shell.interruptCurrentCommand();
 
     const resp = await shell.executeCommand(this.runnerId.get(), action.content, () => {
       logger.debug(`[${action.type}]:Aborting Action\n\n`, action);

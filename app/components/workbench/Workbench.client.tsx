@@ -34,7 +34,6 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { ResourcePanel } from './ResourcePanel';
-import { SETTINGS_KEYS } from '~/lib/stores/settings';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -418,23 +417,8 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   }, [connectionState, terminalReady]);
 
   const onRun = useCallback(async () => {
-    setSelectedView('code');
-
-    const shell = workbench.boltTerminal;
-
-    await shell.ready;
-    await workbench.setupDeployConfig(shell);
-
-    const container = await workbench.container;
-    await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
-    await shell.waitTillOscCode('prompt');
-
-    if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-      await shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
-    } else {
-      await shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
-    }
-  }, [workbench.boltTerminal]);
+    await workbench.runPreview();
+  }, [workbench]);
 
   const onEditorChange = useCallback<OnEditorChange>((update) => {
     workbench.setCurrentDocumentContent(update.content);
