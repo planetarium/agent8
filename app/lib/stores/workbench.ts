@@ -575,6 +575,16 @@ export class WorkbenchStore {
     // TODO: what do we wanna do and how do we wanna recover from this?
   }
 
+  hasArtifactRunning(): boolean {
+    const artifacts = this.artifacts.get();
+
+    if (!artifacts) {
+      return false;
+    }
+
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
+  }
+
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
     const artifact = this.#getArtifact(id);
 
@@ -652,6 +662,10 @@ export class WorkbenchStore {
 
   async closeArtifact(data: ArtifactCallbackData) {
     const artifact = this.#getArtifact(data.id);
+
+    if (isCommitedMessage(data.messageId)) {
+      artifact.runner.resetPendingActionsCount();
+    }
 
     if (artifact?.closed) {
       return;
@@ -1072,6 +1086,38 @@ export class WorkbenchStore {
     return { user, verseId };
   }
 
+  async runPreview() {
+    this.currentView.set('code');
+
+    const shell = this.boltTerminal;
+    await shell.ready;
+
+    try {
+      if (!this.hasArtifactRunning()) {
+        // Interrupt any currently running command
+        shell.interruptCurrentCommand();
+      }
+
+      // Setup deploy configuration
+      await this.setupDeployConfig(shell);
+
+      // Navigate to working directory
+      const container = await this.container;
+
+      await this.#runShellCommand(shell, `cd ${container.workdir}`);
+
+      // Run development server
+      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
+        await this.#runShellCommand(shell, 'bun update && bun run dev');
+      } else {
+        await this.#runShellCommand(shell, 'bun update && npx -y @agent8/deploy --preview && bun run dev');
+      }
+    } catch (error) {
+      logger.error('[RunPreview] Error:', error);
+      throw error;
+    }
+  }
+
   async publish(chatId: string, title: string) {
     this.currentView.set('code');
 
@@ -1079,6 +1125,11 @@ export class WorkbenchStore {
     await shell.ready;
 
     try {
+      if (!this.hasArtifactRunning()) {
+        // Interrupt any currently running command
+        shell.interruptCurrentCommand();
+      }
+
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
       await this.#runShellCommand(shell, 'bun update');

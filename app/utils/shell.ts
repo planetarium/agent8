@@ -171,6 +171,21 @@ export class BoltShell {
     }
   }
 
+  /**
+   * Interrupts the currently running command by sending Ctrl+C (SIGINT)
+   * @returns true if a command was interrupted, false otherwise
+   */
+  interruptCurrentCommand(): boolean {
+    const currentState = this.executionState.get();
+
+    if (currentState?.active && this.#terminal) {
+      this.#terminal.input('\x03');
+      return true;
+    }
+
+    return false;
+  }
+
   private async _isSessionValid(): Promise<boolean> {
     if (!this.#container || !this.#shellSession || !this.#terminal) {
       logger.debug('BoltShell: Session validation failed - missing components');
