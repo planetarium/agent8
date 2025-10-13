@@ -42,11 +42,13 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
 
 export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
   return tool({
-    description: 'Submit the result or artifact for the request. Must be called.',
+    description:
+      "Apply the user's request as concrete project changes and return the result only via this tool. Do not print code or artifacts outside this call.",
     inputSchema: z
       .object({
         id: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
-        title: z.string().optional().describe('Descriptive title of the artifact'),
+        title: z.string().min(1).max(80).optional().describe('Descriptive title of the artifact'),
+        summary: z.string().min(10).max(400).optional().describe('1-3 sentences: what changed and why.'),
         actions: z.array(ACTION_SCHEMA).describe('List of file/modify/shell actions'),
       })
       .superRefine((arg, _ctx) => {
