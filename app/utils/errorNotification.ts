@@ -1,5 +1,6 @@
 import { createScopedLogger } from '~/utils/logger';
 import { toast } from 'react-toastify';
+import { getErrorFilter } from '~/constants/errorFilters';
 
 const logger = createScopedLogger('ErrorNotificationUtil');
 
@@ -89,15 +90,23 @@ export function handleChatError(
   context?: string,
   toastType: 'error' | 'warning' = 'error',
 ): void {
+  // Check if error matches any filter
+  const filter = getErrorFilter(error);
+
+  // Use replacement message if available, otherwise use original message
+  const displayMessage = filter?.replacementMessage || message;
+
   // Show toast notification
   if (toastType === 'error') {
-    toast.error(message);
+    toast.error(displayMessage);
   } else {
-    toast.warning(message);
+    toast.warning(displayMessage);
   }
 
-  // Send Slack notification (don't await to avoid blocking UI)
-  sendChatErrorWithToastMessage(message, error, context).catch((notificationError) => {
-    logger.error('Failed to send error notification for:', message, notificationError);
-  });
+  // Send Slack notification only if error is not filtered (don't await to avoid blocking UI)
+  if (!filter) {
+    sendChatErrorWithToastMessage(message, error, context).catch((notificationError) => {
+      logger.error('Failed to send error notification for:', message, notificationError);
+    });
+  }
 }
