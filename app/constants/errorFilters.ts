@@ -41,6 +41,12 @@ export const ERROR_FILTERS: ErrorFilter[] = [
     caseSensitive: false,
     replacementMessage: 'The selected model is not available in your current location.',
   },
+  {
+    pattern: 'Insufficient credit',
+    reason: 'Verse8 API error',
+    caseSensitive: false,
+    replacementMessage: "You don't have enough credit",
+  },
 ];
 
 /**
