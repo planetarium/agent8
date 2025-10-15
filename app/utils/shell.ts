@@ -2,6 +2,7 @@ import type { Container, ExecutionResult, ShellSession } from '~/lib/container/i
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 import { createScopedLogger } from '~/utils/logger';
+import { SHELL_COMMANDS } from './constants';
 
 const logger = createScopedLogger('BoltShell');
 
@@ -13,6 +14,8 @@ export class BoltShell {
   #container: Container | undefined;
   #terminal: ITerminal | undefined;
   #shellSession: ShellSession | undefined;
+  #devServerRunning: boolean = false;
+
   executionState = atom<
     { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
   >();
@@ -127,9 +130,18 @@ export class BoltShell {
     // Utilize advanced features from container API
     if (this.#container && this.#terminal) {
       if (this.#shellSession?.executeCommand) {
+        if (this.#devServerRunning) {
+          this.#devServerRunning = false;
+          this.interruptCurrentCommand();
+        }
+
         // Use the pre-implemented executeCommand function
         const executionPromise = this.#shellSession.executeCommand(command);
         this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
+
+        if (command.includes(SHELL_COMMANDS.START_DEV_SERVER)) {
+          this.#devServerRunning = true;
+        }
 
         const resp = await executionPromise;
         this.executionState.set({ sessionId, active: false });

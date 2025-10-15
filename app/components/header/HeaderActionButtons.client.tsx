@@ -12,6 +12,7 @@ import type { ActionCallbackData } from '~/lib/runtime/message-parser';
 import { streamingState } from '~/lib/stores/streaming';
 import { NetlifyDeploymentLink } from '~/components/chat/NetlifyDeploymentLink.client';
 import { repoStore } from '~/lib/stores/repo';
+import { SHELL_COMMANDS } from '~/utils/constants';
 interface HeaderActionButtonsProps {}
 
 export function HeaderActionButtons({}: HeaderActionButtonsProps) {
@@ -68,7 +69,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
         actionId,
         action: {
           type: 'build' as const,
-          content: 'bun run build',
+          content: SHELL_COMMANDS.BUILD_PROJECT,
         },
       };
 
