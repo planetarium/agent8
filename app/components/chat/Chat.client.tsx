@@ -55,7 +55,6 @@ import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHi
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
-import { SETTINGS_KEYS } from '~/lib/stores/settings';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
@@ -329,17 +328,7 @@ export const ChatImpl = memo(
         break;
       }
 
-      await workbench.setupDeployConfig(shell);
-
-      const container = await workbench.container;
-      await shell.executeCommand(Date.now().toString(), `cd ${container.workdir}`);
-      await shell.waitTillOscCode('prompt');
-
-      if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        shell.executeCommand(Date.now().toString(), 'bun update && bun run dev');
-      } else {
-        shell.executeCommand(Date.now().toString(), 'bun update && npx -y @agent8/deploy --preview && bun run dev');
-      }
+      await workbench.runPreview();
     };
 
     const lastSendMessageTime = useRef(0);
