@@ -150,7 +150,11 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
       sendEventToParent('EVENT', { name: 'START_EDITING' });
     }
 
-    changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+    const timeoutId = setTimeout(() => {
+      changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
@@ -333,7 +337,21 @@ export const ChatImpl = memo(
 
     const lastSendMessageTime = useRef(0);
     const promptProcessed = useRef(false);
-    const autorunRequested = useRef(false);
+
+    // Check for run=auto in URL at initialization
+    const initialAutorun = (() => {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const runParam = urlParams.get('run');
+        const hasPrompt = !!urlParams.get('prompt');
+
+        return runParam === 'auto' && hasPrompt;
+      }
+
+      return false;
+    })();
+
+    const autorunRequested = useRef(initialAutorun);
     const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
     const [attachmentList, setAttachmentList] = useState<ChatAttachment[]>([]);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -360,9 +378,27 @@ export const ChatImpl = memo(
 
     const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
     const [input, setInput] = useState(() => {
-      return initialMessages.length > 0
-        ? Cookies.get(PROMPT_COOKIE_KEY) || ''
-        : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlPrompt = urlParams.get('prompt');
+
+        if (urlPrompt) {
+          try {
+            const decoded = decodeURIComponent(urlPrompt);
+
+            return decoded;
+          } catch {
+            return urlPrompt;
+          }
+        }
+      }
+
+      const result =
+        initialMessages.length > 0
+          ? Cookies.get(PROMPT_COOKIE_KEY) || ''
+          : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+
+      return result;
     });
     const [chatData, setChatData] = useState<any[]>([]);
 
@@ -459,29 +495,31 @@ export const ChatImpl = memo(
       const prompt = searchParams.get('prompt');
       const autorun = searchParams.get('run');
 
-      if (prompt && !promptProcessed.current && !input) {
-        try {
-          const decodedPrompt = decodeURIComponent(prompt);
-          setInput(decodedPrompt);
-          setSearchParams({});
-          promptProcessed.current = true;
+      // Process if prompt exists in URL
+      if (prompt && !promptProcessed.current) {
+        const defaultPrompt =
+          'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
 
-          // Check if autorun is requested
-          if (autorun === 'auto') {
-            autorunRequested.current = true;
+        // Apply URL prompt only if input is empty or matches default prompt
+        if (!input || input === defaultPrompt) {
+          try {
+            const decodedPrompt = decodeURIComponent(prompt);
+
+            setInput(decodedPrompt);
+
+            if (autorun === 'auto') {
+              autorunRequested.current = true;
+            }
+          } catch (error) {
+            console.error('Error decoding prompt parameter:', error);
+            setInput(prompt);
+
+            if (autorun === 'auto') {
+              autorunRequested.current = true;
+            }
           }
-        } catch (error) {
-          console.error('Error decoding prompt parameter:', error);
 
-          // If decoding fails, use the original prompt
-          setInput(prompt);
-          setSearchParams({});
           promptProcessed.current = true;
-
-          // Check if autorun is requested
-          if (autorun === 'auto') {
-            autorunRequested.current = true;
-          }
         }
       }
     }, [searchParams, input, setInput, setSearchParams]);
@@ -613,7 +651,7 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
-      // 인증 체크 - 인증되지 않은 경우 부모에게 알리고 리턴
+      // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
         return;
@@ -907,7 +945,7 @@ export const ChatImpl = memo(
 
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
 
-          // 에러 메시지가 의미있는 내용인지 확인
+          // Check if error message has meaningful content
           if (
             errorMessage.trim() &&
             errorMessage !== 'Not Found Template' &&
@@ -1022,6 +1060,11 @@ export const ChatImpl = memo(
         !enhancingPrompt &&
         (!chatStarted || Object.keys(files).length > 0) // For existing chats, ensure workbenchFiles are loaded
       ) {
+        // Wait for authentication before auto-run (flag is preserved for retry)
+        if (!isAuthenticated) {
+          return;
+        }
+
         autorunRequested.current = false;
 
         // Use setTimeout to ensure UI is ready
@@ -1029,7 +1072,18 @@ export const ChatImpl = memo(
           sendMessage({} as React.UIEvent);
         }, 100);
       }
-    }, [input, isLoading, fakeLoading, provider, model, enhancingPrompt, sendMessage, chatStarted, files]);
+    }, [
+      input,
+      isLoading,
+      fakeLoading,
+      provider,
+      model,
+      enhancingPrompt,
+      sendMessage,
+      chatStarted,
+      files,
+      isAuthenticated,
+    ]);
 
     /**
      * Handles the change event for the textarea and updates the input state.
