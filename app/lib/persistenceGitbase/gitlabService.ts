@@ -1384,4 +1384,275 @@ export class GitlabService {
       throw new Error(`Failed to get tags: ${errorMessage}`);
     }
   }
+
+  // ===== DEV TOKEN MANAGEMENT =====
+
+  async getProjectTokens(projectId: number): Promise<any[]> {
+    try {
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get project tokens: ${errorMessage}`);
+    }
+  }
+
+  async revokeProjectToken(projectId: number, tokenId: number): Promise<void> {
+    try {
+      logger.info(`Attempting to revoke token ${tokenId} for project ${projectId}`);
+
+      // Use gitlab-api library for better error handling
+      await this.gitlab.ProjectAccessTokens.revoke(projectId, tokenId);
+
+      logger.info(`Token ${tokenId} revoked successfully using gitlab-api`);
+    } catch (error: any) {
+      logger.error(`Failed to revoke token ${tokenId}:`, error);
+
+      // Fallback to direct API call if gitlab-api fails
+      try {
+        logger.info(`Trying direct API call as fallback for token ${tokenId}`);
+
+        const response = await axios.delete(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens/${tokenId}`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        });
+        logger.info(`Token ${tokenId} revoked successfully via direct API. Status: ${response.status}`);
+      } catch (directError: any) {
+        logger.error(`Direct API call also failed for token ${tokenId}:`, {
+          status: directError.response?.status,
+          statusText: directError.response?.statusText,
+          data: directError.response?.data,
+          message: directError.message,
+        });
+
+        const errorMessage = directError.response?.data?.message || directError.message || 'Unknown error';
+        throw new Error(`Failed to revoke project token: ${errorMessage}`);
+      }
+    }
+  }
+
+  async revokeAllProjectTokens(projectId: number): Promise<void> {
+    try {
+      logger.info(`Starting to revoke all dev tokens for project ${projectId}`);
+
+      const tokens = await this.getProjectTokens(projectId);
+
+      // Filter for active dev tokens only
+      const devTokens = tokens.filter((token) => {
+        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isNotRevoked = !token.revoked && token.active !== false;
+        const isNotExpired = new Date(token.expires_at) > new Date();
+
+        return isDevToken && isNotRevoked && isNotExpired;
+      });
+
+      logger.info(`Found ${devTokens.length} active dev tokens to revoke`);
+
+      if (devTokens.length === 0) {
+        logger.info('No active dev tokens found to revoke');
+        return;
+      }
+
+      const revokePromises = devTokens.map(async (token) => {
+        try {
+          await this.revokeProjectToken(projectId, token.id);
+          logger.info(`Successfully revoked token ${token.id} (${token.name})`);
+        } catch (error) {
+          logger.error(`Failed to revoke token ${token.id} (${token.name}):`, error);
+          throw error; // Re-throw to fail the whole operation
+        }
+      });
+
+      await Promise.all(revokePromises);
+      logger.info(`Successfully revoked all ${devTokens.length} dev tokens`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Failed to revoke all project tokens:`, error);
+      throw new Error(`Failed to revoke all project tokens: ${errorMessage}`);
+    }
+  }
+
+  async createDevToken(projectId: number): Promise<{
+    token: string;
+    id: number;
+    name: string;
+    scopes: string[];
+    expires_at: string;
+    access_level: number;
+  }> {
+    try {
+      // Create expiry date (30 days from now)
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+
+      const expiresAt = expiryDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      const tokenData = {
+        name: `git-dev-${Date.now()}`,
+        scopes: ['read_repository', 'write_repository', 'read_api'],
+        access_level: 30, // Developer level
+        expires_at: expiresAt,
+      };
+
+      const response = await axios.post(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`, tokenData, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const axiosError = error as any;
+      const responseData = axiosError?.response?.data;
+      const statusCode = axiosError?.response?.status;
+
+      logger.error('Failed to create dev token', {
+        error: errorMessage,
+        projectId,
+        statusCode,
+        responseData,
+        requestUrl: `${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`,
+      });
+
+      throw new Error(`Failed to create dev token: ${errorMessage}`);
+    }
+  }
+
+  async getActiveDevToken(projectId: number): Promise<{
+    hasToken: boolean;
+    expiresAt?: string;
+    daysLeft?: number;
+    tokenName?: string;
+  }> {
+    try {
+      const tokens = await this.getProjectTokens(projectId);
+
+      // Find active dev tokens (not revoked and not expired)
+      const activeDevTokens = tokens.filter((token) => {
+        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isNotExpired = new Date(token.expires_at) > new Date();
+        const isNotRevoked = !token.revoked && token.active !== false;
+
+        return isDevToken && isNotExpired && isNotRevoked;
+      });
+
+      if (activeDevTokens.length === 0) {
+        return { hasToken: false };
+      }
+
+      // Get the most recently created token
+      const latestToken = activeDevTokens.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )[0];
+
+      const expiresAt = latestToken.expires_at;
+      const daysLeft = Math.ceil((new Date(expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+      return {
+        hasToken: true,
+        expiresAt,
+        daysLeft,
+        tokenName: latestToken.name,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get active dev token: ${errorMessage}`);
+    }
+  }
+
+  async getActiveDevTokensList(projectId: number): Promise<
+    Array<{
+      id: number;
+      name: string;
+      expires_at: string;
+      daysLeft: number;
+      created_at: string;
+      revoked: boolean;
+    }>
+  > {
+    try {
+      const tokens = await this.getProjectTokens(projectId);
+
+      // Find active dev tokens (not revoked and not expired)
+      const activeDevTokens = tokens.filter((token) => {
+        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isNotExpired = new Date(token.expires_at) > new Date();
+        const isNotRevoked = !token.revoked && token.active !== false;
+
+        return isDevToken && isNotExpired && isNotRevoked;
+      });
+
+      return activeDevTokens
+        .map((token) => {
+          const daysLeft = Math.ceil(
+            (new Date(token.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+          );
+
+          return {
+            id: token.id,
+            name: token.name,
+            expires_at: token.expires_at,
+            daysLeft,
+            created_at: token.created_at,
+            revoked: !!token.revoked || token.active === false,
+          };
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get active dev tokens list: ${errorMessage}`);
+    }
+  }
+
+  async getAllDevTokensList(projectId: number): Promise<
+    Array<{
+      id: number;
+      name: string;
+      expires_at: string;
+      daysLeft: number;
+      created_at: string;
+      revoked: boolean;
+      expired: boolean;
+    }>
+  > {
+    try {
+      const tokens = await this.getProjectTokens(projectId);
+
+      // Find all dev tokens (active, revoked, and expired)
+      const allDevTokens = tokens.filter(
+        (token) => token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository'),
+      );
+
+      return allDevTokens
+        .map((token) => {
+          const now = new Date();
+          const expiresAt = new Date(token.expires_at);
+          const daysLeft = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const isExpired = expiresAt <= now;
+          const isRevoked = !!token.revoked || token.active === false;
+
+          return {
+            id: token.id,
+            name: token.name,
+            expires_at: token.expires_at,
+            daysLeft: Math.max(0, daysLeft),
+            created_at: token.created_at,
+            revoked: isRevoked,
+            expired: isExpired,
+          };
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get all dev tokens list: ${errorMessage}`);
+    }
+  }
 }

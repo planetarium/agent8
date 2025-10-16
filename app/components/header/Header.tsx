@@ -7,6 +7,7 @@ import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { useSearchParams } from '@remix-run/react';
 import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
+import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import WithTooltip from '~/components/ui/Tooltip';
@@ -58,6 +59,7 @@ export function Header() {
             </span>
             <div className="flex items-center gap-3">
               {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
+              {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}
               <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
             </div>
           </>

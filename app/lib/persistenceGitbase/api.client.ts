@@ -427,3 +427,45 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
 
   return response.data;
 };
+
+// ===== DEV TOKEN API FUNCTIONS =====
+
+export const createDevToken = async (projectPath: string) => {
+  const response = await axios.post('/api/gitlab/dev-token', {
+    projectPath,
+  });
+
+  return response.data;
+};
+
+export const getDevTokenStatus = async (projectPath: string) => {
+  const response = await axios.get('/api/gitlab/dev-token', {
+    params: { projectPath },
+  });
+
+  return response.data;
+};
+
+export const revokeAllDevTokens = async (projectPath: string) => {
+  const response = await axios.delete('/api/gitlab/dev-token', {
+    data: { projectPath },
+  });
+
+  return response.data;
+};
+
+export const revokeDevToken = async (projectPath: string, tokenId: number) => {
+  const response = await axios.delete('/api/gitlab/dev-token', {
+    data: { projectPath, tokenId },
+  });
+
+  return response.data;
+};
+
+export const getGitCommands = async (projectPath: string) => {
+  const response = await axios.get('/api/gitlab/git-commands', {
+    params: { projectPath },
+  });
+
+  return response.data;
+};
