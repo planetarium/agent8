@@ -428,8 +428,6 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
   return response.data;
 };
 
-// ===== DEV TOKEN API FUNCTIONS =====
-
 export const createDevToken = async (projectPath: string) => {
   const response = await axios.post('/api/gitlab/dev-token', {
     projectPath,

@@ -25,22 +25,18 @@ async function gitCommandsLoader({ context, request }: ActionFunctionArgs) {
   try {
     const gitlabService = new GitlabService(env);
 
-    // Get project and verify ownership (simple check)
     const project = await gitlabService.gitlab.Projects.show(projectPath);
     const projectOwner = await gitlabService.getOrCreateUser(user.email);
 
-    // Simple ownership check - GitLab already validates access
     if (project.namespace?.id !== projectOwner.namespace_id) {
       return json({ success: false, message: 'Only project owner can get git commands' }, { status: 403 });
     }
 
-    // Check if there's an active token
     const tokenStatus = await gitlabService.getActiveDevToken(project.id);
 
     const gitlabHost = gitlabService.gitlabUrl.replace('https://', '');
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;
 
-    // Generate commands based on token availability
     const commands = {
       projectInfo: {
         path: projectPath,

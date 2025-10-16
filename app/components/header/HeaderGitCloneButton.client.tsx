@@ -14,7 +14,6 @@ import {
   revokeDevToken,
 } from '~/lib/persistenceGitbase/api.client';
 
-// Code download icon component
 function CodeIcon({ width = 20, height = 20 }: { width?: number; height?: number }) {
   return (
     <svg width={width} height={height} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,7 +28,6 @@ function CodeIcon({ width = 20, height = 20 }: { width?: number; height?: number
   );
 }
 
-// Copy icon component
 function CopyIcon({ width = 16, height = 16 }: { width?: number; height?: number }) {
   return (
     <svg width={width} height={height} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -73,17 +71,44 @@ export function HeaderGitCloneButton() {
     }>;
   }>({});
 
-  // Copy button states
-  const [copiedToken, setCopiedToken] = useState(false);
-  const [copiedCommand, setCopiedCommand] = useState(false);
-  const [copiedUpdateCommand, setCopiedUpdateCommand] = useState(false);
+  const [copiedStates, setCopiedStates] = useState({
+    token: false,
+    command: false,
+    updateCommand: false,
+  });
 
-  // Check if there's an existing token when modal opens
   useEffect(() => {
     if (isModalOpen && repo.path) {
       checkTokenStatus();
     }
   }, [isModalOpen, repo.path]);
+
+  const handleError = (error: any, action: string) => {
+    if (error.response?.status === 403) {
+      const errorData = error.response.data;
+
+      if (errorData?.error === 'PERMISSION_DENIED') {
+        toast.error('Access Denied: You are not the owner of this project');
+      } else {
+        toast.error(`You do not have permission to ${action}`);
+      }
+    } else {
+      const message = error.response?.data?.message || error.message || 'Unknown error';
+      toast.error(`Failed to ${action}: ${message}`);
+    }
+  };
+
+  const handleCopy = async (text: string, type: 'token' | 'command' | 'updateCommand', successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedStates((prev) => ({ ...prev, [type]: true }));
+      setTimeout(() => setCopiedStates((prev) => ({ ...prev, [type]: false })), 2000);
+      toast.success(successMessage);
+    } catch (error) {
+      console.error(error);
+      toast.error(`Failed to copy ${type}`);
+    }
+  };
 
   const checkTokenStatus = async () => {
     if (!repo.path) {
@@ -104,7 +129,7 @@ export function HeaderGitCloneButton() {
         });
       }
     } catch (error) {
-      console.error('Failed to check token status:', error);
+      handleError(error, 'check token status');
     } finally {
       setIsLoading(false);
     }
@@ -130,28 +155,14 @@ export function HeaderGitCloneButton() {
         });
         toast.success('Git token generated successfully!');
       } else {
-        // Handle specific error responses from backend
         if (response.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
+          toast.error('Access Denied: You are not the owner of this project');
         } else {
           toast.error(`Failed to generate token: ${response.message || 'Unknown error'}`);
         }
       }
     } catch (error: any) {
-      console.error('Failed to generate token:', error);
-
-      // Handle HTTP error responses
-      if (error.response?.status === 403) {
-        const errorData = error.response.data;
-
-        if (errorData?.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
-        } else {
-          toast.error('❌ You do not have permission to generate tokens for this project');
-        }
-      } else {
-        toast.error('Failed to generate token. Please try again.');
-      }
+      handleError(error, 'generate token');
     } finally {
       setIsLoading(false);
     }
@@ -165,41 +176,20 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      console.log(`Attempting to revoke all tokens for project ${repo.path}`);
-
       const response = await revokeAllDevTokens(repo.path);
 
-      console.log('Revoke all response:', response);
-
       if (response.success) {
-        // Refresh token list to show updated state
         await checkTokenStatus();
         toast.success('All active tokens revoked successfully!');
       } else {
-        console.error('Revoke all failed:', response.message);
-
         if (response.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
+          toast.error('Access Denied: You are not the owner of this project');
         } else {
           toast.error(`Failed to revoke tokens: ${response.message}`);
         }
       }
     } catch (error: any) {
-      console.error('Failed to revoke tokens:', error);
-
-      // Handle HTTP error responses
-      if (error.response?.status === 403) {
-        const errorData = error.response.data;
-
-        if (errorData?.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
-        } else {
-          toast.error('❌ You do not have permission to revoke tokens for this project');
-        }
-      } else {
-        const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-        toast.error(`Failed to revoke tokens: ${errorMessage}`);
-      }
+      handleError(error, 'revoke tokens');
     } finally {
       setIsLoading(false);
     }
@@ -213,83 +203,24 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      console.log(`Attempting to revoke token ${tokenId} for project ${repo.path}`);
-
       const response = await revokeDevToken(repo.path, tokenId);
 
-      console.log('Revoke response:', response);
-
       if (response.success) {
-        // Refresh token list
         await checkTokenStatus();
         toast.success('Token revoked successfully!');
       } else {
-        console.error('Revoke failed:', response.message);
-
         if (response.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
+          toast.error('Access Denied: You are not the owner of this project');
         } else {
           toast.error(`Failed to revoke token: ${response.message}`);
         }
       }
     } catch (error: any) {
-      console.error('Failed to revoke token:', error);
-
-      // Handle HTTP error responses
-      if (error.response?.status === 403) {
-        const errorData = error.response.data;
-
-        if (errorData?.error === 'PERMISSION_DENIED') {
-          toast.error('❌ Access Denied: You are not the owner of this project');
-        } else {
-          toast.error('❌ You do not have permission to revoke tokens for this project');
-        }
-      } else {
-        const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-        toast.error(`Failed to revoke token: ${errorMessage}`);
-      }
+      handleError(error, 'revoke token');
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleCopyToken = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-      toast.success('Token copied to clipboard!');
-    } catch (error) {
-      console.error('Failed to copy token:', error);
-      toast.error('Failed to copy token');
-    }
-  };
-
-  const handleCopyCommand = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedCommand(true);
-      setTimeout(() => setCopiedCommand(false), 2000);
-      toast.success('Command copied to clipboard!');
-    } catch (error) {
-      console.error('Failed to copy command:', error);
-      toast.error('Failed to copy command');
-    }
-  };
-
-  const handleCopyUpdateCommand = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedUpdateCommand(true);
-      setTimeout(() => setCopiedUpdateCommand(false), 2000);
-      toast.success('Update command copied to clipboard!');
-    } catch (error) {
-      console.error('Failed to copy update command:', error);
-      toast.error('Failed to copy update command');
-    }
-  };
-
-  // Get expiry color based on days left
   const getExpiryColor = (daysLeft: number) => {
     if (daysLeft < 3) {
       return 'text-red-500';
@@ -318,7 +249,7 @@ export function HeaderGitCloneButton() {
               <CodeIcon width={20} height={20} />
             </div>
             <span className="text-sm font-semibold leading-[142.9%] text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
-              Clone Code
+              Git Access
             </span>
           </button>
         </Tooltip.Trigger>
@@ -330,7 +261,7 @@ export function HeaderGitCloneButton() {
             align="end"
             alignOffset={0}
           >
-            Generate access tokens to clone and work with code locally
+            Get git access to clone and develop this project locally
             <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
           </Tooltip.Content>
         </Tooltip.Portal>
@@ -359,9 +290,7 @@ export function HeaderGitCloneButton() {
                 <div className="text-white/90">
                   <CodeIcon width={24} height={24} />
                 </div>
-                <span className="text-primary text-[20px] font-semibold leading-[140%] flex-[1_0_0]">
-                  Clone Code Access
-                </span>
+                <span className="text-primary text-[20px] font-semibold leading-[140%] flex-[1_0_0]">Git Access</span>
                 <button onClick={() => setIsModalOpen(false)} className="bg-transparent text-white/80 hover:text-white">
                   <CloseIcon width={20} height={20} />
                 </button>
@@ -416,77 +345,83 @@ export function HeaderGitCloneButton() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-bolt-elements-textPrimary">Access Token</span>
                             <button
-                              onClick={() => handleCopyToken(tokenData.token!)}
-                              className="flex items-center gap-1 px-2 py-1 rounded bg-bolt-elements-background hover:bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                              onClick={() => handleCopy(tokenData.token!, 'token', 'Token copied to clipboard!')}
+                              className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
                               title="Copy token"
                             >
                               <CopyIcon width={14} height={14} />
-                              <span className="text-[12px]">{copiedToken ? '✓ Copied' : 'Copy'}</span>
+                              <span className="text-[12px]">{copiedStates.token ? '✓ Copied' : 'Copy'}</span>
                             </button>
                           </div>
                           <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
                             {tokenData.token}
                           </code>
-                          <span className="text-[11px] text-yellow-500/80">
-                            ⚠️ Keep this token secure. It will only be shown once.
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-bolt-elements-textPrimary">Clone Command</span>
-                            <button
-                              onClick={() => handleCopyCommand(tokenData.cloneCommand!)}
-                              className="flex items-center gap-1 px-2 py-1 rounded bg-bolt-elements-background hover:bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
-                              title="Copy command"
-                            >
-                              <CopyIcon width={14} height={14} />
-                              <span className="text-[12px]">{copiedCommand ? '✓ Copied' : 'Copy'}</span>
-                            </button>
-                          </div>
-                          <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
-                            {tokenData.cloneCommand}
-                          </code>
+                          <span className="text-[11px] text-yellow-500/80">🔒 This token will only be shown once.</span>
                         </div>
 
                         <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-bolt-elements-textPrimary">
-                              Token Update Command
+                              Clone Git Repository Command
                             </span>
                             <button
                               onClick={() =>
-                                handleCopyUpdateCommand(
-                                  `git remote set-url origin https://oauth2:${tokenData.token}@${tokenData.cloneCommand?.split('@')[1]}`,
-                                )
+                                handleCopy(`$ ${tokenData.cloneCommand!}`, 'command', 'Command copied to clipboard!')
                               }
-                              className="flex items-center gap-1 px-2 py-1 rounded bg-bolt-elements-background hover:bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
-                              title="Copy update command"
+                              className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                              title="Copy command"
                             >
                               <CopyIcon width={14} height={14} />
-                              <span className="text-[12px]">{copiedUpdateCommand ? '✓ Copied' : 'Copy'}</span>
+                              <span className="text-[12px]">{copiedStates.command ? '✓ Copied' : 'Copy'}</span>
                             </button>
                           </div>
                           <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
-                            git remote set-url origin https://oauth2:{tokenData.token}@
+                            $ {tokenData.cloneCommand}
+                          </code>
+                          <span className="text-[11px] text-blue-400/80">
+                            💡 Use this command to clone the repository with access token
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                              Refresh AccessToken Command
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleCopy(
+                                  `$ git remote set-url origin https://oauth2:${tokenData.token}@${tokenData.cloneCommand?.split('@')[1]}`,
+                                  'updateCommand',
+                                  'Update command copied to clipboard!',
+                                )
+                              }
+                              className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
+                              title="Copy update command"
+                            >
+                              <CopyIcon width={14} height={14} />
+                              <span className="text-[12px]">{copiedStates.updateCommand ? '✓ Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                          <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
+                            $ git remote set-url origin https://oauth2:{tokenData.token}@
                             {tokenData.cloneCommand?.split('@')[1]}
                           </code>
-                          <span className="text-[11px] text-yellow-500/80">
-                            💡 Use this command in existing repos when your token expires
-                          </span>
                           <span className="text-[11px] text-blue-400/80">
-                            ℹ️ Clone command uses develop branch by default. Switch to develop if not already: `git
-                            checkout develop`
+                            💡 Use this command to update existing repositories with a new token
                           </span>
                         </div>
 
                         <div className="text-[12px] text-white/60">
-                          <p>Token expires in 30 days. After cloning:</p>
+                          <p>✨ Quick start guide:</p>
                           <ol className="list-decimal list-inside mt-1 space-y-1">
-                            <li>cd into the project directory</li>
-                            <li>Ensure you're on the develop branch: `git branch`</li>
-                            <li>Make your changes locally</li>
-                            <li>Commit and push to develop: `git push origin develop`</li>
+                            <li>
+                              Navigate to project: <code>cd project-name</code>
+                            </li>
+                            <li>Make your changes and commit</li>
+                            <li>
+                              Push changes: <code>git push origin develop</code>
+                            </li>
                           </ol>
                         </div>
                       </>
@@ -494,32 +429,34 @@ export function HeaderGitCloneButton() {
                       <div className="flex flex-col gap-3 items-center justify-center py-6 self-stretch">
                         <span className="text-sm text-bolt-elements-textSecondary text-center">
                           {tokenData.tokens && tokenData.tokens.length > 0
-                            ? 'Generate a new token to get the clone command with fresh credentials.'
-                            : 'No active Git access token. Generate one to clone this project locally.'}
+                            ? 'Create a new token to get updated clone commands with fresh credentials.'
+                            : 'Create an access token to start working with this project locally.'}
                         </span>
                       </div>
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-3 self-stretch">
-                      <button
-                        onClick={handleGenerateToken}
-                        disabled={isLoading}
-                        className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-[#1A92A4] hover:bg-[#1A7583] active:bg-[#1B5862] text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isLoading ? 'Generating...' : 'Generate New Token'}
-                      </button>
-
-                      {tokenData.tokens && tokenData.tokens.length > 0 && (
+                    {!tokenData.token && (
+                      <div className="flex gap-3 self-stretch">
                         <button
-                          onClick={handleRevokeAllTokens}
+                          onClick={handleGenerateToken}
                           disabled={isLoading}
-                          className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-zinc-600 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-[#1A92A4] hover:bg-[#1A7583] active:bg-[#1B5862] text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isLoading ? 'Revoking...' : 'Revoke All Tokens'}
+                          {isLoading ? 'Generating...' : 'Generate New Token'}
                         </button>
-                      )}
-                    </div>
+
+                        {tokenData.tokens && tokenData.tokens.length > 0 && (
+                          <button
+                            onClick={handleRevokeAllTokens}
+                            disabled={isLoading}
+                            className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-zinc-600 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isLoading ? 'Revoking...' : 'Revoke All Tokens'}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

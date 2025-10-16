@@ -1487,16 +1487,15 @@ export class GitlabService {
     access_level: number;
   }> {
     try {
-      // Create expiry date (30 days from now)
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30);
 
-      const expiresAt = expiryDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const expiresAt = expiryDate.toISOString().split('T')[0];
 
       const tokenData = {
         name: `git-dev-${Date.now()}`,
         scopes: ['read_repository', 'write_repository', 'read_api'],
-        access_level: 30, // Developer level
+        access_level: 30,
         expires_at: expiresAt,
       };
 

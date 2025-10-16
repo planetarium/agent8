@@ -26,7 +26,6 @@ async function devTokenLoader({ context, request }: ActionFunctionArgs) {
   try {
     const gitlabService = new GitlabService(env);
 
-    // Get project and verify ownership using dedicated method
     const project = await gitlabService.gitlab.Projects.show(projectPath);
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
@@ -42,7 +41,6 @@ async function devTokenLoader({ context, request }: ActionFunctionArgs) {
       );
     }
 
-    // Get active dev token status and active tokens list only
     const tokenStatus = await gitlabService.getActiveDevToken(project.id);
     const tokensList = await gitlabService.getActiveDevTokensList(project.id);
 
@@ -91,12 +89,12 @@ async function devTokenAction({ context, request }: ActionFunctionArgs) {
  * Create new dev token
  */
 async function createDevToken(
-  args: { context: any; request: Request },
+  { request }: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
 ) {
   try {
-    const body = (await args.request.json()) as { projectPath: string };
+    const body = (await request.json()) as { projectPath: string };
     const { projectPath } = body;
 
     if (!projectPath) {
@@ -105,7 +103,6 @@ async function createDevToken(
 
     const gitlabService = new GitlabService(env);
 
-    // Get project and verify ownership using dedicated method
     const project = await gitlabService.gitlab.Projects.show(projectPath);
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
@@ -121,7 +118,6 @@ async function createDevToken(
       );
     }
 
-    // Create new dev token (this will revoke existing ones)
     const tokenData = await gitlabService.createDevToken(project.id);
 
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;
@@ -130,7 +126,7 @@ async function createDevToken(
     return json({
       success: true,
       data: {
-        token: tokenData.token, // Only exposed once
+        token: tokenData.token,
         projectPath,
         gitUrl,
         cloneCommand,
@@ -155,7 +151,7 @@ async function createDevToken(
  * Revoke all dev tokens
  */
 async function revokeAllDevTokens(
-  args: { context: any; request: Request },
+  _args: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
   projectPath: string,
@@ -167,7 +163,6 @@ async function revokeAllDevTokens(
 
     const gitlabService = new GitlabService(env);
 
-    // Get project and verify ownership using dedicated method
     const project = await gitlabService.gitlab.Projects.show(projectPath);
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
@@ -183,7 +178,6 @@ async function revokeAllDevTokens(
       );
     }
 
-    // Revoke all dev tokens
     await gitlabService.revokeAllProjectTokens(project.id);
 
     return json({
@@ -205,7 +199,7 @@ async function revokeAllDevTokens(
  * Revoke individual dev token
  */
 async function revokeDevToken(
-  args: { context: any; request: Request },
+  _args: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
   tokenId: number,
@@ -218,7 +212,6 @@ async function revokeDevToken(
 
     const gitlabService = new GitlabService(env);
 
-    // Get project and verify ownership using dedicated method
     const project = await gitlabService.gitlab.Projects.show(projectPath);
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
@@ -234,7 +227,6 @@ async function revokeDevToken(
       );
     }
 
-    // Revoke specific dev token
     await gitlabService.revokeProjectToken(project.id, tokenId);
     logger.info(`Successfully revoked token ${tokenId} for project ${projectPath}`);
 
