@@ -129,10 +129,29 @@ export function HeaderGitCloneButton() {
           daysLeft: response.data.expiresInDays,
         });
         toast.success('Git token generated successfully!');
+      } else {
+        // Handle specific error responses from backend
+        if (response.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error(`Failed to generate token: ${response.message || 'Unknown error'}`);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to generate token:', error);
-      toast.error('Failed to generate token. Please try again.');
+
+      // Handle HTTP error responses
+      if (error.response?.status === 403) {
+        const errorData = error.response.data;
+
+        if (errorData?.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error('❌ You do not have permission to generate tokens for this project');
+        }
+      } else {
+        toast.error('Failed to generate token. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -158,14 +177,29 @@ export function HeaderGitCloneButton() {
         toast.success('All active tokens revoked successfully!');
       } else {
         console.error('Revoke all failed:', response.message);
-        toast.error(`Failed to revoke tokens: ${response.message}`);
+
+        if (response.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error(`Failed to revoke tokens: ${response.message}`);
+        }
       }
     } catch (error: any) {
       console.error('Failed to revoke tokens:', error);
 
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      // Handle HTTP error responses
+      if (error.response?.status === 403) {
+        const errorData = error.response.data;
 
-      toast.error(`Failed to revoke tokens: ${errorMessage}`);
+        if (errorData?.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error('❌ You do not have permission to revoke tokens for this project');
+        }
+      } else {
+        const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+        toast.error(`Failed to revoke tokens: ${errorMessage}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -191,14 +225,29 @@ export function HeaderGitCloneButton() {
         toast.success('Token revoked successfully!');
       } else {
         console.error('Revoke failed:', response.message);
-        toast.error(`Failed to revoke token: ${response.message}`);
+
+        if (response.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error(`Failed to revoke token: ${response.message}`);
+        }
       }
     } catch (error: any) {
       console.error('Failed to revoke token:', error);
 
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      // Handle HTTP error responses
+      if (error.response?.status === 403) {
+        const errorData = error.response.data;
 
-      toast.error(`Failed to revoke token: ${errorMessage}`);
+        if (errorData?.error === 'PERMISSION_DENIED') {
+          toast.error('❌ Access Denied: You are not the owner of this project');
+        } else {
+          toast.error('❌ You do not have permission to revoke tokens for this project');
+        }
+      } else {
+        const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+        toast.error(`Failed to revoke token: ${errorMessage}`);
+      }
     } finally {
       setIsLoading(false);
     }

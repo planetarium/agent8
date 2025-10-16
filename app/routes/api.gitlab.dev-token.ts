@@ -31,7 +31,15 @@ async function devTokenLoader({ context, request }: ActionFunctionArgs) {
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json({ success: false, message: 'Only project owner can check dev token status' }, { status: 403 });
+      return json(
+        {
+          success: false,
+          message: 'Access denied: You are not the owner of this project',
+          error: 'PERMISSION_DENIED',
+          details: 'Only project owners can view token status',
+        },
+        { status: 403 },
+      );
     }
 
     // Get active dev token status and active tokens list only
@@ -102,7 +110,15 @@ async function createDevToken(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json({ success: false, message: 'Only project owner can create dev tokens' }, { status: 403 });
+      return json(
+        {
+          success: false,
+          message: 'Access denied: You are not the owner of this project',
+          error: 'PERMISSION_DENIED',
+          details: 'Only project owners can create development tokens',
+        },
+        { status: 403 },
+      );
     }
 
     // Create new dev token (this will revoke existing ones)
@@ -156,7 +172,15 @@ async function revokeAllDevTokens(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json({ success: false, message: 'Only project owner can revoke dev tokens' }, { status: 403 });
+      return json(
+        {
+          success: false,
+          message: 'Access denied: You are not the owner of this project',
+          error: 'PERMISSION_DENIED',
+          details: 'Only project owners can revoke development tokens',
+        },
+        { status: 403 },
+      );
     }
 
     // Revoke all dev tokens
@@ -199,7 +223,15 @@ async function revokeDevToken(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json({ success: false, message: 'Only project owner can revoke dev tokens' }, { status: 403 });
+      return json(
+        {
+          success: false,
+          message: 'Access denied: You are not the owner of this project',
+          error: 'PERMISSION_DENIED',
+          details: 'Only project owners can revoke development tokens',
+        },
+        { status: 403 },
+      );
     }
 
     // Revoke specific dev token
