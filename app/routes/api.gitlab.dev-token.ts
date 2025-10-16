@@ -118,6 +118,21 @@ async function createDevToken(
       );
     }
 
+    // Check if already has 3 active tokens
+    const activeTokens = await gitlabService.getActiveDevTokensList(project.id);
+
+    if (activeTokens.length >= 3) {
+      return json(
+        {
+          success: false,
+          message: 'Token limit reached: Maximum 3 active tokens allowed per project',
+          error: 'TOKEN_LIMIT_EXCEEDED',
+          details: 'Please revoke an existing token before creating a new one',
+        },
+        { status: 400 },
+      );
+    }
+
     const tokenData = await gitlabService.createDevToken(project.id);
 
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;

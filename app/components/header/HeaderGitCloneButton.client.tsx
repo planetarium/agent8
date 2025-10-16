@@ -157,6 +157,8 @@ export function HeaderGitCloneButton() {
       } else {
         if (response.error === 'PERMISSION_DENIED') {
           toast.error('Access Denied: You are not the owner of this project');
+        } else if (response.error === 'TOKEN_LIMIT_EXCEEDED') {
+          toast.error('Token limit reached: Maximum 3 active tokens allowed per project');
         } else {
           toast.error(`Failed to generate token: ${response.message || 'Unknown error'}`);
         }
@@ -432,6 +434,11 @@ export function HeaderGitCloneButton() {
                             ? 'Create a new token to get updated clone commands with fresh credentials.'
                             : 'Create an access token to start working with this project locally.'}
                         </span>
+                        {tokenData.tokens && tokenData.tokens.length >= 3 && (
+                          <span className="text-sm text-red-400 text-center">
+                            ⚠️ Token limit reached: Maximum 3 active tokens allowed per project
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -440,8 +447,13 @@ export function HeaderGitCloneButton() {
                       <div className="flex gap-3 self-stretch">
                         <button
                           onClick={handleGenerateToken}
-                          disabled={isLoading}
+                          disabled={isLoading || (tokenData.tokens && tokenData.tokens.length >= 3)}
                           className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-[#1A92A4] hover:bg-[#1A7583] active:bg-[#1B5862] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={
+                            tokenData.tokens && tokenData.tokens.length >= 3
+                              ? 'Maximum 3 tokens allowed per project'
+                              : undefined
+                          }
                         >
                           {isLoading ? 'Generating...' : 'Generate New Token'}
                         </button>
