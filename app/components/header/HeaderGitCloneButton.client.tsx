@@ -320,7 +320,7 @@ export function HeaderGitCloneButton() {
                             >
                               <div className="flex flex-col gap-1">
                                 <span className="text-[12px] font-mono text-bolt-elements-textSecondary">
-                                  {token.name.replace('git-dev-', '')}
+                                  {token.name}
                                 </span>
                                 <span className={classNames('text-[11px]', getExpiryColor(token.daysLeft))}>
                                   {token.daysLeft > 0 ? `${token.daysLeft} days left` : 'Expires today'}
@@ -395,7 +395,7 @@ export function HeaderGitCloneButton() {
                                 handleCopy(
                                   `$ git remote set-url origin https://oauth2:${tokenData.token}@${tokenData.cloneCommand?.split('@')[1]}`,
                                   'updateCommand',
-                                  'Update command copied to clipboard!',
+                                  'Command copied to clipboard!',
                                 )
                               }
                               className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"

@@ -1445,7 +1445,7 @@ export class GitlabService {
 
       // Filter for active dev tokens only
       const devTokens = tokens.filter((token) => {
-        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isDevToken = token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
         const isNotRevoked = !token.revoked && token.active !== false;
         const isNotExpired = new Date(token.expires_at) > new Date();
 
@@ -1478,7 +1478,10 @@ export class GitlabService {
     }
   }
 
-  async createDevToken(projectId: number): Promise<{
+  async createDevToken(
+    projectId: number,
+    projectPath?: string,
+  ): Promise<{
     token: string;
     id: number;
     name: string;
@@ -1492,8 +1495,30 @@ export class GitlabService {
 
       const expiresAt = expiryDate.toISOString().split('T')[0];
 
+      const generateRandomString = (length: number): string => {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+      };
+
+      const createTokenName = (projectPath?: string): string => {
+        if (!projectPath) {
+          return `token-${generateRandomString(8)}`;
+        }
+
+        const projectName = projectPath.split('/').pop() || 'project';
+        const projectPrefix = projectName
+          .slice(0, 6)
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toLowerCase();
+        const randomSuffix = generateRandomString(6);
+
+        return `${projectPrefix}-${randomSuffix}`;
+      };
+
+      const tokenName = createTokenName(projectPath);
+
       const tokenData = {
-        name: `git-dev-${Date.now()}`,
+        name: tokenName,
         scopes: ['read_repository', 'write_repository', 'read_api'],
         access_level: 30,
         expires_at: expiresAt,
@@ -1536,7 +1561,7 @@ export class GitlabService {
 
       // Find active dev tokens (not revoked and not expired)
       const activeDevTokens = tokens.filter((token) => {
-        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isDevToken = token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
         const isNotExpired = new Date(token.expires_at) > new Date();
         const isNotRevoked = !token.revoked && token.active !== false;
 
@@ -1582,7 +1607,7 @@ export class GitlabService {
 
       // Find active dev tokens (not revoked and not expired)
       const activeDevTokens = tokens.filter((token) => {
-        const isDevToken = token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository');
+        const isDevToken = token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
         const isNotExpired = new Date(token.expires_at) > new Date();
         const isNotRevoked = !token.revoked && token.active !== false;
 
@@ -1627,7 +1652,7 @@ export class GitlabService {
 
       // Find all dev tokens (active, revoked, and expired)
       const allDevTokens = tokens.filter(
-        (token) => token.name.startsWith('git-dev-') || token.scopes?.includes('write_repository'),
+        (token) => token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository'),
       );
 
       return allDevTokens

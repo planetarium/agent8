@@ -118,7 +118,6 @@ async function createDevToken(
       );
     }
 
-    // Check if already has 3 active tokens
     const activeTokens = await gitlabService.getActiveDevTokensList(project.id);
 
     if (activeTokens.length >= 3) {
@@ -133,7 +132,7 @@ async function createDevToken(
       );
     }
 
-    const tokenData = await gitlabService.createDevToken(project.id);
+    const tokenData = await gitlabService.createDevToken(project.id, projectPath);
 
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;
     const cloneCommand = `git clone -b develop https://oauth2:${tokenData.token}@${gitlabService.gitlabUrl.replace('https://', '')}/${projectPath}.git`;
