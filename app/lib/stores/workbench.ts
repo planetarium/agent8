@@ -4,7 +4,7 @@ import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
-import { WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
@@ -575,16 +575,6 @@ export class WorkbenchStore {
     // TODO: what do we wanna do and how do we wanna recover from this?
   }
 
-  hasArtifactRunning(): boolean {
-    const artifacts = this.artifacts.get();
-
-    if (!artifacts) {
-      return false;
-    }
-
-    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
-  }
-
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
     const artifact = this.#getArtifact(id);
 
@@ -1093,12 +1083,6 @@ export class WorkbenchStore {
     await shell.ready;
 
     try {
-      if (!this.hasArtifactRunning()) {
-        // Interrupt any currently running command
-        shell.interruptCurrentCommand();
-      }
-
-      // Setup deploy configuration
       await this.setupDeployConfig(shell);
 
       // Navigate to working directory
@@ -1108,9 +1092,15 @@ export class WorkbenchStore {
 
       // Run development server
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        await this.#runShellCommand(shell, 'bun update && bun run dev');
+        shell.executeCommand(
+          Date.now().toString(),
+          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+        );
       } else {
-        await this.#runShellCommand(shell, 'bun update && npx -y @agent8/deploy --preview && bun run dev');
+        shell.executeCommand(
+          Date.now().toString(),
+          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx -y @agent8/deploy --preview && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+        );
       }
     } catch (error) {
       logger.error('[RunPreview] Error:', error);
@@ -1125,14 +1115,9 @@ export class WorkbenchStore {
     await shell.ready;
 
     try {
-      if (!this.hasArtifactRunning()) {
-        // Interrupt any currently running command
-        shell.interruptCurrentCommand();
-      }
-
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, 'bun update');
+      await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
@@ -1146,7 +1131,7 @@ export class WorkbenchStore {
       await this.#runShellCommand(shell, `cd ${container.workdir}`);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, 'bun run build --base ./');
+      const buildResult = await this.#runShellCommand(shell, `${SHELL_COMMANDS.BUILD_PROJECT} --base ./`);
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);

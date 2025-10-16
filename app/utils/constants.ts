@@ -93,6 +93,12 @@ export const TOOL_NAMES = {
   READ_FILES_CONTENTS: 'read_files_contents',
 } as const;
 
+export const SHELL_COMMANDS = {
+  UPDATE_DEPENDENCIES: 'bun update',
+  START_DEV_SERVER: 'bun run dev',
+  BUILD_PROJECT: 'bun run build',
+} as const;
+
 export const ATTACHMENT_EXTS = [
   '.png',
   '.jpg',
