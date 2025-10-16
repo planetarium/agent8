@@ -675,6 +675,38 @@ export class WorkbenchStore {
     this.#processMessageClose(messageId);
   }
 
+  waitForMessageComplete(messageId: string, options: { timeoutMs?: number } = {}): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this.offMessageClose(messageId);
+        reject(new Error(` Timeout after ${options.timeoutMs ?? 60000}ms`));
+      }, options.timeoutMs ?? 60000);
+
+      this.onMessageClose(messageId, async () => {
+        clearTimeout(timeoutId);
+        resolve();
+      });
+    });
+  }
+
+  clearMessageArtifactsActions(messageId: string) {
+    const artifactIds = this.#messageToArtifactIds.get(messageId) || [];
+
+    if (artifactIds.length === 0) {
+      return;
+    }
+
+    artifactIds.forEach((artifactId) => {
+      const artifact = this.#getArtifact(artifactId);
+
+      if (artifact) {
+        artifact.runner.clearSuccessfulActions();
+      }
+    });
+
+    logger.debug(`Cleared successful actions`);
+  }
+
   updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
     const artifact = this.#getArtifact(id);
 

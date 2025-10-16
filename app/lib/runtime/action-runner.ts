@@ -7,6 +7,7 @@ import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
 import { extractFromCDATA } from '~/utils/stringUtils';
+import { v4 as uuidv4 } from 'uuid';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -68,7 +69,7 @@ export class ActionRunner {
   #container: Promise<Container>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
-  runnerId = atom<string>(`${Date.now()}`);
+  runnerId = atom<string>(uuidv4());
   actions: ActionsMap = map({});
   onAlert?: (alert: ActionAlert) => void;
   onComplete?: () => void;
@@ -76,6 +77,7 @@ export class ActionRunner {
   #envFileCreated = false;
   buildOutput?: { path: string; exitCode: number; output: string };
   #completeCalled = false;
+  #successfulActions = new Set<string>();
 
   constructor(
     containerPromise: Promise<Container>,
@@ -133,6 +135,10 @@ export class ActionRunner {
     });
   }
 
+  clearSuccessfulActions() {
+    this.#successfulActions.clear();
+  }
+
   async runAction(data: ActionCallbackData, isStreaming: boolean = false) {
     const { actionId } = data;
     const action = this.actions.get()[actionId];
@@ -179,19 +185,19 @@ export class ActionRunner {
     try {
       switch (action.type) {
         case 'shell': {
-          await this.#runShellAction(action);
+          await this.#runShellAction(action, actionId);
           break;
         }
         case 'file': {
-          await this.#runFileAction(action);
+          await this.#runFileAction(action, actionId);
           break;
         }
         case 'modify': {
-          await this.#runModifyAction(action);
+          await this.#runModifyAction(action, actionId);
           break;
         }
         case 'build': {
-          const buildOutput = await this.#runBuildAction(action);
+          const buildOutput = await this.#runBuildAction(action, actionId);
 
           // Store build output for deployment
           this.buildOutput = buildOutput;
@@ -284,9 +290,14 @@ export class ActionRunner {
     }
   }
 
-  async #runShellAction(action: ActionState) {
+  async #runShellAction(action: ActionState, actionId: string) {
     if (action.type !== 'shell') {
       unreachable('Expected shell action');
+    }
+
+    if (this.#successfulActions.has(actionId)) {
+      logger.info(`Shell action already executed, skipping: ${actionId}`);
+      return;
     }
 
     const shell = this.#shellTerminal();
@@ -310,6 +321,8 @@ export class ActionRunner {
       logger.warn(`Failed To Execute Shell Command content: ${action.content}`);
       throw new ActionCommandError(`Failed To Execute Shell Command`, resp?.output || 'No Output Available');
     }
+
+    this.#successfulActions.add(actionId);
   }
 
   async #runStartAction(action: ActionState) {
@@ -341,9 +354,14 @@ export class ActionRunner {
     return resp;
   }
 
-  async #runFileAction(action: ActionState) {
+  async #runFileAction(action: ActionState, actionId: string) {
     if (action.type !== 'file') {
       unreachable('Expected file action');
+    }
+
+    if (this.#successfulActions.has(actionId)) {
+      logger.info(`File action already executed, skipping: ${actionId}`);
+      return;
     }
 
     const container = await this.#container;
@@ -366,14 +384,20 @@ export class ActionRunner {
     try {
       await container.fs.writeFile(relativePath, action.content);
       logger.debug(`File written ${relativePath}`);
+      this.#successfulActions.add(actionId);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
     }
   }
 
-  async #runModifyAction(action: ActionState) {
+  async #runModifyAction(action: ActionState, actionId: string) {
     if (action.type !== 'modify') {
       unreachable('Expected modify action');
+    }
+
+    if (this.#successfulActions.has(actionId)) {
+      logger.info(`Modify action already executed, skipping: ${actionId}`);
+      return;
     }
 
     const container = await this.#container;
@@ -437,6 +461,8 @@ export class ActionRunner {
       logger.info(`   - Final file: ${finalFileSize} bytes`);
       logger.info(`   - Modifications sent: ${modificationsSize} bytes`);
       logger.info(`   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`);
+
+      this.#successfulActions.add(actionId);
     } catch (error) {
       logger.error(`❌ [Modify] Failed to apply modifications to ${relativePath}:`, error);
     }
@@ -521,21 +547,29 @@ export class ActionRunner {
   async saveFileHistory(filePath: string, history: FileHistory) {
     const historyPath = this.#getHistoryPath(filePath);
 
-    await this.#runFileAction({
-      type: 'file',
-      filePath: historyPath,
-      content: JSON.stringify(history),
-      changeSource: 'auto-save',
-    } as any);
+    await this.#runFileAction(
+      {
+        type: 'file',
+        filePath: historyPath,
+        content: JSON.stringify(history),
+        changeSource: 'auto-save',
+      } as any,
+      uuidv4(),
+    );
   }
 
   #getHistoryPath(filePath: string) {
     return nodePath.join('.history', filePath);
   }
 
-  async #runBuildAction(action: ActionState) {
+  async #runBuildAction(action: ActionState, actionId: string) {
     if (action.type !== 'build') {
       unreachable('Expected build action');
+    }
+
+    if (this.#successfulActions.has(actionId)) {
+      logger.info(`Build action already executed, skipping: ${actionId}`);
+      return this.buildOutput;
     }
 
     const container = await this.#container;
@@ -560,6 +594,8 @@ export class ActionRunner {
 
     // Get the build output directory path
     const buildDir = nodePath.join(container.workdir, 'dist');
+
+    this.#successfulActions.add(actionId);
 
     return {
       path: buildDir,
