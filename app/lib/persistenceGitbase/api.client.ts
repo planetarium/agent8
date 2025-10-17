@@ -428,41 +428,33 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
   return response.data;
 };
 
-export const createDevToken = async (projectPath: string) => {
-  const response = await axios.post('/api/gitlab/dev-token', {
+export const createProjectAccessToken = async (projectPath: string) => {
+  const response = await axios.post('/api/gitlab/project-access-token', {
     projectPath,
   });
 
   return response.data;
 };
 
-export const getDevTokenStatus = async (projectPath: string) => {
-  const response = await axios.get('/api/gitlab/dev-token', {
+export const getProjectAccessTokenStatus = async (projectPath: string) => {
+  const response = await axios.get('/api/gitlab/project-access-token', {
     params: { projectPath },
   });
 
   return response.data;
 };
 
-export const revokeAllDevTokens = async (projectPath: string) => {
-  const response = await axios.delete('/api/gitlab/dev-token', {
+export const revokeAllProjectAccessTokens = async (projectPath: string) => {
+  const response = await axios.delete('/api/gitlab/project-access-token', {
     data: { projectPath },
   });
 
   return response.data;
 };
 
-export const revokeDevToken = async (projectPath: string, tokenId: number) => {
-  const response = await axios.delete('/api/gitlab/dev-token', {
+export const revokeProjectAccessToken = async (projectPath: string, tokenId: number) => {
+  const response = await axios.delete('/api/gitlab/project-access-token', {
     data: { projectPath, tokenId },
-  });
-
-  return response.data;
-};
-
-export const getGitCommands = async (projectPath: string) => {
-  const response = await axios.get('/api/gitlab/git-commands', {
-    params: { projectPath },
   });
 
   return response.data;

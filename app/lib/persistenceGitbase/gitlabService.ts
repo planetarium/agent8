@@ -381,33 +381,6 @@ export class GitlabService {
     }
   }
 
-  private async _getProjectFiles(projectId: number, branch: string = 'develop'): Promise<string[]> {
-    try {
-      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/tree`, {
-        headers: {
-          'PRIVATE-TOKEN': this.gitlabToken,
-        },
-        params: {
-          recursive: true,
-          ref: branch,
-          per_page: 100,
-        },
-      });
-
-      interface TreeItem {
-        path: string;
-        type: string;
-      }
-
-      const files = (response.data as TreeItem[]).filter((item) => item.type === 'blob').map((item) => item.path);
-
-      return files;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get project files: ${errorMessage}`);
-    }
-  }
-
   private async _existsFile(projectId: number, filePath: string, branch: string = 'develop'): Promise<boolean> {
     try {
       await this.gitlab.RepositoryFiles.show(projectId, filePath, branch);
@@ -1385,20 +1358,21 @@ export class GitlabService {
     }
   }
 
-  // ===== DEV TOKEN MANAGEMENT =====
+  // ===== PROJECT ACCESS TOKEN MANAGEMENT =====
 
   /**
-   * Check if a token is an active dev token
+   * Check if a token is an active project access token
    */
-  private _isActiveDevToken(token: any): boolean {
-    const isDevToken = token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
+  private _isActiveProjectAccessToken(token: any): boolean {
+    const isProjectAccessToken =
+      token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
     const isNotExpired = new Date(token.expires_at) > new Date();
     const isNotRevoked = !token.revoked && token.active !== false;
 
-    return isDevToken && isNotExpired && isNotRevoked;
+    return isProjectAccessToken && isNotExpired && isNotRevoked;
   }
 
-  async getProjectTokens(projectId: number): Promise<any[]> {
+  async getProjectAccessTokens(projectId: number): Promise<any[]> {
     try {
       const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`, {
         headers: {
@@ -1409,11 +1383,11 @@ export class GitlabService {
       return response.data;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get project tokens: ${errorMessage}`);
+      throw new Error(`Failed to get project access tokens: ${errorMessage}`);
     }
   }
 
-  async revokeProjectToken(projectId: number, tokenId: number): Promise<void> {
+  async revokeProjectAccessToken(projectId: number, tokenId: number): Promise<void> {
     try {
       logger.info(`Attempting to revoke token ${tokenId} for project ${projectId}`);
 
@@ -1443,29 +1417,29 @@ export class GitlabService {
         });
 
         const errorMessage = directError.response?.data?.message || directError.message || 'Unknown error';
-        throw new Error(`Failed to revoke project token: ${errorMessage}`);
+        throw new Error(`Failed to revoke project access token: ${errorMessage}`);
       }
     }
   }
 
-  async revokeAllProjectTokens(projectId: number): Promise<void> {
+  async revokeAllProjectAccessTokens(projectId: number): Promise<void> {
     try {
-      logger.info(`Starting to revoke all dev tokens for project ${projectId}`);
+      logger.info(`Starting to revoke all project access tokens for project ${projectId}`);
 
-      const tokens = await this.getProjectTokens(projectId);
+      const tokens = await this.getProjectAccessTokens(projectId);
 
-      const devTokens = tokens.filter((token) => this._isActiveDevToken(token));
+      const projectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
 
-      logger.info(`Found ${devTokens.length} active dev tokens to revoke`);
+      logger.info(`Found ${projectAccessTokens.length} active project access tokens to revoke`);
 
-      if (devTokens.length === 0) {
-        logger.info('No active dev tokens found to revoke');
+      if (projectAccessTokens.length === 0) {
+        logger.info('No active project access tokens found to revoke');
         return;
       }
 
-      const revokePromises = devTokens.map(async (token) => {
+      const revokePromises = projectAccessTokens.map(async (token) => {
         try {
-          await this.revokeProjectToken(projectId, token.id);
+          await this.revokeProjectAccessToken(projectId, token.id);
           logger.info(`Successfully revoked token ${token.id} (${token.name})`);
         } catch (error) {
           logger.error(`Failed to revoke token ${token.id} (${token.name}):`, error);
@@ -1474,15 +1448,15 @@ export class GitlabService {
       });
 
       await Promise.all(revokePromises);
-      logger.info(`Successfully revoked all ${devTokens.length} dev tokens`);
+      logger.info(`Successfully revoked all ${projectAccessTokens.length} project access tokens`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Failed to revoke all project tokens:`, error);
-      throw new Error(`Failed to revoke all project tokens: ${errorMessage}`);
+      logger.error(`Failed to revoke all project access tokens:`, error);
+      throw new Error(`Failed to revoke all project access tokens: ${errorMessage}`);
     }
   }
 
-  async createDevToken(
+  async createProjectAccessToken(
     projectId: number,
     projectPath?: string,
   ): Promise<{
@@ -1542,7 +1516,7 @@ export class GitlabService {
       const responseData = axiosError?.response?.data;
       const statusCode = axiosError?.response?.status;
 
-      logger.error('Failed to create dev token', {
+      logger.error('Failed to create project access token', {
         error: errorMessage,
         projectId,
         statusCode,
@@ -1550,26 +1524,26 @@ export class GitlabService {
         requestUrl: `${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`,
       });
 
-      throw new Error(`Failed to create dev token: ${errorMessage}`);
+      throw new Error(`Failed to create project access token: ${errorMessage}`);
     }
   }
 
-  async getActiveDevToken(projectId: number): Promise<{
+  async getActiveProjectAccessToken(projectId: number): Promise<{
     hasToken: boolean;
     expiresAt?: string;
     daysLeft?: number;
     tokenName?: string;
   }> {
     try {
-      const tokens = await this.getProjectTokens(projectId);
+      const tokens = await this.getProjectAccessTokens(projectId);
 
-      const activeDevTokens = tokens.filter((token) => this._isActiveDevToken(token));
+      const activeProjectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
 
-      if (activeDevTokens.length === 0) {
+      if (activeProjectAccessTokens.length === 0) {
         return { hasToken: false };
       }
 
-      const latestToken = activeDevTokens.sort(
+      const latestToken = activeProjectAccessTokens.sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )[0];
 
@@ -1584,11 +1558,11 @@ export class GitlabService {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get active dev token: ${errorMessage}`);
+      throw new Error(`Failed to get active project access token: ${errorMessage}`);
     }
   }
 
-  async getActiveDevTokensList(projectId: number): Promise<
+  async getActiveProjectAccessTokensList(projectId: number): Promise<
     Array<{
       id: number;
       name: string;
@@ -1599,11 +1573,11 @@ export class GitlabService {
     }>
   > {
     try {
-      const tokens = await this.getProjectTokens(projectId);
+      const tokens = await this.getProjectAccessTokens(projectId);
 
-      const activeDevTokens = tokens.filter((token) => this._isActiveDevToken(token));
+      const activeProjectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
 
-      return activeDevTokens
+      return activeProjectAccessTokens
         .map((token) => {
           const daysLeft = Math.ceil(
             (new Date(token.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
@@ -1621,7 +1595,7 @@ export class GitlabService {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get active dev tokens list: ${errorMessage}`);
+      throw new Error(`Failed to get active project access tokens list: ${errorMessage}`);
     }
   }
 }

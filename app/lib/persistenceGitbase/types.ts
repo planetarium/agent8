@@ -73,7 +73,7 @@ export interface FileContent {
   content: string;
 }
 
-export interface DevTokenResponse {
+export interface ProjectAccessTokenResponse {
   token: string;
   id: number;
   name: string;
@@ -82,7 +82,7 @@ export interface DevTokenResponse {
   access_level: number;
 }
 
-export interface DevTokenStatus {
+export interface ProjectAccessTokenStatus {
   hasToken: boolean;
   expiresAt?: string;
   daysLeft?: number;

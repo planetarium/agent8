@@ -3,16 +3,16 @@ import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
 
-const logger = createScopedLogger('devTokenApi');
+const logger = createScopedLogger('projectAccessTokenApi');
 
-export const action = withV8AuthUser(devTokenAction, { checkCredit: true });
-export const loader = withV8AuthUser(devTokenLoader, { checkCredit: true });
+export const action = withV8AuthUser(projectAccessTokenAction, { checkCredit: true });
+export const loader = withV8AuthUser(projectAccessTokenLoader, { checkCredit: true });
 
 /**
- * GET /api/gitlab/dev-token
- * Get dev token status for a project
+ * GET /api/gitlab/project-access-token
+ * Get project access token status for a project
  */
-async function devTokenLoader({ context, request }: ActionFunctionArgs) {
+async function projectAccessTokenLoader({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
@@ -41,8 +41,8 @@ async function devTokenLoader({ context, request }: ActionFunctionArgs) {
       );
     }
 
-    const tokenStatus = await gitlabService.getActiveDevToken(project.id);
-    const tokensList = await gitlabService.getActiveDevTokensList(project.id);
+    const tokenStatus = await gitlabService.getActiveProjectAccessToken(project.id);
+    const tokensList = await gitlabService.getActiveProjectAccessTokensList(project.id);
 
     return json({
       success: true,
@@ -54,31 +54,34 @@ async function devTokenLoader({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Failed to get dev token status', { projectPath, error: errorMessage });
+    logger.error('Failed to get project access token status', { projectPath, error: errorMessage });
 
-    return json({ success: false, message: `Failed to get dev token status: ${errorMessage}` }, { status: 500 });
+    return json(
+      { success: false, message: `Failed to get project access token status: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
 
 /**
- * POST /api/gitlab/dev-token
- * Create new dev token (revokes existing ones)
+ * POST /api/gitlab/project-access-token
+ * Create new project access token (revokes existing ones)
  */
-async function devTokenAction({ context, request }: ActionFunctionArgs) {
+async function projectAccessTokenAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
   if (request.method === 'POST') {
-    return await createDevToken({ context, request }, env, user);
+    return await createProjectAccessToken({ context, request }, env, user);
   }
 
   if (request.method === 'DELETE') {
     const body = (await request.json()) as { projectPath: string; tokenId?: number };
 
     if (body.tokenId) {
-      return await revokeDevToken({ context, request }, env, user, body.tokenId, body.projectPath);
+      return await revokeProjectAccessToken({ context, request }, env, user, body.tokenId, body.projectPath);
     } else {
-      return await revokeAllDevTokens({ context, request }, env, user, body.projectPath);
+      return await revokeAllProjectAccessTokens({ context, request }, env, user, body.projectPath);
     }
   }
 
@@ -86,9 +89,9 @@ async function devTokenAction({ context, request }: ActionFunctionArgs) {
 }
 
 /**
- * Create new dev token
+ * Create new project access token
  */
-async function createDevToken(
+async function createProjectAccessToken(
   { request }: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
@@ -112,13 +115,13 @@ async function createDevToken(
           success: false,
           message: 'Access denied: You are not the owner of this project',
           error: 'PERMISSION_DENIED',
-          details: 'Only project owners can create development tokens',
+          details: 'Only project owners can create project access tokens',
         },
         { status: 403 },
       );
     }
 
-    const activeTokens = await gitlabService.getActiveDevTokensList(project.id);
+    const activeTokens = await gitlabService.getActiveProjectAccessTokensList(project.id);
 
     if (activeTokens.length >= 3) {
       return json(
@@ -132,7 +135,7 @@ async function createDevToken(
       );
     }
 
-    const tokenData = await gitlabService.createDevToken(project.id, projectPath);
+    const tokenData = await gitlabService.createProjectAccessToken(project.id, projectPath);
 
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;
     const cloneCommand = `git clone -b develop https://oauth2:${tokenData.token}@${gitlabService.gitlabUrl.replace('https://', '')}/${projectPath}.git`;
@@ -152,19 +155,19 @@ async function createDevToken(
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Failed to create dev token', {
+    logger.error('Failed to create project access token', {
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return json({ success: false, message: `Failed to create dev token: ${errorMessage}` }, { status: 500 });
+    return json({ success: false, message: `Failed to create project access token: ${errorMessage}` }, { status: 500 });
   }
 }
 
 /**
- * Revoke all dev tokens
+ * Revoke all project access tokens
  */
-async function revokeAllDevTokens(
+async function revokeAllProjectAccessTokens(
   _args: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
@@ -186,33 +189,36 @@ async function revokeAllDevTokens(
           success: false,
           message: 'Access denied: You are not the owner of this project',
           error: 'PERMISSION_DENIED',
-          details: 'Only project owners can revoke development tokens',
+          details: 'Only project owners can revoke project access tokens',
         },
         { status: 403 },
       );
     }
 
-    await gitlabService.revokeAllProjectTokens(project.id);
+    await gitlabService.revokeAllProjectAccessTokens(project.id);
 
     return json({
       success: true,
       data: {
-        message: 'All dev tokens have been revoked',
+        message: 'All project access tokens have been revoked',
         projectPath,
       },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Failed to revoke dev tokens', { error: errorMessage });
+    logger.error('Failed to revoke project access tokens', { error: errorMessage });
 
-    return json({ success: false, message: `Failed to revoke dev tokens: ${errorMessage}` }, { status: 500 });
+    return json(
+      { success: false, message: `Failed to revoke project access tokens: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
 
 /**
- * Revoke individual dev token
+ * Revoke individual project access token
  */
-async function revokeDevToken(
+async function revokeProjectAccessToken(
   _args: { context: any; request: Request },
   env: Env,
   user: { email: string; isActivated: boolean },
@@ -235,13 +241,13 @@ async function revokeDevToken(
           success: false,
           message: 'Access denied: You are not the owner of this project',
           error: 'PERMISSION_DENIED',
-          details: 'Only project owners can revoke development tokens',
+          details: 'Only project owners can revoke project access tokens',
         },
         { status: 403 },
       );
     }
 
-    await gitlabService.revokeProjectToken(project.id, tokenId);
+    await gitlabService.revokeProjectAccessToken(project.id, tokenId);
     logger.info(`Successfully revoked token ${tokenId} for project ${projectPath}`);
 
     return json({
@@ -254,8 +260,8 @@ async function revokeDevToken(
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Failed to revoke dev token', { error: errorMessage, tokenId });
+    logger.error('Failed to revoke project access token', { error: errorMessage, tokenId });
 
-    return json({ success: false, message: `Failed to revoke dev token: ${errorMessage}` }, { status: 500 });
+    return json({ success: false, message: `Failed to revoke project access token: ${errorMessage}` }, { status: 500 });
   }
 }

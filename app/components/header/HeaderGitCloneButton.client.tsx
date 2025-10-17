@@ -8,10 +8,10 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { CloseIcon } from '~/components/ui/Icons';
 import { useMobileView } from '~/lib/hooks/useMobileView';
 import {
-  createDevToken,
-  getDevTokenStatus,
-  revokeAllDevTokens,
-  revokeDevToken,
+  createProjectAccessToken,
+  getProjectAccessTokenStatus,
+  revokeAllProjectAccessTokens,
+  revokeProjectAccessToken,
 } from '~/lib/persistenceGitbase/api.client';
 
 function CodeIcon({ width = 20, height = 20 }: { width?: number; height?: number }) {
@@ -119,7 +119,7 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      const response = await getDevTokenStatus(repo.path);
+      const response = await getProjectAccessTokenStatus(repo.path);
 
       if (response.success && response.data) {
         setTokenData({
@@ -130,7 +130,7 @@ export function HeaderGitCloneButton() {
         });
       }
     } catch (error) {
-      handleError(error, 'check token status');
+      handleError(error, 'check access token status');
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +144,7 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      const response = await createDevToken(repo.path);
+      const response = await createProjectAccessToken(repo.path);
 
       if (response.success && response.data) {
         const updateCommand = `git remote set-url origin https://oauth2:${response.data.token}@${response.data.cloneCommand?.split('@')[1]}`;
@@ -156,18 +156,18 @@ export function HeaderGitCloneButton() {
           hasToken: true,
           daysLeft: response.data.expiresInDays,
         });
-        toast.success('Git token generated successfully!');
+        toast.success('Git access token generated successfully!');
       } else {
         if (response.error === 'PERMISSION_DENIED') {
           toast.error('Access Denied: You are not the owner of this project');
         } else if (response.error === 'TOKEN_LIMIT_EXCEEDED') {
-          toast.error('Token limit reached: Maximum 3 active tokens allowed per project');
+          toast.error('Access token limit reached: Maximum 3 active access tokens allowed per project');
         } else {
-          toast.error(`Failed to generate token: ${response.message || 'Unknown error'}`);
+          toast.error(`Failed to generate access token: ${response.message || 'Unknown error'}`);
         }
       }
     } catch (error: any) {
-      handleError(error, 'generate token');
+      handleError(error, 'generate access token');
     } finally {
       setIsLoading(false);
     }
@@ -181,20 +181,20 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      const response = await revokeAllDevTokens(repo.path);
+      const response = await revokeAllProjectAccessTokens(repo.path);
 
       if (response.success) {
         await checkTokenStatus();
-        toast.success('All active tokens revoked successfully!');
+        toast.success('All active access tokens revoked successfully!');
       } else {
         if (response.error === 'PERMISSION_DENIED') {
           toast.error('Access Denied: You are not the owner of this project');
         } else {
-          toast.error(`Failed to revoke tokens: ${response.message}`);
+          toast.error(`Failed to revoke access tokens: ${response.message}`);
         }
       }
     } catch (error: any) {
-      handleError(error, 'revoke tokens');
+      handleError(error, 'revoke access tokens');
     } finally {
       setIsLoading(false);
     }
@@ -208,7 +208,7 @@ export function HeaderGitCloneButton() {
     setIsLoading(true);
 
     try {
-      const response = await revokeDevToken(repo.path, tokenId);
+      const response = await revokeProjectAccessToken(repo.path, tokenId);
 
       if (response.success) {
         await checkTokenStatus();
@@ -217,11 +217,11 @@ export function HeaderGitCloneButton() {
         if (response.error === 'PERMISSION_DENIED') {
           toast.error('Access Denied: You are not the owner of this project');
         } else {
-          toast.error(`Failed to revoke token: ${response.message}`);
+          toast.error(`Failed to revoke access token: ${response.message}`);
         }
       }
     } catch (error: any) {
-      handleError(error, 'revoke token');
+      handleError(error, 'revoke access token');
     } finally {
       setIsLoading(false);
     }
@@ -313,7 +313,7 @@ export function HeaderGitCloneButton() {
                     {tokenData.tokens && tokenData.tokens.length > 0 && (
                       <div className="flex flex-col gap-3 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
                         <span className="text-sm font-medium text-bolt-elements-textPrimary">
-                          Active Tokens ({tokenData.tokens.length})
+                          Active Access Tokens ({tokenData.tokens.length})
                         </span>
                         <div className="flex flex-col gap-2">
                           {tokenData.tokens.map((token) => (
@@ -333,7 +333,7 @@ export function HeaderGitCloneButton() {
                                 onClick={() => handleRevokeToken(token.id)}
                                 disabled={isLoading}
                                 className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-zinc-600 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Revoke token"
+                                title="Revoke access token"
                               >
                                 Revoke
                               </button>
@@ -350,9 +350,9 @@ export function HeaderGitCloneButton() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-bolt-elements-textPrimary">Access Token</span>
                             <button
-                              onClick={() => handleCopy(tokenData.token!, 'token', 'Token copied to clipboard!')}
+                              onClick={() => handleCopy(tokenData.token!, 'token', 'Access token copied to clipboard!')}
                               className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
-                              title="Copy token"
+                              title="Copy access token"
                             >
                               <CopyIcon width={14} height={14} />
                               <span className="text-[12px]">{copiedStates.token ? '✓ Copied' : 'Copy'}</span>
@@ -361,7 +361,9 @@ export function HeaderGitCloneButton() {
                           <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
                             {tokenData.token}
                           </code>
-                          <span className="text-[11px] text-yellow-500/80">🔒 This token will only be shown once.</span>
+                          <span className="text-[11px] text-yellow-500/80">
+                            🔒 This access token will only be shown once.
+                          </span>
                         </div>
 
                         <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
@@ -412,7 +414,7 @@ export function HeaderGitCloneButton() {
                             $ {tokenData.updateCommand}
                           </code>
                           <span className="text-[11px] text-blue-400/80">
-                            💡 Use this command to update existing repositories with a new token
+                            💡 Use this command to update existing repositories with a new access token
                           </span>
                         </div>
 
@@ -433,12 +435,12 @@ export function HeaderGitCloneButton() {
                       <div className="flex flex-col gap-3 items-center justify-center py-6 self-stretch">
                         <span className="text-sm text-bolt-elements-textSecondary text-center">
                           {tokenData.tokens && tokenData.tokens.length > 0
-                            ? 'Create a new token to get updated clone commands with fresh credentials.'
+                            ? 'Create a new access token to get updated clone commands with fresh credentials.'
                             : 'Create an access token to start working with this project locally.'}
                         </span>
                         {tokenData.tokens && tokenData.tokens.length >= 3 && (
                           <span className="text-sm text-red-400 text-center">
-                            ⚠️ Token limit reached: Maximum 3 active tokens allowed per project
+                            ⚠️ Access token limit reached: Maximum 3 active access tokens allowed per project
                           </span>
                         )}
                       </div>
@@ -453,11 +455,11 @@ export function HeaderGitCloneButton() {
                           className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-[#1A92A4] hover:bg-[#1A7583] active:bg-[#1B5862] text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           title={
                             tokenData.tokens && tokenData.tokens.length >= 3
-                              ? 'Maximum 3 tokens allowed per project'
+                              ? 'Maximum 3 access tokens allowed per project'
                               : undefined
                           }
                         >
-                          {isLoading ? 'Generating...' : 'Generate New Token'}
+                          {isLoading ? 'Generating...' : 'Generate New Access Token'}
                         </button>
 
                         {tokenData.tokens && tokenData.tokens.length > 0 && (
@@ -466,7 +468,7 @@ export function HeaderGitCloneButton() {
                             disabled={isLoading}
                             className="flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors bg-zinc-600 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {isLoading ? 'Revoking...' : 'Revoke All Tokens'}
+                            {isLoading ? 'Revoking...' : 'Revoke All Access Tokens'}
                           </button>
                         )}
                       </div>
