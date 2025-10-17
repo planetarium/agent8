@@ -561,17 +561,17 @@ export const ChatImpl = memo(
         return;
       }
 
-      const MAX_RETRIES = 3;
-      const CONNECTION_TIMEOUT = 30000;
-      const WORKBENCH_TIMEOUT = 60000;
+      const maxRetries = 3;
+      const connectionTimeout = 30000;
+      const workbenchTimeout = 60000;
 
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           if (attempt > 0) {
-            console.log(`🔄 Retry ${attempt}/${MAX_RETRIES}`);
-            await waitForWorkbenchConnection(workbench, CONNECTION_TIMEOUT);
+            logger.info(`Commit retry attempt: ${attempt}/${maxRetries}`);
+            await waitForWorkbenchConnection(workbench, connectionTimeout);
             await new Promise((resolve) => setTimeout(resolve, 100));
-            await workbench.waitForMessageComplete(message.id, { timeoutMs: WORKBENCH_TIMEOUT });
+            await workbench.waitForMessageComplete(message.id, { timeoutMs: workbenchTimeout });
           }
 
           await commitChanges(message, (commitHash) => {
@@ -579,16 +579,14 @@ export const ChatImpl = memo(
             reloadTaskBranches(repoStore.get().path);
           });
 
-          workbench.clearMessageArtifactsActions(message.id);
           logger.info('✅ Commit succeeded');
 
-          return; // 성공
+          return;
         } catch (error) {
-          const isLastAttempt = attempt >= MAX_RETRIES;
+          const isLastAttempt = attempt >= maxRetries;
           logger.warn(`❌ Commit retry attempt ${attempt + 1} failed:`, error);
 
           if (isLastAttempt) {
-            workbench.clearMessageArtifactsActions(message.id);
             handleChatError(
               'The code commit has failed after retry.',
               error instanceof Error ? error : String(error),

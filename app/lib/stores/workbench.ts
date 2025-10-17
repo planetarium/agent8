@@ -689,24 +689,6 @@ export class WorkbenchStore {
     });
   }
 
-  clearMessageArtifactsActions(messageId: string) {
-    const artifactIds = this.#messageToArtifactIds.get(messageId) || [];
-
-    if (artifactIds.length === 0) {
-      return;
-    }
-
-    artifactIds.forEach((artifactId) => {
-      const artifact = this.#getArtifact(artifactId);
-
-      if (artifact) {
-        artifact.runner.clearSuccessfulActions();
-      }
-    });
-
-    logger.debug(`Cleared successful actions`);
-  }
-
   updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
     const artifact = this.#getArtifact(id);
 
