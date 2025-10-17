@@ -116,7 +116,7 @@ function sendEventToParent(type: string, payload: any) {
   }
 }
 
-async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: number = 30000): Promise<void> {
+async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: number = 10000): Promise<void> {
   const currentState = workbench.connectionState.get();
 
   if (currentState === 'failed') {
@@ -124,7 +124,7 @@ async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: 
   }
 
   if (currentState === 'connected') {
-    return; // 이미 연결됨
+    return;
   }
 
   await new Promise<void>((resolve, reject) => {
@@ -472,7 +472,6 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
-          workbench.offMessageClose(message.id);
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
@@ -562,8 +561,8 @@ export const ChatImpl = memo(
       }
 
       const maxRetries = 3;
-      const connectionTimeout = 30000;
-      const workbenchTimeout = 60000;
+      const connectionTimeout = 10000;
+      const messageIdleTimeout = 15000;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -571,7 +570,7 @@ export const ChatImpl = memo(
             logger.info(`Commit retry attempt: ${attempt}/${maxRetries}`);
             await waitForWorkbenchConnection(workbench, connectionTimeout);
             await new Promise((resolve) => setTimeout(resolve, 100));
-            await workbench.waitForMessageComplete(message.id, { timeoutMs: workbenchTimeout });
+            await workbench.waitForMessageIdle(message.id, { timeoutMs: messageIdleTimeout });
           }
 
           await commitChanges(message, (commitHash) => {

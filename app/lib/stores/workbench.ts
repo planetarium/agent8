@@ -612,8 +612,62 @@ export class WorkbenchStore {
     });
   }
 
-  offMessageClose(messageId: string) {
-    this.#messageCloseCallbacks.delete(messageId);
+  /**
+   * Check if message is idle (all artifacts closed and action queue empty)
+   */
+  isMessageIdle(messageId: string): boolean {
+    const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
+    const allClosed = compositeIds.every((compositeId) => {
+      const artifact = this.#getArtifact(compositeId);
+
+      return artifact?.closed;
+    });
+    const queueEmpty = !this.#messageToActionQueue.has(messageId);
+
+    return allClosed && queueEmpty;
+  }
+
+  /**
+   * Wait for message to become idle (all artifacts closed and action queue empty)
+   * Returns immediately if already idle
+   */
+  waitForMessageIdle(messageId: string, options: { timeoutMs?: number } = {}): Promise<void> {
+    // Already idle - return immediately
+    if (this.isMessageIdle(messageId)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      let resolveCallback: (() => Promise<void>) | null = null;
+
+      const timeoutId = setTimeout(() => {
+        // Remove only this callback
+        if (resolveCallback) {
+          const callbacks = this.#messageCloseCallbacks.get(messageId);
+
+          if (callbacks) {
+            const index = callbacks.indexOf(resolveCallback);
+
+            if (index > -1) {
+              callbacks.splice(index, 1);
+            }
+
+            if (callbacks.length === 0) {
+              this.#messageCloseCallbacks.delete(messageId);
+            }
+          }
+        }
+
+        reject(new Error(`Message ${messageId} idle timeout after ${options.timeoutMs ?? 15000}ms`));
+      }, options.timeoutMs ?? 15000);
+
+      resolveCallback = async () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+
+      this.onMessageClose(messageId, resolveCallback);
+    });
   }
 
   async #processMessageClose(messageId: string) {
@@ -621,21 +675,14 @@ export class WorkbenchStore {
     const callbacks = this.#messageCloseCallbacks.get(messageId);
 
     if (callbacks && callbacks.length > 0) {
-      // Check if all artifacts for this message are closed
-      const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
+      // Check if message is idle using the centralized method
+      if (this.isMessageIdle(messageId)) {
+        // Copy callbacks and clear map before execution to prevent duplicate runs
+        const callbacksCopy = [...callbacks];
+        this.#messageCloseCallbacks.delete(messageId);
 
-      const allClosed = compositeIds.every((compositeId) => {
-        const artifact = this.#getArtifact(compositeId);
-
-        return artifact?.closed;
-      });
-
-      // Check if action queue is empty for this message
-      const queueExists = this.#messageToActionQueue.has(messageId);
-
-      // Only trigger callbacks if artifacts are closed AND queue is empty
-      if (allClosed && !queueExists) {
-        await Promise.all(callbacks.map((callback) => callback()));
+        logger.debug(`Executing ${callbacksCopy.length} callbacks for message ${messageId}`);
+        await Promise.all(callbacksCopy.map((callback) => callback()));
       }
     }
   }
@@ -673,20 +720,6 @@ export class WorkbenchStore {
     const { messageId } = data;
 
     this.#processMessageClose(messageId);
-  }
-
-  waitForMessageComplete(messageId: string, options: { timeoutMs?: number } = {}): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        this.offMessageClose(messageId);
-        reject(new Error(` Timeout after ${options.timeoutMs ?? 60000}ms`));
-      }, options.timeoutMs ?? 60000);
-
-      this.onMessageClose(messageId, async () => {
-        clearTimeout(timeoutId);
-        resolve();
-      });
-    });
   }
 
   updateArtifact({ id }: ArtifactCallbackData, state: Partial<ArtifactUpdateState>) {
