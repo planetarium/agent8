@@ -58,6 +58,7 @@ export function HeaderGitCloneButton() {
   const [tokenData, setTokenData] = useState<{
     token?: string;
     cloneCommand?: string;
+    updateCommand?: string;
     expiresAt?: string;
     hasToken?: boolean;
     daysLeft?: number;
@@ -146,9 +147,11 @@ export function HeaderGitCloneButton() {
       const response = await createDevToken(repo.path);
 
       if (response.success && response.data) {
+        const updateCommand = `git remote set-url origin https://oauth2:${response.data.token}@${response.data.cloneCommand?.split('@')[1]}`;
         setTokenData({
           token: response.data.token,
           cloneCommand: response.data.cloneCommand,
+          updateCommand,
           expiresAt: response.data.expiresAt,
           hasToken: true,
           daysLeft: response.data.expiresInDays,
@@ -364,11 +367,11 @@ export function HeaderGitCloneButton() {
                         <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-bolt-elements-textPrimary">
-                              Clone Git Repository Command
+                              Clone Repository Command
                             </span>
                             <button
                               onClick={() =>
-                                handleCopy(`$ ${tokenData.cloneCommand!}`, 'command', 'Command copied to clipboard!')
+                                handleCopy(tokenData.cloneCommand!, 'command', 'Clone command copied to clipboard!')
                               }
                               className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
                               title="Copy command"
@@ -388,26 +391,25 @@ export function HeaderGitCloneButton() {
                         <div className="flex flex-col gap-2 p-3 self-stretch rounded-lg border border-white/22 bg-[#222428]/50">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-bolt-elements-textPrimary">
-                              Refresh AccessToken Command
+                              Update Remote URL Command
                             </span>
                             <button
                               onClick={() =>
                                 handleCopy(
-                                  `$ git remote set-url origin https://oauth2:${tokenData.token}@${tokenData.cloneCommand?.split('@')[1]}`,
+                                  tokenData.updateCommand!,
                                   'updateCommand',
-                                  'Command copied to clipboard!',
+                                  'Update command copied to clipboard!',
                                 )
                               }
                               className="flex items-center gap-1 bg-transparent border-none text-gray-400 hover:text-gray-200 transition-colors cursor-pointer"
-                              title="Copy update command"
+                              title="Copy command"
                             >
                               <CopyIcon width={14} height={14} />
                               <span className="text-[12px]">{copiedStates.updateCommand ? '✓ Copied' : 'Copy'}</span>
                             </button>
                           </div>
                           <code className="text-[12px] font-mono text-white/80 break-all bg-black/30 p-2 rounded">
-                            $ git remote set-url origin https://oauth2:{tokenData.token}@
-                            {tokenData.cloneCommand?.split('@')[1]}
+                            $ {tokenData.updateCommand}
                           </code>
                           <span className="text-[11px] text-blue-400/80">
                             💡 Use this command to update existing repositories with a new token
