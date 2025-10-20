@@ -84,7 +84,14 @@ export class WorkbenchStore {
   #editorStore: EditorStore;
   #terminalStore: TerminalStore;
   #messageCloseCallbacks: Map<string, Array<() => void>> = new Map();
-
+  #messageIdleWaiters = new Map<
+    string, // messageId
+    Array<{
+      resolve: () => void;
+      reject: (error: Error) => void;
+      timeoutId: NodeJS.Timeout;
+    }>
+  >();
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
 
@@ -638,52 +645,65 @@ export class WorkbenchStore {
     }
 
     return new Promise((resolve, reject) => {
-      let resolveCallback: (() => Promise<void>) | null = null;
-
       const timeoutId = setTimeout(() => {
-        // Remove only this callback
-        if (resolveCallback) {
-          const callbacks = this.#messageCloseCallbacks.get(messageId);
+        const waiters = this.#messageIdleWaiters.get(messageId);
 
-          if (callbacks) {
-            const index = callbacks.indexOf(resolveCallback);
+        if (waiters) {
+          const remainingWaiters = waiters.filter((w) => w.timeoutId !== timeoutId);
 
-            if (index > -1) {
-              callbacks.splice(index, 1);
-            }
-
-            if (callbacks.length === 0) {
-              this.#messageCloseCallbacks.delete(messageId);
-            }
+          if (remainingWaiters.length === 0) {
+            this.#messageIdleWaiters.delete(messageId);
+          } else {
+            this.#messageIdleWaiters.set(messageId, remainingWaiters);
           }
         }
 
         reject(new Error(`Message ${messageId} idle timeout after ${options.timeoutMs ?? 15000}ms`));
       }, options.timeoutMs ?? 15000);
 
-      resolveCallback = async () => {
-        clearTimeout(timeoutId);
-        resolve();
-      };
+      if (!this.#messageIdleWaiters.has(messageId)) {
+        this.#messageIdleWaiters.set(messageId, []);
+      }
 
-      this.onMessageClose(messageId, resolveCallback);
+      this.#messageIdleWaiters.get(messageId)!.push({
+        resolve,
+        reject,
+        timeoutId,
+      });
     });
   }
 
   async #processMessageClose(messageId: string) {
+    // Check if message is idle first
+    if (!this.isMessageIdle(messageId)) {
+      return; // Not idle yet, do nothing
+    }
+
     // Trigger registered callbacks for this messageId if all artifacts are closed
     const callbacks = this.#messageCloseCallbacks.get(messageId);
 
     if (callbacks && callbacks.length > 0) {
-      // Check if message is idle using the centralized method
-      if (this.isMessageIdle(messageId)) {
-        // Copy callbacks and clear map before execution to prevent duplicate runs
-        const callbacksCopy = [...callbacks];
-        this.#messageCloseCallbacks.delete(messageId);
+      // Copy callbacks and clear map before execution to prevent duplicate runs
+      const callbacksCopy = [...callbacks];
+      this.#messageCloseCallbacks.delete(messageId);
 
-        logger.debug(`Executing ${callbacksCopy.length} callbacks for message ${messageId}`);
-        await Promise.all(callbacksCopy.map((callback) => callback()));
-      }
+      logger.debug(`Executing ${callbacksCopy.length} callbacks for message ${messageId}`);
+      await Promise.all(callbacksCopy.map((callback) => callback()));
+    }
+
+    // Resolve idle waiters for this messageId
+    const waiters = this.#messageIdleWaiters.get(messageId);
+
+    if (waiters && waiters.length > 0) {
+      const waitersCopy = [...waiters];
+      this.#messageIdleWaiters.delete(messageId);
+
+      logger.debug(`Resolving ${waitersCopy.length} idle waiters for message ${messageId}`);
+
+      waitersCopy.forEach((waiter) => {
+        clearTimeout(waiter.timeoutId);
+        waiter.resolve();
+      });
     }
   }
 
