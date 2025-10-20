@@ -64,6 +64,10 @@ import type { WorkbenchStore } from '~/lib/stores/workbench';
 
 const logger = createScopedLogger('Chat');
 
+const MAX_COMMIT_RETRIES = 3;
+const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
+const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 15000;
+
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
     const params = new URLSearchParams();
@@ -598,17 +602,13 @@ export const ChatImpl = memo(
         return;
       }
 
-      const maxRetries = 3;
-      const connectionTimeout = 10000;
-      const messageIdleTimeout = 15000;
-
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      for (let attempt = 0; attempt <= MAX_COMMIT_RETRIES; attempt++) {
         try {
           if (attempt > 0) {
-            logger.info(`Commit retry attempt: ${attempt}/${maxRetries}`);
-            await waitForWorkbenchConnection(workbench, connectionTimeout);
+            logger.info(`Commit retry attempt: ${attempt}/${MAX_COMMIT_RETRIES}`);
+            await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
             await new Promise((resolve) => setTimeout(resolve, 100));
-            await workbench.waitForMessageIdle(message.id, { timeoutMs: messageIdleTimeout });
+            await workbench.waitForMessageIdle(message.id, { timeoutMs: WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS });
           }
 
           await commitChanges(message, (commitHash) => {
@@ -620,7 +620,7 @@ export const ChatImpl = memo(
 
           return;
         } catch (error) {
-          const isLastAttempt = attempt >= maxRetries;
+          const isLastAttempt = attempt >= MAX_COMMIT_RETRIES;
           logger.warn(`❌ Commit retry attempt ${attempt + 1} failed:`, error);
 
           if (isLastAttempt) {
