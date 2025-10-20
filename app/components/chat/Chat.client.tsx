@@ -66,6 +66,7 @@ const logger = createScopedLogger('Chat');
 
 const MAX_COMMIT_RETRIES = 3;
 const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
+const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 15000;
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
@@ -607,7 +608,9 @@ export const ChatImpl = memo(
           if (attempt > 0) {
             logger.info(`Commit retry attempt: ${attempt}/${MAX_COMMIT_RETRIES}`);
             await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
-            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Wait until the remote container's WebSocket connection is established and initialization (heartbeat, authentication, message queue, etc.) is stable
+            await new Promise((resolve) => setTimeout(resolve, WORKBENCH_INIT_DELAY_MS));
             await workbench.waitForMessageIdle(message.id, { timeoutMs: WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS });
           }
 
