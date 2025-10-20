@@ -603,16 +603,17 @@ export const ChatImpl = memo(
         return;
       }
 
-      for (let attempt = 0; attempt <= MAX_COMMIT_RETRIES; attempt++) {
-        try {
-          if (attempt > 0) {
-            logger.info(`Commit retry attempt: ${attempt}/${MAX_COMMIT_RETRIES}`);
-            await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+      let attempt = 0;
+      let commitSucceeded = false;
+      let lastError: unknown;
 
-            // Wait until the remote container's WebSocket connection is established and initialization (heartbeat, authentication, message queue, etc.) is stable
-            await new Promise((resolve) => setTimeout(resolve, WORKBENCH_INIT_DELAY_MS));
-            await workbench.waitForMessageIdle(message.id, { timeoutMs: WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS });
-          }
+      while (!commitSucceeded && attempt <= MAX_COMMIT_RETRIES) {
+        try {
+          logger.info(`Commit attempt ${attempt + 1}/${MAX_COMMIT_RETRIES + 1}`);
+
+          await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+          await new Promise((resolve) => setTimeout(resolve, WORKBENCH_INIT_DELAY_MS));
+          await workbench.waitForMessageIdle(message.id, { timeoutMs: WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS });
 
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
@@ -620,20 +621,20 @@ export const ChatImpl = memo(
           });
 
           logger.info('✅ Commit succeeded');
-
-          return;
+          commitSucceeded = true;
         } catch (error) {
-          const isLastAttempt = attempt >= MAX_COMMIT_RETRIES;
-          logger.warn(`❌ Commit retry attempt ${attempt + 1} failed:`, error);
-
-          if (isLastAttempt) {
-            handleChatError(
-              'The code commit has failed after retry.',
-              error instanceof Error ? error : String(error),
-              'handleCommit',
-            );
-          }
+          lastError = error;
+          logger.warn(`❌ Commit attempt ${attempt + 1} failed:`, error);
+          attempt++;
         }
+      }
+
+      if (!commitSucceeded) {
+        handleChatError(
+          `Code commit failed after ${MAX_COMMIT_RETRIES + 1} attempts`,
+          lastError instanceof Error ? lastError : String(lastError),
+          'handleCommit',
+        );
       }
     };
 
