@@ -427,3 +427,35 @@ export const revertBranch = async (projectPath: string, branchName: string, comm
 
   return response.data;
 };
+
+export const createProjectAccessToken = async (projectPath: string) => {
+  const response = await axios.post('/api/gitlab/project-access-token', {
+    projectPath,
+  });
+
+  return response.data;
+};
+
+export const getProjectAccessTokenStatus = async (projectPath: string) => {
+  const response = await axios.get('/api/gitlab/project-access-token', {
+    params: { projectPath },
+  });
+
+  return response.data;
+};
+
+export const revokeAllProjectAccessTokens = async (projectPath: string) => {
+  const response = await axios.delete('/api/gitlab/project-access-token', {
+    data: { projectPath },
+  });
+
+  return response.data;
+};
+
+export const revokeProjectAccessToken = async (projectPath: string, tokenId: number) => {
+  const response = await axios.delete('/api/gitlab/project-access-token', {
+    data: { projectPath, tokenId },
+  });
+
+  return response.data;
+};

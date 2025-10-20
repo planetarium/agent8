@@ -381,33 +381,6 @@ export class GitlabService {
     }
   }
 
-  private async _getProjectFiles(projectId: number, branch: string = 'develop'): Promise<string[]> {
-    try {
-      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/tree`, {
-        headers: {
-          'PRIVATE-TOKEN': this.gitlabToken,
-        },
-        params: {
-          recursive: true,
-          ref: branch,
-          per_page: 100,
-        },
-      });
-
-      interface TreeItem {
-        path: string;
-        type: string;
-      }
-
-      const files = (response.data as TreeItem[]).filter((item) => item.type === 'blob').map((item) => item.path);
-
-      return files;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get project files: ${errorMessage}`);
-    }
-  }
-
   private async _existsFile(projectId: number, filePath: string, branch: string = 'develop'): Promise<boolean> {
     try {
       await this.gitlab.RepositoryFiles.show(projectId, filePath, branch);
@@ -1382,6 +1355,247 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get tags: ${errorMessage}`);
+    }
+  }
+
+  // ===== PROJECT ACCESS TOKEN MANAGEMENT =====
+
+  /**
+   * Check if a token is an active project access token
+   */
+  private _isActiveProjectAccessToken(token: any): boolean {
+    const isProjectAccessToken =
+      token.scopes?.includes('write_repository') && token.scopes?.includes('read_repository');
+    const isNotExpired = new Date(token.expires_at) > new Date();
+    const isNotRevoked = !token.revoked && token.active !== false;
+
+    return isProjectAccessToken && isNotExpired && isNotRevoked;
+  }
+
+  async getProjectAccessTokens(projectId: number): Promise<any[]> {
+    try {
+      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get project access tokens: ${errorMessage}`);
+    }
+  }
+
+  async revokeProjectAccessToken(projectId: number, tokenId: number): Promise<void> {
+    try {
+      logger.info(`Attempting to revoke token ${tokenId} for project ${projectId}`);
+
+      // Use gitlab-api library for better error handling
+      await this.gitlab.ProjectAccessTokens.revoke(projectId, tokenId);
+
+      logger.info(`Token ${tokenId} revoked successfully using gitlab-api`);
+    } catch (error: any) {
+      logger.error(`Failed to revoke token ${tokenId}:`, error);
+
+      // Fallback to direct API call if gitlab-api fails
+      try {
+        logger.info(`Trying direct API call as fallback for token ${tokenId}`);
+
+        const response = await axios.delete(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens/${tokenId}`, {
+          headers: {
+            'PRIVATE-TOKEN': this.gitlabToken,
+          },
+        });
+        logger.info(`Token ${tokenId} revoked successfully via direct API. Status: ${response.status}`);
+      } catch (directError: any) {
+        logger.error(`Direct API call also failed for token ${tokenId}:`, {
+          status: directError.response?.status,
+          statusText: directError.response?.statusText,
+          data: directError.response?.data,
+          message: directError.message,
+        });
+
+        const errorMessage = directError.response?.data?.message || directError.message || 'Unknown error';
+        throw new Error(`Failed to revoke project access token: ${errorMessage}`);
+      }
+    }
+  }
+
+  async revokeAllProjectAccessTokens(projectId: number): Promise<void> {
+    try {
+      logger.info(`Starting to revoke all project access tokens for project ${projectId}`);
+
+      const tokens = await this.getProjectAccessTokens(projectId);
+
+      const projectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
+
+      logger.info(`Found ${projectAccessTokens.length} active project access tokens to revoke`);
+
+      if (projectAccessTokens.length === 0) {
+        logger.info('No active project access tokens found to revoke');
+        return;
+      }
+
+      const revokePromises = projectAccessTokens.map(async (token) => {
+        try {
+          await this.revokeProjectAccessToken(projectId, token.id);
+          logger.info(`Successfully revoked token ${token.id} (${token.name})`);
+        } catch (error) {
+          logger.error(`Failed to revoke token ${token.id} (${token.name}):`, error);
+          throw error; // Re-throw to fail the whole operation
+        }
+      });
+
+      await Promise.all(revokePromises);
+      logger.info(`Successfully revoked all ${projectAccessTokens.length} project access tokens`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Failed to revoke all project access tokens:`, error);
+      throw new Error(`Failed to revoke all project access tokens: ${errorMessage}`);
+    }
+  }
+
+  async createProjectAccessToken(
+    projectId: number,
+    projectPath?: string,
+  ): Promise<{
+    token: string;
+    id: number;
+    name: string;
+    scopes: string[];
+    expires_at: string;
+    access_level: number;
+  }> {
+    try {
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+
+      const expiresAt = expiryDate.toISOString().split('T')[0];
+
+      const generateRandomString = (length: number): string => {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+      };
+
+      const createTokenName = (projectPath?: string): string => {
+        if (!projectPath) {
+          return `token-${generateRandomString(8)}`;
+        }
+
+        const projectName = projectPath.split('/').pop() || 'project';
+        const projectPrefix = projectName
+          .slice(0, 6)
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toLowerCase();
+        const randomSuffix = generateRandomString(6);
+
+        return `${projectPrefix}-${randomSuffix}`;
+      };
+
+      const tokenName = createTokenName(projectPath);
+
+      const tokenData = {
+        name: tokenName,
+        scopes: ['read_repository', 'write_repository', 'read_api'],
+        access_level: 30,
+        expires_at: expiresAt,
+      };
+
+      const response = await axios.post(`${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`, tokenData, {
+        headers: {
+          'PRIVATE-TOKEN': this.gitlabToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const axiosError = error as any;
+      const responseData = axiosError?.response?.data;
+      const statusCode = axiosError?.response?.status;
+
+      logger.error('Failed to create project access token', {
+        error: errorMessage,
+        projectId,
+        statusCode,
+        responseData,
+        requestUrl: `${this.gitlabUrl}/api/v4/projects/${projectId}/access_tokens`,
+      });
+
+      throw new Error(`Failed to create project access token: ${errorMessage}`);
+    }
+  }
+
+  async getActiveProjectAccessToken(projectId: number): Promise<{
+    hasToken: boolean;
+    expiresAt?: string;
+    daysLeft?: number;
+    tokenName?: string;
+  }> {
+    try {
+      const tokens = await this.getProjectAccessTokens(projectId);
+
+      const activeProjectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
+
+      if (activeProjectAccessTokens.length === 0) {
+        return { hasToken: false };
+      }
+
+      const latestToken = activeProjectAccessTokens.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )[0];
+
+      const expiresAt = latestToken.expires_at;
+      const daysLeft = Math.ceil((new Date(expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+
+      return {
+        hasToken: true,
+        expiresAt,
+        daysLeft,
+        tokenName: latestToken.name,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get active project access token: ${errorMessage}`);
+    }
+  }
+
+  async getActiveProjectAccessTokensList(projectId: number): Promise<
+    Array<{
+      id: number;
+      name: string;
+      expires_at: string;
+      daysLeft: number;
+      created_at: string;
+      revoked: boolean;
+    }>
+  > {
+    try {
+      const tokens = await this.getProjectAccessTokens(projectId);
+
+      const activeProjectAccessTokens = tokens.filter((token) => this._isActiveProjectAccessToken(token));
+
+      return activeProjectAccessTokens
+        .map((token) => {
+          const daysLeft = Math.ceil(
+            (new Date(token.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+          );
+
+          return {
+            id: token.id,
+            name: token.name,
+            expires_at: token.expires_at,
+            daysLeft,
+            created_at: token.created_at,
+            revoked: false, // Always false since we already filtered for active tokens
+          };
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get active project access tokens list: ${errorMessage}`);
     }
   }
 }

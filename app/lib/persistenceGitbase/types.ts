@@ -19,6 +19,12 @@ export interface GitlabProject {
   id: number;
   name: string;
   path_with_namespace: string;
+  namespace: {
+    id: number;
+    name: string;
+    path: string;
+    kind: string;
+  };
   default_branch?: string;
   last_commit?: {
     id: string;
@@ -65,4 +71,39 @@ export interface CommitAction {
 export interface FileContent {
   path: string;
   content: string;
+}
+
+export interface ProjectAccessTokenResponse {
+  token: string;
+  id: number;
+  name: string;
+  scopes: string[];
+  expires_at: string;
+  access_level: number;
+}
+
+export interface ProjectAccessTokenStatus {
+  hasToken: boolean;
+  expiresAt?: string;
+  daysLeft?: number;
+  tokenName?: string;
+}
+
+export interface GitCommands {
+  projectInfo: {
+    path: string;
+    gitUrl: string;
+    defaultBranch: string;
+    hasActiveToken: boolean;
+    tokenExpiresAt?: string;
+    daysLeft?: number;
+  };
+  setup: {
+    clone: string;
+    remoteUpdate: string[];
+    basicWorkflow: string[];
+    branchStrategy: string[];
+  };
+  troubleshooting: string[];
+  security: string[];
 }
