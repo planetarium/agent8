@@ -3,7 +3,7 @@ import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 
-export const loader = withV8AuthUser(userLoader, { checkCredit: true });
+export const loader = withV8AuthUser(userLoader);
 
 /**
  * Loader function for getting or creating GitLab user

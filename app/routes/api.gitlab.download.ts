@@ -2,7 +2,7 @@ import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
-export const loader = withV8AuthUser(downloadLoader, { checkCredit: true });
+export const loader = withV8AuthUser(downloadLoader);
 
 /**
  * Loader function for downloading code from a project

@@ -3,7 +3,7 @@ import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 
-export const action = withV8AuthUser(revertBranchAction, { checkCredit: true });
+export const action = withV8AuthUser(revertBranchAction);
 
 /**
  * Action function for reverting a branch to a specific commit

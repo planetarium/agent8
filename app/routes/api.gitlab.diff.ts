@@ -2,7 +2,7 @@ import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
-export const loader = withV8AuthUser(getDiffLoader, { checkCredit: true });
+export const loader = withV8AuthUser(getDiffLoader);
 
 async function getDiffLoader({ context, request }: LoaderFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;

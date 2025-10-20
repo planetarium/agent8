@@ -3,8 +3,8 @@ import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 
-export const loader = withV8AuthUser(branchesLoader, { checkCredit: true });
-export const action = withV8AuthUser(branchesAction, { checkCredit: true });
+export const loader = withV8AuthUser(branchesLoader);
+export const action = withV8AuthUser(branchesAction);
 
 /**
  * Loader function for getting project branches with task- prefix
