@@ -28,6 +28,16 @@ export interface FileSystemWatcher {
 
 /**
  * File node interfaces for file system tree structure
+ *
+ * @property file.contents - File content as string (text) or number[] (binary bytes)
+ * @property file.isBinary - Flag indicating binary content
+ * @property file.mimeType - Optional MIME type
+ *
+ * @note Protocol Compliance: Uses number[] for binary content to ensure JSON serialization compatibility
+ * - Text files: string (actual content)
+ * - Binary files: number[] (byte array)
+ * - container-agent checks Array.isArray(contents) to identify binary files and converts to Buffer
+ * - Base64 encoding would violate protocol contract and cause incorrect file writes
  */
 export interface FileNode {
   file: {

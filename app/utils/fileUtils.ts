@@ -104,7 +104,6 @@ function analyzeFileContent(buffer: Uint8Array): {
 
   const sampleSize = Math.min(8000, buffer.length);
   let nullBytes = 0;
-  let highBytes = 0;
   let controlChars = 0;
 
   for (let i = 0; i < sampleSize; i++) {
@@ -112,8 +111,6 @@ function analyzeFileContent(buffer: Uint8Array): {
 
     if (byte === 0) {
       nullBytes++;
-    } else if (byte > 127) {
-      highBytes++;
     } else if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
       controlChars++;
     }
@@ -124,8 +121,12 @@ function analyzeFileContent(buffer: Uint8Array): {
     return { isBinary: true, confidence: 'high' };
   }
 
-  // High ratio of control characters or high bytes suggests binary
-  const suspiciousRatio = (controlChars + highBytes) / sampleSize;
+  /*
+   * High ratio of control characters suggests binary
+   * Note: We no longer count bytes > 127 as suspicious to avoid
+   * misclassifying legitimate UTF-8 text with multi-byte characters
+   */
+  const suspiciousRatio = controlChars / sampleSize;
 
   if (suspiciousRatio > 0.3) {
     return { isBinary: true, confidence: 'high' };
@@ -393,14 +394,24 @@ export function convertFileMapToFileSystemTree(fileMap: FileMap): FileSystemTree
        * - 바이너리 파일: fileData.buffer (Uint8Array) → contents (number[])
        * - 텍스트 파일: fileData.content (string) → contents (string)
        *
-       * Uint8Array를 number[]로 변환하는 이유: JSON 직렬화 시 Uint8Array는
-       * 올바르게 직렬화되지 않으므로 일반 배열로 변환하여 전송
+       * ⚠️ PROTOCOL COMPLIANCE - DO NOT CHANGE TO BASE64:
+       * FileNode.file.contents MUST be string | number[] as defined in remote-container-protocol.ts
+       * - Text files: string (actual text content)
+       * - Binary files: number[] (byte array)
+       *
+       * Why number[] instead of Base64 string:
+       * 1. Protocol contract: container-agent expects Array.isArray(contents) for binary detection
+       * 2. Container-agent logic: `Array.isArray(contents) ? Buffer.from(contents) : contents`
+       * 3. Base64 string would be written as-is to files, corrupting binary data
+       * 4. Both projects share the same protocol definition with explicit number[] type
+       *
+       * Reference: agent8-container-agent/src/server.ts:1259 and container-agent-impl.ts:127
        */
       if (fileData.isBinary && fileData.buffer) {
-        // 바이너리 파일: Uint8Array를 number[]로 변환 (JSON 직렬화 대응)
+        // 바이너리 파일: Uint8Array를 number[]로 변환 (프로토콜 준수)
         currentTree[fileName] = {
           file: {
-            contents: Array.from(fileData.buffer), // Uint8Array → number[]
+            contents: Array.from(fileData.buffer), // Uint8Array → number[] (MUST be array, not Base64)
             isBinary: true,
             mimeType: fileData.mimeType,
           },

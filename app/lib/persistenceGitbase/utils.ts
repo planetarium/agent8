@@ -60,7 +60,10 @@ export async function unzipCode(zipBlob: Buffer) {
 
         const filePath = pathParts.join('/');
 
-        const binaryDetectionResult = await detectBinaryFileInZip(filePath, zipEntry);
+        const { result: binaryDetectionResult, buffer: detectionBuffer } = await detectBinaryFileInZip(
+          filePath,
+          zipEntry,
+        );
         let content = '';
         let buffer: Uint8Array | undefined;
 
@@ -73,8 +76,8 @@ export async function unzipCode(zipBlob: Buffer) {
          * 기존 FileMap 인터페이스와 이를 사용하는 코드들의 변경을 최소화
          */
         if (binaryDetectionResult.isBinary) {
-          // 바이너리 파일: 원본 Uint8Array 데이터를 buffer에 저장
-          buffer = await zipEntry.async('uint8array');
+          // 바이너리 파일: 감지 시 읽은 버퍼를 재사용 (중복 읽기 방지)
+          buffer = detectionBuffer;
 
           // content는 빈 문자열로 유지 (기존 코드 호환성)
         } else {
@@ -105,10 +108,15 @@ export async function unzipCode(zipBlob: Buffer) {
 
 /**
  * ZIP 파일 내부의 파일에 대한 바이너리 감지
- * 통합된 detectBinaryFile 함수를 사용
+ * 통합된 detectBinaryFile 함수를 사용하며, 버퍼도 함께 반환하여 중복 읽기 방지
  */
-async function detectBinaryFileInZip(filePath: string, zipEntry: JSZip.JSZipObject): Promise<BinaryDetectionResult> {
-  // ZIP 파일에서 버퍼를 읽어서 통합된 함수에 전달
+async function detectBinaryFileInZip(
+  filePath: string,
+  zipEntry: JSZip.JSZipObject,
+): Promise<{ result: BinaryDetectionResult; buffer: Uint8Array }> {
+  // ZIP 파일에서 버퍼를 한 번만 읽어서 감지 결과와 함께 반환
   const buffer = await zipEntry.async('uint8array');
-  return detectBinaryFile(filePath, buffer);
+  const result = await detectBinaryFile(filePath, buffer);
+
+  return { result, buffer };
 }
