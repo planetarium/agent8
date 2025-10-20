@@ -60,6 +60,7 @@ import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError } from '~/utils/errorNotification';
 import ToastContainer from '~/components/ui/ToastContainer';
+import type { WorkbenchStore } from '~/lib/stores/workbench';
 
 const logger = createScopedLogger('Chat');
 
@@ -113,6 +114,37 @@ function sendEventToParent(type: string, payload: any) {
   } catch (error) {
     logger.error('Error sending message to parent:', error);
   }
+}
+
+async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: number = 10000): Promise<void> {
+  const currentState = workbench.connectionState.get();
+
+  if (currentState === 'failed') {
+    throw new Error('Container connection failed - manual recovery required');
+  }
+
+  if (currentState === 'connected') {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      unsubscribe();
+      reject(new Error(`Connection timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const unsubscribe = workbench.connectionState.subscribe((state) => {
+      if (state === 'connected') {
+        clearTimeout(timeoutId);
+        unsubscribe();
+        resolve();
+      } else if (state === 'failed') {
+        clearTimeout(timeoutId);
+        unsubscribe();
+        reject(new Error('Connection failed during wait'));
+      }
+    });
+  });
 }
 
 interface ChatComponentProps {
@@ -476,7 +508,6 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
-          workbench.offMessageClose(message.id);
           await runAndPreview(message);
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
@@ -567,31 +598,39 @@ export const ChatImpl = memo(
         return;
       }
 
-      try {
-        await commitChanges(message, (commitHash) => {
-          setMessages((prev: UIMessage[]) => {
-            const newMessages = prev.map((m: UIMessage) => {
-              if (m.id === message.id) {
-                return {
-                  ...m,
-                  id: commitHash,
-                };
-              }
+      const maxRetries = 3;
+      const connectionTimeout = 10000;
+      const messageIdleTimeout = 15000;
 
-              return m;
-            });
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            logger.info(`Commit retry attempt: ${attempt}/${maxRetries}`);
+            await waitForWorkbenchConnection(workbench, connectionTimeout);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            await workbench.waitForMessageIdle(message.id, { timeoutMs: messageIdleTimeout });
+          }
 
-            return newMessages;
+          await commitChanges(message, (commitHash) => {
+            setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
+            reloadTaskBranches(repoStore.get().path);
           });
-          reloadTaskBranches(repoStore.get().path);
-        });
-      } catch (e) {
-        handleChatError(
-          'The code commit has failed. You can download the code and restore it.',
-          e instanceof Error ? e : String(e),
-          'handleCommit',
-        );
-        console.log(e);
+
+          logger.info('✅ Commit succeeded');
+
+          return;
+        } catch (error) {
+          const isLastAttempt = attempt >= maxRetries;
+          logger.warn(`❌ Commit retry attempt ${attempt + 1} failed:`, error);
+
+          if (isLastAttempt) {
+            handleChatError(
+              'The code commit has failed after retry.',
+              error instanceof Error ? error : String(error),
+              'handleCommit',
+            );
+          }
+        }
       }
     };
 

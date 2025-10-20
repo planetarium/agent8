@@ -4,8 +4,8 @@ import type { GitlabProject } from '~/lib/persistenceGitbase/types';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 
-export const action = withV8AuthUser(commitsAction, { checkCredit: true });
-export const loader = withV8AuthUser(commitsLoader, { checkCredit: true });
+export const action = withV8AuthUser(commitsAction);
+export const loader = withV8AuthUser(commitsLoader);
 
 /**
  * Loader function for getting project commits
