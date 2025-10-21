@@ -354,6 +354,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } as ProgressAnnotation,
         });
 
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second to check 200 OK
+
         burnCPU(100);
 
         // await new Promise((resolve) => setTimeout(resolve, 300_000));
