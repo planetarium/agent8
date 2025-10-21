@@ -337,6 +337,7 @@ export const ChatImpl = memo(
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const chatRequestStartTimeRef = useRef<number>(0);
 
     const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
@@ -484,6 +485,13 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
+        if (e instanceof TypeError && e.message === 'network error') {
+          const elapsedTimeInSeconds = ((performance.now() - chatRequestStartTimeRef.current) / 1000).toFixed(2);
+          e.stack = `${e.stack} / Elapsed time: ${elapsedTimeInSeconds}sec`;
+        }
+
+        chatRequestStartTimeRef.current = 0;
+
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -517,6 +525,8 @@ export const ChatImpl = memo(
           await new Promise((resolve) => setTimeout(resolve, 1000));
           await handleCommit(message);
         });
+
+        chatRequestStartTimeRef.current = 0;
 
         setFakeLoading(false);
 
@@ -1060,6 +1070,8 @@ export const ChatImpl = memo(
             setMessages(() => []);
           }
         }
+
+        chatRequestStartTimeRef.current = performance.now();
 
         // Send new message immediately - useChat will use the latest state
         sendChatMessage({
