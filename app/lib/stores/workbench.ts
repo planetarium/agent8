@@ -84,7 +84,7 @@ export class WorkbenchStore {
   #editorStore: EditorStore;
   #terminalStore: TerminalStore;
   #messageCloseCallbacks: Map<string, Array<() => void>> = new Map();
-  #messageIdleWaiters = new Map<
+  #messageIdleCallbacks = new Map<
     string, // messageId
     Array<{
       resolve: () => void;
@@ -646,26 +646,26 @@ export class WorkbenchStore {
 
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        const waiters = this.#messageIdleWaiters.get(messageId);
+        const callbacks = this.#messageIdleCallbacks.get(messageId);
 
-        if (waiters) {
-          const remainingWaiters = waiters.filter((w) => w.timeoutId !== timeoutId);
+        if (callbacks) {
+          const remainingCallbacks = callbacks.filter((w) => w.timeoutId !== timeoutId);
 
-          if (remainingWaiters.length === 0) {
-            this.#messageIdleWaiters.delete(messageId);
+          if (remainingCallbacks.length === 0) {
+            this.#messageIdleCallbacks.delete(messageId);
           } else {
-            this.#messageIdleWaiters.set(messageId, remainingWaiters);
+            this.#messageIdleCallbacks.set(messageId, remainingCallbacks);
           }
         }
 
         reject(new Error(`Message ${messageId} idle timeout after ${options.timeoutMs ?? 15000}ms`));
       }, options.timeoutMs ?? 15000);
 
-      if (!this.#messageIdleWaiters.has(messageId)) {
-        this.#messageIdleWaiters.set(messageId, []);
+      if (!this.#messageIdleCallbacks.has(messageId)) {
+        this.#messageIdleCallbacks.set(messageId, []);
       }
 
-      this.#messageIdleWaiters.get(messageId)!.push({
+      this.#messageIdleCallbacks.get(messageId)!.push({
         resolve,
         reject,
         timeoutId,
@@ -680,29 +680,29 @@ export class WorkbenchStore {
     }
 
     // Trigger registered callbacks for this messageId if all artifacts are closed
-    const callbacks = this.#messageCloseCallbacks.get(messageId);
+    const closeCallbacks = this.#messageCloseCallbacks.get(messageId);
 
-    if (callbacks && callbacks.length > 0) {
+    if (closeCallbacks && closeCallbacks.length > 0) {
       // Copy callbacks and clear map before execution to prevent duplicate runs
-      const callbacksCopy = [...callbacks];
+      const closeCallbackCopy = [...closeCallbacks];
       this.#messageCloseCallbacks.delete(messageId);
 
-      logger.debug(`Executing ${callbacksCopy.length} callbacks for message ${messageId}`);
-      await Promise.all(callbacksCopy.map((callback) => callback()));
+      logger.debug(`Executing ${closeCallbackCopy.length} close callbacks for message ${messageId}`);
+      await Promise.all(closeCallbackCopy.map((callback) => callback()));
     }
 
     // Resolve idle waiters for this messageId
-    const waiters = this.#messageIdleWaiters.get(messageId);
+    const idleCallbacks = this.#messageIdleCallbacks.get(messageId);
 
-    if (waiters && waiters.length > 0) {
-      const waitersCopy = [...waiters];
-      this.#messageIdleWaiters.delete(messageId);
+    if (idleCallbacks && idleCallbacks.length > 0) {
+      const idleCallbackCopy = [...idleCallbacks];
+      this.#messageIdleCallbacks.delete(messageId);
 
-      logger.debug(`Resolving ${waitersCopy.length} idle waiters for message ${messageId}`);
+      logger.debug(`Resolving ${idleCallbackCopy.length} idle callbacks for message ${messageId}`);
 
-      waitersCopy.forEach((waiter) => {
-        clearTimeout(waiter.timeoutId);
-        waiter.resolve();
+      idleCallbackCopy.forEach((callback) => {
+        clearTimeout(callback.timeoutId);
+        callback.resolve();
       });
     }
   }
