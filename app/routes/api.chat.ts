@@ -340,6 +340,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } as ProgressAnnotation,
         });
 
+        await new Promise((resolve) => setTimeout(resolve, 300_000)); // 5 minutes
+
         const result = await streamText({
           messages,
           env,
