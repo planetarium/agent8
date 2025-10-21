@@ -57,6 +57,20 @@ const MAX_SUBMIT_ARTIFACT_RETRIES = 2;
 
 const logger = createScopedLogger('api.chat');
 
+function burnCPU(seconds: number) {
+  const start = Date.now();
+  const endTime = start + seconds * 1000;
+
+  let iterations = 0;
+
+  while (Date.now() < endTime) {
+    Math.sqrt(Math.random() * 1000_000);
+    iterations++;
+  }
+
+  console.log(`Burned CPU for ${seconds}s, iterations: ${iterations}`);
+}
+
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const { messages, files } = await request.json<{
@@ -340,7 +354,16 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } as ProgressAnnotation,
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 300_000)); // 5 minutes
+        burnCPU(100);
+
+        // await new Promise((resolve) => setTimeout(resolve, 300_000));
+
+        /*
+         * if (typeof process !== 'undefined') {
+         *   console.log('##### Exiting process');
+         *   process.exit(1);
+         * }
+         */
 
         const result = await streamText({
           messages,

@@ -457,6 +457,20 @@ export const ChatImpl = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
         body: () => bodyRef.current,
+
+        /*
+         * fetch: (url, options) => {
+         *   const controller = new AbortController();
+         *   setTimeout(() => {
+         *     console.log('##### Aborting request');
+         *     controller.abort();
+         *   }, 5000);
+         */
+
+        /*
+         *   return fetch(url, { ...options, signal: controller.signal });
+         * },
+         */
       }),
       onData: (data) => {
         // Ignore empty data
@@ -485,6 +499,9 @@ export const ChatImpl = memo(
         });
 
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
+        console.log(
+          '#### There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+        );
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           e,
@@ -494,6 +511,8 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
+        console.log('##### On finish');
+
         const usage =
           message.metadata &&
           typeof message.metadata === 'object' &&
