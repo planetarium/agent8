@@ -356,7 +356,19 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second to check 200 OK
 
-        burnCPU(100);
+        // burnCPU(100);
+
+        const bigArray: any[] = [];
+
+        try {
+          // 150MB 할당 시도 (128MB 제한 초과)
+          for (let i = 0; i < 150; i++) {
+            bigArray.push(Buffer.alloc(1024 * 1024)); // 1MB씩
+            console.log(`Allocated ${i + 1}MB`);
+          }
+        } catch {
+          console.error('Memory allocation failed');
+        }
 
         // await new Promise((resolve) => setTimeout(resolve, 300_000));
 
