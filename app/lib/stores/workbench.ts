@@ -88,8 +88,6 @@ export class WorkbenchStore {
     string, // messageId
     Array<{
       resolve: () => void;
-      reject: (error: Error) => void;
-      timeoutId: NodeJS.Timeout;
     }>
   >();
   #reinitCounter = atom(0);
@@ -649,12 +647,14 @@ export class WorkbenchStore {
         const callbacks = this.#messageIdleCallbacks.get(messageId);
 
         if (callbacks) {
-          const remainingCallbacks = callbacks.filter((w) => w.timeoutId !== timeoutId);
+          const index = callbacks.findIndex((w) => w.resolve === resolve);
 
-          if (remainingCallbacks.length === 0) {
+          if (index !== -1) {
+            callbacks.splice(index, 1);
+          }
+
+          if (callbacks.length === 0) {
             this.#messageIdleCallbacks.delete(messageId);
-          } else {
-            this.#messageIdleCallbacks.set(messageId, remainingCallbacks);
           }
         }
 
@@ -666,9 +666,10 @@ export class WorkbenchStore {
       }
 
       this.#messageIdleCallbacks.get(messageId)!.push({
-        resolve,
-        reject,
-        timeoutId,
+        resolve: () => {
+          clearTimeout(timeoutId);
+          resolve();
+        },
       });
     });
   }
@@ -701,7 +702,6 @@ export class WorkbenchStore {
       logger.debug(`Resolving ${idleCallbackCopy.length} idle callbacks for message ${messageId}`);
 
       idleCallbackCopy.forEach((callback) => {
-        clearTimeout(callback.timeoutId);
         callback.resolve();
       });
     }
