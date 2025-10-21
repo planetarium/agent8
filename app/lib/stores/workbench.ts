@@ -84,12 +84,7 @@ export class WorkbenchStore {
   #editorStore: EditorStore;
   #terminalStore: TerminalStore;
   #messageCloseCallbacks: Map<string, Array<() => void>> = new Map();
-  #messageIdleCallbacks = new Map<
-    string, // messageId
-    Array<{
-      resolve: () => void;
-    }>
-  >();
+  #messageIdleCallbacks: Map<string, Array<() => void>> = new Map();
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
 
@@ -643,11 +638,12 @@ export class WorkbenchStore {
     }
 
     return new Promise((resolve, reject) => {
+      let callback: () => void;
       const timeoutId = setTimeout(() => {
         const callbacks = this.#messageIdleCallbacks.get(messageId);
 
         if (callbacks) {
-          const index = callbacks.findIndex((w) => w.resolve === resolve);
+          const index = callbacks.findIndex((fn) => fn === callback);
 
           if (index !== -1) {
             callbacks.splice(index, 1);
@@ -665,12 +661,12 @@ export class WorkbenchStore {
         this.#messageIdleCallbacks.set(messageId, []);
       }
 
-      this.#messageIdleCallbacks.get(messageId)!.push({
-        resolve: () => {
+      this.#messageIdleCallbacks.get(messageId)!.push(
+        (callback = () => {
           clearTimeout(timeoutId);
           resolve();
-        },
-      });
+        }),
+      );
     });
   }
 
@@ -701,9 +697,7 @@ export class WorkbenchStore {
 
       logger.debug(`Resolving ${idleCallbackCopy.length} idle callbacks for message ${messageId}`);
 
-      idleCallbackCopy.forEach((callback) => {
-        callback.resolve();
-      });
+      idleCallbackCopy.forEach((fn) => fn());
     }
   }
 
