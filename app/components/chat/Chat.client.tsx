@@ -64,6 +64,11 @@ import type { WorkbenchStore } from '~/lib/stores/workbench';
 
 const logger = createScopedLogger('Chat');
 
+const MAX_COMMIT_RETRIES = 2;
+const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
+const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
+const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 15000;
+
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
     const params = new URLSearchParams();
@@ -598,18 +603,17 @@ export const ChatImpl = memo(
         return;
       }
 
-      const maxRetries = 3;
-      const connectionTimeout = 10000;
-      const messageIdleTimeout = 15000;
+      let attempt = 0;
+      let commitSucceeded = false;
+      let lastError: unknown;
 
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      while (!commitSucceeded && attempt <= MAX_COMMIT_RETRIES) {
         try {
-          if (attempt > 0) {
-            logger.info(`Commit retry attempt: ${attempt}/${maxRetries}`);
-            await waitForWorkbenchConnection(workbench, connectionTimeout);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            await workbench.waitForMessageIdle(message.id, { timeoutMs: messageIdleTimeout });
-          }
+          logger.info(`Commit attempt ${attempt + 1}/${MAX_COMMIT_RETRIES + 1}`);
+
+          await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+          await new Promise((resolve) => setTimeout(resolve, WORKBENCH_INIT_DELAY_MS));
+          await workbench.waitForMessageIdle(message.id, { timeoutMs: WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS });
 
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
@@ -617,20 +621,20 @@ export const ChatImpl = memo(
           });
 
           logger.info('✅ Commit succeeded');
-
-          return;
+          commitSucceeded = true;
         } catch (error) {
-          const isLastAttempt = attempt >= maxRetries;
-          logger.warn(`❌ Commit retry attempt ${attempt + 1} failed:`, error);
-
-          if (isLastAttempt) {
-            handleChatError(
-              'The code commit has failed after retry.',
-              error instanceof Error ? error : String(error),
-              'handleCommit',
-            );
-          }
+          lastError = error;
+          logger.warn(`❌ Commit attempt ${attempt + 1} failed:`, error);
+          attempt++;
         }
+      }
+
+      if (!commitSucceeded) {
+        handleChatError(
+          `Code commit failed after ${MAX_COMMIT_RETRIES + 1} attempts`,
+          lastError instanceof Error ? lastError : String(lastError),
+          'handleCommit',
+        );
       }
     };
 
