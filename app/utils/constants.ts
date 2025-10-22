@@ -52,7 +52,6 @@ PROVIDER_LIST.forEach((provider) => {
 });
 
 // starter Templates
-
 export const STARTER_TEMPLATES: Template[] = [
   {
     name: 'basic-vite-react',
@@ -98,6 +97,29 @@ export const SHELL_COMMANDS = {
   START_DEV_SERVER: 'bun run dev',
   BUILD_PROJECT: 'bun run build',
 } as const;
+
+export const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
+export const VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME = 'vibe-starter-3d-environment';
+
+export const EXCLUSIVE_3D_DOC_TOOLS = [
+  'read_r3f_rapier_essentials',
+  'read_projectile_systems',
+  'read_input_system_guide',
+  'read_how_to_use_3d_tree',
+  'read_environment_terrain',
+  'read_environment_stage',
+  'read_environment_grass',
+  'read_environment_model_placer',
+  'read_environment_navigator',
+  'read_environment_trigger',
+  'read_environment_water',
+  'read_environment_weather',
+  'read_vibe_starter_3d_character',
+  'read_vibe_starter_3d_follow_light',
+  'read_vibe_starter_3d_rigidbody_object',
+  'read_vibe_starter_3d_rigidbody_player',
+  'read_vibe_starter_3d_view_controllers',
+];
 
 export const ATTACHMENT_EXTS = [
   '.png',
