@@ -57,20 +57,6 @@ const MAX_SUBMIT_ARTIFACT_RETRIES = 2;
 
 const logger = createScopedLogger('api.chat');
 
-function burnCPU(seconds: number) {
-  const start = Date.now();
-  const endTime = start + seconds * 1000;
-
-  let iterations = 0;
-
-  while (Date.now() < endTime) {
-    Math.sqrt(Math.random() * 1000_000);
-    iterations++;
-  }
-
-  console.log(`Burned CPU for ${seconds}s, iterations: ${iterations}`);
-}
-
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const { messages, files } = await request.json<{
@@ -356,19 +342,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second to check 200 OK
 
-        // burnCPU(100);
-
-        const bigArray: any[] = [];
-
-        try {
-          // 1500MB 할당 시도
-          for (let i = 0; i < 1500; i++) {
-            bigArray.push(Buffer.alloc(1024 * 1024)); // 1MB씩
-            console.log(`Allocated ${i + 1}MB`);
-          }
-        } catch {
-          console.error('Memory allocation failed');
-        }
+        /*
+         * burnCPU(100);
+         * allocateMemory(1500);
+         */
 
         // await new Promise((resolve) => setTimeout(resolve, 300_000));
 

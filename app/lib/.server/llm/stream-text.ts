@@ -28,6 +28,7 @@ import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 import { createInvalidToolInputHandler } from './tools/error-handle';
 import { createSubmitArtifactActionTool } from './tools/action';
 import { createUnknownToolHandler } from './tools/error-handle';
+import { burnCPU } from '~/lib/utils';
 
 export type Messages = UIMessage[];
 
@@ -249,6 +250,8 @@ export async function streamText(props: {
     },
     ...options,
   });
+
+  burnCPU(100);
 
   (async () => {
     try {

@@ -6,6 +6,33 @@ interface CloudflareCacheStorage extends CacheStorage {
   default: Cache;
 }
 
+export function burnCPU(seconds: number) {
+  const start = Date.now();
+  const endTime = start + seconds * 1000;
+
+  let iterations = 0;
+
+  while (Date.now() < endTime) {
+    Math.sqrt(Math.random() * 1000_000);
+    iterations++;
+  }
+
+  console.log(`Burned CPU for ${seconds}s, iterations: ${iterations}`);
+}
+
+export function allocateMemory(mb: number) {
+  const bigArray: any[] = [];
+  let i = 0;
+
+  try {
+    for (i = 0; i < mb; i++) {
+      bigArray.push(Buffer.alloc(1024 * 1024));
+    }
+  } catch {
+    console.error(`Memory allocation failed: ${mb}MB`);
+  }
+}
+
 function getPackageContent(files: any): string {
   const packageFile = files[`${WORK_DIR}/package.json`];
 
