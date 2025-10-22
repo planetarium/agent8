@@ -263,7 +263,7 @@ export const fetchProjectFiles = async (projectPath: string, commitSha?: string)
 
 export const getProjectCommits = async (
   projectPath: string,
-  options: { branch?: string; untilCommit?: string; page?: number } = {},
+  options: { branch?: string; untilCommit?: string; page?: number; all?: boolean } = {},
 ) => {
   const queryParams = new URLSearchParams({
     projectPath,
@@ -275,6 +275,10 @@ export const getProjectCommits = async (
 
   if (options.untilCommit) {
     queryParams.append('untilCommit', options.untilCommit);
+  }
+
+  if (options.all) {
+    queryParams.append('all', 'true');
   }
 
   if (options.page) {
@@ -455,6 +459,55 @@ export const revokeAllProjectAccessTokens = async (projectPath: string) => {
 export const revokeProjectAccessToken = async (projectPath: string, tokenId: number) => {
   const response = await axios.delete('/api/gitlab/project-access-token', {
     data: { projectPath, tokenId },
+  });
+
+  return response.data;
+};
+
+export const getRestorePoint = async (projectPath: string): Promise<string | null> => {
+  try {
+    const response = await axios.get('/api/gitlab/restore-point', {
+      params: {
+        projectPath,
+      },
+    });
+
+    return response.data.data?.restorePoint || null;
+  } catch {
+    return null;
+  }
+};
+
+export const setRestorePoint = async (projectPath: string, commitHash: string, commitTitle: string) => {
+  const response = await axios.post('/api/gitlab/restore-point', {
+    projectPath,
+    commitHash,
+    commitTitle,
+  });
+
+  return response.data;
+};
+
+export const getRestoreHistory = async (projectPath: string) => {
+  try {
+    const response = await axios.get('/api/gitlab/restore-point', {
+      params: {
+        projectPath,
+        history: true,
+      },
+    });
+
+    return response.data.data?.history || [];
+  } catch {
+    return [];
+  }
+};
+
+export const clearRestorePoint = async (projectPath: string) => {
+  const response = await axios.delete('/api/gitlab/restore-point', {
+    data: {
+      projectPath,
+    },
   });
 
   return response.data;

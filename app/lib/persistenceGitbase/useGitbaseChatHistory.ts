@@ -7,9 +7,14 @@ import {
   fetchProjectFiles,
   getTaskBranches,
   revertBranch,
+  getRestorePoint,
+  getRestoreHistory,
 } from '~/lib/persistenceGitbase/api.client';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
+import type { RestoreHistoryEntry } from '~/lib/persistenceGitbase/gitlabService';
+import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
 
@@ -69,6 +74,7 @@ export function useGitbaseChatHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
+  const [cachedRestoreHistory, setCachedRestoreHistory] = useState<RestoreHistoryEntry[]>([]);
   const prevRequestParams = useRef<{ [key: string]: any }>({});
 
   const loadTaskBranches = useCallback(async (projectPath: string) => {
@@ -105,11 +111,13 @@ export function useGitbaseChatHistory() {
       page = 1,
       taskBranch,
       untilCommit,
+      fileCommit,
       force,
     }: {
       page?: number;
       taskBranch?: string;
       untilCommit?: string;
+      fileCommit?: string;
       force?: boolean;
     }) => {
       if (!projectPath) {
@@ -174,7 +182,7 @@ export function useGitbaseChatHistory() {
           }
 
           await Promise.all([
-            loadFiles(projectPath, untilCommit || taskBranch || undefined),
+            loadFiles(projectPath, fileCommit || untilCommit || taskBranch || undefined),
             loadTaskBranches(projectPath),
           ]);
         }
@@ -183,6 +191,7 @@ export function useGitbaseChatHistory() {
           branch: taskBranch,
           untilCommit,
           page,
+          all: true, // Get all commits including unreachable ones
         })) as CommitResponse;
 
         if (!data.success) {
@@ -200,10 +209,113 @@ export function useGitbaseChatHistory() {
 
         const newMessages = parseCommitMessages(data.data.commits);
 
+        // Get restore history and filter by commit time range
+        let restoreMessages: UIMessage[] = [];
+
+        try {
+          // Fetch restore history only on first page load, then use cache
+          let restoreHistory = cachedRestoreHistory;
+
+          if (page === 1) {
+            restoreHistory = await getRestoreHistory(projectPath);
+            setCachedRestoreHistory(restoreHistory);
+          }
+
+          // Calculate time range of loaded messages
+          if (newMessages.length > 0) {
+            const messageTimes = newMessages
+              .map((msg) => {
+                const metadata = msg.metadata as any;
+                return metadata?.createdAt ? new Date(metadata.createdAt).getTime() : 0;
+              })
+              .filter((time) => time > 0);
+
+            if (messageTimes.length > 0) {
+              const minTime = Math.min(...messageTimes);
+              const maxTime = Math.max(...messageTimes);
+
+              // Filter restore messages within the commit time range
+              const filteredHistory = restoreHistory.filter((entry: RestoreHistoryEntry) => {
+                const restoreTime = new Date(entry.restoredAt).getTime();
+                return restoreTime >= minTime && restoreTime <= maxTime;
+              });
+
+              restoreMessages = filteredHistory.map((entry: RestoreHistoryEntry) => ({
+                id: `restore-${entry.commitHash}`,
+                role: 'assistant' as const,
+                parts: [
+                  {
+                    type: 'text' as const,
+                    text: `${entry.commitTitle}`,
+                  },
+                ],
+                metadata: {
+                  createdAt: new Date(entry.restoredAt),
+                  annotations: ['restore-message'],
+                },
+              }));
+            }
+          }
+        } catch (err) {
+          logger.warn('Failed to load restore history:', err);
+        }
+
         if (page > 1) {
-          setChats((prevChats) => [...newMessages.reverse(), ...prevChats]);
+          // Load More: Merge new messages with restore messages and existing chats, then sort
+          setChats((prevChats) => {
+            const allMessages = [...newMessages, ...restoreMessages, ...prevChats];
+
+            allMessages.sort((a, b) => {
+              const metadataA = a.metadata as any;
+              const metadataB = b.metadata as any;
+              const timeA = metadataA?.createdAt ? new Date(metadataA.createdAt).getTime() : 0;
+              const timeB = metadataB?.createdAt ? new Date(metadataB.createdAt).getTime() : 0;
+
+              // Sort by timestamp first
+              if (timeA !== timeB) {
+                return timeA - timeB;
+              }
+
+              // If same timestamp, user messages come before assistant messages
+              if (a.role === 'user' && b.role === 'assistant') {
+                return -1;
+              }
+
+              if (a.role === 'assistant' && b.role === 'user') {
+                return 1;
+              }
+
+              return 0;
+            });
+
+            return allMessages;
+          });
         } else {
-          setChats(newMessages.reverse());
+          // First load: Combine restore messages with regular messages and sort by timestamp
+          const allMessages = [...newMessages, ...restoreMessages];
+          allMessages.sort((a, b) => {
+            const metadataA = a.metadata as any;
+            const metadataB = b.metadata as any;
+            const timeA = metadataA?.createdAt ? new Date(metadataA.createdAt).getTime() : 0;
+            const timeB = metadataB?.createdAt ? new Date(metadataB.createdAt).getTime() : 0;
+
+            // Sort by timestamp first
+            if (timeA !== timeB) {
+              return timeA - timeB;
+            }
+
+            // If same timestamp, user messages come before assistant messages
+            if (a.role === 'user' && b.role === 'assistant') {
+              return -1;
+            }
+
+            if (a.role === 'assistant' && b.role === 'user') {
+              return 1;
+            }
+
+            return 0;
+          });
+          setChats(allMessages);
         }
 
         setLoaded(true);
@@ -255,16 +367,105 @@ export function useGitbaseChatHistory() {
   }, [loading, hasMore, currentPage, load]);
 
   useEffect(() => {
-    const unsubscribe = repoStore.subscribe((state) => {
+    const initializeLoad = async () => {
+      // Read revertTo from URL query parameters (priority 1)
+      const url = new URL(window.location.href);
+      const revertToParam = url.searchParams.get('revertTo');
+      let revertToCommit = revertToParam && isCommitHash(revertToParam) ? revertToParam : undefined;
+
+      // If no URL parameter, try to get from GitLab (priority 2)
+      if (!revertToCommit && projectPath) {
+        try {
+          const savedRestorePoint = await getRestorePoint(projectPath);
+
+          if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
+            revertToCommit = savedRestorePoint;
+          }
+        } catch (err) {
+          console.warn('Failed to get restore point from GitLab:', err);
+        }
+      }
+
+      // Initial load on mount or projectPath change
+      if (
+        projectPath &&
+        (projectPath !== prevRequestParams.current.projectPath ||
+          repoStore.get().taskBranch !== prevRequestParams.current.taskBranch)
+      ) {
+        // Always load all chat history (don't filter by untilCommit)
+        load({ page: 1, taskBranch: repoStore.get().taskBranch, fileCommit: revertToCommit, untilCommit: undefined });
+      }
+    };
+
+    initializeLoad();
+
+    const unsubscribe = repoStore.subscribe(async (state) => {
       if (
         projectPath !== prevRequestParams.current.projectPath ||
         state.taskBranch !== prevRequestParams.current.taskBranch
       ) {
-        load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
+        // Read revertTo from URL or GitLab
+        const url = new URL(window.location.href);
+        const revertToParam = url.searchParams.get('revertTo');
+        let revertToCommit = revertToParam && isCommitHash(revertToParam) ? revertToParam : undefined;
+
+        if (!revertToCommit && projectPath) {
+          try {
+            const savedRestorePoint = await getRestorePoint(projectPath);
+
+            if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
+              revertToCommit = savedRestorePoint;
+            }
+          } catch (err) {
+            console.warn('Failed to get restore point from GitLab:', err);
+          }
+        }
+
+        load({ page: 1, taskBranch: state.taskBranch, fileCommit: revertToCommit, untilCommit: undefined });
       }
     });
+
     return () => unsubscribe();
   }, [load, projectPath]);
+
+  // Subscribe to restore events and add message to chat
+  useEffect(() => {
+    const unsubscribe = restoreEventStore.subscribe((event) => {
+      if (event && loaded) {
+        const restoreMessage: UIMessage = {
+          id: `restore-${event.commitHash}-${event.timestamp}`,
+          role: 'assistant',
+          parts: [
+            {
+              type: 'text',
+              text: `${event.commitTitle}`,
+            },
+          ],
+          metadata: {
+            createdAt: new Date(),
+            annotations: ['restore-message'],
+          },
+        };
+
+        // Add restore message to the end of chats (most recent)
+        setChats((prevChats) => [...prevChats, restoreMessage]);
+
+        // Update cached restore history with new entry
+        const newEntry: RestoreHistoryEntry = {
+          commitHash: event.commitHash,
+          commitTitle: event.commitTitle,
+          restoredAt: new Date().toISOString(),
+        };
+
+        setCachedRestoreHistory((prevHistory) => [newEntry, ...prevHistory].slice(0, 200));
+
+        // Clear the event after processing
+        clearRestoreEvent();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [loaded]);
 
   return {
     loaded: loaded && filesLoaded,

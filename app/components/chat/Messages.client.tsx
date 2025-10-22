@@ -76,6 +76,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const messageText = extractAllTextContent(message);
               const messageMetadata = message.metadata as any;
               const isHidden = messageMetadata?.annotations?.includes('hidden');
+              const isRestoreMessage = messageMetadata?.annotations?.includes('restore-message');
               const isUserMessage = role === 'user';
               const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
@@ -83,6 +84,21 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
+              }
+
+              // Special rendering for restore messages
+              if (isRestoreMessage) {
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch backdrop-blur-[4px]"
+                  >
+                    <div className="flex items-center gap-2 self-stretch">
+                      <span className="text-body-md-medium text-secondary">Restored</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{messageText}</span>
+                    </div>
+                  </div>
+                );
               }
 
               return (

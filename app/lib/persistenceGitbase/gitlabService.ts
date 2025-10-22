@@ -25,6 +25,17 @@ interface GitlabDiff {
   deleted_file: boolean;
 }
 
+export interface RestoreHistoryEntry {
+  commitHash: string;
+  commitTitle: string;
+  restoredAt: string;
+}
+
+export interface RestorePointData {
+  currentRestorePoint: string | null;
+  history: RestoreHistoryEntry[];
+}
+
 export class GitlabService {
   gitlab: InstanceType<typeof Gitlab>;
   gitlabUrl: string;
@@ -1596,6 +1607,110 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get active project access tokens list: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Set restore point for a project using custom attributes
+   */
+  async setRestorePoint(projectPath: string, commitHash: string, commitTitle: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing restore point data
+      let restoreData: RestorePointData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+        restoreData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist or is invalid, create new one
+        restoreData = {
+          currentRestorePoint: null,
+          history: [],
+        };
+      }
+
+      // Add new entry to history
+      const newEntry: RestoreHistoryEntry = {
+        commitHash,
+        commitTitle,
+        restoredAt: new Date().toISOString(),
+      };
+
+      restoreData.currentRestorePoint = commitHash;
+      restoreData.history.unshift(newEntry); // Add to beginning
+
+      // Keep only last 200 entries
+      if (restoreData.history.length > 200) {
+        restoreData.history = restoreData.history.slice(0, 200);
+      }
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_restore_point', JSON.stringify(restoreData));
+      logger.info(`Set restore point for project ${projectPath} to ${commitHash} (${commitTitle})`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to set restore point: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get restore point for a project
+   */
+  async getRestorePoint(projectPath: string): Promise<string | null> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+      const value = attr.value as string;
+
+      // Try to parse as JSON first
+      try {
+        const restoreData: RestorePointData = JSON.parse(value);
+
+        return restoreData.currentRestorePoint;
+      } catch {
+        // If not JSON, assume it's legacy format (just commit hash)
+        return value;
+      }
+    } catch {
+      // If attribute doesn't exist, return null
+      return null;
+    }
+  }
+
+  /**
+   * Get restore history for a project
+   */
+  async getRestoreHistory(projectPath: string): Promise<RestoreHistoryEntry[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+      const value = attr.value as string;
+
+      try {
+        const restoreData: RestorePointData = JSON.parse(value);
+
+        return restoreData.history || [];
+      } catch {
+        // If not JSON or parsing fails, return empty array
+        return [];
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Clear restore point for a project
+   */
+  async clearRestorePoint(projectPath: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      await this.gitlab.ProjectCustomAttributes.remove(project.id, 'agent8_restore_point');
+      logger.info(`Cleared restore point for project ${projectPath}`);
+    } catch (error) {
+      // Ignore error if attribute doesn't exist
+      logger.warn(`Failed to clear restore point: ${error}`);
     }
   }
 }
