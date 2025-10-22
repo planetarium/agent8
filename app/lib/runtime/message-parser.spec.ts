@@ -52,75 +52,44 @@ describe('StreamingMessageParser', () => {
   describe('valid artifacts without actions', () => {
     it.each<[string | string[], ExpectedResult | string]>([
       [
-        'Some text before <boltArtifact title="Some title" id="artifact_1">foo bar</boltArtifact> Some more text',
+        'Before <boltArtifact title="Some title" id="artifact_1">foo bar</boltArtifact> After',
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact',
-          ' title="Some title" id="artifact_1" type="bundled" >foo</boltArtifact> Some more text',
-        ],
+        ['Before <boltArti', 'fact', ' title="Some title" id="artifact_1" type="bundled" >foo</boltArtifact> After'],
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fac',
-          't title="Some title" id="artifact_1"',
-          ' ',
-          '>',
-          'foo</boltArtifact> Some more text',
-        ],
+        ['Before <boltArti', 'fac', 't title="Some title" id="artifact_1"', ' ', '>', 'foo</boltArtifact> After'],
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact',
-          ' title="Some title" id="artifact_1"',
-          ' >fo',
-          'o</boltArtifact> Some more text',
-        ],
+        ['Before <boltArti', 'fact', ' title="Some title" id="artifact_1"', ' >fo', 'o</boltArtifact> After'],
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact tit',
-          'le="Some ',
-          'title" id="artifact_1">fo',
-          'o',
-          '<',
-          '/boltArtifact> Some more text',
-        ],
+        ['Before <boltArti', 'fact tit', 'le="Some ', 'title" id="artifact_1">fo', 'o', '<', '/boltArtifact> After'],
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
       [
-        [
-          'Some text before <boltArti',
-          'fact title="Some title" id="artif',
-          'act_1">fo',
-          'o<',
-          '/boltArtifact> Some more text',
-        ],
+        ['Before <boltArti', 'fact title="Some title" id="artif', 'act_1">fo', 'o<', '/boltArtifact> After'],
         {
-          output: 'Some text before  Some more text',
+          output: 'Before  After',
           callbacks: { onArtifactOpen: 1, onArtifactClose: 1, onActionOpen: 0, onActionClose: 0 },
         },
       ],
