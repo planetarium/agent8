@@ -361,8 +361,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const bigArray: any[] = [];
 
         try {
-          // 150MB 할당 시도 (128MB 제한 초과)
-          for (let i = 0; i < 150; i++) {
+          // 1500MB 할당 시도
+          for (let i = 0; i < 1500; i++) {
             bigArray.push(Buffer.alloc(1024 * 1024)); // 1MB씩
             console.log(`Allocated ${i + 1}MB`);
           }
