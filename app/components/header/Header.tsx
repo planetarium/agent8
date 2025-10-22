@@ -24,11 +24,11 @@ export function Header() {
   return (
     <TooltipProvider>
       <header
-        className={classNames('flex items-center p-5 bg-primary border-b h-[var(--header-height)]', {
+        className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
           'border-transparent': !chat.started,
           'border-bolt-elements-borderColor': chat.started,
-          'mt-5': !chat.started && isEmbedMode,
-          'mt-2': chat.started && isEmbedMode,
+          'mt-5 bg-primary': !chat.started && isEmbedMode,
+          'backdrop-blur-[6px] bg-[rgba(17, 19, 21, 0.30)] z-2': chat.started,
         })}
       >
         {/* Logo and menu button - hidden in embed mode */}
@@ -47,22 +47,21 @@ export function Header() {
         </div>
 
         {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
-          <>
-            {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
+          <div className="flex justify-between items-center self-stretch w-full">
             <span
-              className={classNames('truncate text-center text-bolt-elements-textPrimary', {
-                'flex-1 px-4': !isEmbedMode,
-                'flex-1': isEmbedMode,
+              className={classNames('text-interactive-neutral overflow-visible', {
+                'px-4': !isEmbedMode,
               })}
             >
               <ClientOnly>{() => <ChatDescription />}</ClientOnly>
             </span>
             <div className="flex items-center gap-3">
+              {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
               {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
               {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}
               <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
             </div>
-          </>
+          </div>
         )}
       </header>
     </TooltipProvider>

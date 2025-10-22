@@ -613,9 +613,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               },
             )}
           >
+            <MainBackground
+              zIndex={1}
+              isMobileView={isMobileView}
+              opacity={chatStarted ? 0.4 : 0.8}
+              chatStarted={chatStarted}
+            />
             {!chatStarted && (
               <div className="flex flex-col items-center max-w-[632px] w-full gap-4 flex-shrink-0 tablet:h-[85vh] tablet:px-0 relative tablet:max-w-none mx-auto">
-                <MainBackground zIndex={1} isMobileView={isMobileView} />
                 {/* Background Image */}
                 <div
                   className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
