@@ -61,6 +61,7 @@ import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError } from '~/utils/errorNotification';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
+import { ERROR_MESSAGES } from '~/constants/errorMessages';
 
 const logger = createScopedLogger('Chat');
 
@@ -337,6 +338,7 @@ export const ChatImpl = memo(
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const chatRequestStartTimeRef = useRef<number>(performance.now());
 
     const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
@@ -484,6 +486,11 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
+        if (e instanceof TypeError && e.message === ERROR_MESSAGES.NETWORK.NETWORK_ERROR) {
+          const elapsedTimeInSeconds = ((performance.now() - chatRequestStartTimeRef.current) / 1000).toFixed(2);
+          e.stack = `${e.stack} / Elapsed time: ${elapsedTimeInSeconds}sec`;
+        }
+
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -600,6 +607,11 @@ export const ChatImpl = memo(
 
     const handleCommit = async (message: UIMessage) => {
       if (!isEnabledGitbasePersistence) {
+        return;
+      }
+
+      if (workbench.hasMessageArtifacts(message.id)) {
+        logger.info(`Message has no artifacts, skipping commit`);
         return;
       }
 
@@ -1060,6 +1072,8 @@ export const ChatImpl = memo(
             setMessages(() => []);
           }
         }
+
+        chatRequestStartTimeRef.current = performance.now();
 
         // Send new message immediately - useChat will use the latest state
         sendChatMessage({
