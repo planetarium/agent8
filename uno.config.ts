@@ -163,8 +163,12 @@ export default defineConfig({
     'text-body-lg-regular': 'font-primary text-[16px] font-normal leading-[150%] not-italic',
     'text-body-lg-medium': 'font-primary text-[16px] font-medium leading-[150%] not-italic',
 
+    'text-accent-primary': 'text-[var(--color-text-accent-primary)]',
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
+    'text-interactive-primary': 'text-[var(--color-text-interactive-primary)]',
     'text-interactive-on-primary': 'text-[var(--color-text-interactive-on-primary)]',
+    'text-interactive-on-primary-hovered': 'text-[var(--color-text-interactive-on-primary-hovered)]',
+    'text-interactive-on-primary-pressed': 'text-[var(--color-text-interactive-on-primary-pressed)]',
     'bg-interactive-neutral': 'bg-[var(--color-bg-interactive-neutral)]',
     'bg-interactive-neutral-hovered': 'bg-[var(--color-bg-interactive-neutral-hovered)]',
     'bg-interactive-neutral-pressed': 'bg-[var(--color-bg-interactive-neutral-pressed)]',
@@ -173,6 +177,7 @@ export default defineConfig({
     'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
     'disabled:border-disabled': 'disabled:border-[var(--color-border-disabled)]',
     'border-primary': 'border-[var(--color-border-primary)]',
+    'border-secondary': 'border-[var(--color-border-secondary,rgba(255,255,255,0.22))]',
     'border-tertiary': 'border-[var(--color-border-tertiary)]',
     'disabled:bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
     'bg-interactive-gradient':

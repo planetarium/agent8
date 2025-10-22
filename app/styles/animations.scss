@@ -62,6 +62,20 @@
   }
 }
 
+@keyframes slideDownChatStarted {
+  from {
+    transform: translateX(-50%);
+    opacity: 0;
+    clippath: circle(0% at center);
+  }
+
+  to {
+    transform: translateX(-50%);
+    opacity: 0.4;
+    clippath: circle(100% at center);
+  }
+}
+
 @keyframes slideDownBackground {
   from {
     opacity: 0;
