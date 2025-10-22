@@ -74,6 +74,42 @@ export default class GoogleProvider extends BaseProvider {
 
     const google = createGoogleGenerativeAI({
       apiKey,
+      fetch: async (url, options) => {
+        const response = await fetch(url, options);
+
+        // 원본 스트림 읽기
+        const reader = response.body!.getReader();
+
+        // 느린 스트림 생성
+        let chunkCount = 0;
+        const slowStream = new ReadableStream({
+          async start(controller) {
+            while (true) {
+              const { done, value } = await reader.read();
+
+              if (done) {
+                break;
+              }
+
+              chunkCount++;
+
+              // 5번째 청크 후 150초 대기
+              if (chunkCount === 5) {
+                console.log('[TEST] Pausing stream for 150 seconds...');
+                await new Promise((resolve) => setTimeout(resolve, 150000));
+              }
+
+              controller.enqueue(value);
+            }
+            controller.close();
+          },
+        });
+
+        return new Response(slowStream, {
+          status: response.status,
+          headers: response.headers,
+        });
+      },
     });
 
     return google(model);
