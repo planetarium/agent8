@@ -102,16 +102,23 @@ export default defineConfig((config) => {
         },
       },
       commonjsOptions: {
+        include: [/set-cookie-parser/, /node_modules/],
         transformMixedEsModules: true,
+        strictRequires: true,
+        defaultIsModuleExports: 'auto',
       },
     },
     optimizeDeps: {
+      include: ['set-cookie-parser'],
       esbuildOptions: {
         define: {
           global: 'globalThis',
           module: '{}',
         },
       },
+    },
+    ssr: {
+      noExternal: ['set-cookie-parser'],
     },
     resolve: {
       alias: {
