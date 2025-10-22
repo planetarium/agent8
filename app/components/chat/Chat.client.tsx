@@ -614,6 +614,11 @@ export const ChatImpl = memo(
         return;
       }
 
+      if (workbench.hasMessageArtifacts(message.id)) {
+        logger.info(`Message has no artifacts, skipping commit`);
+        return;
+      }
+
       let attempt = 0;
       let commitSucceeded = false;
       let lastError: unknown;
