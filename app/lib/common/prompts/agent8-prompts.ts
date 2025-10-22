@@ -1,11 +1,10 @@
 import { stripIndents } from '~/utils/stripIndent';
-import { WORK_DIR, TOOL_NAMES } from '~/utils/constants';
+import { WORK_DIR, TOOL_NAMES, VIBE_STARTER_3D_PACKAGE_NAME } from '~/utils/constants';
 import { IGNORE_PATTERNS } from '~/utils/fileUtils';
 import ignore from 'ignore';
 import path from 'path';
-import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
+import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, is3dProject, resolvePackageVersion } from '~/lib/utils';
 
-const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
 const vibeStarter3dSpec: Record<string, Record<string, string>> = {};
 
 export const getAgent8Prompt = (
@@ -413,20 +412,6 @@ export function getProjectDocsPrompt(files: any) {
     </docs_files>
 </PROJECT_DESCRIPTION>
 `;
-}
-
-function is3dProject(files: any): boolean {
-  const packageJson = files[`${WORK_DIR}/package.json`];
-
-  if (packageJson?.type === 'file' && packageJson?.content?.length > 0) {
-    const packageContent = JSON.parse(packageJson.content);
-
-    if (packageContent.dependencies?.hasOwnProperty(VIBE_STARTER_3D_PACKAGE_NAME)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 export async function getVibeStarter3dSpecPrompt(files: any): Promise<string> {

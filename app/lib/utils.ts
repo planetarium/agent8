@@ -1,4 +1,4 @@
-import { WORK_DIR } from '~/utils/constants';
+import { VIBE_STARTER_3D_PACKAGE_NAME, WORK_DIR } from '~/utils/constants';
 import semver from 'semver';
 import type { Cache } from '@cloudflare/workers-types';
 
@@ -111,4 +111,22 @@ export function extractMarkdownFileNamesFromUnpkgHtml(html: string): string[] {
   }
 
   return fileNames;
+}
+
+export function is3dProject(files: any): boolean {
+  if (!files || Object.keys(files).length === 0) {
+    return false;
+  }
+
+  const packageJson = files[`${WORK_DIR}/package.json`];
+
+  if (packageJson?.type === 'file' && packageJson?.content?.length > 0) {
+    const packageContent = JSON.parse(packageJson.content);
+
+    if (packageContent.dependencies?.hasOwnProperty(VIBE_STARTER_3D_PACKAGE_NAME)) {
+      return true;
+    }
+  }
+
+  return false;
 }

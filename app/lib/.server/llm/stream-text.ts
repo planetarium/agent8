@@ -9,7 +9,15 @@ import {
   hasToolCall,
 } from 'ai';
 import { MAX_TOKENS, TOOL_ERROR, type FileMap, type Orchestration } from './constants';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER, FIXED_MODELS, PROVIDER_LIST, WORK_DIR, TOOL_NAMES } from '~/utils/constants';
+import {
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
+  FIXED_MODELS,
+  PROVIDER_LIST,
+  WORK_DIR,
+  TOOL_NAMES,
+  EXCLUSIVE_3D_DOC_TOOLS,
+} from '~/utils/constants';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createScopedLogger } from '~/utils/logger';
 import { extractPropertiesFromMessage } from './utils';
@@ -28,6 +36,7 @@ import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 import { createInvalidToolInputHandler } from './tools/error-handle';
 import { createSubmitArtifactActionTool } from './tools/action';
 import { createUnknownToolHandler } from './tools/error-handle';
+import { is3dProject } from '~/lib/utils';
 
 export type Messages = UIMessage[];
 
@@ -123,7 +132,6 @@ export async function streamText(props: {
 
   let combinedTools: Record<string, any> = {
     ...tools,
-    ...docTools,
     ...codebaseTools,
     ...resourcesTools,
     [TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER]: invalidToolInputHandler,
@@ -137,6 +145,17 @@ export async function streamText(props: {
       ...combinedTools,
       [TOOL_NAMES.SEARCH_FILE_CONTENTS]: createFileContentSearchTool(files),
       [TOOL_NAMES.READ_FILES_CONTENTS]: createFilesReadTool(files, orchestration),
+    };
+  }
+
+  if (docTools && Object.keys(docTools).length > 0) {
+    const filteredDocTools = is3dProject(files)
+      ? docTools
+      : Object.fromEntries(Object.entries(docTools).filter(([key]) => !EXCLUSIVE_3D_DOC_TOOLS.includes(key)));
+
+    combinedTools = {
+      ...combinedTools,
+      ...filteredDocTools,
     };
   }
 

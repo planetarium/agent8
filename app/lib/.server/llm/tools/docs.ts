@@ -4,10 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 import { createScopedLogger } from '~/utils/logger';
 import path from 'path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, resolvePackageVersion } from '~/lib/utils';
+import { VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME, VIBE_STARTER_3D_PACKAGE_NAME } from '~/utils/constants';
 
 const logger = createScopedLogger('docs-tools');
-const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
-const VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME = 'vibe-starter-3d-environment';
 const vibeStarter3dDocs: Record<string, Record<string, string>> = {};
 const vibeStarter3dEnvironmentDocs: Record<string, Record<string, string>> = {};
 
