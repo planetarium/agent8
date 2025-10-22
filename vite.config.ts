@@ -102,7 +102,8 @@ export default defineConfig((config) => {
       },
       commonjsOptions: {
         transformMixedEsModules: true,
-        include: [/node_modules\/set-cookie-parser/],
+        include: [/node_modules/],
+        strictRequires: true,
       },
     },
     optimizeDeps: {
