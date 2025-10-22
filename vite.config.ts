@@ -103,11 +103,9 @@ export default defineConfig((config) => {
       commonjsOptions: {
         transformMixedEsModules: true,
         include: [/node_modules/],
-        strictRequires: true,
       },
     },
     optimizeDeps: {
-      include: ['set-cookie-parser'],
       esbuildOptions: {
         define: {
           global: 'globalThis',
