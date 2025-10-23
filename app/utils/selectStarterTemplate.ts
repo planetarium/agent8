@@ -4,6 +4,12 @@ import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
+import {
+  TEMPLATE_2D_PHASER_BASIC,
+  TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY,
+  TEMPLATE_3D_BASIC,
+  TEMPLATE_BASIC_VITE_REACT,
+} from '~/constants/template';
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -301,17 +307,51 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
 };
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
-  const files = await getGitHubRepoContent(githubRepo, path, env);
-
-  const fileMap: FileMap = {};
-
-  if (path) {
-    for (const key in files) {
-      fileMap[key.replace(path + '/', '')] = files[key];
-    }
+  if (path === '2d-phaser-basic') {
+    return {
+      fileMap: TEMPLATE_2D_PHASER_BASIC as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_2D_PHASER_BASIC as FileMap, title),
+    };
+  } else if (path === 'basic-3d') {
+    return {
+      fileMap: TEMPLATE_3D_BASIC as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_3D_BASIC as FileMap, title),
+    };
+  } else if (path === 'basic-3d-quarterview') {
+    return {
+      fileMap: TEMPLATE_3D_BASIC as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_3D_BASIC as FileMap, title),
+    };
+  } else if (path === '2d-phaser-sprite-character-gravity') {
+    return {
+      fileMap: TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY as FileMap, title),
+    };
+  } else if (path === 'basic-vite-react') {
+    return {
+      fileMap: TEMPLATE_BASIC_VITE_REACT as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_BASIC_VITE_REACT as FileMap, title),
+    };
   }
 
-  return { fileMap, messages: generateTemplateMessages(fileMap, title) };
+  try {
+    const files = await getGitHubRepoContent(githubRepo, path, env);
+
+    const fileMap: FileMap = {};
+
+    if (path) {
+      for (const key in files) {
+        fileMap[key.replace(path + '/', '')] = files[key];
+      }
+    }
+
+    return { fileMap, messages: generateTemplateMessages(fileMap, title) };
+  } catch {
+    return {
+      fileMap: TEMPLATE_BASIC_VITE_REACT as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_BASIC_VITE_REACT as FileMap, title),
+    };
+  }
 }
 
 export async function getZipTemplates(zipFile: File, title?: string) {
