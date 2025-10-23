@@ -54,9 +54,9 @@ const MainBackground: React.FC<MainBackgroundProps> = ({ className = '', zIndex 
                 width="1872"
                 height="1872"
                 filterUnits="userSpaceOnUse"
-                color-interpolation-filters="sRGB"
+                colorInterpolationFilters="sRGB"
               >
-                <feFlood flood-opacity="0" result="BackgroundImageFix" />
+                <feFlood floodOpacity="0" result="BackgroundImageFix" />
                 <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
                 <feTurbulence
                   type="fractalNoise"
