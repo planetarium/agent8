@@ -1,12 +1,11 @@
 import type { Container, PathWatcherEvent } from '~/lib/container/interfaces';
-import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
-import { Buffer } from 'node:buffer';
 import { path } from '~/utils/path';
 import { bufferWatchEvents } from '~/utils/buffer';
 import { WORK_DIR } from '~/utils/constants';
 import { computeFileModifications } from '~/utils/diff';
 import { createScopedLogger } from '~/utils/logger';
+import { detectBinaryFile } from '~/utils/fileUtils';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -14,8 +13,32 @@ const utf8TextDecoder = new TextDecoder('utf-8', { fatal: true });
 
 export interface File {
   type: 'file';
+
+  /**
+   * 파일의 텍스트 내용
+   * - 텍스트 파일: 실제 파일 내용 (UTF-8 문자열)
+   * - 바이너리 파일: 빈 문자열 '' (기존 코드 호환성 유지)
+   */
   content: string;
+
+  /**
+   * 바이너리 파일 여부를 나타내는 플래그
+   * true: 바이너리 파일 (이미지, 실행파일 등)
+   * false: 텍스트 파일 (코드, 문서 등)
+   */
   isBinary: boolean;
+  mimeType?: string;
+  fileFormat?: string;
+
+  /**
+   * 바이너리 파일의 원본 데이터
+   * - 바이너리 파일: 실제 Uint8Array 데이터
+   * - 텍스트 파일: undefined
+   *
+   * 설계 이유: content 필드를 string | Uint8Array로 변경하지 않고
+   * 별도 buffer 필드를 추가하여 기존 코드의 변경을 최소화
+   */
+  buffer?: Uint8Array;
 }
 
 export interface Folder {
@@ -146,11 +169,11 @@ export class FilesStore {
         includeContent: true,
         ignoreInitial: false,
       },
-      bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
+      bufferWatchEvents(100, async (events) => await this.#processEventBuffer(events)),
     );
   }
 
-  #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
+  async #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
     const watchEvents = events.flat(2);
 
     for (const { type, path, buffer } of watchEvents) {
@@ -183,21 +206,33 @@ export class FilesStore {
           let content = '';
 
           /**
-           * @note This check is purely for the editor. The way we detect this is not
-           * bullet-proof and it's a best guess so there might be false-positives.
-           * The reason we do this is because we don't want to display binary files
-           * in the editor nor allow to edit them.
+           * @note Enhanced binary file detection using unified utility function
            */
-          const isBinary = isBinaryFile(buffer);
+          const binaryDetectionResult = await detectBinaryFile(sanitizedPath, buffer);
+          const isBinary = binaryDetectionResult.isBinary;
 
+          /**
+           * 파일 타입별 데이터 저장:
+           * - 바이너리 파일: buffer에 원본 Uint8Array 저장, content는 빈 문자열
+           * - 텍스트 파일: content에 UTF-8 문자열 저장, buffer는 undefined
+           *
+           * content 필드를 string | Uint8Array로 변경하지 않고 별도 buffer 필드를 추가한 이유:
+           * 기존 코드에서 content를 string으로 사용하는 부분의 변경을 최소화
+           */
           if (!isBinary) {
+            // 텍스트 파일: 문자열로 디코딩하여 content에 저장
             content = this.#decodeFileContent(buffer);
           }
 
+          // 바이너리 파일: content는 빈 문자열로 유지, buffer에 원본 데이터 보존
+
           this.files.setKey(sanitizedPath, {
             type: 'file',
-            content,
+            content, // 바이너리: '', 텍스트: 실제 내용
             isBinary,
+            mimeType: binaryDetectionResult.mimeType,
+            fileFormat: binaryDetectionResult.fileFormat,
+            buffer: isBinary ? buffer : undefined, // 바이너리: 실제 데이터, 텍스트: undefined
           });
 
           break;
@@ -227,22 +262,4 @@ export class FilesStore {
       return '';
     }
   }
-}
-
-function isBinaryFile(buffer: Uint8Array | undefined) {
-  if (buffer === undefined) {
-    return false;
-  }
-
-  return getEncoding(convertToBuffer(buffer), { chunkLength: 100 }) === 'binary';
-}
-
-/**
- * Converts a `Uint8Array` into a Node.js `Buffer` by copying the prototype.
- * The goal is to  avoid expensive copies. It does create a new typed array
- * but that's generally cheap as long as it uses the same underlying
- * array buffer.
- */
-function convertToBuffer(view: Uint8Array): Buffer {
-  return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
 }
