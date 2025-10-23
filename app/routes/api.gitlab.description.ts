@@ -2,7 +2,7 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
-export const action = withV8AuthUser(descriptionAction, { checkCredit: true });
+export const action = withV8AuthUser(descriptionAction);
 
 /**
  * Action function for updating project description
