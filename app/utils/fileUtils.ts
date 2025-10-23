@@ -2,10 +2,9 @@ import type { FileNode, FileSystemTree, DirectoryNode } from '~/lib/container/in
 import ignore from 'ignore';
 import { WORK_DIR } from './constants';
 import type { FileMap } from '~/lib/.server/llm/constants';
-import isBinaryPath from 'is-binary-path';
 import { fileTypeFromBuffer } from 'file-type';
 import { getEncoding } from 'istextorbinary';
-import { Buffer } from 'node:buffer';
+import { Buffer } from 'buffer';
 
 // Common patterns to ignore, similar to .gitignore
 export const IGNORE_PATTERNS = [
@@ -37,12 +36,124 @@ export interface BinaryDetectionResult {
 }
 
 /**
+ * Binary file extensions list
+ * Based on common binary file types without needing is-binary-path package
+ */
+const BINARY_EXTENSIONS = new Set([
+  // Images
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'bmp',
+  'tiff',
+  'tif',
+  'ico',
+  'icns',
+  'psd',
+  'svg',
+
+  // 3D Models
+  'glb',
+  'gltf',
+  'obj',
+  'fbx',
+  'dae',
+  'stl',
+  '3ds',
+  'blend',
+  'max',
+
+  // Documents
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+
+  // Archives
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  'tgz',
+  'tbz2',
+
+  // Executables & Libraries
+  'exe',
+  'dll',
+  'so',
+  'dylib',
+  'app',
+  'dmg',
+  'pkg',
+  'deb',
+  'rpm',
+
+  // Audio
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'm4a',
+  'ogg',
+  'wma',
+  'opus',
+
+  // Video
+  'mp4',
+  'avi',
+  'mov',
+  'mkv',
+  'flv',
+  'wmv',
+  'webm',
+  'm4v',
+
+  // Fonts
+  'ttf',
+  'otf',
+  'woff',
+  'woff2',
+  'eot',
+
+  // Other binary formats
+  'bin',
+  'dat',
+  'db',
+  'sqlite',
+  'class',
+  'pyc',
+  'o',
+  'a',
+  'lib',
+]);
+
+/**
+ * Check if a file path indicates a binary file based on its extension
+ * Replacement for is-binary-path package to avoid path module dependency
+ */
+function isBinaryPathByExtension(filePath: string): boolean {
+  const extension = filePath.toLowerCase().split('.').pop();
+  return extension ? BINARY_EXTENSIONS.has(extension) : false;
+}
+
+/**
  * Enhanced binary file detection using path-based and content-based analysis
  * Supports various file formats including 3D models, images, etc.
  */
 export async function detectBinaryFile(filePath: string, buffer?: Uint8Array): Promise<BinaryDetectionResult> {
-  // Step 1: Quick path-based detection using is-binary-path
-  if (isBinaryPath(filePath)) {
+  // Step 1: Quick path-based detection using extension check
+  if (isBinaryPathByExtension(filePath)) {
     return {
       isBinary: true,
       fileFormat: getFileFormatFromPath(filePath),

@@ -92,7 +92,6 @@ export default defineConfig((config) => {
 
       // Define global values
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-      module: '{}',
     },
     build: {
       target: 'esnext',
@@ -102,23 +101,15 @@ export default defineConfig((config) => {
         },
       },
       commonjsOptions: {
-        include: [/set-cookie-parser/, /node_modules/],
         transformMixedEsModules: true,
-        strictRequires: true,
-        defaultIsModuleExports: 'auto',
       },
     },
     optimizeDeps: {
-      include: ['set-cookie-parser'],
       esbuildOptions: {
         define: {
           global: 'globalThis',
-          module: '{}',
         },
       },
-    },
-    ssr: {
-      noExternal: ['set-cookie-parser'],
     },
     resolve: {
       alias: {
@@ -127,7 +118,7 @@ export default defineConfig((config) => {
     },
     plugins: [
       nodePolyfills({
-        include: ['buffer', 'process', 'util', 'stream', 'path'],
+        include: ['buffer', 'process', 'util', 'stream'],
         globals: {
           Buffer: true,
           process: true,
@@ -136,7 +127,7 @@ export default defineConfig((config) => {
         protocolImports: true,
 
         // Exclude Node.js modules that shouldn't be polyfilled in Cloudflare
-        exclude: ['child_process', 'fs'],
+        exclude: ['child_process', 'fs', 'path'],
       }),
       {
         name: 'buffer-polyfill',
