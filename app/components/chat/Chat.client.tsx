@@ -610,7 +610,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      if (workbench.hasMessageArtifacts(message.id)) {
+      if (!workbench.hasMessageArtifacts(message.id)) {
         logger.info(`Message has no artifacts, skipping commit`);
         return;
       }
