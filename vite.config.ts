@@ -102,6 +102,7 @@ export default defineConfig((config) => {
       },
       commonjsOptions: {
         transformMixedEsModules: true,
+        include: [/node_modules/],
       },
     },
     optimizeDeps: {

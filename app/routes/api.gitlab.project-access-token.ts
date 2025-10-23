@@ -5,8 +5,8 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('projectAccessTokenApi');
 
-export const action = withV8AuthUser(projectAccessTokenAction, { checkCredit: true });
-export const loader = withV8AuthUser(projectAccessTokenLoader, { checkCredit: true });
+export const action = withV8AuthUser(projectAccessTokenAction);
+export const loader = withV8AuthUser(projectAccessTokenLoader);
 
 /**
  * GET /api/gitlab/project-access-token

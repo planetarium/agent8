@@ -613,6 +613,14 @@ export class WorkbenchStore {
   }
 
   /**
+   * Check if message has any associated artifacts
+   */
+  hasMessageArtifacts(messageId: string): boolean {
+    const compositeIds = this.#messageToArtifactIds.get(messageId) || [];
+    return compositeIds.length > 0;
+  }
+
+  /**
    * Check if message is idle (all artifacts closed and action queue empty)
    */
   isMessageIdle(messageId: string): boolean {

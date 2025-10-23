@@ -4,8 +4,8 @@ import { withV8AuthUser } from '~/lib/verse8/middleware';
 
 // Create an instance of GitlabService
 
-export const action = withV8AuthUser(projectsAction, { checkCredit: true });
-export const loader = withV8AuthUser(projectsLoader, { checkCredit: true });
+export const action = withV8AuthUser(projectsAction);
+export const loader = withV8AuthUser(projectsLoader);
 
 /**
  * Loader function for getting user projects

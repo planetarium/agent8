@@ -2,8 +2,8 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
-export const action = withV8AuthUser(visibilityAction, { checkCredit: true });
-export const loader = withV8AuthUser(visibilityLoader, { checkCredit: true });
+export const action = withV8AuthUser(visibilityAction);
+export const loader = withV8AuthUser(visibilityLoader);
 
 /**
  * Loader function for getting project visibility

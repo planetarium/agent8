@@ -4,7 +4,7 @@ import { unzipCode } from '~/lib/persistenceGitbase/utils';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { fetchVerse, extractProjectInfoFromPlayUrl } from '~/lib/verse8/api';
 
-export const action = withV8AuthUser(forkAction, { checkCredit: true });
+export const action = withV8AuthUser(forkAction);
 
 async function forkAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;

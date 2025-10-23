@@ -4,7 +4,7 @@ import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
 import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 
-export const loader = withV8AuthUser(commitDetailLoader, { checkCredit: true });
+export const loader = withV8AuthUser(commitDetailLoader);
 
 /**
  * Loader function for getting commit details by hash
