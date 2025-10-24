@@ -19,10 +19,10 @@ export function NotFoundPage({
         </div>
 
         <div className="text-center p-12 max-w-md mx-auto">
-          {/* 401 Number */}
+          {/* 404 Number */}
           <div className="relative mb-8">
-            <div className="text-8xl font-bold text-gray-200 mb-2 drop-shadow-lg">401</div>
-            <div className="absolute inset-0 text-8xl font-bold text-blue-400/30 blur-sm">401</div>
+            <div className="text-8xl font-bold text-gray-200 mb-2 drop-shadow-lg">404</div>
+            <div className="absolute inset-0 text-8xl font-bold text-blue-400/30 blur-sm">404</div>
           </div>
 
           {/* Title */}
