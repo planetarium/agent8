@@ -258,10 +258,15 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     }
   }, [loaded, files, chats, project, workbench]);
 
+  const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
+
   // Check for 404 error (project not found or access denied)
-  if (error && typeof error === 'object' && (error as any).status === 404) {
+  if (errorStatus === 404) {
     return <NotFoundPage />;
-  } else if (error && typeof error === 'object' && (error as any).status === 401) {
+  }
+
+  // Check for 401 error (unauthorized)
+  if (errorStatus === 401) {
     return <UnauthorizedPage />;
   }
 
