@@ -1,14 +1,34 @@
-interface NotFoundPageProps {
+import { useEffect } from 'react';
+
+interface UnauthorizedPageProps {
   title?: string;
   description?: string;
   showBackButton?: boolean;
 }
 
-export function NotFoundPage({
-  title = 'Project Not Found',
-  description = "The project you're looking for doesn't exist or you don't have permission to access it.",
-  showBackButton = true,
-}: NotFoundPageProps) {
+export function UnauthorizedPage({
+  title = 'Session Expired',
+  description = 'Your authentication session has expired. Please return to the home page to sign in again.',
+  showBackButton = false,
+}: UnauthorizedPageProps) {
+  useEffect(() => {
+    if (window.parent && window.parent !== window) {
+      const allowedOriginsEnv = import.meta.env.VITE_ALLOWED_PARENT_ORIGINS;
+      const allowedOrigins = allowedOriginsEnv
+        ? allowedOriginsEnv.split(',').map((origin: string) => origin.trim())
+        : ['https://verse8.io']; // fallback
+      const parentOrigin = document.referrer ? new URL(document.referrer).origin : null;
+      const targetOrigin = parentOrigin && allowedOrigins.includes(parentOrigin) ? parentOrigin : allowedOrigins[0];
+
+      window.parent.postMessage(
+        {
+          type: 'REQUEST_AUTH',
+        },
+        targetOrigin,
+      );
+    }
+  }, []);
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-bolt-elements-background-depth-1">
       <div className="relative">
@@ -36,7 +56,7 @@ export function NotFoundPage({
             <button
               onClick={() => (window.location.href = '/')}
               className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg 
-                        transition-all duration-200 shadow-lg hover:shadow-blue-500/25 transform hover:-translate-y-0.5"
+                          transition-all duration-200 shadow-lg hover:shadow-blue-500/25 transform hover:-translate-y-0.5"
             >
               <div className="flex items-center justify-center gap-2">
                 <div className="i-ph:house text-lg" />
@@ -48,8 +68,8 @@ export function NotFoundPage({
               <button
                 onClick={() => window.history.back()}
                 className="w-full px-6 py-3 bg-gray-700 hover:bg-gray-600 text-gray-200 
-                          border border-gray-600 rounded-lg hover:border-gray-500
-                          transition-all duration-200"
+                            border border-gray-600 rounded-lg hover:border-gray-500
+                            transition-all duration-200"
               >
                 <div className="flex items-center justify-center gap-2">
                   <div className="i-ph:arrow-left text-lg" />
@@ -63,7 +83,7 @@ export function NotFoundPage({
           <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-lg backdrop-blur-sm">
             <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
               <div className="i-ph:info text-lg" />
-              <span>If you believe this is an error, please contact the project owner</span>
+              <span>If you continue to see this message after signing in, please contact support</span>
             </div>
           </div>
         </div>

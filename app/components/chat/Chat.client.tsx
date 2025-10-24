@@ -28,6 +28,7 @@ import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
+import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -260,6 +261,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   // Check for 404 error (project not found or access denied)
   if (error && typeof error === 'object' && (error as any).status === 404) {
     return <NotFoundPage />;
+  } else if (error && typeof error === 'object' && (error as any).status === 401) {
+    return <UnauthorizedPage />;
   }
 
   return (
