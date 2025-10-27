@@ -6,7 +6,6 @@ settings:
 
 overrides:
   '@typescript-eslint/utils': ^8.0.0-alpha.30
-  binary-extensions: 2.3.0
 
 importers:
 
