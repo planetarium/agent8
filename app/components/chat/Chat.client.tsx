@@ -28,6 +28,7 @@ import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
+import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -257,9 +258,16 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     }
   }, [loaded, files, chats, project, workbench]);
 
+  const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
+
   // Check for 404 error (project not found or access denied)
-  if (error && typeof error === 'object' && (error as any).status === 404) {
+  if (errorStatus === 404) {
     return <NotFoundPage />;
+  }
+
+  // Check for 401 error (unauthorized)
+  if (errorStatus === 401) {
+    return <UnauthorizedPage />;
   }
 
   return (
@@ -610,7 +618,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      if (workbench.hasMessageArtifacts(message.id)) {
+      if (!workbench.hasMessageArtifacts(message.id)) {
         logger.info(`Message has no artifacts, skipping commit`);
         return;
       }

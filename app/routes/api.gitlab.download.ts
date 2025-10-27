@@ -31,6 +31,7 @@ async function downloadLoader({ context, request }: LoaderFunctionArgs) {
 
     const archive = await gitlabService.downloadCode(projectPath, commitSha);
 
+    // @ts-ignore TODO: fix this
     return new Response(archive, {
       headers: {
         'Content-Type': 'application/zip',

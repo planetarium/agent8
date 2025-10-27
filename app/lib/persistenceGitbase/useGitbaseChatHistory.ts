@@ -331,6 +331,11 @@ export function useGitbaseChatHistory() {
               message: axiosError.response?.data?.message || 'Project not found',
               status: 404,
             });
+          } else if (axiosError.response?.status === 401) {
+            setError({
+              message: axiosError.response?.data?.message || 'Unauthorized',
+              status: 401,
+            });
           } else {
             setError({
               message:

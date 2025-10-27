@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-toastify';
 import { removeTaskBranch } from '~/lib/persistenceGitbase/api.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
@@ -104,7 +104,7 @@ const TaskBranch = ({ branch, onRemove }: { branch: any; onRemove: () => Promise
   );
 };
 
-export const TaskBranches = forwardRef<HTMLDivElement, TaskBranchesProps>((props: TaskBranchesProps) => {
+export const TaskBranches = (props: TaskBranchesProps) => {
   const taskBranches = props.taskBranches;
   return taskBranches?.map((branch) => (
     <TaskBranch
@@ -117,4 +117,4 @@ export const TaskBranches = forwardRef<HTMLDivElement, TaskBranchesProps>((props
       }}
     />
   ));
-});
+};
