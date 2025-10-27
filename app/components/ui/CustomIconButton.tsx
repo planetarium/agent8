@@ -34,7 +34,7 @@ const CustomIconButton = React.forwardRef<HTMLButtonElement, CustomIconButtonPro
       'secondary-ghost':
         'border-interactive-neutral bg-interactive-neutral text-interactive-on-primary hover:border-interactive-neutral-hover hover:bg-interactive-neutral-hover active:border-interactive-neutral-pressed active:bg-interactive-neutral-pressed',
       'secondary-transparent':
-        'border-transparent text-interactive-neutral hover:text-interactive-neutral-hover active:text-interactive-neutral-pressed',
+        'bg-transparent border-transparent text-interactive-neutral hover:text-interactive-neutral-hover active:text-interactive-neutral-pressed',
       'secondary-outlined':
         'rounded-radius-4 border-interactive-neutral text-interactive-neutral bg-transparent hover:border-interactive-neutral-hovered hover:text-interactive-neutral-hovered active:border-interactive-neutral-pressed active:bg-interactive-neutral-pressed active:text-interactive-neutral-pressed',
     };

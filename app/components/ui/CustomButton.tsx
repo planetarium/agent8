@@ -29,7 +29,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       secondary:
         'text-interactive-neutral hover:text-interactive-neutral-hovered active:text-interactive-neutral-pressed',
       'primary-text':
-        "text-interactive border-none hover:text-interactive-hovered active:text-interactive-pressed focus-visible:text-interactive rounded-[4px] focus-visible:before:absolute focus-visible:before:-right-[3.133px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3.133px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
+        "bg-transparent text-interactive-primary border-none hover:text-interactive-hovered active:text-interactive-pressed focus-visible:text-interactive rounded-[4px] focus-visible:before:absolute focus-visible:before:-right-[3.133px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3.133px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
       'primary-ghost':
         'rounded-[4px] border border-interactive-neutral bg-interactive-neutral text-interactive hover:bg-interactive-neutral-hovered hover:border-interactive-neutral-hovered hover:text-interactive-hovered active:bg-interactive-neutral-pressed active:border-interactive-neutral-pressed active:text-interactive-pressed focus-visible:bg-interactive-neutral focus-visible:border-interactive-neutral',
       'secondary-ghost':

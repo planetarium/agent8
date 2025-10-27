@@ -100,6 +100,58 @@ function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConf
   );
 }
 
+// Fork Confirmation Modal Component
+interface ForkConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  commit: Commit | null;
+}
+
+function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmModalProps) {
+  if (!isOpen || !commit) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex justify-center items-start gap-2 self-stretch">
+          <span className="text-primary text-heading-md flex-[1_0_0]">Are you sure you want to fork this commit?</span>
+          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
+            <CloseIcon width={20} height={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
+          <span className="text-body-md-medium text-tertiary self-stretch">
+            A new project will be created. Publishing will produce a separate project from the original.
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col items-start gap-[10px] self-stretch">
+          <div className="flex justify-end items-center gap-3 self-stretch">
+            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
+              Cancel
+            </CustomButton>
+            <CustomButton variant="primary-filled" size="lg" onClick={onConfirm}>
+              <ForkIcon size={24} fill="#f3f5f8" />
+              Fork
+            </CustomButton>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function HeaderCommitHistoryButton() {
   const repo = useStore(repoStore);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -111,8 +163,10 @@ export function HeaderCommitHistoryButton() {
   const [showGradient, setShowGradient] = useState<boolean>(true);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+  const [isForkModalOpen, setIsForkModalOpen] = useState<boolean>(false);
+  const [selectedCommitForFork, setSelectedCommitForFork] = useState<Commit | null>(null);
 
-  const perPage = 50;
+  const COMMITS_PER_PAGE = 50;
 
   const fetchCommits = async (page: number = 1, append: boolean = false) => {
     if (!repo.path) {
@@ -127,7 +181,7 @@ export function HeaderCommitHistoryButton() {
         projectPath: repo.path,
         all: 'true',
         page: page.toString(),
-        perPage: perPage.toString(),
+        perPage: COMMITS_PER_PAGE.toString(),
       });
 
       const response = await fetch(`/api/gitlab/commits?${params}`);
@@ -214,11 +268,24 @@ export function HeaderCommitHistoryButton() {
     return `https://gitlab.verse8.io/${repo.path}/-/commit/${commitId}`;
   };
 
-  const handleFork = async (commit: Commit) => {
-    const commitHash = commit.id;
+  // Open fork confirmation modal
+  const handleForkClick = (commit: Commit) => {
+    setSelectedCommitForFork(commit);
+    setIsForkModalOpen(true);
+  };
+
+  // Actual fork logic after confirmation
+  const handleForkConfirm = async () => {
+    if (!selectedCommitForFork) {
+      return;
+    }
+
+    const commitHash = selectedCommitForFork.id;
 
     if (!commitHash || !isCommitHash(commitHash)) {
       handleChatError('No commit hash found', undefined, 'handleFork - commit hash validation');
+      setIsForkModalOpen(false);
+
       return;
     }
 
@@ -231,6 +298,9 @@ export function HeaderCommitHistoryButton() {
     } else {
       newRepoName = nameWords.join('-');
     }
+
+    // Close modal first
+    setIsForkModalOpen(false);
 
     // Show loading toast while forking
     const toastId = toast.loading('Forking project...');
@@ -355,15 +425,10 @@ export function HeaderCommitHistoryButton() {
 
   return (
     <>
-      <button
-        className="text-bolt-elements-textSecondary bg-transparent hover:text-bolt-elements-textPrimary transition-colors text-sm font-medium flex items-center gap-2"
-        onClick={() => handleOpenChange(true)}
-      >
+      <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
         <HistoryIcon width={20} height={20} />
-        <span className="text-heading-xs text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
-          Commit History
-        </span>
-      </button>
+        Commit History
+      </CustomButton>
 
       {isOpen &&
         createPortal(
@@ -441,7 +506,7 @@ export function HeaderCommitHistoryButton() {
                                   <OutLinkIcon size={20} />
                                 </a>
                               </CustomButton>
-                              <CustomButton variant="secondary-ghost" size="md" onClick={() => handleFork(commit)}>
+                              <CustomButton variant="secondary-ghost" size="md" onClick={() => handleForkClick(commit)}>
                                 <ForkIcon size={20} />
                                 <span>Fork</span>
                               </CustomButton>
@@ -518,6 +583,14 @@ export function HeaderCommitHistoryButton() {
           </div>,
           document.body,
         )}
+
+      {/* Fork Confirmation Modal */}
+      <ForkConfirmModal
+        isOpen={isForkModalOpen}
+        onClose={() => setIsForkModalOpen(false)}
+        onConfirm={handleForkConfirm}
+        commit={selectedCommitForFork}
+      />
 
       {/* Restore Confirmation Modal */}
       <RestoreConfirmModal
