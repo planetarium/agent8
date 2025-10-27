@@ -1,8 +1,9 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { generateText } from 'ai';
+import { generateObject } from 'ai';
 import { FIXED_MODELS } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
 
 export const action = withV8AuthUser(startcallAction, { checkCredit: true });
 
@@ -19,11 +20,12 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
   const model = FIXED_MODELS.SELECT_STARTER_TEMPLATE.model;
 
   try {
-    const result = await generateText({
+    const result = await generateObject({
       model: provider.getModelInstance({
         model,
         serverEnv: env,
       }),
+      schema: TEMPLATE_SELECTION_SCHEMA,
       messages: [
         {
           role: 'system',
@@ -39,37 +41,32 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
           content: `${message}`,
         },
       ],
-      onStepFinish: async ({ usage, providerMetadata }) => {
-        if (usage) {
-          let cacheRead = 0;
-          let cacheWrite = 0;
-
-          if (providerMetadata?.anthropic) {
-            const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
-            cacheRead += Number(cacheReadInputTokens || 0);
-            cacheWrite += Number(cacheCreationInputTokens || 0);
-          }
-
-          const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-          await consumeUserCredit({
-            model: { provider: provider.name, name: model },
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cacheRead,
-            cacheWrite,
-            description: 'Start Call',
-          });
-        }
-      },
       abortSignal: request.signal,
     });
 
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    // Process usage after generation
+    if (result.usage) {
+      let cacheRead = 0;
+      let cacheWrite = 0;
+
+      if (result.providerMetadata?.anthropic) {
+        const { cacheCreationInputTokens, cacheReadInputTokens } = result.providerMetadata.anthropic;
+        cacheRead += Number(cacheReadInputTokens || 0);
+        cacheWrite += Number(cacheCreationInputTokens || 0);
+      }
+
+      const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+      await consumeUserCredit({
+        model: { provider: provider.name, name: model },
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        cacheRead,
+        cacheWrite,
+        description: 'Start Call',
+      });
+    }
+
+    return result.toJsonResponse();
   } catch (error: unknown) {
     logger.error(error);
 

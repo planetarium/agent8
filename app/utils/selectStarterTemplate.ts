@@ -1,4 +1,5 @@
 import ignore from 'ignore';
+import { z } from 'zod';
 import type { Template } from '~/types/template';
 import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
@@ -10,6 +11,16 @@ import {
   TEMPLATE_3D_BASIC,
   TEMPLATE_BASIC_VITE_REACT,
 } from '~/constants/template';
+
+// Zod schema for template selection response
+export const TEMPLATE_SELECTION_SCHEMA = z.object({
+  templateName: z.string(),
+  title: z.string().default('Untitled Project'),
+  projectRepo: z.string().default(''),
+  nextActionSuggestion: z.string().default(''),
+});
+
+type TemplateSelection = z.infer<typeof TEMPLATE_SELECTION_SCHEMA>;
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -28,97 +39,54 @@ ${templates
   )
   .join('\n')}
 
-Response Format:
-<selection>
-  <templateName>{selected template name}</templateName>
-  <title>{a proper title for the project}</title>
-  <projectRepo>{the name of the new project repository to use}</projectRepo>
-  <nextActionSuggestion>{Suggestions for action users might do after calling this template. If there is no suggestion, just return an empty string.}</nextActionSuggestion>
-</selection>
-
-Examples:
-
-<example>
-User: I need to build a 2d platformer game
-Response:
-<selection>
-  <templateName>basic-2d</templateName>
-  <title>Simple 2d platformer game</title>
-  <projectRepo>basic-2d-game</projectRepo>
-  <nextActionSuggestion>Please change background image.</nextActionSuggestion>
-</selection>
-</example>
-
-<example>
-User: Make a simple 3d rpg game
-Response:
-<selection>
-  <templateName>basic-3d-quarterview</templateName>
-  <title>Simple 3d rpg game</title>
-  <projectRepo>basic-3d-rpg-game</projectRepo>
-  <nextActionSuggestion>Add a floor texture and skybox.</nextActionSuggestion>
-</selection>
-</example>
-
-<example>
-User: Make a simple 3d rpg game
-Response:
-<selection>
-  <templateName>basic-3d-quarterview</templateName>
-  <title>Simple 3d rpg game</title>
-  <projectRepo>basic-3d-rpg-game</projectRepo>
-  <nextActionSuggestion>Please plant a tree on the floor.</nextActionSuggestion>
-</selection>
-</example>
-
 Instructions:
 1. For trivial tasks and simple scripts, always recommend the basic-vite-react template
 2. For more complex projects, recommend templates from the provided list
-3. Follow the exact XML format
-4. Consider both technical requirements and tags
-5. If no perfect match exists, recommend the closest option
+3. Consider both technical requirements and tags
+4. If no perfect match exists, recommend the closest option
 
-nextActionSuggestion:
+nextActionSuggestion guidelines:
 1. It's unacceptable for a project build to fail due to simple changes or code modifications. Please request the simplest next task.
 2. The requested task should not cause the program build to fail once the unit task is completed.
 3. To handle the first requested task, it is appropriate to have work at the level of modifying about one file.
 4. Think of it as a work unit when developing rather than an implementation unit in the game.
-BAD: Setting the surrounding environment of the 3d map (This can involve many tasks.)
-GOOD: Changing the texture of the map specifically
-GOOD: Placing trees on the map
 
+Examples of good nextActionSuggestion:
+- GOOD: Changing the texture of the map specifically
+- GOOD: Placing trees on the map
+- BAD: Setting the surrounding environment of the 3d map (This can involve many tasks.)
 
-Important: Provide only the selection tags in your response, no additional text.
-MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH 
+Selection examples:
+
+User: I need to build a 2d platformer game
+Expected response:
+{
+  "templateName": "basic-2d",
+  "title": "Simple 2d platformer game",
+  "projectRepo": "basic-2d-game",
+  "nextActionSuggestion": "Please change background image."
+}
+
+User: Make a simple 3d rpg game
+Expected response:
+{
+  "templateName": "basic-3d-quarterview",
+  "title": "Simple 3d rpg game",
+  "projectRepo": "basic-3d-rpg-game",
+  "nextActionSuggestion": "Add a floor texture and skybox."
+}
+
+Return your selection as a JSON object with these exact fields:
+- templateName: the selected template name (string)
+- title: a proper title for the project (string)
+- projectRepo: the name of the new project repository (string)
+- nextActionSuggestion: suggestions for the next action (string, empty if none)
+
+Important: Return ONLY the JSON object, no additional text or explanation.
+MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
 `;
 
 let templates: Template[] = STARTER_TEMPLATES;
-
-const parseSelectedTemplate = (
-  llmOutput: string,
-): { template: string; title: string; projectRepo: string; nextActionSuggestion: string } | null => {
-  try {
-    // Extract content between <templateName> tags
-    const templateNameMatch = llmOutput.match(/<templateName>(.*?)<\/templateName>/);
-    const titleMatch = llmOutput.match(/<title>(.*?)<\/title>/);
-    const projectRepoMatch = llmOutput.match(/<projectRepo>(.*?)<\/projectRepo>/);
-    const nextActionSuggestionMatch = llmOutput.match(/<nextActionSuggestion>(.*?)<\/nextActionSuggestion>/);
-
-    if (!templateNameMatch) {
-      return null;
-    }
-
-    return {
-      template: templateNameMatch[1].trim(),
-      title: titleMatch?.[1].trim() || 'Untitled Project',
-      projectRepo: projectRepoMatch?.[1].trim() || '',
-      nextActionSuggestion: nextActionSuggestionMatch?.[1].trim() || '',
-    };
-  } catch (error) {
-    console.error('Error parsing template selection:', error);
-    return null;
-  }
-};
 
 export const selectStarterTemplate = async (options: { message: string }) => {
   try {
@@ -166,43 +134,15 @@ export const selectStarterTemplate = async (options: { message: string }) => {
     throw new Error(errorMessage);
   }
 
-  const respJson = (await response.json()) as {
-    steps?: Array<{
-      content?: Array<{ type: string; text?: string }>;
-    }>;
-  };
+  // generateObject returns the structured object directly
+  const selectedTemplate = (await response.json()) as TemplateSelection;
 
-  const textChunks: string[] = [];
-
-  if (respJson?.steps && Array.isArray(respJson.steps) && respJson.steps.length > 0) {
-    for (const step of respJson.steps) {
-      if (!step?.content || !Array.isArray(step.content)) {
-        continue;
-      }
-
-      for (const content of step.content) {
-        if (content && typeof content === 'object' && content.type === 'text' && typeof content.text === 'string') {
-          const trimmedText = content.text.trim();
-
-          if (trimmedText) {
-            textChunks.push(trimmedText);
-          }
-        }
-      }
-    }
-  }
-
-  // Combine all text chunks
-  const combinedText = textChunks.join('\n').trim();
-
-  const selectedTemplate = parseSelectedTemplate(combinedText);
-
-  if (!selectedTemplate) {
+  if (!selectedTemplate.templateName) {
     console.log('No template selected, using blank template');
     return {};
   }
 
-  const template: Template | undefined = templates.find((t) => t.name == selectedTemplate.template);
+  const template: Template | undefined = templates.find((t) => t.name == selectedTemplate.templateName);
 
   if (template) {
     return {
