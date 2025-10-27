@@ -512,3 +512,47 @@ export const clearRestorePoint = async (projectPath: string) => {
 
   return response.data;
 };
+
+// Version History API
+export const saveVersion = async (
+  projectPath: string,
+  commitHash: string,
+  commitTitle: string,
+  title?: string,
+  description?: string,
+) => {
+  const response = await axios.post('/api/gitlab/version-history', {
+    projectPath,
+    commitHash,
+    commitTitle,
+    ...(title && { title }),
+    ...(description && { description }),
+  });
+
+  return response.data;
+};
+
+export const getVersionHistory = async (projectPath: string) => {
+  try {
+    const response = await axios.get('/api/gitlab/version-history', {
+      params: {
+        projectPath,
+      },
+    });
+
+    return response.data.data?.versions || [];
+  } catch {
+    return [];
+  }
+};
+
+export const deleteVersion = async (projectPath: string, commitHash: string) => {
+  const response = await axios.delete('/api/gitlab/version-history', {
+    data: {
+      projectPath,
+      commitHash,
+    },
+  });
+
+  return response.data;
+};

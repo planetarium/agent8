@@ -7,6 +7,7 @@ import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { chatStore } from '~/lib/stores/chat';
@@ -54,6 +55,8 @@ import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
+import { versionEventStore } from '~/lib/stores/versionEvent';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
@@ -61,6 +64,8 @@ import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError } from '~/utils/errorNotification';
 import ToastContainer from '~/components/ui/ToastContainer';
+import CustomButton from '~/components/ui/CustomButton';
+import { CloseIcon } from '~/components/ui/Icons';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import { ERROR_MESSAGES } from '~/constants/errorMessages';
 
@@ -154,6 +159,105 @@ async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: 
   });
 }
 
+// Save Version Confirmation Modal Component
+interface SaveVersionConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (title: string, description: string) => void;
+  commitTitle: string | null;
+}
+
+function SaveVersionConfirmModal({ isOpen, onClose, onConfirm, commitTitle }: SaveVersionConfirmModalProps) {
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+
+  // Reset fields when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setDescription('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !commitTitle) {
+    return null;
+  }
+
+  const handleConfirm = () => {
+    // Title is required
+    if (!title.trim()) {
+      return;
+    }
+
+    onConfirm(title.trim(), description.trim());
+  };
+
+  // Check if form is valid (title is required)
+  const isFormValid = title.trim().length > 0;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 self-stretch">
+          <span className="text-primary text-heading-md flex-[1_0_0]">Save to Version History</span>
+          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
+            <CloseIcon width={20} height={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-col items-start gap-4 self-stretch">
+          <span className="text-body-md-medium text-tertiary self-stretch">
+            Save versions to easily compare and restore them
+          </span>
+
+          {/* Version Title Input */}
+          <div className="flex flex-col items-start gap-2 self-stretch">
+            <label className="text-body-md-medium text-primary">
+              Title <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg text-primary text-body-md placeholder:text-tertiary focus:outline-none focus:border-[rgba(148,250,239,0.5)]"
+            />
+          </div>
+
+          {/* Description Input */}
+          <div className="flex flex-col items-start gap-2 self-stretch">
+            <label className="text-body-md-medium text-primary">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe what changed"
+              rows={1}
+              className="w-full px-3 py-2 bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg text-primary text-body-md placeholder:text-tertiary focus:outline-none focus:border-[rgba(148,250,239,0.5)] resize-none"
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col items-start gap-[10px] self-stretch mt-4">
+          <div className="flex justify-end items-center gap-3 self-stretch">
+            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
+              Cancel
+            </CustomButton>
+            <CustomButton variant="primary-filled" size="lg" onClick={handleConfirm} disabled={!isFormValid}>
+              Save
+            </CustomButton>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
@@ -181,6 +285,9 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
+  const [isSaveVersionModalOpen, setIsSaveVersionModalOpen] = useState<boolean>(false);
+  const [selectedMessageForVersion, setSelectedMessageForVersion] = useState<UIMessage | null>(null);
+  const [savedVersionHashes, setSavedVersionHashes] = useState<Set<string>>(new Set());
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
 
@@ -201,6 +308,46 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
       setReady(true);
     }
   }, [initialMessages, loaded]);
+
+  // Fetch saved version hashes when project loads
+  useEffect(() => {
+    const fetchSavedVersions = async () => {
+      if (repoStore.get().path && isEnabledGitbasePersistence) {
+        try {
+          const { getVersionHistory } = await import('~/lib/persistenceGitbase/api.client');
+          const versions = await getVersionHistory(repoStore.get().path);
+          const hashes = new Set<string>(versions.map((v: VersionEntry) => v.commitHash));
+          setSavedVersionHashes(hashes);
+        } catch (error) {
+          console.error('Failed to fetch version history:', error);
+        }
+      }
+    };
+
+    fetchSavedVersions();
+  }, [repoStore.get().path, loaded]);
+
+  // Listen to version events (save/delete)
+  useEffect(() => {
+    const unsubscribe = versionEventStore.subscribe((event) => {
+      if (event) {
+        if (event.type === 'save') {
+          // Add to savedVersionHashes
+          setSavedVersionHashes((prev) => new Set([...prev, event.commitHash]));
+        } else if (event.type === 'delete') {
+          // Remove from savedVersionHashes
+          setSavedVersionHashes((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(event.commitHash);
+
+            return newSet;
+          });
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (loaded) {
@@ -288,6 +435,11 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           loadingBefore={loadingBefore}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
+          isSaveVersionModalOpen={isSaveVersionModalOpen}
+          setIsSaveVersionModalOpen={setIsSaveVersionModalOpen}
+          selectedMessageForVersion={selectedMessageForVersion}
+          setSelectedMessageForVersion={setSelectedMessageForVersion}
+          savedVersionHashes={savedVersionHashes}
         />
       )}
       <ToastContainer />
@@ -322,6 +474,11 @@ interface ChatProps {
   loadingBefore: boolean;
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  isSaveVersionModalOpen: boolean;
+  setIsSaveVersionModalOpen: (open: boolean) => void;
+  selectedMessageForVersion: UIMessage | null;
+  setSelectedMessageForVersion: (message: UIMessage | null) => void;
+  savedVersionHashes: Set<string>;
 }
 
 export const ChatImpl = memo(
@@ -340,6 +497,11 @@ export const ChatImpl = memo(
     loadingBefore,
     isAuthenticated,
     onAuthRequired,
+    isSaveVersionModalOpen,
+    setIsSaveVersionModalOpen,
+    selectedMessageForVersion,
+    setSelectedMessageForVersion,
+    savedVersionHashes,
   }: ChatProps) => {
     useShortcuts();
 
@@ -1336,6 +1498,56 @@ export const ChatImpl = memo(
       revertTo(commitHash);
     };
 
+    // Open save version confirmation modal
+    const handleSaveVersionClick = (message: UIMessage) => {
+      setSelectedMessageForVersion(message);
+      setIsSaveVersionModalOpen(true);
+    };
+
+    // Actual save version logic after confirmation
+    const handleSaveVersionConfirm = async (title: string, description: string) => {
+      if (!selectedMessageForVersion) {
+        return;
+      }
+
+      const commitHash = selectedMessageForVersion.id.split('-').pop();
+
+      if (!commitHash || !isCommitHash(commitHash)) {
+        handleChatError('No commit hash found', undefined, 'handleSaveVersion - commit hash validation');
+        setIsSaveVersionModalOpen(false);
+
+        return;
+      }
+
+      const commitTitle =
+        selectedMessageForVersion.parts[0]?.type === 'text'
+          ? selectedMessageForVersion.parts[0].text.slice(0, 100)
+          : 'Saved version';
+
+      // Close modal first
+      setIsSaveVersionModalOpen(false);
+
+      // Show loading toast
+      const toastId = toast.loading('Saving version...');
+
+      try {
+        const { saveVersion } = await import('~/lib/persistenceGitbase/api.client');
+        await saveVersion(repoStore.get().path, commitHash, commitTitle, title || undefined, description || undefined);
+
+        // Trigger version save event
+        const { triggerVersionSave } = await import('~/lib/stores/versionEvent');
+        triggerVersionSave(commitHash);
+
+        // Dismiss loading toast and show success
+        toast.dismiss(toastId);
+        toast.success('Version saved successfully');
+      } catch (error) {
+        // Dismiss loading toast and show error
+        toast.dismiss(toastId);
+        handleChatError('Failed to save version', error instanceof Error ? error : String(error), 'handleSaveVersion');
+      }
+    };
+
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       workbench.currentView.set('code');
 
@@ -1408,87 +1620,103 @@ export const ChatImpl = memo(
     const isStreaming = isLoading || fakeLoading || loading;
 
     return (
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isStreaming}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        enabledTaskMode={enabledTaskMode}
-        setEnabledTaskMode={setEnabledTaskMode}
-        taskBranches={taskBranches}
-        reloadTaskBranches={reloadTaskBranches}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
-        messageRef={messageRef}
-        scrollRef={scrollRef}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        handleRetry={handleRetry}
-        handleFork={handleFork}
-        handleRevert={handleRevert}
-        onViewDiff={handleViewDiff}
-        description={description}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
+      <>
+        <BaseChat
+          ref={animationScope}
+          textareaRef={textareaRef}
+          input={input}
+          showChat={showChat}
+          chatStarted={chatStarted}
+          isStreaming={isStreaming}
+          onStreamingChange={(streaming) => {
+            streamingState.set(streaming);
+          }}
+          enhancingPrompt={enhancingPrompt}
+          promptEnhanced={promptEnhanced}
+          enabledTaskMode={enabledTaskMode}
+          setEnabledTaskMode={setEnabledTaskMode}
+          taskBranches={taskBranches}
+          reloadTaskBranches={reloadTaskBranches}
+          sendMessage={sendMessage}
+          model={model}
+          setModel={handleModelChange}
+          provider={provider}
+          setProvider={handleProviderChange}
+          providerList={activeProviders}
+          messageRef={messageRef}
+          scrollRef={scrollRef}
+          handleInputChange={(e) => {
+            onTextareaChange(e);
+            debouncedCachePrompt(e);
+          }}
+          handleStop={abort}
+          handleRetry={handleRetry}
+          handleFork={handleFork}
+          handleRevert={handleRevert}
+          handleSaveVersion={handleSaveVersionClick}
+          savedVersionHashes={savedVersionHashes}
+          onViewDiff={handleViewDiff}
+          description={description}
+          messages={messages.map((message, i) => {
+            if (message.role === 'user') {
+              return message;
+            }
+
+            const parsedContent = parsedMessages[i];
+
+            if (parsedContent) {
+              return {
+                ...message,
+                parts: [
+                  {
+                    type: 'text' as const,
+                    text: parsedContent,
+                  },
+                ],
+              } satisfies UIMessage;
+            }
+
             return message;
+          })}
+          enhancePrompt={() => {
+            enhancePrompt(
+              input,
+              (input) => {
+                setInput(input);
+                scrollTextArea();
+              },
+              model,
+              provider,
+              apiKeys,
+            );
+          }}
+          attachmentList={attachmentList}
+          setAttachmentList={setAttachmentList}
+          actionAlert={actionAlert}
+          clearAlert={() => workbench.clearAlert()}
+          data={chatData}
+          onProjectZipImport={handleProjectZipImport}
+          hasMore={hasMore}
+          loadBefore={loadBefore}
+          loadingBefore={loadingBefore}
+          customProgressAnnotations={customProgressAnnotations}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={onAuthRequired}
+          textareaExpanded={textareaExpanded}
+        />
+
+        {/* Save Version Confirmation Modal */}
+        <SaveVersionConfirmModal
+          isOpen={isSaveVersionModalOpen}
+          onClose={() => setIsSaveVersionModalOpen(false)}
+          onConfirm={handleSaveVersionConfirm}
+          commitTitle={
+            selectedMessageForVersion?.parts[0]?.type === 'text'
+              ? selectedMessageForVersion.parts[0].text.slice(0, 100)
+              : null
           }
-
-          const parsedContent = parsedMessages[i];
-
-          if (parsedContent) {
-            return {
-              ...message,
-              parts: [
-                {
-                  type: 'text' as const,
-                  text: parsedContent,
-                },
-              ],
-            } satisfies UIMessage;
-          }
-
-          return message;
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
-        attachmentList={attachmentList}
-        setAttachmentList={setAttachmentList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbench.clearAlert()}
-        data={chatData}
-        onProjectZipImport={handleProjectZipImport}
-        hasMore={hasMore}
-        loadBefore={loadBefore}
-        loadingBefore={loadingBefore}
-        customProgressAnnotations={customProgressAnnotations}
-        isAuthenticated={isAuthenticated}
-        onAuthRequired={onAuthRequired}
-        textareaExpanded={textareaExpanded}
-      />
+        />
+      </>
     );
   },
 );

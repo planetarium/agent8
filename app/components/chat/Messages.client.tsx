@@ -13,6 +13,8 @@ import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client
 import Lottie from 'lottie-react';
 import { loadingAnimationData } from '~/utils/animationData';
 import { extractAllTextContent } from '~/utils/message';
+import { StarLineIcon } from '~/components/ui/Icons';
+import CustomButton from '~/components/ui/CustomButton';
 
 interface MessagesProps {
   id?: string;
@@ -24,6 +26,8 @@ interface MessagesProps {
   onFork?: (message: UIMessage) => void;
   onRevert?: (message: UIMessage) => void;
   onViewDiff?: (message: UIMessage) => void;
+  onSaveVersion?: (message: UIMessage) => void;
+  savedVersionHashes?: Set<string>;
   hasMore?: boolean;
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -40,6 +44,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       onFork,
       onRevert,
       onViewDiff,
+      onSaveVersion,
+      savedVersionHashes,
       hasMore,
       loadingBefore,
       loadBefore,
@@ -91,7 +97,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 return (
                   <div
                     key={index}
-                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch backdrop-blur-[4px]"
+                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
                   >
                     <div className="flex items-center gap-2 self-stretch">
                       <span className="text-body-md-medium text-secondary">Restored</span>
@@ -141,7 +147,27 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && (
                     <>
                       {!isUserMessage ? (
-                        <div className="flex items-start mt-2.5">
+                        <div className="flex items-start gap-2 mt-2.5">
+                          {messageId &&
+                            isCommitHash(messageId.split('-').pop() as string) &&
+                            (() => {
+                              const commitHash = messageId.split('-').pop() as string;
+                              const isSaved = savedVersionHashes?.has(commitHash);
+
+                              return isSaved ? (
+                                <CustomButton variant="primary-text" size="sm">
+                                  Restore
+                                </CustomButton>
+                              ) : (
+                                <button
+                                  onClick={() => onSaveVersion?.(message)}
+                                  className="p-1.5 rounded-md hover:bg-bolt-elements-background-depth-2 bg-transparent transition-colors"
+                                  title="Save as version"
+                                >
+                                  <StarLineIcon size={20} />
+                                </button>
+                              );
+                            })()}
                           <Dropdown
                             trigger={
                               <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />

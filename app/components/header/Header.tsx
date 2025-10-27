@@ -9,6 +9,7 @@ import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
+import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import WithTooltip from '~/components/ui/Tooltip';
 import { TooltipProvider } from '@radix-ui/react-tooltip';
@@ -56,6 +57,7 @@ export function Header() {
               <ClientOnly>{() => <ChatDescription />}</ClientOnly>
             </span>
             <div className="flex items-center gap-3">
+              {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
               {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
               {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
               {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}

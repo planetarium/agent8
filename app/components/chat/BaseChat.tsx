@@ -96,6 +96,8 @@ interface BaseChatProps {
   handleRetry?: (message: UIMessage) => void;
   handleFork?: (message: UIMessage) => void;
   handleRevert?: (message: UIMessage) => void;
+  handleSaveVersion?: (message: UIMessage) => void;
+  savedVersionHashes?: Set<string>;
   onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -145,6 +147,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleRetry,
       handleFork,
       handleRevert,
+      handleSaveVersion,
+      savedVersionHashes,
       onViewDiff,
       hasMore,
       loadBefore,
@@ -862,6 +866,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           onRetry={handleRetry}
                           onFork={handleFork}
                           onRevert={handleRevert}
+                          onSaveVersion={handleSaveVersion}
+                          savedVersionHashes={savedVersionHashes}
                           onViewDiff={onViewDiff}
                           hasMore={hasMore}
                           loadBefore={loadBefore}

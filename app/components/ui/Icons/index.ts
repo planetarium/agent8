@@ -19,3 +19,6 @@ export { ForkIcon } from './ForkIcon';
 export { EditIcon } from './EditIcon';
 export { CheckIcon } from './CheckIcon';
 export { RestoreIcon } from './RestoreIcon';
+export { StarLineIcon } from './StarLineIcon';
+export { DeleteIcon } from './DeleteIcon';
+export { PlayIcon } from './PlayIcon';

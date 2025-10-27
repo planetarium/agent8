@@ -36,6 +36,18 @@ export interface RestorePointData {
   history: RestoreHistoryEntry[];
 }
 
+export interface VersionEntry {
+  commitHash: string;
+  commitTitle: string; // Original commit message
+  savedAt: string;
+  title?: string; // User-defined version title
+  description?: string; // User-defined description
+}
+
+export interface VersionHistoryData {
+  versions: VersionEntry[];
+}
+
 export class GitlabService {
   gitlab: InstanceType<typeof Gitlab>;
   gitlabUrl: string;
@@ -1711,6 +1723,108 @@ export class GitlabService {
     } catch (error) {
       // Ignore error if attribute doesn't exist
       logger.warn(`Failed to clear restore point: ${error}`);
+    }
+  }
+
+  /**
+   * Save a version to project history
+   */
+  async saveVersion(
+    projectPath: string,
+    commitHash: string,
+    commitTitle: string,
+    title?: string,
+    description?: string,
+  ): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing version history
+      let versionData: VersionHistoryData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+        versionData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist, create new one
+        versionData = { versions: [] };
+      }
+
+      // Add new version entry
+      const newVersion: VersionEntry = {
+        commitHash,
+        commitTitle,
+        savedAt: new Date().toISOString(),
+        ...(title && { title }),
+        ...(description && { description }),
+      };
+
+      versionData.versions.unshift(newVersion); // Add to beginning
+
+      // Keep only last 100 versions
+      if (versionData.versions.length > 100) {
+        versionData.versions = versionData.versions.slice(0, 100);
+      }
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_version_history', JSON.stringify(versionData));
+
+      logger.info(`Saved version for project ${projectPath}: ${commitHash} (${commitTitle})`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to save version: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get version history for a project
+   */
+  async getVersionHistory(projectPath: string): Promise<VersionEntry[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+      const value = attr.value as string;
+
+      try {
+        const versionData: VersionHistoryData = JSON.parse(value);
+
+        return versionData.versions || [];
+      } catch {
+        // If parsing fails, return empty array
+        return [];
+      }
+    } catch {
+      // If attribute doesn't exist, return empty array
+      return [];
+    }
+  }
+
+  /**
+   * Delete a specific version
+   */
+  async deleteVersion(projectPath: string, commitHash: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing version history
+      let versionData: VersionHistoryData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+        versionData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist, nothing to delete
+        return;
+      }
+
+      // Remove the version with matching commitHash
+      versionData.versions = versionData.versions.filter((v) => v.commitHash !== commitHash);
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_version_history', JSON.stringify(versionData));
+
+      logger.info(`Deleted version ${commitHash} for project ${projectPath}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to delete version: ${errorMessage}`);
     }
   }
 }
