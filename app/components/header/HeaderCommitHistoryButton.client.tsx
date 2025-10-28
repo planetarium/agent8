@@ -9,6 +9,7 @@ import { forkProject } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { toast } from 'react-toastify';
 import { handleChatError } from '~/utils/errorNotification';
+import { getElapsedTime } from '~/utils/performance';
 
 interface Commit {
   id: string;
@@ -134,10 +135,20 @@ export function HeaderCommitHistoryButton() {
   };
 
   const handleFork = async (commit: Commit) => {
+    const startTime = performance.now();
     const commitHash = commit.id;
 
+    const commitInfo = commit.title || commit.message.split('\n')[0];
+
     if (!commitHash || !isCommitHash(commitHash)) {
-      handleChatError('No commit hash found', undefined, 'handleFork - commit hash validation');
+      handleChatError(
+        'No commit hash found',
+        undefined,
+        'handleFork - commit hash validation',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
+      );
+
       return;
     }
 
@@ -164,15 +175,24 @@ export function HeaderCommitHistoryButton() {
         toast.success('Forked project successfully');
         window.location.href = '/chat/' + forkedProject.project.path;
       } else {
-        handleChatError('Failed to fork project', undefined, 'handleFork - fork result check');
+        handleChatError(
+          'Failed to fork project',
+          undefined,
+          'handleFork - fork result check',
+          commitInfo || undefined,
+          getElapsedTime(startTime),
+        );
       }
     } catch (error) {
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
+
       handleChatError(
         'Failed to fork project',
         error instanceof Error ? error : String(error),
         'handleFork - catch block',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
       );
     }
   };

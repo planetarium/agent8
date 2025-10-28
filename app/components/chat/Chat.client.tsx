@@ -60,9 +60,9 @@ import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/age
 import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError } from '~/utils/errorNotification';
+import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
-import { ERROR_MESSAGES } from '~/constants/errorMessages';
 
 const logger = createScopedLogger('Chat');
 
@@ -346,7 +346,8 @@ export const ChatImpl = memo(
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const chatRequestStartTimeRef = useRef<number>(performance.now());
+    const chatRequestStartTimeRef = useRef<number>(undefined);
+    const lastUserPromptRef = useRef<string>(undefined);
 
     const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
@@ -494,16 +495,13 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
-        if (e instanceof TypeError && e.message === ERROR_MESSAGES.NETWORK.NETWORK_ERROR) {
-          const elapsedTimeInSeconds = ((performance.now() - chatRequestStartTimeRef.current) / 1000).toFixed(2);
-          e.stack = `${e.stack} / Elapsed time: ${elapsedTimeInSeconds}sec`;
-        }
-
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           e,
           'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
+          lastUserPromptRef.current,
+          getElapsedTime(chatRequestStartTimeRef.current),
         );
         setFakeLoading(false);
       },
@@ -587,6 +585,15 @@ export const ChatImpl = memo(
     useEffect(() => {
       if (!isLoading) {
         setMessages(initialMessages);
+
+        // Set lastUserPromptRef from the last user message in initialMessages
+        if (initialMessages.length > 0) {
+          const lastUserMessage = [...initialMessages].reverse().find((m) => m.role === 'user');
+
+          if (lastUserMessage) {
+            lastUserPromptRef.current = extractTextContent(lastUserMessage);
+          }
+        }
       }
     }, [initialMessages]);
 
@@ -623,6 +630,7 @@ export const ChatImpl = memo(
         return;
       }
 
+      const startTime = performance.now();
       let attempt = 0;
       let commitSucceeded = false;
       let lastError: unknown;
@@ -654,6 +662,8 @@ export const ChatImpl = memo(
           `Code commit failed after ${MAX_COMMIT_RETRIES + 1} attempts`,
           lastError instanceof Error ? lastError : String(lastError),
           'handleCommit',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
         );
       }
     };
@@ -736,6 +746,7 @@ export const ChatImpl = memo(
       }
 
       if (chatStarted && Object.keys(files).length === 0) {
+        const fileRecoveryStartTime = performance.now();
         let recoverySuccessful = false;
         const containerInstance = await workbench.container;
 
@@ -771,7 +782,14 @@ export const ChatImpl = memo(
         }
 
         if (!recoverySuccessful) {
-          handleChatError('Files are not loaded. Please try again later.', undefined, 'sendMessage - files check');
+          handleChatError(
+            'Files are not loaded. Please try again later.',
+            undefined,
+            'sendMessage - files check',
+            messageContent,
+            getElapsedTime(fileRecoveryStartTime),
+          );
+
           return;
         }
       }
@@ -825,6 +843,8 @@ export const ChatImpl = memo(
       }
 
       if (!chatStarted) {
+        const templateSelectionStartTime = performance.now();
+
         try {
           // Set progress annotation for analyzing request
           setCustomProgressAnnotations([
@@ -903,7 +923,13 @@ export const ChatImpl = memo(
               const { success, message, data } = await createTaskBranch(projectPath);
 
               if (!success) {
-                handleChatError(message, undefined, 'createTaskBranch - starter template');
+                handleChatError(
+                  message,
+                  undefined,
+                  'createTaskBranch - starter template',
+                  messageContent,
+                  getElapsedTime(templateSelectionStartTime),
+                );
                 return;
               }
 
@@ -1007,6 +1033,7 @@ export const ChatImpl = memo(
           setCustomProgressAnnotations([]);
 
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
+          const elapsedTime = getElapsedTime(templateSelectionStartTime);
 
           // Check if error message has meaningful content
           if (
@@ -1014,12 +1041,20 @@ export const ChatImpl = memo(
             errorMessage !== 'Not Found Template' &&
             errorMessage !== 'Not Found Template Data'
           ) {
-            handleChatError(errorMessage, error instanceof Error ? error : String(error), 'starter template selection');
+            handleChatError(
+              errorMessage,
+              error instanceof Error ? error : String(error),
+              'starter template selection',
+              messageContent,
+              elapsedTime,
+            );
           } else {
             handleChatError(
               'Failed to import starter template\nRetry again after a few minutes.',
               error instanceof Error ? error : String(error),
               'starter template selection',
+              messageContent,
+              elapsedTime,
               'warning',
             );
           }
@@ -1030,6 +1065,8 @@ export const ChatImpl = memo(
           return;
         }
       }
+
+      const sendMessageFinalStartTime = performance.now();
 
       try {
         // Record prompt activity for subsequent requests
@@ -1065,10 +1102,17 @@ export const ChatImpl = memo(
           }
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
+            const createTaskBranchStartTime = performance.now();
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
 
             if (!success) {
-              handleChatError(message, undefined, 'createTaskBranch - subsequent message');
+              handleChatError(
+                message,
+                undefined,
+                'createTaskBranch - subsequent message',
+                messageContent,
+                getElapsedTime(createTaskBranchStartTime),
+              );
               return;
             }
 
@@ -1082,6 +1126,7 @@ export const ChatImpl = memo(
         }
 
         chatRequestStartTimeRef.current = performance.now();
+        lastUserPromptRef.current = messageContent;
 
         // Send new message immediately - useChat will use the latest state
         sendChatMessage({
@@ -1108,7 +1153,13 @@ export const ChatImpl = memo(
         logger.error('Error sending message:', error);
 
         if (error instanceof Error) {
-          handleChatError('Error:' + error?.message, error, 'sendMessage function');
+          handleChatError(
+            'Error:' + error?.message,
+            error,
+            'sendMessage function',
+            lastUserPromptRef.current,
+            getElapsedTime(sendMessageFinalStartTime),
+          );
         }
       }
     };
@@ -1204,6 +1255,8 @@ export const ChatImpl = memo(
     };
 
     const handleTemplateImport = async (source: { type: 'github' | 'zip'; title: string }, files: FileMap) => {
+      const startTime = performance.now();
+
       try {
         setFakeLoading(true);
         runAnimation();
@@ -1263,6 +1316,8 @@ export const ChatImpl = memo(
           `Failed to import ${source.type === 'github' ? 'repository' : 'project'}`,
           error instanceof Error ? error : String(error),
           'handleTemplateImport',
+          undefined, // Prompt not required (not a chat request)
+          getElapsedTime(startTime),
         );
       } finally {
         setFakeLoading(false);
@@ -1275,13 +1330,22 @@ export const ChatImpl = memo(
     };
 
     const handleFork = async (message: UIMessage) => {
+      const startTime = performance.now();
+
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError('No commit hash found', undefined, 'handleFork - commit hash validation');
+        handleChatError(
+          'No commit hash found',
+          undefined,
+          'handleFork - commit hash validation',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
+        );
+
         return;
       }
 
@@ -1308,28 +1372,46 @@ export const ChatImpl = memo(
           toast.success('Forked project successfully');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          handleChatError('Failed to fork project', undefined, 'handleFork - fork result check');
+          handleChatError(
+            'Failed to fork project',
+            undefined,
+            'handleFork - fork result check',
+            lastUserPromptRef.current,
+            getElapsedTime(startTime),
+          );
         }
       } catch (error) {
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
+
         handleChatError(
           'Failed to fork project',
           error instanceof Error ? error : String(error),
           'handleFork - catch block',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
         );
         logger.error('Error forking project:', error);
       }
     };
 
     const handleRevert = async (message: UIMessage) => {
+      const startTime = performance.now();
+
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError('No commit hash found', undefined, 'handleRevert - commit hash validation');
+        handleChatError(
+          'No commit hash found',
+          undefined,
+          'handleRevert - commit hash validation',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
+        );
+
         return;
       }
 
@@ -1337,6 +1419,8 @@ export const ChatImpl = memo(
     };
 
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
+      const startTime = performance.now();
+
       workbench.currentView.set('code');
 
       // Use prevMessage if provided, otherwise find the previous message
@@ -1358,7 +1442,14 @@ export const ChatImpl = memo(
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
               } else {
-                handleChatError('No parent commit found', undefined, 'handleRetry - parent commit check');
+                handleChatError(
+                  'No parent commit found',
+                  undefined,
+                  'handleRetry - parent commit check',
+                  lastUserPromptRef.current,
+                  getElapsedTime(startTime),
+                );
+
                 return;
               }
             } catch (error) {
@@ -1366,7 +1457,10 @@ export const ChatImpl = memo(
                 'Failed to get commit data',
                 error instanceof Error ? error : String(error),
                 'handleRetry - getCommit',
+                lastUserPromptRef.current,
+                getElapsedTime(startTime),
               );
+
               return;
             }
           }
@@ -1374,7 +1468,14 @@ export const ChatImpl = memo(
       }
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError('No commit hash found', undefined, 'handleRetry - commit hash validation');
+        handleChatError(
+          'No commit hash found',
+          undefined,
+          'handleRetry - commit hash validation',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
+        );
+
         return;
       }
 
@@ -1383,11 +1484,20 @@ export const ChatImpl = memo(
     };
 
     const handleViewDiff = async (message: UIMessage) => {
+      const startTime = performance.now();
+
       try {
         const commitHash = message.id?.split('-').pop();
 
         if (!commitHash || !isCommitHash(commitHash)) {
-          handleChatError('Invalid commit information', undefined, 'handleViewDiff - commit validation');
+          handleChatError(
+            'Invalid commit information',
+            undefined,
+            'handleViewDiff - commit validation',
+            lastUserPromptRef.current,
+            getElapsedTime(startTime),
+          );
+
           return;
         }
 
@@ -1401,6 +1511,8 @@ export const ChatImpl = memo(
           'Error displaying diff view',
           error instanceof Error ? error : String(error),
           'handleViewDiff - catch block',
+          lastUserPromptRef.current,
+          getElapsedTime(startTime),
         );
       }
     };
