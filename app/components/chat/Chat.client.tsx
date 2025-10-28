@@ -346,7 +346,7 @@ export const ChatImpl = memo(
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const chatRequestStartTimeRef = useRef<number>(performance.now());
+    const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
 
     const runAndPreview = async (message: UIMessage) => {
