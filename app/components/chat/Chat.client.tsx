@@ -347,7 +347,7 @@ export const ChatImpl = memo(
     const container = useWorkbenchContainer();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(performance.now());
-    const lastUserPromptRef = useRef<string>('');
+    const lastUserPromptRef = useRef<string>(undefined);
 
     const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
@@ -1342,7 +1342,7 @@ export const ChatImpl = memo(
           'No commit hash found',
           undefined,
           'handleFork - commit hash validation',
-          lastUserPromptRef.current || undefined,
+          lastUserPromptRef.current,
           getElapsedTime(startTime),
         );
 
@@ -1376,7 +1376,7 @@ export const ChatImpl = memo(
             'Failed to fork project',
             undefined,
             'handleFork - fork result check',
-            lastUserPromptRef.current || undefined,
+            lastUserPromptRef.current,
             getElapsedTime(startTime),
           );
         }
@@ -1388,7 +1388,7 @@ export const ChatImpl = memo(
           'Failed to fork project',
           error instanceof Error ? error : String(error),
           'handleFork - catch block',
-          lastUserPromptRef.current || undefined,
+          lastUserPromptRef.current,
           getElapsedTime(startTime),
         );
         logger.error('Error forking project:', error);
@@ -1408,7 +1408,7 @@ export const ChatImpl = memo(
           'No commit hash found',
           undefined,
           'handleRevert - commit hash validation',
-          lastUserPromptRef.current || undefined,
+          lastUserPromptRef.current,
           getElapsedTime(startTime),
         );
 
@@ -1446,7 +1446,7 @@ export const ChatImpl = memo(
                   'No parent commit found',
                   undefined,
                   'handleRetry - parent commit check',
-                  lastUserPromptRef.current || undefined,
+                  lastUserPromptRef.current,
                   getElapsedTime(startTime),
                 );
 
@@ -1457,7 +1457,7 @@ export const ChatImpl = memo(
                 'Failed to get commit data',
                 error instanceof Error ? error : String(error),
                 'handleRetry - getCommit',
-                lastUserPromptRef.current || undefined,
+                lastUserPromptRef.current,
                 getElapsedTime(startTime),
               );
 
@@ -1472,7 +1472,7 @@ export const ChatImpl = memo(
           'No commit hash found',
           undefined,
           'handleRetry - commit hash validation',
-          lastUserPromptRef.current || undefined,
+          lastUserPromptRef.current,
           getElapsedTime(startTime),
         );
 
@@ -1494,7 +1494,7 @@ export const ChatImpl = memo(
             'Invalid commit information',
             undefined,
             'handleViewDiff - commit validation',
-            lastUserPromptRef.current || undefined,
+            lastUserPromptRef.current,
             getElapsedTime(startTime),
           );
 
@@ -1511,7 +1511,7 @@ export const ChatImpl = memo(
           'Error displaying diff view',
           error instanceof Error ? error : String(error),
           'handleViewDiff - catch block',
-          lastUserPromptRef.current || undefined,
+          lastUserPromptRef.current,
           getElapsedTime(startTime),
         );
       }
