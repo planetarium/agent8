@@ -25,7 +25,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
         message: options.error.message,
         stack: options.error.stack,
         prompt: options.prompt,
-        elapsedTime: options.elapsedTime !== undefined ? `${options.elapsedTime.toFixed(2)}sec` : undefined,
+        elapsedTime: options.elapsedTime,
 
         // Include any custom properties that might exist on the error
         ...Object.getOwnPropertyNames(options.error).reduce((acc, key) => {
