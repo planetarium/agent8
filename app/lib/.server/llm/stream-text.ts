@@ -126,7 +126,7 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const invalidToolInputHandler = await createInvalidToolInputHandler();
+  const invalidToolInputHandler = createInvalidToolInputHandler();
   const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
@@ -216,6 +216,7 @@ export async function streamText(props: {
           }),
         };
       } else if (InvalidToolInputError.isInstance(error)) {
+        // For SUBMIT_ARTIFACT tool, if it's a MISSING_FILE_CONTEXT error, try to repair by reading the missing files.
         if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT && error.message) {
           const match = error.message.match(/Error message:\s*({.*})/);
 
@@ -232,26 +233,27 @@ export async function streamText(props: {
               };
             }
           }
-        } else {
-          const toolName = toolCall.toolName;
-          const currentAttempts = toolRepairAttempts.get(toolName) || 0;
-
-          if (currentAttempts >= MAX_REPAIR_ATTEMPTS) {
-            logger.warn(`Max repair attempts (${MAX_REPAIR_ATTEMPTS}) reached for toolCallId: ${toolCall.toolCallId}`);
-            return null;
-          }
-
-          toolRepairAttempts.set(toolName, currentAttempts + 1);
-
-          return {
-            type: 'tool-call',
-            toolCallId: toolCall.toolCallId,
-            toolName: TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER,
-            input: JSON.stringify({
-              originalTool: toolCall.toolName,
-            }),
-          };
         }
+
+        // For all other InvalidToolInputError cases, use the generic repair handler.
+        const toolName = toolCall.toolName;
+        const currentAttempts = toolRepairAttempts.get(toolName) || 0;
+
+        if (currentAttempts >= MAX_REPAIR_ATTEMPTS) {
+          logger.warn(`Max repair attempts (${MAX_REPAIR_ATTEMPTS}) reached for toolCallId: ${toolCall.toolCallId}`);
+          return null;
+        }
+
+        toolRepairAttempts.set(toolName, currentAttempts + 1);
+
+        return {
+          type: 'tool-call',
+          toolCallId: toolCall.toolCallId,
+          toolName: TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER,
+          input: JSON.stringify({
+            originalTool: toolCall.toolName,
+          }),
+        };
       }
 
       return null;

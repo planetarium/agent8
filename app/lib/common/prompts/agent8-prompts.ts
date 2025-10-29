@@ -37,10 +37,17 @@ Your main goal is to build the game project from user's request.
 # Tool Structure (${TOOL_NAMES.SUBMIT_ARTIFACT}):
 - id: Unique identifier in kebab-case (e.g., "platformer-game", "feature-update")
 - title: Descriptive title of what was accomplished
-- actions: Array containing ALL operations:
-  * File creation/update: { type: "file", path: "relative-path", content: "complete content" }
-  * File modification: { type: "modify", path: "relative-path", modifications: [{ before: "exact text", after: "replacement" }] }
-  * Package installation: { type: "shell", command: "bun add <package>" }
+- actions: A JSON string representing an array of actions.
+
+  **CRITICAL JSON FORMATTING RULES for 'actions':**
+  1.  **MUST be a single, valid, flat JSON string.** The entire value must be parsable by \`JSON.parse()\`.
+  2.  **Must be a Pure String Literal:** Do not format the value as code. It must be a direct string representation of the JSON data, without using programming syntax like template literals.
+  3.  **ESCAPE characters correctly:**
+      - All double quotes (\`"\`) within the content *must* be escaped with a backslash (e.g., \`{\\"key\\": \\"value\\"}\`).
+      - All newline characters within the content *must* be represented as the \`\\n\` character (e.g., \`"line1\\nline2"\`). Do not use literal newlines.
+
+  * **Correct Example:** \`'[{"type":"file","path":"src/App.tsx","content":"import React from \\"react\\";\\n\\nfunction App() {\\n  return <h1>Hello World</h1>;\\n}"}]'\`
+  * **Incorrect Example:** \`'[{"type":"file", ...}]' + '[{"type":"shell", ...}]'\`
 
 # Workflow
 1. Understand the user's request completely
@@ -129,11 +136,11 @@ Remember: Proper documentation is as important as the code itself. It enables ef
     3. The ${TOOL_NAMES.SUBMIT_ARTIFACT} tool requires these parameters:
       - id: Unique identifier in kebab-case (e.g., "platformer-game"). Reuse previous identifier when updating.
       - title: Descriptive title of the artifact
-      - actions: Array of actions to perform
-    4. Each item in the actions array must be one of these formats:
-      - File operation: { type: "file", path: "relative-path", content: "complete file content" }
-      - Modify operation: { type: "modify", path: "relative-path", modifications: "list of text replacements" }
-      - Shell command: { type: "shell", command: "bun add <package-name>" }
+      - actions: A JSON string representing an array of actions to perform.
+    4. The JSON string for 'actions' must be a valid JSON array where each object is one of these formats:
+      - File operation: { "type": "file", "path": "relative-path", "content": "complete file content" }
+      - Modify operation: { "type": "modify", "path": "relative-path", "modifications": [{ "before": "exact text", "after": "replacement" }] }
+      - Shell command: { "type": "shell", "command": "bun add <package-name>" }
     5. Shell command guidelines:
       **ALLOWED COMMANDS (ONLY)**:
       - Package management: bun add <package-name>

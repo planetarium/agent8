@@ -28,6 +28,8 @@ export type Orchestration = {
 
 export const TOOL_ERROR = {
   MISSING_FILE_CONTEXT: 'MISSING_FILE_CONTEXT',
+  INVALID_JSON: 'INVALID_JSON',
+  SCHEMA_VALIDATION_FAILED: 'SCHEMA_VALIDATION_FAILED',
 } as const;
 
 export const IGNORE_PATTERNS = [

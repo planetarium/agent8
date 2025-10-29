@@ -1,5 +1,6 @@
 import { atom, map } from 'nanostores';
 import { PROVIDER_LIST } from '~/utils/constants';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 import type { IProviderConfig } from '~/types/model';
 import type {
   TabVisibilityConfig,
@@ -78,11 +79,20 @@ const getInitialProviderSettings = (): ProviderSetting => {
 
   // Start with default settings
   PROVIDER_LIST.forEach((provider) => {
+    const enabledProviders: string[] = [
+      PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+      PROVIDER_NAMES.ANTHROPIC,
+      PROVIDER_NAMES.OPEN_ROUTER,
+      PROVIDER_NAMES.OPEN_AI,
+      PROVIDER_NAMES.GOOGLE,
+      PROVIDER_NAMES.X_AI,
+    ];
+
     initialSettings[provider.name] = {
       ...provider,
       settings: {
         // Only enable by default, disable all others
-        enabled: ['Anthropic', 'OpenRouter', 'OpenAI', 'Google', 'xAI'].includes(provider.name),
+        enabled: enabledProviders.includes(provider.name),
       },
     };
   });
@@ -97,7 +107,14 @@ const getInitialProviderSettings = (): ProviderSetting => {
         Object.entries(parsed).forEach(([key, value]) => {
           if (initialSettings[key]) {
             const providerSettings = (value as IProviderConfig).settings;
-            const mandatoryProviders = ['Anthropic', 'OpenRouter', 'OpenAI', 'Google', 'xAI', 'GoogleVertexAI'];
+            const mandatoryProviders: string[] = [
+              PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+              PROVIDER_NAMES.ANTHROPIC,
+              PROVIDER_NAMES.OPEN_ROUTER,
+              PROVIDER_NAMES.OPEN_AI,
+              PROVIDER_NAMES.GOOGLE,
+              PROVIDER_NAMES.X_AI,
+            ];
 
             initialSettings[key].settings = {
               ...providerSettings,

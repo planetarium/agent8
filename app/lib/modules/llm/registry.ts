@@ -1,8 +1,8 @@
+import GoogleVertexProvider from './providers/google-vertex';
 import AnthropicProvider from './providers/anthropic';
 import CohereProvider from './providers/cohere';
 import DeepseekProvider from './providers/deepseek';
 import GoogleProvider from './providers/google';
-import GoogleVertexProvider from './providers/google-vertex';
 import GroqProvider from './providers/groq';
 import HuggingFaceProvider from './providers/huggingface';
 import LMStudioProvider from './providers/lmstudio';
@@ -19,11 +19,11 @@ import AmazonBedrockProvider from './providers/amazon-bedrock';
 import GithubProvider from './providers/github';
 
 export {
+  GoogleVertexProvider,
   AnthropicProvider,
   CohereProvider,
   DeepseekProvider,
   GoogleProvider,
-  GoogleVertexProvider,
   GroqProvider,
   HuggingFaceProvider,
   HyperbolicProvider,

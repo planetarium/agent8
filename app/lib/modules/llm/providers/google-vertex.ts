@@ -3,6 +3,7 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex/edge';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 interface VertexCredentials {
   projectId: string;
@@ -12,7 +13,7 @@ interface VertexCredentials {
 }
 
 export default class GoogleVertexProvider extends BaseProvider {
-  name = 'GoogleVertexAI';
+  name = PROVIDER_NAMES.GOOGLE_VERTEX_AI;
   getApiKeyLink = 'https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal';
 
   config = {
@@ -20,11 +21,18 @@ export default class GoogleVertexProvider extends BaseProvider {
   };
 
   staticModels: ModelInfo[] = [
-    { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 65535 },
-    { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'GoogleVertexAI', maxTokenAllowed: 65535 },
-    { name: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
-    { name: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
-    { name: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'GoogleVertexAI', maxTokenAllowed: 8192 },
+    {
+      name: 'gemini-2.5-pro',
+      label: 'Gemini 2.5 Pro',
+      provider: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+      maxTokenAllowed: 65535,
+    },
+    {
+      name: 'gemini-2.5-flash',
+      label: 'Gemini 2.5 Flash',
+      provider: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+      maxTokenAllowed: 65535,
+    },
   ];
 
   async getDynamicModels(): Promise<ModelInfo[]> {

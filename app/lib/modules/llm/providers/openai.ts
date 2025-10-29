@@ -3,9 +3,10 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModel } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 export default class OpenAIProvider extends BaseProvider {
-  name = 'OpenAI';
+  name = PROVIDER_NAMES.OPEN_AI;
   getApiKeyLink = 'https://platform.openai.com/api-keys';
 
   config = {
@@ -13,11 +14,11 @@ export default class OpenAIProvider extends BaseProvider {
   };
 
   staticModels: ModelInfo[] = [
-    { name: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4-turbo', label: 'GPT-4 Turbo', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-4', label: 'GPT-4', provider: 'OpenAI', maxTokenAllowed: 8000 },
-    { name: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: 'OpenAI', maxTokenAllowed: 8000 },
+    { name: 'gpt-4o', label: 'GPT-4o', provider: PROVIDER_NAMES.OPEN_AI, maxTokenAllowed: 8000 },
+    { name: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: PROVIDER_NAMES.OPEN_AI, maxTokenAllowed: 8000 },
+    { name: 'gpt-4-turbo', label: 'GPT-4 Turbo', provider: PROVIDER_NAMES.OPEN_AI, maxTokenAllowed: 8000 },
+    { name: 'gpt-4', label: 'GPT-4', provider: PROVIDER_NAMES.OPEN_AI, maxTokenAllowed: 8000 },
+    { name: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: PROVIDER_NAMES.OPEN_AI, maxTokenAllowed: 8000 },
   ];
 
   async getDynamicModels(

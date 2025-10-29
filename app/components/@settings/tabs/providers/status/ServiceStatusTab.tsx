@@ -220,7 +220,7 @@ const ServiceStatusTab = () => {
         Anthropic: 'ANTHROPIC_API_KEY',
         Cohere: 'COHERE_API_KEY',
         Google: 'GOOGLE_GENERATIVE_AI_API_KEY',
-        GoogleVertex: 'GOOGLE_CLOUD_PROJECT',
+        GoogleVertex: 'GOOGLE_PRIVATE_KEY',
         HuggingFace: 'HuggingFace_API_KEY',
         Mistral: 'MISTRAL_API_KEY',
         Perplexity: 'PERPLEXITY_API_KEY',
