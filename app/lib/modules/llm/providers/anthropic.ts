@@ -4,11 +4,12 @@ import type { LanguageModel } from 'ai';
 import type { IProviderSetting } from '~/types/model';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createScopedLogger } from '~/utils/logger';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 const logger = createScopedLogger('llm.providers.anthropic');
 
 export default class AnthropicProvider extends BaseProvider {
-  name = 'Anthropic';
+  name = PROVIDER_NAMES.ANTHROPIC;
   getApiKeyLink = 'https://console.anthropic.com/settings/keys';
 
   config = {
@@ -17,9 +18,9 @@ export default class AnthropicProvider extends BaseProvider {
 
   staticModels: ModelInfo[] = [
     {
-      name: 'claude-3-7-sonnet-20250219',
-      label: 'Claude 3.7 Sonnet',
-      provider: 'Anthropic',
+      name: 'claude-sonnet-4.5',
+      label: 'Claude 4.5 Sonnet',
+      provider: PROVIDER_NAMES.ANTHROPIC,
       maxTokenAllowed: 64000,
     },
   ];

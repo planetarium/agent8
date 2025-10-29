@@ -27,8 +27,8 @@ importers:
         specifier: ^2.0.17
         version: 2.0.23(zod@4.1.12)
       '@ai-sdk/google-vertex':
-        specifier: ^3.0.33
-        version: 3.0.51(encoding@0.1.13)(zod@4.1.12)
+        specifier: ^3.0.54
+        version: 3.0.54(encoding@0.1.13)(zod@4.1.12)
       '@ai-sdk/mistral':
         specifier: ^2.0.17
         version: 2.0.19(zod@4.1.12)
@@ -519,6 +519,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/anthropic@2.0.38':
+    resolution: {integrity: sha512-NjU1ftHbu90OfRCgBwfFelmdEXwGFwLEcfyOyyfjRDm8QHaJUlPNnXhdhPTYuUU386yhj29Vibemiaq6jQv3lA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/cohere@2.0.14':
     resolution: {integrity: sha512-IsYhu8uJIRnjz/OQNd+9LS9ROD2bNMLuizFoLYfSv+J8gmdm0dcHxdTHNEacrs6VYl0jutq6dfRgCb4CKLAqBw==}
     engines: {node: '>=18'}
@@ -537,14 +543,20 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google-vertex@3.0.51':
-    resolution: {integrity: sha512-0g/jGGm0nCSWZX8hXUWXYwDCYAd7gh12e0EVX5+BCHBJImk68Y80rjFGAgCr02I9qdFuQ9cH4Wf8dPtjwzizvA==}
+  '@ai-sdk/google-vertex@3.0.54':
+    resolution: {integrity: sha512-/X4KvOe5E440uHh/fHJqKBrg/e9xO1Q7S9fxIxnu1IXi6/o+i+PPmvNxz+IAzTIR+ppKbeGeCC2Inpy3sg2IvQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/google@2.0.23':
     resolution: {integrity: sha512-VbCnKR+6aWUVLkAiSW5gUEtST7KueEmlt+d6qwDikxlLnFG9pzy59je8MiDVeM5G2tuSXbvZQF78PGIfXDBmow==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/google@2.0.24':
+    resolution: {integrity: sha512-GUNj1fo+q/JHDB2d1zIEULPt/EvwhGs8MIDo7PEEsuMcNyFwXzc80IUlTvFRUNy0tiZ6kBRw40dRU/hJRx5zQg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -578,6 +590,12 @@ packages:
 
   '@ai-sdk/provider-utils@3.0.12':
     resolution: {integrity: sha512-ZtbdvYxdMoria+2SlNarEk6Hlgyf+zzcznlD55EAl+7VZvJaSg2sqPvwArY7L6TfDEDJsnCq0fdhBSkYo0Xqdg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@3.0.13':
+    resolution: {integrity: sha512-aXFLBLRPTUYA853MJliItefSXeJPl+mg0KSjbToP41kJ+banBmHO8ZPGLJhNqGlCU82o11TYN7G05EREKX8CkA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -9922,6 +9940,12 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.12(zod@4.1.12)
       zod: 4.1.12
 
+  '@ai-sdk/anthropic@2.0.38(zod@4.1.12)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.13(zod@4.1.12)
+      zod: 4.1.12
+
   '@ai-sdk/cohere@2.0.14(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
@@ -9942,12 +9966,12 @@ snapshots:
       '@vercel/oidc': 3.0.3
       zod: 4.1.12
 
-  '@ai-sdk/google-vertex@3.0.51(encoding@0.1.13)(zod@4.1.12)':
+  '@ai-sdk/google-vertex@3.0.54(encoding@0.1.13)(zod@4.1.12)':
     dependencies:
-      '@ai-sdk/anthropic': 2.0.35(zod@4.1.12)
-      '@ai-sdk/google': 2.0.23(zod@4.1.12)
+      '@ai-sdk/anthropic': 2.0.38(zod@4.1.12)
+      '@ai-sdk/google': 2.0.24(zod@4.1.12)
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.12(zod@4.1.12)
+      '@ai-sdk/provider-utils': 3.0.13(zod@4.1.12)
       google-auth-library: 9.15.1(encoding@0.1.13)
       zod: 4.1.12
     transitivePeerDependencies:
@@ -9958,6 +9982,12 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.12(zod@4.1.12)
+      zod: 4.1.12
+
+  '@ai-sdk/google@2.0.24(zod@4.1.12)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.13(zod@4.1.12)
       zod: 4.1.12
 
   '@ai-sdk/mistral@2.0.19(zod@4.1.12)':
@@ -9988,6 +10018,13 @@ snapshots:
       zod: 4.1.12
 
   '@ai-sdk/provider-utils@3.0.12(zod@4.1.12)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 4.1.12
+
+  '@ai-sdk/provider-utils@3.0.13(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@standard-schema/spec': 1.0.0
@@ -12912,7 +12949,7 @@ snapshots:
       '@babel/plugin-syntax-typescript': 7.27.1(@babel/core@7.28.4)
       '@vanilla-extract/babel-plugin-debug-ids': 1.2.2
       '@vanilla-extract/css': 1.17.4
-      esbuild: 0.17.19
+      esbuild: 0.17.6
       eval: 0.1.8
       find-up: 5.0.0
       javascript-stringify: 2.1.0

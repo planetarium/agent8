@@ -5,7 +5,7 @@ const logger = createScopedLogger('error-handle-tool');
 
 export const createUnknownToolHandler = () => {
   return {
-    description: '', // Intentionally empty to hide from LLM
+    description: 'Do not call this tool directly',
     inputSchema: z.object({
       originalTool: z.string(),
       originalArgs: z.string(),
@@ -21,7 +21,7 @@ export const createUnknownToolHandler = () => {
 
 export const createInvalidToolInputHandler = () => {
   return {
-    description: '', // Intentionally empty to hide from LLM
+    description: 'Do not call this tool directly',
     inputSchema: z.object({
       originalTool: z.string(),
     }),

@@ -53,7 +53,7 @@
     "@ai-sdk/cohere": "^2.0.12",
     "@ai-sdk/deepseek": "^1.0.20",
     "@ai-sdk/google": "^2.0.17",
-    "@ai-sdk/google-vertex": "^3.0.33",
+    "@ai-sdk/google-vertex": "^3.0.54",
     "@ai-sdk/mistral": "^2.0.17",
     "@ai-sdk/openai": "^2.0.42",
     "@ai-sdk/provider": "^2.0.0",

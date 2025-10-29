@@ -13,8 +13,42 @@ import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
 
+function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
+  const artifactId = id || 'unknown';
+  const artifactTitle = title || '';
+  const artifactBody = body || '';
+
+  return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
+}
+
 function toBoltArtifactXML(a: any) {
-  const body = a.actions
+  let actionsArray = [];
+
+  if (a.actions) {
+    try {
+      let parsedActions;
+
+      if (typeof a.actions === 'string') {
+        parsedActions = JSON.parse(a.actions);
+      } else {
+        parsedActions = a.actions;
+      }
+
+      if (Array.isArray(parsedActions)) {
+        actionsArray = parsedActions;
+      } else {
+        // Handle cases where a single object might be provided.
+        actionsArray = [parsedActions];
+      }
+    } catch (error) {
+      console.warn('Failed to parse actions JSON string:', error);
+
+      // If parsing fails, return an empty artifact or handle the error appropriately.
+      return createBoltArtifactXML(a.id, a.title);
+    }
+  }
+
+  const body = actionsArray
     .filter(
       (act: any) =>
         (act.content && act.path) ||
@@ -45,9 +79,7 @@ function toBoltArtifactXML(a: any) {
     })
     .join('\n');
 
-  return `<boltArtifact id="${a.id || 'unknown'}" title="${a.title}">
-${body}
-</boltArtifact>`;
+  return createBoltArtifactXML(a.id, a.title, body);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -212,7 +244,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             // Retry if tool was not called and response is not empty
             if (
               !hasSubmitArtifact &&
-              finishReason === 'stop' &&
+              (finishReason === 'stop' || finishReason === 'unknown') &&
               content.trim().length > 0 &&
               submitArtifactRetryCount < MAX_SUBMIT_ARTIFACT_RETRIES
             ) {
@@ -363,6 +395,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
+          let isSubmitArtifact = false;
           const submitArtifactInputs = new Map<string, unknown>();
 
           return (chunk, controller) => {
@@ -450,24 +483,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               case 'tool-output-available': {
                 if (submitArtifactInputs.has(chunk.toolCallId)) {
                   const artifactData = submitArtifactInputs.get(chunk.toolCallId);
+
                   const xmlContent = toBoltArtifactXML(artifactData);
                   submitArtifactInputs.delete(chunk.toolCallId);
 
-                  controller.enqueue({
-                    type: 'text-start',
-                    id: chunk.toolCallId,
-                  });
+                  // only enqueue the submit artifact once
+                  if (!isSubmitArtifact) {
+                    controller.enqueue({
+                      type: 'text-start',
+                      id: chunk.toolCallId,
+                    });
 
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: chunk.toolCallId,
-                    delta: '\n' + xmlContent + '\n',
-                  });
+                    controller.enqueue({
+                      type: 'text-delta',
+                      id: chunk.toolCallId,
+                      delta: '\n' + xmlContent + '\n',
+                    });
 
-                  controller.enqueue({
-                    type: 'text-end',
-                    id: chunk.toolCallId,
-                  });
+                    controller.enqueue({
+                      type: 'text-end',
+                      id: chunk.toolCallId,
+                    });
+
+                    isSubmitArtifact = true;
+                  }
 
                   break;
                 }
