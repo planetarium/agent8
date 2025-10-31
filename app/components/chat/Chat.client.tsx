@@ -659,7 +659,7 @@ export const ChatImpl = memo(
 
       if (!commitSucceeded) {
         handleChatError(
-          `Code commit failed after ${MAX_COMMIT_RETRIES + 1} attempts`,
+          `Code commit failed`,
           lastError instanceof Error ? lastError : String(lastError),
           'handleCommit',
           lastUserPromptRef.current,
