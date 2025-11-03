@@ -4,6 +4,14 @@ import type { IProviderSetting } from '~/types/model';
 import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex/edge';
 import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
+import {
+  SUBMIT_ARTIFACT_FIELDS,
+  FILE_ACTION_FIELDS,
+  MODIFY_ACTION_FIELDS,
+  MODIFICATION_FIELDS,
+  SHELL_ACTION_FIELDS,
+} from '~/lib/constants/tool-fields';
+import { TOOL_NAMES } from '~/utils/constants';
 
 interface VertexCredentials {
   projectId: string;
@@ -11,6 +19,12 @@ interface VertexCredentials {
   clientEmail: string;
   privateKey: string;
 }
+
+const VERTEX_FINISH_REASON = {
+  MALFORMED_FUNCTION_CALL: 'MALFORMED_FUNCTION_CALL',
+} as const;
+
+const SSE_DATA_PREFIX = 'data: ' as const;
 
 export default class GoogleVertexProvider extends BaseProvider {
   name = PROVIDER_NAMES.GOOGLE_VERTEX_AI;
@@ -165,17 +179,26 @@ export default class GoogleVertexProvider extends BaseProvider {
   }
 
   /**
-   * Unescapes Python string literals
-   * Converts escaped characters back to their original form
+   * Builds Python object type name from tool name and field names
+   * Used to match against Vertex AI's generated Python type annotations
+   *
+   * @example
+   * _buildObjectTypeName('submit_artifact', 'fileActions') → 'SubmitArtifactFileactions'
+   * _buildObjectTypeName('submit_artifact', 'modifyActions', 'modifications') → 'SubmitArtifactModifyactionsModifications'
    */
-  private _unescapePythonString(str: string): string {
-    return str
-      .replace(/\\"/g, '"') // \" → "
-      .replace(/\\'/g, "'") // \' → '
-      .replace(/\\\\/g, '\\') // \\ → \
-      .replace(/\\n/g, '\n') // \n → newline
-      .replace(/\\r/g, '\r') // \r → carriage return
-      .replace(/\\t/g, '\t'); // \t → tab
+  private _buildObjectTypeName(toolName: string, ...fieldNames: string[]): string {
+    // Convert snake_case tool name to PascalCase: submit_artifact → SubmitArtifact
+    const pascalToolName = toolName
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+
+    // Convert camelCase field names to capitalized: fileActions → Fileactions
+    const normalizedFieldNames = fieldNames
+      .map((fieldName) => fieldName.charAt(0).toUpperCase() + fieldName.slice(1).toLowerCase())
+      .join('');
+
+    return pascalToolName + normalizedFieldNames;
   }
 
   /**
@@ -300,65 +323,53 @@ export default class GoogleVertexProvider extends BaseProvider {
    */
   private _parsePythonFunctionCall(finishMessage: string): any {
     try {
-      console.log('=== PARSING PYTHON FUNCTION CALL ===');
-
       /* Extract content between submit_artifact( and final ) */
-      const match = finishMessage.match(/submit_artifact\((.*)\)\)/s);
+      const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
+      const pattern = new RegExp(`${toolName}\\((.*)\\)\\)`, 's');
+      const match = finishMessage.match(pattern);
 
       if (!match) {
-        console.log('Failed to match submit_artifact function call');
         return null;
       }
 
       const argsStr = match[1];
-      console.log('Extracted args string length:', argsStr.length);
-
       const result: any = {};
 
       /* Parse simple string fields: id, title, summary */
-      const simpleFields = ['id', 'title', 'summary'];
+      const simpleFields = [SUBMIT_ARTIFACT_FIELDS.ID, SUBMIT_ARTIFACT_FIELDS.TITLE, SUBMIT_ARTIFACT_FIELDS.SUMMARY];
 
       for (const field of simpleFields) {
         const value = this._extractFieldValue(argsStr, field);
 
         if (value !== null) {
           result[field] = value;
-          console.log(`Parsed ${field}:`, value.substring(0, 100));
         }
       }
 
       /* Parse fileActions array */
-      const fileActionsValue = this._extractFieldValue(argsStr, 'fileActions');
+      const fileActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS);
 
       if (fileActionsValue !== null) {
-        console.log('Parsing fileActions...');
-        result.fileActions = this._parseFileActions(fileActionsValue);
-        console.log('Parsed fileActions count:', result.fileActions.length);
+        result[SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS] = this._parseFileActions(fileActionsValue);
       }
 
       /* Parse modifyActions array */
-      const modifyActionsValue = this._extractFieldValue(argsStr, 'modifyActions');
+      const modifyActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS);
 
       if (modifyActionsValue !== null) {
-        console.log('Parsing modifyActions...');
-        result.modifyActions = this._parseModifyActions(modifyActionsValue);
-        console.log('Parsed modifyActions count:', result.modifyActions.length);
+        result[SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS] = this._parseModifyActions(modifyActionsValue);
       }
 
       /* Parse shellActions array */
-      const shellActionsValue = this._extractFieldValue(argsStr, 'shellActions');
+      const shellActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS);
 
       if (shellActionsValue !== null) {
-        console.log('Parsing shellActions...');
-        result.shellActions = this._parseShellActions(shellActionsValue);
-        console.log('Parsed shellActions count:', result.shellActions.length);
+        result[SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS] = this._parseShellActions(shellActionsValue);
       }
-
-      console.log('=== PARSING COMPLETED ===');
 
       return result;
     } catch (error) {
-      console.error('Failed to parse Python function call:', error);
+      console.warn('Failed to parse Python function call:', error);
       return null;
     }
   }
@@ -466,7 +477,7 @@ export default class GoogleVertexProvider extends BaseProvider {
 
       while (i < objStr.length) {
         if (objStr.substring(i, i + 3) === "'''") {
-          return this._unescapePythonString(value);
+          return value;
         }
 
         value += objStr[i];
@@ -488,7 +499,7 @@ export default class GoogleVertexProvider extends BaseProvider {
         const char = objStr[i];
 
         if (char === quoteChar && objStr[i - 1] !== '\\') {
-          return this._unescapePythonString(value);
+          return value;
         }
 
         value += char;
@@ -509,24 +520,26 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      if (!objStr.includes('SubmitArtifactFileactions')) {
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS);
+
+      if (!objStr.includes(typeName)) {
         continue;
       }
 
       const action: any = {};
 
       /* Extract path */
-      const path = this._extractObjectField(objStr, 'path');
+      const path = this._extractObjectField(objStr, FILE_ACTION_FIELDS.PATH);
 
       if (path !== null) {
-        action.path = path;
+        action[FILE_ACTION_FIELDS.PATH] = path;
       }
 
       /* Extract content */
-      const content = this._extractObjectField(objStr, 'content');
+      const content = this._extractObjectField(objStr, FILE_ACTION_FIELDS.CONTENT);
 
       if (content !== null) {
-        action.content = content;
+        action[FILE_ACTION_FIELDS.CONTENT] = content;
       }
 
       actions.push(action);
@@ -543,24 +556,26 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      if (!objStr.includes('SubmitArtifactModifyactions')) {
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS);
+
+      if (!objStr.includes(typeName)) {
         continue;
       }
 
       const action: any = {};
 
       /* Extract path */
-      const path = this._extractObjectField(objStr, 'path');
+      const path = this._extractObjectField(objStr, MODIFY_ACTION_FIELDS.PATH);
 
       if (path !== null) {
-        action.path = path;
+        action[MODIFY_ACTION_FIELDS.PATH] = path;
       }
 
       /* Extract modifications array */
-      const modsValue = this._extractFieldValue(objStr, 'modifications');
+      const modsValue = this._extractFieldValue(objStr, MODIFY_ACTION_FIELDS.MODIFICATIONS);
 
       if (modsValue !== null) {
-        action.modifications = this._parseModifications(modsValue);
+        action[MODIFY_ACTION_FIELDS.MODIFICATIONS] = this._parseModifications(modsValue);
       }
 
       actions.push(action);
@@ -577,24 +592,30 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      if (!objStr.includes('SubmitArtifactModifyactionsModifications')) {
+      const typeName = this._buildObjectTypeName(
+        TOOL_NAMES.SUBMIT_ARTIFACT,
+        SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS,
+        MODIFY_ACTION_FIELDS.MODIFICATIONS,
+      );
+
+      if (!objStr.includes(typeName)) {
         continue;
       }
 
       const modification: any = {};
 
       /* Extract before */
-      const before = this._extractObjectField(objStr, 'before');
+      const before = this._extractObjectField(objStr, MODIFICATION_FIELDS.BEFORE);
 
       if (before !== null) {
-        modification.before = before;
+        modification[MODIFICATION_FIELDS.BEFORE] = before;
       }
 
       /* Extract after */
-      const after = this._extractObjectField(objStr, 'after');
+      const after = this._extractObjectField(objStr, MODIFICATION_FIELDS.AFTER);
 
       if (after !== null) {
-        modification.after = after;
+        modification[MODIFICATION_FIELDS.AFTER] = after;
       }
 
       modifications.push(modification);
@@ -611,17 +632,19 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      if (!objStr.includes('SubmitArtifactShellactions')) {
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS);
+
+      if (!objStr.includes(typeName)) {
         continue;
       }
 
       const action: any = {};
 
       /* Extract command */
-      const command = this._extractObjectField(objStr, 'command');
+      const command = this._extractObjectField(objStr, SHELL_ACTION_FIELDS.COMMAND);
 
       if (command !== null) {
-        action.command = command;
+        action[SHELL_ACTION_FIELDS.COMMAND] = command;
       }
 
       actions.push(action);
@@ -646,22 +669,20 @@ export default class GoogleVertexProvider extends BaseProvider {
       /* Parse and modify SSE lines */
       const lines = rawText.split('\n');
       const modifiedLines = lines.map((line) => {
-        if (!line.startsWith('data: ')) {
+        if (!line.startsWith(SSE_DATA_PREFIX)) {
           return line;
         }
 
         try {
-          const data = JSON.parse(line.substring(6));
+          const data = JSON.parse(line.substring(SSE_DATA_PREFIX.length));
           const candidate = data.candidates?.[0];
 
           /* Fix MALFORMED_FUNCTION_CALL with submit_artifact */
-          if (candidate?.finishReason === 'MALFORMED_FUNCTION_CALL') {
+          if (candidate?.finishReason === VERTEX_FINISH_REASON.MALFORMED_FUNCTION_CALL) {
             const finishMessage = candidate.finishMessage || '';
-            console.log('###### data message:', data);
+            const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
 
-            if (finishMessage.includes('submit_artifact')) {
-              console.log('=== FIXING MALFORMED submit_artifact CALL ===');
-
+            if (finishMessage.includes(toolName)) {
               /* Parse Python function call */
               const parsedArgs = this._parsePythonFunctionCall(finishMessage);
 
@@ -669,7 +690,7 @@ export default class GoogleVertexProvider extends BaseProvider {
                 /* Create valid functionCall part */
                 const fixedPart = {
                   functionCall: {
-                    name: 'submit_artifact',
+                    name: toolName,
                     args: parsedArgs,
                   },
                 };
@@ -685,20 +706,13 @@ export default class GoogleVertexProvider extends BaseProvider {
 
                 /* Change finishReason to STOP */
                 candidate.finishReason = 'STOP';
-
-                console.log('✅ Successfully reconstructed functionCall');
-                console.log('Args keys:', Object.keys(parsedArgs));
-              } else {
-                console.log('❌ Failed to parse Python function call');
               }
-
-              console.log('===============================================');
             }
           }
 
           return `data: ${JSON.stringify(data)}`;
         } catch (parseError) {
-          console.error('Failed to parse/modify SSE line:', parseError);
+          console.warn('Failed to parse/modify SSE line:', parseError);
           return line;
         }
       });

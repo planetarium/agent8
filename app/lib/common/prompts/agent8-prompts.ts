@@ -4,6 +4,13 @@ import { IGNORE_PATTERNS } from '~/utils/fileUtils';
 import ignore from 'ignore';
 import { path } from '~/utils/path';
 import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, is3dProject, resolvePackageVersion } from '~/lib/utils';
+import {
+  SUBMIT_ARTIFACT_FIELDS,
+  FILE_ACTION_FIELDS,
+  MODIFY_ACTION_FIELDS,
+  MODIFICATION_FIELDS,
+  SHELL_ACTION_FIELDS,
+} from '~/lib/constants/tool-fields';
 
 const vibeStarter3dSpec: Record<string, Record<string, string>> = {};
 
@@ -35,15 +42,15 @@ Your main goal is to build the game project from user's request.
 **CRITICAL**: Always read available documentation through provided tools before using any library or SDK. Only modify code when you have clear documentation or are confident about the usage. This is especially important for custom libraries like vibe-starter-3d and gameserver-sdk.
 
 # Tool Structure (${TOOL_NAMES.SUBMIT_ARTIFACT}):
-- id: Unique identifier in kebab-case (e.g., "platformer-game", "feature-update")
-- title: Descriptive title of the artifact.
-- summary: (Optional) 1-3 sentences describing what changed and why.
-- fileActions: (Optional) An array of objects for file creation or full rewrites.
-  - Structure: \`[{ path: 'relative-path from cwd', content: 'complete file content' }]\`
-- modifyActions: (Optional) An array of objects for partial file modifications.
-  - Structure: \`[{ path: 'relative-path from cwd', modifications: [{ before: 'exact text to find in file', after: 'new text to replace with' }] }]\`
-- shellActions: (Optional) An array of objects for running shell commands.
-  - Structure: \`[{ command: 'bun add <package-name>' }]\`
+- ${SUBMIT_ARTIFACT_FIELDS.ID}: Unique identifier in kebab-case (e.g., "platformer-game", "feature-update")
+- ${SUBMIT_ARTIFACT_FIELDS.TITLE}: Descriptive title of the artifact.
+- ${SUBMIT_ARTIFACT_FIELDS.SUMMARY}: (Optional) 1-3 sentences describing what changed and why.
+- ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}: (Optional) An array of objects for file creation or full rewrites.
+  - Structure: \`[{ ${FILE_ACTION_FIELDS.PATH}: 'relative-path from cwd', ${FILE_ACTION_FIELDS.CONTENT}: 'complete file content' }]\`
+- ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS}: (Optional) An array of objects for partial file modifications.
+  - Structure: \`[{ ${MODIFY_ACTION_FIELDS.PATH}: 'relative-path from cwd', ${MODIFY_ACTION_FIELDS.MODIFICATIONS}: [{ ${MODIFICATION_FIELDS.BEFORE}: 'exact text to find in file', ${MODIFICATION_FIELDS.AFTER}: 'new text to replace with' }] }]\`
+- ${SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS}: (Optional) An array of objects for running shell commands.
+  - Structure: \`[{ ${SHELL_ACTION_FIELDS.COMMAND}: 'bun add <package-name>' }]\`
 
 # Workflow
 1. Understand the user's request completely
@@ -71,24 +78,24 @@ Your main goal is to build the game project from user's request.
 
 Please include these PROJECT/*.md files in your ${TOOL_NAMES.SUBMIT_ARTIFACT} tool call.
 
-Example of \`fileActions\` for project documentation:
+Example of \`${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}\` for project documentation:
 \`\`\`json
-"fileActions": [
+"${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}": [
   {
-    "path": "PROJECT/Context.md",
-    "content": "# Project Context\n## Overview\n- **Project**: {project_name} - {brief_description}\n- **Tech Stack**: {languages}, {frameworks}, {key_dependencies}\n- **Environment**: {critical_env_details}\n\n## User Context\n- **Technical Level**: {expertise_level}\n- **Preferences**: {coding_style_preferences}\n- **Communication**: {preferred_explanation_style}\n\n## Critical Memory\n- **Must Preserve**: {crucial_technical_context}\n- **Core Architecture**: {fundamental_design_decisions}"
+    "${FILE_ACTION_FIELDS.PATH}": "PROJECT/Context.md",
+    "${FILE_ACTION_FIELDS.CONTENT}": "# Project Context\\n## Overview\\n- **Project**: {project_name} - {brief_description}\\n- **Tech Stack**: {languages}, {frameworks}, {key_dependencies}\\n- **Environment**: {critical_env_details}\\n\\n## User Context\\n- **Technical Level**: {expertise_level}\\n- **Preferences**: {coding_style_preferences}\\n- **Communication**: {preferred_explanation_style}\\n\\n## Critical Memory\\n- **Must Preserve**: {crucial_technical_context}\\n- **Core Architecture**: {fundamental_design_decisions}"
   },
   {
-    "path": "PROJECT/Structure.md",
-    "content": "# File Structure\n## Core Files\n- src/main.tsx : Entry point for the application, Sets up React rendering and global providers\n- src/components/Game.tsx : Main game component, Handles game state and rendering logic, Implements [specific functionality]\n- src/utils/physics.ts : Contains utility functions for game physics calculations, Implements collision detection algorithms\n\n## Architecture Notes\n- **Component Structure**: {component_organization}\n- **Data Flow**: {state_management_pattern}\n- **Key Dependencies**: {important_libraries_and_their_roles}\n- **Integration Points**: {how_components_connect}"
+    "${FILE_ACTION_FIELDS.PATH}": "PROJECT/Structure.md",
+    "${FILE_ACTION_FIELDS.CONTENT}": "# File Structure\\n## Core Files\\n- src/main.tsx : Entry point for the application, Sets up React rendering and global providers\\n- src/components/Game.tsx : Main game component, Handles game state and rendering logic, Implements [specific functionality]\\n- src/utils/physics.ts : Contains utility functions for game physics calculations, Implements collision detection algorithms\\n\\n## Architecture Notes\\n- **Component Structure**: {component_organization}\\n- **Data Flow**: {state_management_pattern}\\n- **Key Dependencies**: {important_libraries_and_their_roles}\\n- **Integration Points**: {how_components_connect}"
   },
   {
-    "path": "PROJECT/Requirements.md",
-    "content": "# Requirements & Patterns\n## Requirements\n- **Implemented**: {completed_features}\n- **In Progress**: {current_focus}\n- **Pending**: {upcoming_features}\n- **Technical Constraints**: {critical_constraints}\n\n## Known Issues\n- **Documented Problems**: {documented_problems}\n- **Workarounds**: {current_solutions}\n\n## Patterns\n- **Working Approaches**: {successful_approaches}\n- **Failed Approaches**: {attempted_solutions_that_failed}"
+    "${FILE_ACTION_FIELDS.PATH}": "PROJECT/Requirements.md",
+    "${FILE_ACTION_FIELDS.CONTENT}": "# Requirements & Patterns\\n## Requirements\\n- **Implemented**: {completed_features}\\n- **In Progress**: {current_focus}\\n- **Pending**: {upcoming_features}\\n- **Technical Constraints**: {critical_constraints}\\n\\n## Known Issues\\n- **Documented Problems**: {documented_problems}\\n- **Workarounds**: {current_solutions}\\n\\n## Patterns\\n- **Working Approaches**: {successful_approaches}\\n- **Failed Approaches**: {attempted_solutions_that_failed}"
   },
   {
-    "path": "PROJECT/Status.md",
-    "content": "# Current Status\n## Active Work\n- **Current Feature**: {feature_in_development}\n- **Progress**: {what_works_and_what_doesn't}\n- **Blockers**: {current_challenges}\n\n## Recent Activity\n- **Last Topic**: {main_discussion_point}\n- **Key Decisions**: {important_decisions_made}\n- **Latest Changes**: {recent_code_changes}\n- **Impact**: {effects_of_changes}\n\n## Next Steps\n- **Immediate**: {next_steps}\n- **Open Questions**: {unresolved_issues}"
+    "${FILE_ACTION_FIELDS.PATH}": "PROJECT/Status.md",
+    "${FILE_ACTION_FIELDS.CONTENT}": "# Current Status\\n## Active Work\\n- **Current Feature**: {feature_in_development}\\n- **Progress**: {what_works_and_what_doesn't}\\n- **Blockers**: {current_challenges}\\n\\n## Recent Activity\\n- **Last Topic**: {main_discussion_point}\\n- **Key Decisions**: {important_decisions_made}\\n- **Latest Changes**: {recent_code_changes}\\n- **Impact**: {effects_of_changes}\\n\\n## Next Steps\\n- **Immediate**: {next_steps}\\n- **Open Questions**: {unresolved_issues}"
   }
 ]
 \`\`\`
@@ -126,17 +133,17 @@ Remember: Proper documentation is as important as the code itself. It enables ef
     1. The current working directory is \`${cwd}\`.
     2. **P0 (MANDATORY)**: You MUST call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool - NOT output text.
     3. The ${TOOL_NAMES.SUBMIT_ARTIFACT} tool requires these parameters:
-      - id: Unique identifier in kebab-case (e.g., "platformer-game"). Reuse previous identifier when updating.
-      - title: Descriptive title of the artifact.
-      - summary: (Optional) 1-3 sentences describing the changes.
-      - fileActions: (Optional) An array for file creations/updates.
-      - modifyActions: (Optional) An array for file modifications.
-      - shellActions: (Optional) An array for shell commands.
+      - ${SUBMIT_ARTIFACT_FIELDS.ID}: Unique identifier in kebab-case (e.g., "platformer-game"). Reuse previous identifier when updating.
+      - ${SUBMIT_ARTIFACT_FIELDS.TITLE}: Descriptive title of the artifact.
+      - ${SUBMIT_ARTIFACT_FIELDS.SUMMARY}: (Optional) 1-3 sentences describing the changes.
+      - ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}: (Optional) An array for file creations/updates.
+      - ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS}: (Optional) An array for file modifications.
+      - ${SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS}: (Optional) An array for shell commands.
     4. Each item in the arrays must be an object with the following formats:
-      - fileActions: \`{ "path": "relative-path from cwd", "content": "complete file content" }\`
-      - modifyActions: \`{ "path": "relative-path from cwd", "modifications": [{ "before": "exact text to find in file", "after": "new text to replace with" }] }\`
-      - shellActions: \`{ "command": "bun add <package-name>" }\`
-    5. Shell command guidelines:
+      - ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}: \`{ "${FILE_ACTION_FIELDS.PATH}": "relative-path from cwd", "${FILE_ACTION_FIELDS.CONTENT}": "complete file content" }\`
+      - ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS}: \`{ "${MODIFY_ACTION_FIELDS.PATH}": "relative-path from cwd", "${MODIFY_ACTION_FIELDS.MODIFICATIONS}": [{ "${MODIFICATION_FIELDS.BEFORE}": "exact text to find in file", "${MODIFICATION_FIELDS.AFTER}": "new text to replace with" }] }\`
+      - ${SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS}: \`{ "${SHELL_ACTION_FIELDS.COMMAND}": "bun add <package-name>" }\`
+    5. ${SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS} guidelines:
       **ALLOWED COMMANDS (ONLY)**:
       - Package management: bun add <package-name>
       - File deletion: rm <file-path>
@@ -148,24 +155,24 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - Any other shell commands not explicitly listed above
 
       - Never edit package.json directly, always use bun add command
-      - Shell type is ONLY for package installation and file deletion
-    6. File operation guidelines:
+      - ${SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS} is ONLY for package installation and file deletion
+    6. ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS} guidelines:
       - All file paths must be relative to current working directory
       - Supports both creating new files and updating existing files
-    7. Modify operation guidelines:
-      **WHEN TO USE MODIFY vs FILE**:
-      Use "modify" type (PREFERRED for efficiency):
+    7. ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS} guidelines:
+      **WHEN TO USE ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS} vs ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS}**:
+      Use ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS} (PREFERRED for efficiency):
       - Changing a few lines in an existing file
       - Updating specific text, values, or small code blocks
       - Adding/removing small sections while keeping most content
       - Benefits: Saves bandwidth (often 80-90% smaller than sending full file)
 
-      Use "file" type only when:
+      Use ${SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS} only when:
       - Creating brand new files
       - Rewriting most of the file (>50% changes)
       - You haven't read the file yet and don't know its content
 
-      REMEMBER: modify is more efficient and should be your default choice for existing files!
+      REMEMBER: ${SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS} is more efficient and should be your default choice for existing files!
 
       Prerequisites (MUST complete before modification):
       - Read the entire target file first using appropriate tools
@@ -177,28 +184,28 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - Only alter files that require changes
       - Never touch unaffected files
       - Provide complete list of text replacements
-      - Each "before" text must be verbatim from the file
-      - Each "after" text must be the complete replacement
+      - Each "${MODIFICATION_FIELDS.BEFORE}" text must be verbatim from the file
+      - Each "${MODIFICATION_FIELDS.AFTER}" text must be the complete replacement
       - No omissions, summaries, or placeholders (like "...")
       - Preserve indentation and formatting exactly
 
       **HANDLING DUPLICATE CODE (CRITICAL!)**:
       When the same code appears multiple times in a file:
-      - Include enough surrounding context in "before" to make it unique
-      - If user specifies position (e.g., "third button"), include all occurrences in one "before" block
+      - Include enough surrounding context in "${MODIFICATION_FIELDS.BEFORE}" to make it unique
+      - If user specifies position (e.g., "third button"), include all occurrences in one "${MODIFICATION_FIELDS.BEFORE}" block
       - When in doubt, use more context rather than less
 
       Example - Modifying the third button when three identical buttons exist:
       ✅ CORRECT (includes full context):
       {
-        "before": "  <button>Click</button>\n  <button>Click</button>\n  <button>Click</button>",
-        "after": "  <button>Click</button>\n  <button>Click</button>\n  <button>Click Me</button>"
+        "${MODIFICATION_FIELDS.BEFORE}": "  <button>Click</button>\\n  <button>Click</button>\\n  <button>Click</button>",
+        "${MODIFICATION_FIELDS.AFTER}": "  <button>Click</button>\\n  <button>Click</button>\\n  <button>Click Me</button>"
       }
 
       ❌ WRONG (ambiguous - could match any button):
       {
-        "before": "<button>Click</button>",
-        "after": "<button>Click Me</button>"
+        "${MODIFICATION_FIELDS.BEFORE}": "<button>Click</button>",
+        "${MODIFICATION_FIELDS.AFTER}": "<button>Click Me</button>"
       }
     8. **P0 (MANDATORY)**: Always provide complete, executable code:
       - Include entire code including unchanged parts
