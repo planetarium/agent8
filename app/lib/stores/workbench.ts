@@ -646,8 +646,28 @@ export class WorkbenchStore {
     }
 
     return new Promise((resolve, reject) => {
-      let callback: () => void;
-      const timeoutId = setTimeout(() => {
+      const timeoutMs = options.timeoutMs ?? 35000;
+      let timeoutId: NodeJS.Timeout | null = null;
+      let pollingIntervalId: NodeJS.Timeout | null = null;
+
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+
+        if (pollingIntervalId) {
+          clearInterval(pollingIntervalId);
+          pollingIntervalId = null;
+        }
+      };
+
+      const callback = () => {
+        cleanup();
+        resolve();
+      };
+
+      const removeCallback = () => {
         const callbacks = this.#messageIdleCallbacks.get(messageId);
 
         if (callbacks) {
@@ -661,20 +681,27 @@ export class WorkbenchStore {
             this.#messageIdleCallbacks.delete(messageId);
           }
         }
+      };
 
-        reject(new Error(`Message ${messageId} idle timeout after ${options.timeoutMs ?? 15000}ms`));
-      }, options.timeoutMs ?? 15000);
+      timeoutId = setTimeout(() => {
+        cleanup();
+        removeCallback();
+        reject(new Error(`Message ${messageId} idle timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      pollingIntervalId = setInterval(() => {
+        if (this.isMessageIdle(messageId)) {
+          cleanup();
+          removeCallback();
+          resolve();
+        }
+      }, 500);
 
       if (!this.#messageIdleCallbacks.has(messageId)) {
         this.#messageIdleCallbacks.set(messageId, []);
       }
 
-      this.#messageIdleCallbacks.get(messageId)!.push(
-        (callback = () => {
-          clearTimeout(timeoutId);
-          resolve();
-        }),
-      );
+      this.#messageIdleCallbacks.get(messageId)!.push(callback);
     });
   }
 

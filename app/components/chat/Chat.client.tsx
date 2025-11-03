@@ -69,7 +69,7 @@ const logger = createScopedLogger('Chat');
 const MAX_COMMIT_RETRIES = 2;
 const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
-const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 15000;
+const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
@@ -659,7 +659,7 @@ export const ChatImpl = memo(
 
       if (!commitSucceeded) {
         handleChatError(
-          `Code commit failed after ${MAX_COMMIT_RETRIES + 1} attempts`,
+          `Code commit failed`,
           lastError instanceof Error ? lastError : String(lastError),
           'handleCommit',
           lastUserPromptRef.current,
