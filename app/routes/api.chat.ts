@@ -12,10 +12,11 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
+import { cleanEscapedTags, sanitizeXmlAttributeValue } from '~/lib/utils';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
-  const artifactTitle = title || '';
+  const artifactTitle = sanitizeXmlAttributeValue(title);
   const artifactBody = body || '';
 
   return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
@@ -36,7 +37,22 @@ function toBoltArtifactXML(a: any) {
 
   const modifyBody = (modifyActions || [])
     .map((act: any) => {
-      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+      // Unescape before and after fields if they exist
+      const unescapedModifications = (act.modifications || []).map((mod: any) => {
+        const result = { ...mod };
+
+        if (mod.before) {
+          result.before = cleanEscapedTags(mod.before);
+        }
+
+        if (mod.after) {
+          result.after = cleanEscapedTags(mod.after);
+        }
+
+        return result;
+      });
+
+      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(unescapedModifications)}]]></boltAction>`;
     })
     .join('\n');
 

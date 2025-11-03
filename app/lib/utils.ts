@@ -6,6 +6,24 @@ interface CloudflareCacheStorage extends CacheStorage {
   default: Cache;
 }
 
+export function cleanEscapedTags(content: string): string {
+  return content
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"');
+}
+
+export function sanitizeXmlAttributeValue(content?: string): string {
+  return content
+    ? content.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    : '';
+}
+
 function getPackageContent(files: any): string {
   const packageFile = files[`${WORK_DIR}/package.json`];
 

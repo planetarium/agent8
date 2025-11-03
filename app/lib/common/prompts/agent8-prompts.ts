@@ -36,7 +36,7 @@ Your main goal is to build the game project from user's request.
 
 # Tool Structure (${TOOL_NAMES.SUBMIT_ARTIFACT}):
 - id: Unique identifier in kebab-case (e.g., "platformer-game", "feature-update")
-- title: Descriptive title of what was accomplished. IMPORTANT: Do not use double quotes (") in the title.
+- title: Descriptive title of the artifact.
 - summary: (Optional) 1-3 sentences describing what changed and why.
 - fileActions: (Optional) An array of objects for file creation or full rewrites.
   - Structure: \`[{ path: 'relative-path from cwd', content: 'complete file content' }]\`
@@ -127,7 +127,7 @@ Remember: Proper documentation is as important as the code itself. It enables ef
     2. **P0 (MANDATORY)**: You MUST call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool - NOT output text.
     3. The ${TOOL_NAMES.SUBMIT_ARTIFACT} tool requires these parameters:
       - id: Unique identifier in kebab-case (e.g., "platformer-game"). Reuse previous identifier when updating.
-      - title: Descriptive title of the artifact. IMPORTANT: Do not use double quotes (") in the title.
+      - title: Descriptive title of the artifact.
       - summary: (Optional) 1-3 sentences describing the changes.
       - fileActions: (Optional) An array for file creations/updates.
       - modifyActions: (Optional) An array for file modifications.

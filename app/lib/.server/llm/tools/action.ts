@@ -48,12 +48,7 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
     inputSchema: z
       .object({
         id: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
-        title: z
-          .string()
-          .min(1)
-          .max(80)
-          .optional()
-          .describe('Descriptive title of the artifact. IMPORTANT: Do not use double quotes (") in the title.'),
+        title: z.string().min(1).max(80).optional().describe('Descriptive title of the artifact.'),
         summary: z.string().min(10).max(400).optional().describe('1-3 sentences: what changed and why.'),
         fileActions: z.array(FILE_ACTION_SCHEMA).optional().describe('A list of file creation/update actions.'),
         modifyActions: z.array(MODIFY_ACTION_SCHEMA).optional().describe('A list of file modification actions.'),
