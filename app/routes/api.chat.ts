@@ -12,74 +12,38 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
+import { sanitizeXmlAttributeValue } from '~/lib/utils';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
-  const artifactTitle = title || '';
+  const artifactTitle = sanitizeXmlAttributeValue(title);
   const artifactBody = body || '';
 
   return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
 }
 
 function toBoltArtifactXML(a: any) {
-  let actionsArray = [];
+  const { id, title, shellActions, fileActions, modifyActions } = a;
 
-  if (a.actions) {
-    try {
-      let parsedActions;
+  const shellBody = (shellActions || [])
+    .map((act: any) => `  <boltAction type="shell">${act.command}</boltAction>`)
+    .join('\n');
 
-      if (typeof a.actions === 'string') {
-        parsedActions = JSON.parse(a.actions);
-      } else {
-        parsedActions = a.actions;
-      }
-
-      if (Array.isArray(parsedActions)) {
-        actionsArray = parsedActions;
-      } else {
-        // Handle cases where a single object might be provided.
-        actionsArray = [parsedActions];
-      }
-    } catch (error) {
-      console.warn('Failed to parse actions JSON string:', error);
-
-      // If parsing fails, return an empty artifact or handle the error appropriately.
-      return createBoltArtifactXML(a.id, a.title);
-    }
-  }
-
-  const body = actionsArray
-    .filter(
-      (act: any) =>
-        (act.content && act.path) ||
-        (act.type === 'modify' && act.path && act.modifications) ||
-        (act.type === 'shell' && act.command && !act.path),
-    )
-    .sort((a: any, b: any) => {
-      if (a.type === 'shell' && b.type !== 'shell') {
-        return -1;
-      }
-
-      if (a.type !== 'shell' && b.type === 'shell') {
-        return 1;
-      }
-
-      return 0;
-    })
+  const fileBody = (fileActions || [])
     .map((act: any) => {
-      if (act.type === 'modify' && act.modifications) {
-        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
-      }
-
-      if (act.path && act.content !== undefined) {
-        return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
-      }
-
-      return `  <boltAction type="shell">${act.command}</boltAction>`;
+      return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
     })
     .join('\n');
 
-  return createBoltArtifactXML(a.id, a.title, body);
+  const modifyBody = (modifyActions || [])
+    .map((act: any) => {
+      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+    })
+    .join('\n');
+
+  const body = [shellBody, fileBody, modifyBody].filter(Boolean).join('\n');
+
+  return createBoltArtifactXML(id, title, body);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -217,6 +181,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
+            console.log('=== ON_FINISH CALLBACK ===');
+            console.log('finishReason:', finishReason);
+
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);

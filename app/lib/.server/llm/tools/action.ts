@@ -3,16 +3,36 @@ import { InvalidToolInputError, tool } from 'ai';
 import { TOOL_ERROR, type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
 import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
+import {
+  SUBMIT_ARTIFACT_FIELDS,
+  FILE_ACTION_FIELDS,
+  MODIFY_ACTION_FIELDS,
+  MODIFICATION_FIELDS,
+  SHELL_ACTION_FIELDS,
+} from '~/lib/constants/tool-fields';
 
-const ACTION_SCHEMA = z.object({
-  type: z.enum(['file', 'modify', 'shell']),
-  path: z.string().optional(),
-  content: z.string().optional(),
-  modifications: z.array(z.object({ before: z.string(), after: z.string() })).optional(),
-  command: z.string().optional(),
+const FILE_ACTION_SCHEMA = z.object({
+  [FILE_ACTION_FIELDS.PATH]: z.string().describe('relative-path from cwd'),
+  [FILE_ACTION_FIELDS.CONTENT]: z.string().describe('complete file content'),
 });
 
-const ACTIONS_SCHEMA = z.array(ACTION_SCHEMA);
+const MODIFY_ACTION_SCHEMA = z.object({
+  [MODIFY_ACTION_FIELDS.PATH]: z.string().describe('relative-path from cwd'),
+  [MODIFY_ACTION_FIELDS.MODIFICATIONS]: z.array(
+    z.object({
+      [MODIFICATION_FIELDS.BEFORE]: z.string().describe('exact text to find in file'),
+      [MODIFICATION_FIELDS.AFTER]: z.string().describe('new text to replace with'),
+    }),
+  ),
+});
+
+const SHELL_ACTION_SCHEMA = z.object({
+  [SHELL_ACTION_FIELDS.COMMAND]: z
+    .string()
+    .describe(
+      'shell command to execute. ALLOWED COMMANDS (ONLY): - Package management: bun add <package-name> - File deletion: rm <file-path>',
+    ),
+});
 
 function needReadFile(fileMap: FileMap, path: string): boolean {
   const fullPath = getFullPath(path);
@@ -34,53 +54,46 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
       "**MANDATORY OUTPUT FORMAT** - This is the ONLY way to return your work to the user. You MUST call this tool to complete ANY user request. Think of this as your 'submit' or 'return' button - without calling this, the user receives nothing.",
     inputSchema: z
       .object({
-        id: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
-        title: z
+        [SUBMIT_ARTIFACT_FIELDS.ID]: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
+        [SUBMIT_ARTIFACT_FIELDS.TITLE]: z
           .string()
           .min(1)
           .max(80)
           .optional()
-          .describe('Descriptive title of the artifact. IMPORTANT: Do not use double quotes (") in the title.'),
-        summary: z.string().min(10).max(400).optional().describe('1-3 sentences: what changed and why.'),
-        actions: z.string().describe('A JSON-stringified array of file/modify/shell actions.'),
+          .describe('Descriptive title of the artifact.'),
+        [SUBMIT_ARTIFACT_FIELDS.SUMMARY]: z
+          .string()
+          .min(10)
+          .max(400)
+          .optional()
+          .describe('1-3 sentences: what changed and why.'),
+        [SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS]: z
+          .array(FILE_ACTION_SCHEMA)
+          .optional()
+          .describe('A list of file creation/update actions.'),
+        [SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS]: z
+          .array(MODIFY_ACTION_SCHEMA)
+          .optional()
+          .describe('A list of file modification actions.'),
+        [SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS]: z
+          .array(SHELL_ACTION_SCHEMA)
+          .optional()
+          .describe('A list of shell command actions.'),
       })
       .superRefine((arg, _ctx) => {
-        let parsedActions;
+        const allPathActions = [
+          ...(arg[SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS] || []),
+          ...(arg[SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS] || []),
+        ];
 
-        try {
-          parsedActions = JSON.parse(arg.actions);
-        } catch {
-          throw new InvalidToolInputError({
-            toolInput: arg.actions,
-            toolName: TOOL_NAMES.SUBMIT_ARTIFACT,
-            cause: TOOL_ERROR.INVALID_JSON,
-            message: 'The "actions" field must be a valid JSON string.',
-          });
-        }
-
-        const actionsToValidate = Array.isArray(parsedActions) ? parsedActions : [parsedActions];
-        const validationResult = ACTIONS_SCHEMA.safeParse(actionsToValidate);
-
-        if (!validationResult.success) {
-          throw new InvalidToolInputError({
-            toolInput: arg.actions,
-            toolName: TOOL_NAMES.SUBMIT_ARTIFACT,
-            cause: TOOL_ERROR.SCHEMA_VALIDATION_FAILED,
-            message: `Invalid "actions" structure: ${JSON.stringify(z.treeifyError(validationResult.error))}`,
-          });
-        }
-
-        const validatedActions = validationResult.data;
         const need = new Set<string>();
 
         if (fileMap) {
-          for (const action of validatedActions) {
-            if (action.type === 'file' && action.path && action.content) {
-              if (needReadFile(fileMap, action.path)) {
-                need.add(action.path);
-              }
-            } else if (action.type === 'modify' && action.path && action.modifications) {
-              if (needReadFile(fileMap, action.path)) {
+          for (const action of allPathActions) {
+            if (action.path) {
+              const needsRead = needReadFile(fileMap, action.path);
+
+              if (needsRead) {
                 need.add(action.path);
               }
             }
