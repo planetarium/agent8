@@ -5,6 +5,7 @@ import type { KeyboardEvent } from 'react';
 import { classNames } from '~/utils/classNames';
 import { MODEL_WHITELIST } from '~/lib/modules/llm/whitelist';
 import type { WhitelistItem } from '~/lib/modules/llm/whitelist';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 interface ModelSelectorProps {
   model?: string;
@@ -61,10 +62,10 @@ export const ModelSelector = ({
     return providerEnabled;
   });
 
-  // Auto 옵션 생성 - OpenRouter의 Claude 모델을 기본값으로 사용
+  // Auto 옵션 생성 - Vertex AI의 Gemini 모델을 기본값으로 사용
   const autoOption: WhitelistItem = {
     label: 'Agent8 Auto',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
     modelName: AUTO_MODEL_NAME, // Using special name for Auto
   };
 
@@ -149,7 +150,7 @@ export const ModelSelector = ({
     }
 
     if (setProvider) {
-      const openRouterProvider = providerList.find((p) => p.name === 'OpenRouter');
+      const openRouterProvider = providerList.find((p) => p.name === PROVIDER_NAMES.OPEN_ROUTER);
 
       if (openRouterProvider) {
         setProvider(openRouterProvider);

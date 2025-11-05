@@ -3,9 +3,10 @@ import type { ModelInfo } from '~/lib/modules/llm/types';
 import type { IProviderSetting } from '~/types/model';
 import type { LanguageModel } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 export default class GoogleProvider extends BaseProvider {
-  name = 'Google';
+  name = PROVIDER_NAMES.GOOGLE;
   getApiKeyLink = 'https://aistudio.google.com/app/apikey';
 
   config = {
@@ -13,8 +14,8 @@ export default class GoogleProvider extends BaseProvider {
   };
 
   staticModels: ModelInfo[] = [
-    { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'Google', maxTokenAllowed: 65535 },
-    { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'Google', maxTokenAllowed: 65535 },
+    { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: PROVIDER_NAMES.GOOGLE, maxTokenAllowed: 65535 },
+    { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: PROVIDER_NAMES.GOOGLE, maxTokenAllowed: 65535 },
   ];
 
   async getDynamicModels(

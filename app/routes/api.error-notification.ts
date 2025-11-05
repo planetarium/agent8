@@ -11,6 +11,8 @@ interface ErrorNotificationPayload {
   userAgent?: string;
   url?: string;
   userId?: string;
+  prompt?: string;
+  elapsedTime?: number;
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {

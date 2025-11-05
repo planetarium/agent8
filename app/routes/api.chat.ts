@@ -12,42 +12,38 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
+import { sanitizeXmlAttributeValue } from '~/lib/utils';
+
+function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
+  const artifactId = id || 'unknown';
+  const artifactTitle = sanitizeXmlAttributeValue(title);
+  const artifactBody = body || '';
+
+  return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
+}
 
 function toBoltArtifactXML(a: any) {
-  const body = a.actions
-    .filter(
-      (act: any) =>
-        (act.content && act.path) ||
-        (act.type === 'modify' && act.path && act.modifications) ||
-        (act.type === 'shell' && act.command && !act.path),
-    )
-    .sort((a: any, b: any) => {
-      if (a.type === 'shell' && b.type !== 'shell') {
-        return -1;
-      }
+  const { id, title, shellActions, fileActions, modifyActions } = a;
 
-      if (a.type !== 'shell' && b.type === 'shell') {
-        return 1;
-      }
+  const shellBody = (shellActions || [])
+    .map((act: any) => `  <boltAction type="shell">${act.command}</boltAction>`)
+    .join('\n');
 
-      return 0;
-    })
+  const fileBody = (fileActions || [])
     .map((act: any) => {
-      if (act.type === 'modify' && act.modifications) {
-        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
-      }
-
-      if (act.path && act.content !== undefined) {
-        return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
-      }
-
-      return `  <boltAction type="shell">${act.command}</boltAction>`;
+      return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
     })
     .join('\n');
 
-  return `<boltArtifact id="${a.id || 'unknown'}" title="${a.title}">
-${body}
-</boltArtifact>`;
+  const modifyBody = (modifyActions || [])
+    .map((act: any) => {
+      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+    })
+    .join('\n');
+
+  const body = [shellBody, fileBody, modifyBody].filter(Boolean).join('\n');
+
+  return createBoltArtifactXML(id, title, body);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -185,6 +181,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
+            console.log('=== ON_FINISH CALLBACK ===');
+            console.log('finishReason:', finishReason);
+
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
@@ -212,7 +211,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             // Retry if tool was not called and response is not empty
             if (
               !hasSubmitArtifact &&
-              finishReason === 'stop' &&
+              (finishReason === 'stop' || finishReason === 'unknown') &&
               content.trim().length > 0 &&
               submitArtifactRetryCount < MAX_SUBMIT_ARTIFACT_RETRIES
             ) {
@@ -363,6 +362,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
+          let isSubmitArtifact = false;
           const submitArtifactInputs = new Map<string, unknown>();
 
           return (chunk, controller) => {
@@ -450,24 +450,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               case 'tool-output-available': {
                 if (submitArtifactInputs.has(chunk.toolCallId)) {
                   const artifactData = submitArtifactInputs.get(chunk.toolCallId);
+
                   const xmlContent = toBoltArtifactXML(artifactData);
                   submitArtifactInputs.delete(chunk.toolCallId);
 
-                  controller.enqueue({
-                    type: 'text-start',
-                    id: chunk.toolCallId,
-                  });
+                  // only enqueue the submit artifact once
+                  if (!isSubmitArtifact) {
+                    controller.enqueue({
+                      type: 'text-start',
+                      id: chunk.toolCallId,
+                    });
 
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: chunk.toolCallId,
-                    delta: '\n' + xmlContent + '\n',
-                  });
+                    controller.enqueue({
+                      type: 'text-delta',
+                      id: chunk.toolCallId,
+                      delta: '\n' + xmlContent + '\n',
+                    });
 
-                  controller.enqueue({
-                    type: 'text-end',
-                    id: chunk.toolCallId,
-                  });
+                    controller.enqueue({
+                      type: 'text-end',
+                      id: chunk.toolCallId,
+                    });
+
+                    isSubmitArtifact = true;
+                  }
 
                   break;
                 }

@@ -4,6 +4,7 @@ import type { IProviderSetting } from '~/types/model';
 import type { LanguageModel } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createScopedLogger } from '~/utils/logger';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 const logger = createScopedLogger('open-router');
 
@@ -22,7 +23,7 @@ interface OpenRouterModelsResponse {
 }
 
 export default class OpenRouterProvider extends BaseProvider {
-  name = 'OpenRouter';
+  name = PROVIDER_NAMES.OPEN_ROUTER;
   getApiKeyLink = 'https://openrouter.ai/settings/keys';
 
   config = {

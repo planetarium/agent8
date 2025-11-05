@@ -7,6 +7,7 @@ import { repoStore } from '~/lib/stores/repo';
 import { forkProject, fetchProjectFiles, setRestorePoint } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { handleChatError } from '~/utils/errorNotification';
+import { getElapsedTime } from '~/utils/performance';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { triggerRestoreEvent } from '~/lib/stores/restore';
@@ -280,10 +281,19 @@ export function HeaderCommitHistoryButton() {
       return;
     }
 
+    const startTime = performance.now();
     const commitHash = selectedCommitForFork.id;
+    const commitInfo = selectedCommitForFork.title || selectedCommitForFork.message.split('\n')[0];
 
     if (!commitHash || !isCommitHash(commitHash)) {
-      handleChatError('No commit hash found', undefined, 'handleFork - commit hash validation');
+      handleChatError(
+        'No commit hash found',
+        undefined,
+        'handleFork - commit hash validation',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
+      );
+
       setIsForkModalOpen(false);
 
       return;
@@ -317,15 +327,24 @@ export function HeaderCommitHistoryButton() {
         toast.success('Forked project successfully');
         window.location.href = '/chat/' + forkedProject.project.path;
       } else {
-        handleChatError('Failed to fork project', undefined, 'handleFork - fork result check');
+        handleChatError(
+          'Failed to fork project',
+          undefined,
+          'handleFork - fork result check',
+          commitInfo || undefined,
+          getElapsedTime(startTime),
+        );
       }
     } catch (error) {
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
+
       handleChatError(
         'Failed to fork project',
         error instanceof Error ? error : String(error),
         'handleFork - catch block',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
       );
     }
   };
@@ -342,10 +361,18 @@ export function HeaderCommitHistoryButton() {
       return;
     }
 
+    const startTime = performance.now();
     const commitHash = selectedCommit.id;
+    const commitInfo = selectedCommit.title || selectedCommit.message.split('\n')[0];
 
     if (!commitHash || !isCommitHash(commitHash)) {
-      handleChatError('No commit hash found', undefined, 'handleRestore - commit hash validation');
+      handleChatError(
+        'No commit hash found',
+        undefined,
+        'handleRestore - commit hash validation',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
+      );
       return;
     }
 
@@ -415,6 +442,8 @@ export function HeaderCommitHistoryButton() {
         'Failed to restore project',
         error instanceof Error ? error : String(error),
         'handleRestore - restore process',
+        commitInfo || undefined,
+        getElapsedTime(startTime),
       );
     }
   };

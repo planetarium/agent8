@@ -1,3 +1,4 @@
+import { PROVIDER_NAMES } from './provider-names';
 import type { ModelInfo } from './types';
 
 /**
@@ -20,60 +21,60 @@ export interface WhitelistItem {
 export const MODEL_WHITELIST: WhitelistItem[] = [
   {
     label: 'Claude 4 Sonnet',
-    providerName: 'Anthropic',
+    providerName: PROVIDER_NAMES.ANTHROPIC,
     modelName: 'claude-sonnet-4-20250514',
   },
   {
     label: 'Claude 4.5 Sonnet',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'anthropic/claude-sonnet-4.5',
     userSelectable: true,
   },
   {
     label: 'Claude 3.7 Sonnet',
-    providerName: 'Anthropic',
+    providerName: PROVIDER_NAMES.ANTHROPIC,
     modelName: 'claude-3-7-sonnet-20250219',
   },
   {
     label: 'GPT-5',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'openai/gpt-5',
     userSelectable: true,
   },
   {
     label: 'GPT-o4-mini',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'openai/o4-mini',
   },
   {
     label: 'Gemini 2.5 Pro',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'google/gemini-2.5-pro',
   },
   {
     label: 'Gemini 2.5 Flash',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'google/gemini-2.5-flash',
   },
   {
     label: 'Gemini 2.5 Pro',
-    providerName: 'Google',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
     modelName: 'gemini-2.5-pro',
     userSelectable: true,
   },
   {
-    label: 'Gemini 2.5 Flash',
-    providerName: 'OpenRouter',
-    modelName: 'google/gemini-2.5-flash',
+    label: 'Gemini 2.5 Pro',
+    providerName: PROVIDER_NAMES.GOOGLE,
+    modelName: 'gemini-2.5-pro',
   },
   {
     label: 'Grok4',
-    providerName: 'xAI',
+    providerName: PROVIDER_NAMES.X_AI,
     modelName: 'grok-4-0709',
   },
   {
     label: 'Grok4',
-    providerName: 'OpenRouter',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'x-ai/grok-4',
     userSelectable: true,
   },

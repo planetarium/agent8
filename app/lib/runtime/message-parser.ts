@@ -3,6 +3,7 @@ import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
+import { cleanEscapedTags } from '~/lib/utils';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
@@ -79,18 +80,6 @@ function cleanoutCodeblockSyntax(content: string) {
   }
 
   return extractFromCDATA(content);
-}
-
-function cleanEscapedTags(content: string) {
-  return content
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/\\n/g, '\n')
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, '"');
 }
 
 export class StreamingMessageParser {
@@ -303,12 +292,14 @@ export class StreamingMessageParser {
             if (openTagEnd !== -1) {
               const artifactTag = input.slice(i, openTagEnd + 1);
 
-              const artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
+              let artifactTitle = this.#extractAttribute(artifactTag, 'title') as string;
               const type = this.#extractAttribute(artifactTag, 'type') as string;
               let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
               if (!artifactTitle) {
                 logger.warn('Artifact title missing');
+              } else {
+                artifactTitle = cleanEscapedTags(artifactTitle);
               }
 
               if (!artifactId) {

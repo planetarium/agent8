@@ -1,5 +1,6 @@
 import { LLMManager } from '~/lib/modules/llm/manager';
 import type { Template } from '~/types/template';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 
 export const WORK_DIR_NAME = 'project';
 export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
@@ -14,32 +15,32 @@ export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 const llmManager = LLMManager.getInstance(import.meta.env);
 
 export const PROVIDER_LIST = llmManager.getAllProviders();
-export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!;
+export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!;
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
     model: 'google/gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.OPEN_ROUTER)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
     model: 'google/gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.OPEN_ROUTER)!,
   },
   FIRST_2D_CHAT: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
     model: 'gemini-2.5-pro',
-    provider: PROVIDER_LIST.find((p) => p.name === 'Google')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
     model: 'google/gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === 'OpenRouter')!,
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.OPEN_ROUTER)!,
   },
 };
 
