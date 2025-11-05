@@ -82,6 +82,57 @@ export class ProgressEmitter {
 }
 
 /**
+ * Queue to limit concurrent tool executions in Cloudflare Workers environment
+ */
+class ConcurrencyQueue {
+  private _maxConcurrency: number;
+  private _running = 0;
+  private _queue: Array<() => void> = [];
+
+  constructor(maxConcurrency: number) {
+    this._maxConcurrency = maxConcurrency;
+  }
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    // Wait until we have available slot
+    if (this._running >= this._maxConcurrency) {
+      logger.info(
+        `[ConcurrencyQueue] Waiting... (${this._running}/${this._maxConcurrency} running, ${this._queue.length} in queue)`,
+      );
+
+      await new Promise<void>((resolve) => {
+        this._queue.push(resolve);
+      });
+
+      logger.info(`[ConcurrencyQueue] Starting execution (slot available)`);
+    }
+
+    this._running++;
+    logger.info(`[ConcurrencyQueue] Executing (${this._running}/${this._maxConcurrency} running)`);
+
+    try {
+      return await fn();
+    } finally {
+      this._running--;
+      logger.info(
+        `[ConcurrencyQueue] Completed (${this._running}/${this._maxConcurrency} running, ${this._queue.length} waiting)`,
+      );
+
+      // Process next in queue
+      const next = this._queue.shift();
+
+      if (next) {
+        logger.info(`[ConcurrencyQueue] Releasing next task from queue`);
+        next();
+      }
+    }
+  }
+}
+
+// Create global concurrency queue (max 3 concurrent for Cloudflare Workers subrequest limit)
+const concurrencyQueue = new ConcurrencyQueue(3);
+
+/**
  * Extended Tool interface with progress reporting capability
  */
 interface ProgressAwareTool extends Omit<Tool, 'execute'> {
@@ -197,44 +248,51 @@ export async function createToolSet(config: MCPConfig, v8AuthToken?: string): Pr
           description: tool.description || '',
           inputSchema,
           execute: async (args) => {
-            /*
-             * We don't keep clients due to CloudFlare worker's connection limit.
-             * Instead, we create a new client for each tool call.
-             */
-            let client: Client | null = null;
+            const executeTask = async () => {
+              /*
+               * We don't keep clients due to CloudFlare worker's connection limit.
+               * Instead, we create a new client for each tool call.
+               */
+              let client: Client | null = null;
 
-            try {
-              client = await createClient();
+              try {
+                client = await createClient();
 
-              const result = await client.callTool(
-                {
-                  name: tool.name,
-                  arguments: args,
-                },
-                CallToolResultSchema,
-                {
-                  onprogress: (progress) => {
-                    logger.info(`Progress: ${JSON.stringify(progress)}`);
+                const result = await client.callTool(
+                  {
+                    name: tool.name,
+                    arguments: args,
                   },
-                  resetTimeoutOnProgress: true,
-                },
-              );
+                  CallToolResultSchema,
+                  {
+                    onprogress: (progress) => {
+                      logger.info(`Progress: ${JSON.stringify(progress)}`);
+                    },
+                    resetTimeoutOnProgress: true,
+                  },
+                );
 
-              return result;
-            } catch (error) {
-              logger.error(`MCP client[${serverName}] error: ${error}`);
+                return result;
+              } catch (error) {
+                logger.error(`MCP client[${serverName}] error: ${error}`);
 
-              return {
-                error: (error as Error).message || String(error),
-                success: false,
-              };
-            } finally {
-              if (client) {
-                logger.info(`[${serverName}] Closing tool execution client connection`);
-                await client.close();
-                logger.info(`[${serverName}] Tool execution client connection closed`);
+                return {
+                  error: (error as Error).message || String(error),
+                  success: false,
+                };
+              } finally {
+                if (client) {
+                  logger.info(`[${serverName}] Closing tool execution client connection`);
+                  await client.close();
+                  logger.info(`[${serverName}] Tool execution client connection closed`);
+                }
               }
-            }
+            };
+
+            // Use concurrency queue to limit concurrent executions
+            logger.info(`[${serverName}] Queueing tool execution`);
+
+            return concurrencyQueue.execute(executeTask);
           },
         } as ProgressAwareTool;
       }
