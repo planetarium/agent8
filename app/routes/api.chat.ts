@@ -181,8 +181,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
-            console.log('=== ON_FINISH CALLBACK ===');
-            console.log('finishReason:', finishReason);
+            logger.info('onFinish callback: ', finishReason);
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 

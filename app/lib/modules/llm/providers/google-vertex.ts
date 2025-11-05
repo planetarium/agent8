@@ -12,6 +12,7 @@ import {
   SHELL_ACTION_FIELDS,
 } from '~/lib/constants/tool-fields';
 import { TOOL_NAMES } from '~/utils/constants';
+import { createScopedLogger } from '~/utils/logger';
 
 interface VertexCredentials {
   projectId: string;
@@ -25,6 +26,8 @@ const VERTEX_FINISH_REASON = {
 } as const;
 
 const SSE_DATA_PREFIX = 'data: ' as const;
+
+const logger = createScopedLogger('vertex-ai-provider');
 
 export default class GoogleVertexProvider extends BaseProvider {
   name = PROVIDER_NAMES.GOOGLE_VERTEX_AI;
@@ -369,7 +372,7 @@ export default class GoogleVertexProvider extends BaseProvider {
 
       return result;
     } catch (error) {
-      console.warn('Failed to parse Python function call:', error);
+      logger.warn('Failed to parse Python function call:', error);
       return null;
     }
   }
@@ -654,8 +657,69 @@ export default class GoogleVertexProvider extends BaseProvider {
   }
 
   /**
+   * Processes a single SSE line and fixes MALFORMED_FUNCTION_CALL if needed
+   * @param line - SSE line to process
+   * @returns Processed line
+   */
+  private _processSSELine(line: string): string {
+    // Only process SSE data lines
+    if (!line.startsWith(SSE_DATA_PREFIX)) {
+      return line;
+    }
+
+    try {
+      const data = JSON.parse(line.substring(SSE_DATA_PREFIX.length));
+      const candidate = data.candidates?.[0];
+
+      if (candidate?.finishReason) {
+        logger.info('finishReason:', candidate.finishReason);
+      }
+
+      /* Fix MALFORMED_FUNCTION_CALL with submit_artifact */
+      if (candidate?.finishReason === VERTEX_FINISH_REASON.MALFORMED_FUNCTION_CALL) {
+        const finishMessage = candidate.finishMessage || '';
+        const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
+
+        if (finishMessage.includes(toolName)) {
+          /* Parse Python function call */
+          const parsedArgs = this._parsePythonFunctionCall(finishMessage);
+
+          if (parsedArgs) {
+            /* Create valid functionCall part */
+            const fixedPart = {
+              functionCall: {
+                name: toolName,
+                args: parsedArgs,
+              },
+            };
+
+            /* Add to content.parts or create new content */
+            if (!candidate.content) {
+              candidate.content = { parts: [fixedPart] };
+            } else if (!candidate.content.parts) {
+              candidate.content.parts = [fixedPart];
+            } else {
+              candidate.content.parts.push(fixedPart);
+            }
+
+            /* Change finishReason to STOP */
+            candidate.finishReason = 'STOP';
+          }
+        }
+      }
+
+      return `data: ${JSON.stringify(data)}`;
+    } catch (parseError) {
+      logger.warn('Failed to parse/modify SSE line:', parseError);
+      return line;
+    }
+  }
+
+  /**
    * Creates a custom fetch function that intercepts Vertex AI responses
    * Fixes MALFORMED_FUNCTION_CALL errors by parsing Python-style function calls
+   * Uses streaming to avoid blocking and prevent timeouts in Cloudflare Workers
+   * Buffers complete SSE events (until \n\n) to ensure JSON integrity
    *
    * @returns Custom fetch function
    */
@@ -664,66 +728,50 @@ export default class GoogleVertexProvider extends BaseProvider {
 
     return async (url, init) => {
       const response = await originalFetch(url, init);
-      const rawText = await response.text();
 
-      /* Parse and modify SSE lines */
-      const lines = rawText.split('\n');
-      const modifiedLines = lines.map((line) => {
-        if (!line.startsWith(SSE_DATA_PREFIX)) {
-          return line;
-        }
+      let buffer = '';
 
-        try {
-          const data = JSON.parse(line.substring(SSE_DATA_PREFIX.length));
-          const candidate = data.candidates?.[0];
+      const transformStream = new TransformStream({
+        transform: (chunk, controller) => {
+          // Add to buffer
+          buffer += chunk;
 
-          /* Fix MALFORMED_FUNCTION_CALL with submit_artifact */
-          if (candidate?.finishReason === VERTEX_FINISH_REASON.MALFORMED_FUNCTION_CALL) {
-            const finishMessage = candidate.finishMessage || '';
-            const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
+          // SSE events are separated by \n\n
+          const events = buffer.split('\n\n');
 
-            if (finishMessage.includes(toolName)) {
-              /* Parse Python function call */
-              const parsedArgs = this._parsePythonFunctionCall(finishMessage);
+          // Keep last incomplete event in buffer
+          buffer = events.pop() || '';
 
-              if (parsedArgs) {
-                /* Create valid functionCall part */
-                const fixedPart = {
-                  functionCall: {
-                    name: toolName,
-                    args: parsedArgs,
-                  },
-                };
-
-                /* Add to content.parts or create new content */
-                if (!candidate.content) {
-                  candidate.content = { parts: [fixedPart] };
-                } else if (!candidate.content.parts) {
-                  candidate.content.parts = [fixedPart];
-                } else {
-                  candidate.content.parts.push(fixedPart);
-                }
-
-                /* Change finishReason to STOP */
-                candidate.finishReason = 'STOP';
-              }
+          // Process each complete event
+          for (const event of events) {
+            if (event.trim()) {
+              const lines = event.split('\n');
+              const processedLines = lines.map((line) => this._processSSELine(line));
+              controller.enqueue(processedLines.join('\n') + '\n\n');
             }
           }
-
-          return `data: ${JSON.stringify(data)}`;
-        } catch (parseError) {
-          console.warn('Failed to parse/modify SSE line:', parseError);
-          return line;
-        }
+        },
+        flush: (controller) => {
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const lines = buffer.split('\n');
+            const processedLines = lines.map((line) => this._processSSELine(line));
+            controller.enqueue(processedLines.join('\n'));
+          }
+        },
       });
 
-      const modifiedText = modifiedLines.join('\n');
-
-      return new Response(modifiedText, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      });
+      return new Response(
+        response
+          .body!.pipeThrough(new TextDecoderStream())
+          .pipeThrough(transformStream)
+          .pipeThrough(new TextEncoderStream()),
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        },
+      );
     };
   }
 }
