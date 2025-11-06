@@ -727,6 +727,25 @@ export default class GoogleVertexProvider extends BaseProvider {
     const originalFetch = globalThis.fetch;
 
     return async (url, init) => {
+      // Modify request body to add default thinkingConfig if not already set
+      if (init?.body) {
+        try {
+          const body = JSON.parse(init.body as string);
+
+          // Add thinkingConfig to generationConfig only if not already present
+          if (body.generationConfig && !body.generationConfig.thinkingConfig) {
+            body.generationConfig.thinkingConfig = {
+              includeThoughts: false,
+              thinkingBudget: -1,
+            };
+          }
+
+          init.body = JSON.stringify(body);
+        } catch (error) {
+          logger.warn('Failed to modify request body:', error);
+        }
+      }
+
       const response = await originalFetch(url, init);
 
       if (!response.ok) {

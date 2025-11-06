@@ -37,7 +37,6 @@ import { createInvalidToolInputHandler } from './tools/error-handle';
 import { createSubmitArtifactActionTool } from './tools/action';
 import { createUnknownToolHandler } from './tools/error-handle';
 import { is3dProject } from '~/lib/utils';
-import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 
 export type Messages = UIMessage[];
 
@@ -199,15 +198,6 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    providerOptions: {
-      google: {
-        // Options are nested under 'google' for Vertex provider
-        thinkingConfig: {
-          includeThoughts: false,
-          thinkingBudget: -1,
-        },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
     stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
