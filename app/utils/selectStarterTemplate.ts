@@ -9,6 +9,7 @@ import {
   TEMPLATE_2D_PHASER_BASIC,
   TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY,
   TEMPLATE_3D_BASIC,
+  TEMPLATE_3D_BASIC_FREEVIEW,
   TEMPLATE_3D_BASIC_QUARTERVIEW,
   TEMPLATE_BASIC_VITE_REACT,
 } from '~/constants/template';
@@ -257,6 +258,11 @@ export async function getTemplates(githubRepo: string, path: string, title?: str
     return {
       fileMap: TEMPLATE_3D_BASIC as FileMap,
       messages: generateTemplateMessages(TEMPLATE_3D_BASIC as FileMap, title),
+    };
+  } else if (path === 'basic-3d-freeview') {
+    return {
+      fileMap: TEMPLATE_3D_BASIC_FREEVIEW as FileMap,
+      messages: generateTemplateMessages(TEMPLATE_3D_BASIC_FREEVIEW as FileMap, title),
     };
   } else if (path === 'basic-3d-quarterview') {
     return {
