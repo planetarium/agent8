@@ -729,49 +729,80 @@ export default class GoogleVertexProvider extends BaseProvider {
     return async (url, init) => {
       const response = await originalFetch(url, init);
 
-      let buffer = '';
+      if (!response.ok) {
+        return response;
+      }
 
-      const transformStream = new TransformStream({
-        transform: (chunk, controller) => {
-          // Add to buffer
-          buffer += chunk;
+      if (!response.body) {
+        return response;
+      }
 
-          // SSE events are separated by \n\n
-          const events = buffer.split('\n\n');
+      const contentType = response.headers.get('content-type');
 
-          // Keep last incomplete event in buffer
-          buffer = events.pop() || '';
+      const isStreaming = contentType?.includes('text/event-stream');
 
-          // Process each complete event
-          for (const event of events) {
-            if (event.trim()) {
-              const lines = event.split('\n');
-              const processedLines = lines.map((line) => this._processSSELine(line));
-              controller.enqueue(processedLines.join('\n') + '\n\n');
-            }
-          }
-        },
-        flush: (controller) => {
-          // Process any remaining buffer
-          if (buffer.trim()) {
-            const lines = buffer.split('\n');
-            const processedLines = lines.map((line) => this._processSSELine(line));
-            controller.enqueue(processedLines.join('\n'));
-          }
-        },
-      });
+      try {
+        if (isStreaming) {
+          let buffer = '';
 
-      return new Response(
-        response
-          .body!.pipeThrough(new TextDecoderStream())
-          .pipeThrough(transformStream)
-          .pipeThrough(new TextEncoderStream()),
-        {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        },
-      );
+          const transformStream = new TransformStream({
+            transform: (chunk, controller) => {
+              // Add to buffer
+              buffer += chunk;
+
+              // SSE events are separated by \n\n
+              const events = buffer.split('\n\n');
+
+              // Keep last incomplete event in buffer
+              buffer = events.pop() || '';
+
+              // Process each complete event
+              for (const event of events) {
+                if (event.trim()) {
+                  const lines = event.split('\n');
+                  const processedLines = lines.map((line) => this._processSSELine(line));
+                  controller.enqueue(processedLines.join('\n') + '\n\n');
+                }
+              }
+            },
+            flush: (controller) => {
+              // Process any remaining buffer
+              if (buffer.trim()) {
+                const lines = buffer.split('\n');
+                const processedLines = lines.map((line) => this._processSSELine(line));
+                controller.enqueue(processedLines.join('\n'));
+              }
+            },
+          });
+
+          return new Response(
+            response.body
+              .pipeThrough(new TextDecoderStream())
+              .pipeThrough(transformStream)
+              .pipeThrough(new TextEncoderStream()),
+            {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            },
+          );
+        } else {
+          const rawText = await response.text();
+          const lines = rawText.split('\n');
+          const processedLines = lines.map((line) => this._processSSELine(line));
+          const modifiedText = processedLines.join('\n');
+
+          return new Response(modifiedText, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to transform response:', error);
+
+        return response;
+      }
     };
   }
 }

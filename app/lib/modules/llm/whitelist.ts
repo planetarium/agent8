@@ -52,11 +52,6 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'google/gemini-2.5-pro',
   },
   {
-    label: 'Gemini 2.5 Flash',
-    providerName: PROVIDER_NAMES.OPEN_ROUTER,
-    modelName: 'google/gemini-2.5-flash',
-  },
-  {
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
     modelName: 'gemini-2.5-pro',
@@ -66,6 +61,16 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.GOOGLE,
     modelName: 'gemini-2.5-pro',
+  },
+  {
+    label: 'Gemini 2.5 Flash',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
+    modelName: 'google/gemini-2.5-flash',
+  },
+  {
+    label: 'Gemini 2.5 Flash',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+    modelName: 'gemini-2.5-flash',
   },
   {
     label: 'Grok4',
