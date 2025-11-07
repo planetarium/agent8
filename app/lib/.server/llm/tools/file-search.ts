@@ -82,15 +82,25 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         error?: string;
         skippedAsDuplicate?: boolean;
       }> = [];
-      const paths = Array.isArray(pathList) ? pathList : [pathList];
+
+      let paths: string[];
+
+      if (typeof pathList === 'string') {
+        try {
+          const parsed = JSON.parse(pathList);
+          paths = Array.isArray(parsed) ? parsed : [pathList];
+        } catch {
+          paths = [pathList];
+        }
+      } else {
+        paths = Array.isArray(pathList) ? pathList : [pathList];
+      }
 
       for (const path of paths) {
         if (seen.has(path)) {
           out.push({ path, skippedAsDuplicate: true });
           continue;
         }
-
-        seen.add(path);
 
         const raw = getFileContents(fileMap, path);
 
@@ -99,6 +109,7 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
           continue;
         }
 
+        seen.add(path);
         out.push({ path, content: raw });
       }
 
