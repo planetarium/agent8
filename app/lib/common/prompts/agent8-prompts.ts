@@ -150,7 +150,9 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - Dangerous commands: rm -rf /, any commands with /* or *
       - Any other shell commands not explicitly listed above
 
-      - Never edit package.json directly, always use bun add command
+      - **CRITICAL**: NEVER edit package.json directly
+      - Use bun add <package-name> to add packages ONLY
+      - Do NOT remove unused packages - they can stay
       - ${GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS} is ONLY for package installation and file deletion
     6. ${GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS} guidelines:
       - All file paths must be relative to current working directory
@@ -173,6 +175,10 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - NEVER use ${GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS} on files that don't exist
       - If file doesn't exist, you MUST use ${GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS}
       - ALWAYS read the file first before using ${GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS}
+
+      **CRITICAL - Package Management**:
+      - NEVER modify package.json with ${GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS} or ${GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS}
+      - Use ${GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS} to add packages ONLY
 
       REMEMBER: ${GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS} is more efficient and should be your default choice for existing files!
 
@@ -726,23 +732,17 @@ export function getWorkflowPrompt() {
 
 3. **Read all related files** (CRITICAL STEP)
    - Use ${TOOL_NAMES.READ_FILES_CONTENTS} to read as many related files as possible
-   - MANDATORY for modify operations - you CANNOT use modifyActions without reading files first
    - Better to read too many files than too few
 
 4. Prepare all changes comprehensively
 
-5. **IMPORTANT - Incremental Delivery**:
-   - Do NOT try to do too much at once
-   - Limit file creation/modification to less than 10 files per request
-   - If more work is needed, leave it as a plan for the next iteration
-
-6. **Generate artifact** - ALWAYS call '${TOOL_NAMES.GENERATE_ARTIFACT}' to generate output with complete changes
+5. **Generate artifact** - ALWAYS call '${TOOL_NAMES.GENERATE_ARTIFACT}' to generate output with complete changes
    - Include ALL changes in ONE call - do NOT call multiple times
    - Verify the results
    - If generation fails, fix the issue and retry
 
-7. **Present results** to the user
+6. **Present results** to the user
 
-8. NEVER skip the artifact generation - it's your PRIMARY OBJECTIVE. Always verify generation succeeded
+7. NEVER skip the artifact generation - it's your PRIMARY OBJECTIVE. Always verify generation succeeded
 `;
 }

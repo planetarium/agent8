@@ -220,12 +220,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 `Model finished without generating artifact via ${TOOL_NAMES.GENERATE_ARTIFACT} tool. Retry attempt ${generateArtifactRetryCount}/${MAX_GENERATE_ARTIFACT_RETRIES}...`,
               );
 
-              // Add retry messages
-              messages.push({
-                id: generateId(),
-                role: 'assistant',
-                parts: [{ type: 'text', text: content }],
-              });
+              // Add retry messages only if content is not empty
+              if (content && content.trim().length > 0) {
+                messages.push({
+                  id: generateId(),
+                  role: 'assistant',
+                  parts: [{ type: 'text', text: content }],
+                });
+              }
+
               messages.push({
                 id: generateId(),
                 role: 'user',
@@ -305,7 +308,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-            messages.push({ id: generateId(), role: 'assistant', parts: [{ type: 'text', text: content }] });
+            // Only add assistant message if content is not empty
+            if (content && content.trim().length > 0) {
+              messages.push({ id: generateId(), role: 'assistant', parts: [{ type: 'text', text: content }] });
+            }
+
             messages.push({
               id: generateId(),
               role: 'user',
