@@ -5,7 +5,7 @@ import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex/edge';
 import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 import {
-  SUBMIT_ARTIFACT_FIELDS,
+  GENERATE_ARTIFACT_FIELDS,
   FILE_ACTION_FIELDS,
   MODIFY_ACTION_FIELDS,
   MODIFICATION_FIELDS,
@@ -186,11 +186,11 @@ export default class GoogleVertexProvider extends BaseProvider {
    * Used to match against Vertex AI's generated Python type annotations
    *
    * @example
-   * _buildObjectTypeName('submit_artifact', 'fileActions') → 'SubmitArtifactFileactions'
-   * _buildObjectTypeName('submit_artifact', 'modifyActions', 'modifications') → 'SubmitArtifactModifyactionsModifications'
+   * _buildObjectTypeName('generate_artifact', 'fileActions') → 'GenerateArtifactFileactions'
+   * _buildObjectTypeName('generate_artifact', 'modifyActions', 'modifications') → 'GenerateArtifactModifyactionsModifications'
    */
   private _buildObjectTypeName(toolName: string, ...fieldNames: string[]): string {
-    // Convert snake_case tool name to PascalCase: submit_artifact → SubmitArtifact
+    // Convert snake_case tool name to PascalCase: generate_artifact → GenerateArtifact
     const pascalToolName = toolName
       .split('_')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -247,7 +247,7 @@ export default class GoogleVertexProvider extends BaseProvider {
       let value = '';
       let inString = false;
       let stringChar = '';
-      let inTripleQuote = false;
+      let tripleQuoteType = ''; // '', "'''", or '"""'
 
       while (i < argsStr.length) {
         const char = argsStr[i];
@@ -273,14 +273,23 @@ export default class GoogleVertexProvider extends BaseProvider {
 
         /* Priority 2: Handle triple quotes (both ''' and """) */
         if (next3 === "'''" || next3 === '"""') {
-          inTripleQuote = !inTripleQuote;
+          if (tripleQuoteType === '') {
+            // Opening triple quote
+            tripleQuoteType = next3;
+          } else if (tripleQuoteType === next3) {
+            // Closing triple quote (must match opening type)
+            tripleQuoteType = '';
+          }
+
+          // else: different triple quote type inside, just add to value
+
           value += next3;
           i += 3;
           continue;
         }
 
         /* Priority 3: Start new single/double quote string (only when not in triple quote) */
-        if (!inTripleQuote && (char === "'" || char === '"')) {
+        if (tripleQuoteType === '' && (char === "'" || char === '"')) {
           const backslashCount = this._countTrailingBackslashes(argsStr, i);
           const isEscaped = backslashCount % 2 === 1;
 
@@ -295,7 +304,7 @@ export default class GoogleVertexProvider extends BaseProvider {
         }
 
         /* Only count brackets outside of all strings */
-        if (!inTripleQuote) {
+        if (tripleQuoteType === '') {
           if (char === '[') {
             depth++;
           } else if (char === ']') {
@@ -319,15 +328,15 @@ export default class GoogleVertexProvider extends BaseProvider {
 
   /**
    * Parses Python-style function call from MALFORMED_FUNCTION_CALL finishMessage
-   * Extracts submit_artifact arguments and reconstructs as valid JSON
+   * Extracts generate_artifact arguments and reconstructs as valid JSON
    *
    * @param finishMessage - Python-style function call string
    * @returns Parsed arguments object or null if parsing fails
    */
   private _parsePythonFunctionCall(finishMessage: string): any {
     try {
-      /* Extract content between submit_artifact( and final ) */
-      const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
+      /* Extract content between generate_artifact( and final ) */
+      const toolName = TOOL_NAMES.GENERATE_ARTIFACT;
       const pattern = new RegExp(`${toolName}\\((.*)\\)\\)`, 's');
       const match = finishMessage.match(pattern);
 
@@ -339,7 +348,11 @@ export default class GoogleVertexProvider extends BaseProvider {
       const result: any = {};
 
       /* Parse simple string fields: id, title, summary */
-      const simpleFields = [SUBMIT_ARTIFACT_FIELDS.ID, SUBMIT_ARTIFACT_FIELDS.TITLE, SUBMIT_ARTIFACT_FIELDS.SUMMARY];
+      const simpleFields = [
+        GENERATE_ARTIFACT_FIELDS.ID,
+        GENERATE_ARTIFACT_FIELDS.TITLE,
+        GENERATE_ARTIFACT_FIELDS.SUMMARY,
+      ];
 
       for (const field of simpleFields) {
         const value = this._extractFieldValue(argsStr, field);
@@ -350,24 +363,24 @@ export default class GoogleVertexProvider extends BaseProvider {
       }
 
       /* Parse fileActions array */
-      const fileActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS);
+      const fileActionsValue = this._extractFieldValue(argsStr, GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS);
 
       if (fileActionsValue !== null) {
-        result[SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS] = this._parseFileActions(fileActionsValue);
+        result[GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS] = this._parseFileActions(fileActionsValue);
       }
 
       /* Parse modifyActions array */
-      const modifyActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS);
+      const modifyActionsValue = this._extractFieldValue(argsStr, GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS);
 
       if (modifyActionsValue !== null) {
-        result[SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS] = this._parseModifyActions(modifyActionsValue);
+        result[GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS] = this._parseModifyActions(modifyActionsValue);
       }
 
       /* Parse shellActions array */
-      const shellActionsValue = this._extractFieldValue(argsStr, SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS);
+      const shellActionsValue = this._extractFieldValue(argsStr, GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS);
 
       if (shellActionsValue !== null) {
-        result[SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS] = this._parseShellActions(shellActionsValue);
+        result[GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS] = this._parseShellActions(shellActionsValue);
       }
 
       return result;
@@ -384,7 +397,7 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects: string[] = [];
     let depth = 0;
     let current = '';
-    let inTripleQuote = false;
+    let tripleQuoteType = ''; // '', "'''", or '"""'
     let inString = false;
     let stringChar = '';
     let i = 0;
@@ -413,14 +426,23 @@ export default class GoogleVertexProvider extends BaseProvider {
 
       /* Priority 2: Handle triple quotes (both ''' and """) */
       if (next3 === "'''" || next3 === '"""') {
-        inTripleQuote = !inTripleQuote;
+        if (tripleQuoteType === '') {
+          // Opening triple quote
+          tripleQuoteType = next3;
+        } else if (tripleQuoteType === next3) {
+          // Closing triple quote (must match opening type)
+          tripleQuoteType = '';
+        }
+
+        // else: different triple quote type inside, just add to current
+
         current += next3;
         i += 3;
         continue;
       }
 
       /* Priority 3: Start new single/double quote string (only when not in triple quote) */
-      if (!inTripleQuote && (char === "'" || char === '"')) {
+      if (tripleQuoteType === '' && (char === "'" || char === '"')) {
         const backslashCount = this._countTrailingBackslashes(arrayStr, i);
         const isEscaped = backslashCount % 2 === 1;
 
@@ -435,7 +457,7 @@ export default class GoogleVertexProvider extends BaseProvider {
       }
 
       /* Only track parentheses outside of all strings */
-      if (!inTripleQuote) {
+      if (tripleQuoteType === '') {
         if (char === '(') {
           depth++;
         } else if (char === ')') {
@@ -472,14 +494,16 @@ export default class GoogleVertexProvider extends BaseProvider {
     const startIdx = match.index + match[0].length;
     let i = startIdx;
 
-    /* Handle triple quotes */
-    if (objStr.substring(i, i + 3) === "'''") {
-      i += 3; // Skip opening '''
+    /* Handle triple quotes (both ''' and """) */
+    const triple = objStr.substring(i, i + 3);
+
+    if (triple === "'''" || triple === '"""') {
+      i += 3; // Skip opening triple quotes
 
       let value = '';
 
       while (i < objStr.length) {
-        if (objStr.substring(i, i + 3) === "'''") {
+        if (objStr.substring(i, i + 3) === triple) {
           return value;
         }
 
@@ -523,7 +547,7 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS);
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.GENERATE_ARTIFACT, GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS);
 
       if (!objStr.includes(typeName)) {
         continue;
@@ -559,7 +583,7 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS);
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.GENERATE_ARTIFACT, GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS);
 
       if (!objStr.includes(typeName)) {
         continue;
@@ -596,8 +620,8 @@ export default class GoogleVertexProvider extends BaseProvider {
 
     for (const objStr of objects) {
       const typeName = this._buildObjectTypeName(
-        TOOL_NAMES.SUBMIT_ARTIFACT,
-        SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS,
+        TOOL_NAMES.GENERATE_ARTIFACT,
+        GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS,
         MODIFY_ACTION_FIELDS.MODIFICATIONS,
       );
 
@@ -635,7 +659,7 @@ export default class GoogleVertexProvider extends BaseProvider {
     const objects = this._splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
-      const typeName = this._buildObjectTypeName(TOOL_NAMES.SUBMIT_ARTIFACT, SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS);
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.GENERATE_ARTIFACT, GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS);
 
       if (!objStr.includes(typeName)) {
         continue;
@@ -675,10 +699,10 @@ export default class GoogleVertexProvider extends BaseProvider {
         logger.info('finishReason:', candidate.finishReason);
       }
 
-      /* Fix MALFORMED_FUNCTION_CALL with submit_artifact */
+      /* Fix MALFORMED_FUNCTION_CALL with generate_artifact */
       if (candidate?.finishReason === VERTEX_FINISH_REASON.MALFORMED_FUNCTION_CALL) {
         const finishMessage = candidate.finishMessage || '';
-        const toolName = TOOL_NAMES.SUBMIT_ARTIFACT;
+        const toolName = TOOL_NAMES.GENERATE_ARTIFACT;
 
         if (finishMessage.includes(toolName)) {
           /* Parse Python function call */
@@ -727,25 +751,6 @@ export default class GoogleVertexProvider extends BaseProvider {
     const originalFetch = globalThis.fetch;
 
     return async (url, init) => {
-      // Modify request body to add default thinkingConfig if not already set
-      if (init?.body) {
-        try {
-          const body = JSON.parse(init.body as string);
-
-          // Add thinkingConfig to generationConfig only if not already present
-          if (body.generationConfig && !body.generationConfig.thinkingConfig) {
-            body.generationConfig.thinkingConfig = {
-              includeThoughts: false,
-              thinkingBudget: -1,
-            };
-          }
-
-          init.body = JSON.stringify(body);
-        } catch (error) {
-          logger.warn('Failed to modify request body:', error);
-        }
-      }
-
       const response = await originalFetch(url, init);
 
       if (!response.ok) {

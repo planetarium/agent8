@@ -4,7 +4,7 @@ import { TOOL_ERROR, type FileMap, type Orchestration } from '~/lib/.server/llm/
 import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 import {
-  SUBMIT_ARTIFACT_FIELDS,
+  GENERATE_ARTIFACT_FIELDS,
   FILE_ACTION_FIELDS,
   MODIFY_ACTION_FIELDS,
   MODIFICATION_FIELDS,
@@ -48,42 +48,42 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
   return !!getFileContents(fileMap, path);
 }
 
-export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
+export const createGenerateArtifactTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
   return tool({
     description:
-      "**MANDATORY OUTPUT FORMAT** - This is the ONLY way to return your work to the user. You MUST call this tool to complete ANY user request. Think of this as your 'submit' or 'return' button - without calling this, the user receives nothing.",
+      "**CRITICAL FUNCTION** - Generates artifacts and returns results for verification. This function processes your changes and waits for validation. You MUST call this to generate output AND check the results. Think of this as 'generate and verify' - you must confirm the generation succeeded before proceeding.",
     inputSchema: z
       .object({
-        [SUBMIT_ARTIFACT_FIELDS.ID]: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
-        [SUBMIT_ARTIFACT_FIELDS.TITLE]: z
+        [GENERATE_ARTIFACT_FIELDS.ID]: z.string().optional().describe('kebab-case identifier (e.g., platformer-game)'),
+        [GENERATE_ARTIFACT_FIELDS.TITLE]: z
           .string()
           .min(1)
           .max(80)
           .optional()
           .describe('Descriptive title of the artifact.'),
-        [SUBMIT_ARTIFACT_FIELDS.SUMMARY]: z
+        [GENERATE_ARTIFACT_FIELDS.SUMMARY]: z
           .string()
           .min(10)
           .max(400)
           .optional()
           .describe('1-3 sentences: what changed and why.'),
-        [SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS]: z
+        [GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS]: z
           .array(FILE_ACTION_SCHEMA)
           .optional()
           .describe('A list of file creation/update actions.'),
-        [SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS]: z
+        [GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS]: z
           .array(MODIFY_ACTION_SCHEMA)
           .optional()
           .describe('A list of file modification actions.'),
-        [SUBMIT_ARTIFACT_FIELDS.SHELL_ACTIONS]: z
+        [GENERATE_ARTIFACT_FIELDS.SHELL_ACTIONS]: z
           .array(SHELL_ACTION_SCHEMA)
           .optional()
           .describe('A list of shell command actions.'),
       })
       .superRefine((arg, _ctx) => {
         const allPathActions = [
-          ...(arg[SUBMIT_ARTIFACT_FIELDS.FILE_ACTIONS] || []),
-          ...(arg[SUBMIT_ARTIFACT_FIELDS.MODIFY_ACTIONS] || []),
+          ...(arg[GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS] || []),
+          ...(arg[GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS] || []),
         ];
 
         const need = new Set<string>();
@@ -105,16 +105,17 @@ export const createSubmitArtifactActionTool = (fileMap: FileMap | undefined, orc
         if (missingPaths.length) {
           throw new InvalidToolInputError({
             toolInput: '',
-            toolName: TOOL_NAMES.SUBMIT_ARTIFACT,
+            toolName: TOOL_NAMES.GENERATE_ARTIFACT,
             cause: TOOL_ERROR.MISSING_FILE_CONTEXT,
             message: JSON.stringify({ name: TOOL_ERROR.MISSING_FILE_CONTEXT, paths: missingPaths }),
           });
         }
       }),
     async execute() {
+      // Mark artifact generation complete - caller must verify results
       orchestration.submitted = true;
 
-      return { ok: true };
+      return { success: true, message: 'Artifact generation completed - verify results' };
     },
   });
 };

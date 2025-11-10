@@ -83,6 +83,11 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'x-ai/grok-4',
     userSelectable: true,
   },
+  {
+    label: 'Grok Code Fast 1',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
+    modelName: 'x-ai/grok-code-fast-1',
+  },
 ];
 
 /**

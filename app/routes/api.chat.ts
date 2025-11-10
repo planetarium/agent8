@@ -49,7 +49,7 @@ function toBoltArtifactXML(a: any) {
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
-const MAX_SUBMIT_ARTIFACT_RETRIES = 2;
+const MAX_GENERATE_ARTIFACT_RETRIES = 2;
 
 const logger = createScopedLogger('api.chat');
 
@@ -116,8 +116,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const progressUnsubscribers: Array<() => void> = [];
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
-        // Track submit_artifact retry attempts
-        let submitArtifactRetryCount = 0;
+        // Track generate_artifact retry attempts
+        let generateArtifactRetryCount = 0;
 
         for (const toolName in mcpTools) {
           if (mcpTools[toolName]) {
@@ -181,8 +181,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
-            logger.info('onFinish callback: ', finishReason);
-
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
             const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
@@ -200,23 +198,26 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
 
-            // Check if submit_artifact tool was called
-            const hasSubmitArtifact = response?.messages?.some(
-              (msg: any) =>
-                msg.role === 'assistant' &&
-                msg.toolCalls?.some((tc: any) => tc.toolName === TOOL_NAMES.SUBMIT_ARTIFACT),
+            // Check if generate_artifact tool was called
+            const hasGenerateArtifact = response?.messages?.some((msg: any) => {
+              if (msg.role !== 'tool') {
+                return false;
+              }
+
+              return msg.content?.some(
+                (item: any) => item.type === 'tool-result' && item.toolName === TOOL_NAMES.GENERATE_ARTIFACT,
+              );
+            });
+
+            logger.info(
+              `onFinish callback: finishReason(${finishReason}), hasGenerateArtifact(${hasGenerateArtifact}), content length(${content.trim().length})`,
             );
 
             // Retry if tool was not called and response is not empty
-            if (
-              !hasSubmitArtifact &&
-              (finishReason === 'stop' || finishReason === 'unknown') &&
-              content.trim().length > 0 &&
-              submitArtifactRetryCount < MAX_SUBMIT_ARTIFACT_RETRIES
-            ) {
-              submitArtifactRetryCount++;
+            if (!hasGenerateArtifact && generateArtifactRetryCount < MAX_GENERATE_ARTIFACT_RETRIES) {
+              generateArtifactRetryCount++;
               logger.warn(
-                `Model finished without calling ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. Retry attempt ${submitArtifactRetryCount}/${MAX_SUBMIT_ARTIFACT_RETRIES}...`,
+                `Model finished without generating artifact via ${TOOL_NAMES.GENERATE_ARTIFACT} tool. Retry attempt ${generateArtifactRetryCount}/${MAX_GENERATE_ARTIFACT_RETRIES}...`,
               );
 
               // Add retry messages
@@ -231,7 +232,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 parts: [
                   {
                     type: 'text',
-                    text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\nYou described the changes but did not call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. You MUST call it now with the changes you just described. This is MANDATORY.`,
+                    text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\nYou described the changes but did not generate the artifact by calling the ${TOOL_NAMES.GENERATE_ARTIFACT} tool. You MUST generate it now with the changes you just described and verify the results. This is MANDATORY.`,
                   },
                 ],
               });
@@ -242,7 +243,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 env,
                 options: {
                   ...options,
-                  toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
+                  toolChoice: { type: 'tool', toolName: TOOL_NAMES.GENERATE_ARTIFACT },
                 },
                 files,
                 tools: mcpTools,
@@ -361,8 +362,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          let isSubmitArtifact = false;
-          const submitArtifactInputs = new Map<string, unknown>();
+          let isGenerateArtifact = false;
+          const generateArtifactInputs = new Map<string, unknown>();
 
           return (chunk, controller) => {
             const messageType = chunk.type;
@@ -412,8 +413,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool call message
               case 'tool-input-available': {
-                if (chunk.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
-                  submitArtifactInputs.set(chunk.toolCallId, chunk.input);
+                if (chunk.toolName === TOOL_NAMES.GENERATE_ARTIFACT) {
+                  generateArtifactInputs.set(chunk.toolCallId, chunk.input);
 
                   break;
                 }
@@ -447,14 +448,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool result message
               case 'tool-output-available': {
-                if (submitArtifactInputs.has(chunk.toolCallId)) {
-                  const artifactData = submitArtifactInputs.get(chunk.toolCallId);
+                if (generateArtifactInputs.has(chunk.toolCallId)) {
+                  const artifactData = generateArtifactInputs.get(chunk.toolCallId);
 
                   const xmlContent = toBoltArtifactXML(artifactData);
-                  submitArtifactInputs.delete(chunk.toolCallId);
+                  generateArtifactInputs.delete(chunk.toolCallId);
 
-                  // only enqueue the submit artifact once
-                  if (!isSubmitArtifact) {
+                  // only enqueue the generate artifact once
+                  if (!isGenerateArtifact) {
                     controller.enqueue({
                       type: 'text-start',
                       id: chunk.toolCallId,
@@ -471,7 +472,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                       id: chunk.toolCallId,
                     });
 
-                    isSubmitArtifact = true;
+                    isGenerateArtifact = true;
                   }
 
                   break;
@@ -504,8 +505,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               case 'tool-output-error': {
-                // Skip submitArtifact.
-                if (submitArtifactInputs.has(chunk.toolCallId)) {
+                // Skip generateArtifact.
+                if (generateArtifactInputs.has(chunk.toolCallId)) {
                   break;
                 }
 
