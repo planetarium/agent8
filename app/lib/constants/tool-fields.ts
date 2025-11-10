@@ -4,9 +4,9 @@
  */
 
 /**
- * Submit artifact field names
+ * Generate artifact field names
  */
-export const SUBMIT_ARTIFACT_FIELDS = {
+export const GENERATE_ARTIFACT_FIELDS = {
   ID: 'id',
   TITLE: 'title',
   SUMMARY: 'summary',

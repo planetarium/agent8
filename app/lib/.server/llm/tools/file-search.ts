@@ -63,6 +63,10 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     inputSchema: z.object({
       pathList: z.union([z.array(z.string()), z.string()]).describe('The list of paths to the files you want to read.'),
+      internalMessage: z
+        .string()
+        .optional()
+        .describe('INTERNAL USE ONLY - NEVER use this parameter directly. This is for system repair messages only.'),
     }),
     outputSchema: z.object({
       files: z.array(
@@ -74,23 +78,34 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         }),
       ),
       complete: z.boolean(),
+      systemMessage: z.string().optional(),
     }),
-    async execute({ pathList }) {
+    async execute({ pathList, internalMessage }) {
       const out: Array<{
         path: string;
         content?: string;
         error?: string;
         skippedAsDuplicate?: boolean;
       }> = [];
-      const paths = Array.isArray(pathList) ? pathList : [pathList];
+
+      let paths: string[];
+
+      if (typeof pathList === 'string') {
+        try {
+          const parsed = JSON.parse(pathList);
+          paths = Array.isArray(parsed) ? parsed : [pathList];
+        } catch {
+          paths = [pathList];
+        }
+      } else {
+        paths = Array.isArray(pathList) ? pathList : [pathList];
+      }
 
       for (const path of paths) {
         if (seen.has(path)) {
           out.push({ path, skippedAsDuplicate: true });
           continue;
         }
-
-        seen.add(path);
 
         const raw = getFileContents(fileMap, path);
 
@@ -99,10 +114,20 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
           continue;
         }
 
+        seen.add(path);
         out.push({ path, content: raw });
       }
 
-      return { files: out, complete: true };
+      const result: { files: typeof out; complete: boolean; systemMessage?: string } = {
+        files: out,
+        complete: true,
+      };
+
+      if (internalMessage) {
+        result.systemMessage = internalMessage;
+      }
+
+      return result;
     },
   });
 };

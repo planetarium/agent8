@@ -30,11 +30,13 @@ import {
   getProjectPackagesPrompt,
   getAgent8Prompt,
   getVibeStarter3dSpecPrompt,
+  getResponseFormatPrompt,
+  getWorkflowPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
 import { createInvalidToolInputHandler } from './tools/error-handle';
-import { createSubmitArtifactActionTool } from './tools/action';
+import { createGenerateArtifactTool } from './tools/generate-artifact';
 import { createUnknownToolHandler } from './tools/error-handle';
 import { is3dProject } from '~/lib/utils';
 
@@ -127,7 +129,7 @@ export async function streamText(props: {
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
   const invalidToolInputHandler = createInvalidToolInputHandler();
-  const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
+  const submitArtifactActionTool = createGenerateArtifactTool(files, orchestration);
   const unknownToolHandlerTool = createUnknownToolHandler();
 
   let combinedTools: Record<string, any> = {
@@ -135,7 +137,7 @@ export async function streamText(props: {
     ...codebaseTools,
     ...resourcesTools,
     [TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER]: invalidToolInputHandler,
-    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
+    [TOOL_NAMES.GENERATE_ARTIFACT]: submitArtifactActionTool,
     [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
 
@@ -182,6 +184,14 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
+    {
+      role: 'system',
+      content: getResponseFormatPrompt(),
+    } as SystemModelMessage,
+    {
+      role: 'system',
+      content: getWorkflowPrompt(),
+    } as SystemModelMessage,
     ...convertToModelMessages(processedMessages).slice(-3),
   ];
 
@@ -198,7 +208,9 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
+
+    // Stop when artifact generation tool is called (max 15 steps)
+    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.GENERATE_ARTIFACT)],
     messages: coreMessages,
     tools: combinedTools,
     toolChoice: 'auto',
@@ -216,8 +228,8 @@ export async function streamText(props: {
           }),
         };
       } else if (InvalidToolInputError.isInstance(error)) {
-        // For SUBMIT_ARTIFACT tool, if it's a MISSING_FILE_CONTEXT error, try to repair by reading the missing files.
-        if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT && error.message) {
+        // For GENERATE_ARTIFACT tool, if it's a MISSING_FILE_CONTEXT error, try to repair by reading the missing files.
+        if (toolCall.toolName === TOOL_NAMES.GENERATE_ARTIFACT && error.message) {
           const match = error.message.match(/Error message:\s*({.*})/);
 
           if (match) {
@@ -225,11 +237,15 @@ export async function streamText(props: {
             const parsedError = JSON.parse(errorData);
 
             if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
+              const filesList = parsedError.paths.join(', ');
               return {
                 type: 'tool-call',
                 toolCallId: toolCall.toolCallId,
                 toolName: TOOL_NAMES.READ_FILES_CONTENTS,
-                input: JSON.stringify({ pathList: parsedError.paths }),
+                input: JSON.stringify({
+                  pathList: parsedError.paths,
+                  internalMessage: `IMPORTANT: Your previous artifact generation attempt failed because you didn't read these files first: ${filesList}. The files have now been loaded. You MUST generate the artifact again with the same changes now that you have the file contents.`,
+                }),
               };
             }
           }

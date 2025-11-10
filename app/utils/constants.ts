@@ -88,7 +88,7 @@ export const TOOL_NAMES = {
   UNKNOWN_HANDLER: '__system_unknownToolHandler',
   INVALID_TOOL_INPUT_HANDLER: '__system_invalidToolInputHandler',
 
-  SUBMIT_ARTIFACT: 'submit_artifact',
+  GENERATE_ARTIFACT: 'generate_artifact',
   SEARCH_FILE_CONTENTS: 'search_file_contents',
   READ_FILES_CONTENTS: 'read_files_contents',
 } as const;
