@@ -205,14 +205,187 @@ export default class GoogleVertexProvider extends BaseProvider {
   }
 
   /**
+   * Fallback method to extract array when field name is missing
+   * Searches for all instances of type constructor and wraps them in array
+   *
+   * @example
+   * Input: "modifyActions = [...]), default_api.GenerateArtifactFileactions(...)"
+   * typeName: "GenerateArtifactFileactions"
+   * Output: "[default_api.GenerateArtifactFileactions(...)]"
+   */
+  private _fallbackExtractArray(argsStr: string, typeName: string): string | null {
+    const pattern = `default_api.${typeName}(`;
+    const objects: string[] = [];
+    let i = 0;
+
+    logger.info(`#### _fallbackExtractArray searching for pattern: ${pattern}`);
+
+    while (i < argsStr.length) {
+      const startIdx = argsStr.indexOf(pattern, i);
+
+      if (startIdx === -1) {
+        break;
+      }
+
+      logger.info(`#### Found pattern at index ${startIdx}`);
+
+      // Extract complete object
+      const objStr = this._extractCompleteObject(argsStr, startIdx);
+
+      if (objStr) {
+        logger.info(`#### Extracted object (length ${objStr.length}): ${objStr.substring(0, 150)}...`);
+        objects.push(objStr);
+        i = startIdx + objStr.length;
+      } else {
+        logger.warn(`#### Failed to extract complete object at index ${startIdx}`);
+        i = startIdx + pattern.length;
+      }
+    }
+
+    if (objects.length === 0) {
+      logger.warn(`#### No objects found for pattern: ${pattern}`);
+      return null;
+    }
+
+    logger.info(`#### _fallbackExtractArray found ${objects.length} objects`);
+
+    return '[' + objects.join(', ') + ']';
+  }
+
+  /**
+   * Extracts a complete Python object starting from given index
+   * Handles parentheses matching with triple quotes and string literals
+   *
+   * @param argsStr - Full argument string
+   * @param startIdx - Starting index of 'default_api.TypeName('
+   * @returns Complete object string including 'default_api.TypeName(...)'
+   */
+  private _extractCompleteObject(argsStr: string, startIdx: number): string | null {
+    // Find opening parenthesis
+    let i = argsStr.indexOf('(', startIdx);
+
+    if (i === -1) {
+      return null;
+    }
+
+    i++; // Skip opening '('
+
+    let depth = 1;
+    let tripleQuoteType = ''; // '', "'''", or '"""'
+    let inString = false;
+    let stringChar = '';
+
+    const objStart = startIdx;
+
+    while (i < argsStr.length && depth > 0) {
+      const char = argsStr[i];
+      const next3 = argsStr.substring(i, i + 3);
+
+      /* Priority 1: Handle single/double quote strings (highest priority) */
+      if (inString) {
+        /* Check if this is an unescaped closing quote */
+        if (char === stringChar) {
+          const backslashCount = this._countTrailingBackslashes(argsStr, i);
+          const isEscaped = backslashCount % 2 === 1;
+
+          if (!isEscaped) {
+            inString = false;
+            stringChar = '';
+          }
+        }
+
+        i++;
+        continue;
+      }
+
+      /* Priority 2: Handle triple quotes (both ''' and """) */
+      if (next3 === "'''" || next3 === '"""') {
+        if (tripleQuoteType === '') {
+          // Opening triple quote
+          tripleQuoteType = next3;
+        } else if (tripleQuoteType === next3) {
+          // Closing triple quote (must match opening type)
+          tripleQuoteType = '';
+        }
+
+        // else: different triple quote type inside, just continue
+
+        i += 3;
+        continue;
+      }
+
+      /* Priority 3: Start new single/double quote string (only when not in triple quote) */
+      if (tripleQuoteType === '' && (char === "'" || char === '"')) {
+        const backslashCount = this._countTrailingBackslashes(argsStr, i);
+        const isEscaped = backslashCount % 2 === 1;
+
+        if (!isEscaped) {
+          inString = true;
+          stringChar = char;
+        }
+
+        i++;
+        continue;
+      }
+
+      /* Only track parentheses outside of all strings */
+      if (tripleQuoteType === '') {
+        if (char === '(') {
+          depth++;
+        } else if (char === ')') {
+          depth--;
+
+          if (depth === 0) {
+            // Found closing parenthesis
+            return argsStr.substring(objStart, i + 1);
+          }
+        }
+      }
+
+      i++;
+    }
+
+    // Unclosed triple quote - data is incomplete, cannot recover
+    if (tripleQuoteType !== '') {
+      logger.error(`Unclosed triple quote: '${tripleQuoteType}' - data incomplete, cannot recover`);
+      return null;
+    }
+
+    // Triple quotes closed but parentheses not closed - recoverable
+    if (depth > 0) {
+      logger.warn(`Unclosed parentheses detected (depth=${depth}), attempting recovery`);
+
+      const missingParens = ')'.repeat(depth);
+      const recovered = argsStr.substring(objStart) + missingParens;
+      logger.info(`Recovery successful: added ${depth} closing parenthesis`);
+
+      return recovered;
+    }
+
+    return null; // Should not reach here
+  }
+
+  /**
    * Extracts value of a field from Python args string using bracket/quote matching
    * Handles nested quotes and brackets properly
+   * If field name pattern is not found, tries fallback extraction by searching for type constructor
    */
   private _extractFieldValue(argsStr: string, fieldName: string): string | null {
     const fieldPattern = new RegExp(`${fieldName}\\s*=\\s*`);
     const match = fieldPattern.exec(argsStr);
 
     if (!match) {
+      // Fallback: Try to extract by searching for type constructor directly
+      const typeName = this._buildObjectTypeName(TOOL_NAMES.GENERATE_ARTIFACT, fieldName);
+
+      if (argsStr.includes(typeName)) {
+        const fallbackResult = this._fallbackExtractArray(argsStr, typeName);
+
+        if (fallbackResult) {
+          return fallbackResult;
+        }
+      }
+
       return null;
     }
 
@@ -346,6 +519,29 @@ export default class GoogleVertexProvider extends BaseProvider {
 
       const argsStr = match[1];
       const result: any = {};
+
+      logger.info(`########## START: _parsePythonFunctionCall`);
+      logger.info(`Total argsStr length: ${argsStr.length}`);
+      logger.info(`Full argsStr: ${argsStr}`);
+
+      // Split long strings into chunks to prevent log truncation
+      const CHUNK_SIZE = 5000;
+
+      if (argsStr.length <= CHUNK_SIZE) {
+        logger.info(argsStr);
+      } else {
+        const chunks = Math.ceil(argsStr.length / CHUNK_SIZE);
+        logger.info(`Splitting into ${chunks} chunks...`);
+
+        for (let i = 0; i < chunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min((i + 1) * CHUNK_SIZE, argsStr.length);
+          const chunk = argsStr.substring(start, end);
+          logger.info(`[Chunk ${i + 1}/${chunks}] ${chunk}`);
+        }
+      }
+
+      logger.info(`########## END: _parsePythonFunctionCall`);
 
       /* Parse simple string fields: id, title, summary */
       const simpleFields = [

@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
-import { InvalidToolInputError, tool } from 'ai';
-import { TOOL_ERROR, type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
+import { tool } from 'ai';
+import { type FileMap, type Orchestration } from '~/lib/.server/llm/constants';
 import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 import {
@@ -48,6 +48,8 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
   return !!getFileContents(fileMap, path);
 }
 
+export const COMPLETE_FIELD = 'complete';
+
 export const createGenerateArtifactTool = (fileMap: FileMap | undefined, orchestration: Orchestration) => {
   return tool({
     description:
@@ -80,42 +82,74 @@ export const createGenerateArtifactTool = (fileMap: FileMap | undefined, orchest
           .optional()
           .describe('A list of shell command actions.'),
       })
-      .superRefine((arg, _ctx) => {
-        const allPathActions = [
-          ...(arg[GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS] || []),
-          ...(arg[GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS] || []),
-        ];
+      .superRefine((_arg, _ctx) => {
+        console.log('#### generate artifact schema validation started');
+      }),
+    async execute(arg) {
+      console.log('#### generate artifact tool executed');
 
-        const need = new Set<string>();
+      const allPathActions = [
+        ...(arg[GENERATE_ARTIFACT_FIELDS.FILE_ACTIONS] || []),
+        ...(arg[GENERATE_ARTIFACT_FIELDS.MODIFY_ACTIONS] || []),
+      ];
 
-        if (fileMap) {
-          for (const action of allPathActions) {
-            if (action.path) {
-              const needsRead = needReadFile(fileMap, action.path);
+      const need = new Set<string>();
 
-              if (needsRead) {
-                need.add(action.path);
-              }
+      if (fileMap) {
+        for (const action of allPathActions) {
+          if (action.path) {
+            const needsRead = needReadFile(fileMap, action.path);
+
+            if (needsRead) {
+              need.add(action.path);
             }
           }
         }
+      }
 
-        const missingPaths = [...need].filter((p) => !orchestration.readSet.has(p));
+      const seen = orchestration.readSet;
+      const missingPaths = [...need].filter((p) => !seen.has(p));
 
-        if (missingPaths.length) {
-          throw new InvalidToolInputError({
-            toolInput: '',
-            toolName: TOOL_NAMES.GENERATE_ARTIFACT,
-            cause: TOOL_ERROR.MISSING_FILE_CONTEXT,
-            message: JSON.stringify({ name: TOOL_ERROR.MISSING_FILE_CONTEXT, paths: missingPaths }),
-          });
+      const result: any = {};
+
+      if (fileMap && missingPaths.length > 0) {
+        console.log('#### generate artifact schema validation failed: missing paths');
+
+        const out: Array<{
+          path: string;
+          content?: string;
+        }> = [];
+
+        for (const path of missingPaths) {
+          const raw = getFileContents(fileMap, path);
+
+          if (raw != null) {
+            seen.add(path);
+            out.push({ path, content: raw });
+          }
         }
-      }),
-    async execute() {
-      // Mark artifact generation complete - caller must verify results
-      orchestration.submitted = true;
 
-      return { success: true, message: 'Artifact generation completed - verify results' };
+        result.files = out;
+        result.systemMessage = `IMPORTANT: Your previous artifact generation attempt failed because you didn't read these files first: ${missingPaths.join(', ')}. The file contents have been provided in the response. You MUST generate the artifact again with the same changes using the provided file contents.`;
+        result[COMPLETE_FIELD] = false;
+      } else if (allPathActions.length === 0) {
+        console.log('#### generate artifact schema validation failed: no actions');
+
+        if (fileMap && seen.size === 0) {
+          result.systemMessage = `Before using the ${TOOL_NAMES.GENERATE_ARTIFACT} tool, you must first read relevant files to understand the codebase context. Use the ${TOOL_NAMES.READ_FILES_CONTENTS} tool to explore related files, then try again.`;
+        } else {
+          result.systemMessage = 'To fulfill the user request, you must create or modify at least one file.';
+        }
+
+        result[COMPLETE_FIELD] = false;
+      } else {
+        // Mark artifact generation complete - caller must verify results
+        orchestration.submitted = true;
+        result[COMPLETE_FIELD] = true;
+        result.systemMessage = 'Artifact generated. Complete your response immediately.';
+      }
+
+      return result;
     },
   });
 };

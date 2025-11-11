@@ -6,7 +6,6 @@ import {
   type UIMessage,
   NoSuchToolError,
   InvalidToolInputError,
-  hasToolCall,
 } from 'ai';
 import { MAX_TOKENS, TOOL_ERROR, type FileMap, type Orchestration } from './constants';
 import {
@@ -208,9 +207,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-
-    // Stop when artifact generation tool is called (max 15 steps)
-    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.GENERATE_ARTIFACT)],
+    stopWhen: [stepCountIs(15)],
     messages: coreMessages,
     tools: combinedTools,
     toolChoice: 'auto',

@@ -13,6 +13,7 @@ import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
 import { sanitizeXmlAttributeValue } from '~/lib/utils';
+import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -457,9 +458,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               case 'tool-output-available': {
                 if (generateArtifactInputs.has(chunk.toolCallId)) {
                   const artifactData = generateArtifactInputs.get(chunk.toolCallId);
+                  generateArtifactInputs.delete(chunk.toolCallId);
+
+                  if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
+                    console.log('#### tool-output-available: not complete');
+                    break;
+                  }
 
                   const xmlContent = toBoltArtifactXML(artifactData);
-                  generateArtifactInputs.delete(chunk.toolCallId);
+                  logger.info(`#### toBoltArtifactXML`);
 
                   // only enqueue the generate artifact once
                   if (!isGenerateArtifact) {
