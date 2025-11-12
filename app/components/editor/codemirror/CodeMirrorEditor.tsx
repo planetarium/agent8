@@ -243,17 +243,12 @@ function safeLayoutOperation(view: EditorView, operation: () => void, recreateVi
     return;
   }
 
-  view.requestMeasure({
-    read: () => ({}),
-    write: () => {
-      if (isViewAvailable(view)) {
-        operation();
-      } else {
-        logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_DURING_LAYOUT);
-        recreateViewFn?.();
-      }
-    },
-  });
+  if (isViewAvailable(view)) {
+    operation();
+  } else {
+    logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_DURING_LAYOUT);
+    recreateViewFn?.();
+  }
 }
 
 // Create common dispatchTransactions logic
@@ -332,87 +327,73 @@ function setEditorDocument(
   languageCompartment: Compartment,
   autoFocus: boolean,
   doc: TextEditorDocument,
+  isFileChanged: boolean,
   recreateViewFn?: () => void,
 ) {
-  // Update document content if it differs from current state
-  if (doc.value !== view.state.doc.toString()) {
+  const needsContentUpdate = doc.value !== view.state.doc.toString();
+  const newEditableState = editable && !doc.isBinary;
+
+  if (needsContentUpdate) {
     safeDispatch(
       view,
       {
-        selection: { anchor: 0 }, // Reset cursor to start
+        selection: { anchor: 0 },
         changes: { from: 0, to: view.state.doc.length, insert: doc.value },
+        effects: [editableStateEffect.of(newEditableState)],
       },
-      'document content update',
+      'document and state update',
+      recreateViewFn,
+    );
+  } else {
+    safeDispatch(
+      view,
+      { effects: [editableStateEffect.of(newEditableState)] },
+      'editable state update',
       recreateViewFn,
     );
   }
 
-  // Update editable state (disabled for binary files)
-  safeDispatch(
-    view,
-    { effects: [editableStateEffect.of(editable && !doc.isBinary)] },
-    'editable state update',
-    recreateViewFn,
-  );
+  const handleScrollAndFocusIfNeeded = () => {
+    if (isFileChanged) {
+      safeLayoutOperation(
+        view,
 
-  // Load language support asynchronously based on file path
+        // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
+        () => requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc)),
+        recreateViewFn,
+      );
+    }
+  };
+
   getLanguage(doc.filePath)
     .then((languageSupport) => {
-      // Verify view is still available after async language loading
-      if (!isViewAvailable(view)) {
-        logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_AFTER_LANGUAGE);
-        recreateViewFn?.();
-
+      if (!languageSupport) {
+        handleScrollAndFocusIfNeeded();
         return;
       }
 
-      if (languageSupport) {
-        // Apply language support and theme configuration
-        const success = safeDispatch(
-          view,
-          {
-            effects: [languageCompartment.reconfigure([languageSupport]), reconfigureTheme(theme)],
-          },
-          'language configuration',
-          recreateViewFn,
-        );
+      const success = safeDispatch(
+        view,
+        {
+          effects: [languageCompartment.reconfigure([languageSupport]), reconfigureTheme(theme)],
+        },
+        'language configuration',
+        recreateViewFn,
+      );
 
-        // Handle scroll and focus after successful language configuration
-        if (success) {
-          safeLayoutOperation(
-            view,
-            () => {
-              handleScrollAndFocus(view, autoFocus, editable, doc);
-            },
-            recreateViewFn,
-          );
-        }
+      if (!success) {
+        logger.warn('Language configuration failed');
       }
+
+      handleScrollAndFocusIfNeeded();
     })
     .catch((error) => {
       logger.error(EDITOR_MESSAGES.LANGUAGE_LOAD_ERROR, error);
-
-      // Attempt basic scroll/focus even if language loading failed
-      if (isViewAvailable(view)) {
-        safeLayoutOperation(
-          view,
-          () => {
-            handleScrollAndFocus(view, autoFocus, editable, doc);
-          },
-          recreateViewFn,
-        );
-      }
+      handleScrollAndFocusIfNeeded();
     });
 }
 
-// Handle scroll and focus
 function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: boolean, doc: TextEditorDocument) {
-  if (!isViewAvailable(view)) {
-    logger.warn(EDITOR_MESSAGES.SCROLL_FOCUS_UNAVAILABLE);
-    return;
-  }
-
-  // Calculate scroll position changes
   const currentLeft = view.scrollDOM.scrollLeft;
   const currentTop = view.scrollDOM.scrollTop;
   const newLeft = doc.scroll?.left ?? 0;
@@ -588,6 +569,9 @@ export const CodeMirrorEditor = memo(
 
     // Track previous editable state for AI completion detection
     const prevEditableRef = useRef<boolean>(editable);
+
+    // Track previous file path to detect file changes
+    const prevFilePathRef = useRef<string | undefined>();
 
     // EditorView recreation function (infinite recursion prevention)
     const recreateEditorView = (() => {
@@ -766,6 +750,7 @@ export const CodeMirrorEditor = memo(
         ]);
         view.setState(state);
         setNoDocument(view, recreateEditorView);
+        prevFilePathRef.current = undefined;
 
         return;
       }
@@ -780,6 +765,10 @@ export const CodeMirrorEditor = memo(
         logger.warn(EDITOR_MESSAGES.EMPTY_FILE_PATH);
       }
 
+      const isFileChanged = prevFilePathRef.current !== doc.filePath;
+
+      prevFilePathRef.current = doc.filePath;
+
       // Get or create editor state for this file
       let state = editorStates.get(doc.filePath);
 
@@ -791,7 +780,9 @@ export const CodeMirrorEditor = memo(
       }
 
       // Apply state and load document
-      view.setState(state);
+      if (isFileChanged) {
+        view.setState(state);
+      }
 
       setEditorDocument(
         view,
@@ -800,6 +791,7 @@ export const CodeMirrorEditor = memo(
         languageCompartment,
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
+        isFileChanged,
         recreateEditorView,
       );
     }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange]);
