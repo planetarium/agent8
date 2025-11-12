@@ -355,7 +355,13 @@ function setEditorDocument(
 
   const handleScrollAndFocusIfNeeded = () => {
     if (isFileChanged) {
-      safeLayoutOperation(view, () => handleScrollAndFocus(view, autoFocus, editable, doc), recreateViewFn);
+      safeLayoutOperation(
+        view,
+
+        // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
+        () => requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc)),
+        recreateViewFn,
+      );
     }
   };
 
@@ -388,51 +394,43 @@ function setEditorDocument(
 }
 
 function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: boolean, doc: TextEditorDocument) {
-  if (!isViewAvailable(view)) {
-    logger.warn(EDITOR_MESSAGES.SCROLL_FOCUS_UNAVAILABLE);
-    return;
+  const currentLeft = view.scrollDOM.scrollLeft;
+  const currentTop = view.scrollDOM.scrollTop;
+  const newLeft = doc.scroll?.left ?? 0;
+  const newTop = doc.scroll?.top ?? 0;
+  const needsScrolling = currentLeft !== newLeft || currentTop !== newTop;
+
+  // Handle focus management for editable editors
+  if (autoFocus && editable) {
+    try {
+      if (needsScrolling) {
+        // Focus after scroll completes to prevent scroll interruption
+        view.scrollDOM.addEventListener(
+          'scroll',
+          () => {
+            if (isViewAvailable(view)) {
+              view.focus();
+            }
+          },
+          { once: true },
+        );
+      } else {
+        // Focus immediately if no scrolling needed
+        view.focus();
+      }
+    } catch (error) {
+      logger.warn(EDITOR_MESSAGES.FOCUS_FAILED, error);
+    }
   }
 
-  requestAnimationFrame(() => {
-    // Calculate scroll position changes
-    const currentLeft = view.scrollDOM.scrollLeft;
-    const currentTop = view.scrollDOM.scrollTop;
-    const newLeft = doc.scroll?.left ?? 0;
-    const newTop = doc.scroll?.top ?? 0;
-    const needsScrolling = currentLeft !== newLeft || currentTop !== newTop;
-
-    // Handle focus management for editable editors
-    if (autoFocus && editable) {
-      try {
-        if (needsScrolling) {
-          // Focus after scroll completes to prevent scroll interruption
-          view.scrollDOM.addEventListener(
-            'scroll',
-            () => {
-              if (isViewAvailable(view)) {
-                view.focus();
-              }
-            },
-            { once: true },
-          );
-        } else {
-          // Focus immediately if no scrolling needed
-          view.focus();
-        }
-      } catch (error) {
-        logger.warn(EDITOR_MESSAGES.FOCUS_FAILED, error);
-      }
+  // Restore scroll position for editable editors
+  if (needsScrolling && editable) {
+    try {
+      view.scrollDOM.scrollTo(newLeft, newTop);
+    } catch (error) {
+      logger.warn(EDITOR_MESSAGES.SCROLL_FAILED, error);
     }
-
-    // Restore scroll position for editable editors
-    if (needsScrolling && editable) {
-      try {
-        view.scrollDOM.scrollTo(newLeft, newTop);
-      } catch (error) {
-        logger.warn(EDITOR_MESSAGES.SCROLL_FAILED, error);
-      }
-    }
-  });
+  }
 }
 
 /*
