@@ -2,10 +2,12 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import type { GitlabProject } from '~/lib/persistenceGitbase/types';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
-import { logger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
 
 export const action = withV8AuthUser(commitsAction);
 export const loader = withV8AuthUser(commitsLoader);
+
+const logger = createScopedLogger('api.gitlab.commits');
 
 /**
  * Loader function for getting project commits
@@ -132,7 +134,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
       project = await gitlabService.getProject(gitlabUser, projectName);
     }
 
-    logger.info('project', project);
+    logger.info('project', JSON.stringify(project));
 
     // Commit files
     const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch, baseCommit, deletedFiles);

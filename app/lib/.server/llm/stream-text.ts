@@ -5,6 +5,9 @@ import {
   type SystemModelMessage,
   type UIMessage,
   NoSuchToolError,
+  type ToolContent,
+  type ToolModelMessage,
+  type ModelMessage,
 } from 'ai';
 import { MAX_TOKENS, type FileMap, type Orchestration } from './constants';
 import {
@@ -54,12 +57,30 @@ export async function streamText(props: {
   files?: FileMap;
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
+  toolResults?: ToolContent;
 }) {
-  const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
+  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
   const orchestration = createOrchestration();
+
+  // Populate orchestration.readSet from toolResults if provided (for retry scenarios)
+  if (toolResults && Array.isArray(toolResults)) {
+    for (const toolResult of toolResults) {
+      if (toolResult.type === 'tool-result' && toolResult.toolName === TOOL_NAMES.READ_FILES_CONTENTS) {
+        const output = toolResult.output?.value as any;
+
+        if (output?.files && Array.isArray(output.files)) {
+          for (const file of output.files) {
+            if (file.path && file.content) {
+              orchestration.readSet.add(file.path);
+            }
+          }
+        }
+      }
+    }
+  }
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
@@ -155,7 +176,7 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  const coreMessages = [
+  const coreMessages: ModelMessage[] = [
     ...[
       systemPrompt,
       getProjectFilesPrompt(files),
@@ -184,8 +205,18 @@ export async function streamText(props: {
       role: 'system',
       content: getWorkflowPrompt(),
     } as SystemModelMessage,
-    ...convertToModelMessages(processedMessages).slice(-3),
   ];
+
+  // Add tool results before recent messages (for retry scenarios with previous file reads)
+  if (toolResults && toolResults.length > 0) {
+    coreMessages.push({
+      role: 'tool',
+      content: toolResults,
+    } as ToolModelMessage);
+  }
+
+  // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
+  coreMessages.push(...convertToModelMessages(processedMessages).slice(-3));
 
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {

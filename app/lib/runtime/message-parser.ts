@@ -54,32 +54,8 @@ interface MessageState {
   actionId: number;
 }
 
-export function cleanoutFileContent(content: string, filePath: string): string {
-  return cleanoutContent(content, filePath) + '\n';
-}
-
-export function cleanoutContent(content: string, filePath: string): string {
-  let processedContent = content.trim();
-
-  // Remove markdown code block syntax if present and file is not markdown
-  if (!filePath.endsWith('.md')) {
-    processedContent = cleanoutCodeblockSyntax(processedContent);
-    processedContent = cleanEscapedTags(processedContent);
-  }
-
-  return processedContent;
-}
-
-function cleanoutCodeblockSyntax(content: string) {
-  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-
-  const markdownMatch = content.match(markdownCodeBlockRegex);
-
-  if (markdownMatch) {
-    return markdownMatch[1];
-  }
-
-  return extractFromCDATA(content);
+function cleanoutFileContent(content: string): string {
+  return content.trim() + '\n';
 }
 
 export class StreamingMessageParser {
@@ -130,7 +106,7 @@ export class StreamingMessageParser {
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
+              content = cleanoutFileContent(content);
             } else {
               content = extractFromCDATA(content);
             }
@@ -194,7 +170,7 @@ export class StreamingMessageParser {
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
+              content = cleanoutFileContent(content);
             }
 
             currentAction.content = content;
@@ -218,7 +194,7 @@ export class StreamingMessageParser {
             i = artifactCloseIndex + ARTIFACT_TAG_CLOSE.length;
           } else {
             if ('type' in currentAction && currentAction.type === 'file') {
-              const content = cleanoutFileContent(input.slice(i), currentAction.filePath);
+              const content = cleanoutFileContent(input.slice(i));
 
               this._options.callbacks?.onActionStream?.({
                 artifactId: currentArtifact.id,
