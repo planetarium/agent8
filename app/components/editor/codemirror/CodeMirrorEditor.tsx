@@ -332,6 +332,7 @@ function setEditorDocument(
   languageCompartment: Compartment,
   autoFocus: boolean,
   doc: TextEditorDocument,
+  shouldRestoreScroll: boolean,
   recreateViewFn?: () => void,
 ) {
   // Update document content if it differs from current state
@@ -377,8 +378,8 @@ function setEditorDocument(
           recreateViewFn,
         );
 
-        // Handle scroll and focus after successful language configuration
-        if (success) {
+        // Handle scroll and focus only when needed
+        if (success && shouldRestoreScroll) {
           safeLayoutOperation(
             view,
             () => {
@@ -392,8 +393,8 @@ function setEditorDocument(
     .catch((error) => {
       logger.error(EDITOR_MESSAGES.LANGUAGE_LOAD_ERROR, error);
 
-      // Attempt basic scroll/focus even if language loading failed
-      if (isViewAvailable(view)) {
+      // Attempt basic scroll/focus only if needed
+      if (isViewAvailable(view) && shouldRestoreScroll) {
         safeLayoutOperation(
           view,
           () => {
@@ -589,6 +590,9 @@ export const CodeMirrorEditor = memo(
     // Track previous editable state for AI completion detection
     const prevEditableRef = useRef<boolean>(editable);
 
+    // Track previous file path to detect file changes
+    const prevFilePathRef = useRef<string | undefined>();
+
     // EditorView recreation function (infinite recursion prevention)
     const recreateEditorView = (() => {
       let isRecreating = false;
@@ -766,6 +770,7 @@ export const CodeMirrorEditor = memo(
         ]);
         view.setState(state);
         setNoDocument(view, recreateEditorView);
+        prevFilePathRef.current = undefined;
 
         return;
       }
@@ -778,6 +783,25 @@ export const CodeMirrorEditor = memo(
       // Warn about empty file paths (affects language detection)
       if (doc.filePath === '') {
         logger.warn(EDITOR_MESSAGES.EMPTY_FILE_PATH);
+      }
+
+      const isFileChanged = prevFilePathRef.current !== doc.filePath;
+      const isContentDifferent = doc.value !== view.state.doc.toString();
+
+      const shouldRestoreScroll = isFileChanged || isContentDifferent;
+
+      prevFilePathRef.current = doc.filePath;
+
+      if (!shouldRestoreScroll && !isContentDifferent) {
+        safeDispatch(
+          view,
+          {
+            effects: [editableStateEffect.of(editable && !doc.isBinary)],
+          },
+          'editable state only update',
+          recreateEditorView,
+        );
+        return;
       }
 
       // Get or create editor state for this file
@@ -800,6 +824,7 @@ export const CodeMirrorEditor = memo(
         languageCompartment,
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
+        shouldRestoreScroll,
         recreateEditorView,
       );
     }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange]);
