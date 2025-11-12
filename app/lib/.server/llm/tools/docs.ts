@@ -65,7 +65,7 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
     if (currentVibeStarter3dDocs) {
       Object.keys(tools).forEach((key) => {
         if (currentVibeStarter3dDocs.hasOwnProperty(key)) {
-          logger.debug(`Found vibe-starter-3d docTools key: ${key}`);
+          // logger.debug(`Found vibe-starter-3d docTools key: ${key}`);
 
           tools[key].execute = async () => {
             return { content: currentVibeStarter3dDocs[key] };
@@ -84,7 +84,7 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
     if (currentVibeStarter3dEnvironmentDocs) {
       Object.keys(tools).forEach((key) => {
         if (currentVibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
-          logger.debug(`Found vibe-starter-3d-environment docTools key: ${key}`);
+          // logger.debug(`Found vibe-starter-3d-environment docTools key: ${key}`);
 
           tools[key].execute = async () => {
             return { content: currentVibeStarter3dEnvironmentDocs[key] };

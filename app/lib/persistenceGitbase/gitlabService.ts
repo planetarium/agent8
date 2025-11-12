@@ -284,7 +284,6 @@ export class GitlabService {
               filePath,
             };
             actions.push(action);
-            logger.info(`Added delete action for file: ${filePath}`);
           } else {
             logger.warn(`Skipped delete action for non-existent file: ${filePath}`);
           }

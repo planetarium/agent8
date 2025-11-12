@@ -12,7 +12,38 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
-import { sanitizeXmlAttributeValue } from '~/lib/utils';
+import { sanitizeXmlAttributeValue, cleanEscapedTags } from '~/lib/utils';
+import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
+import { extractFromCDATA } from '~/utils/stringUtils';
+
+/**
+ * Cleans content by removing markdown code blocks and escaped tags
+ * Only applies to non-markdown files (trim is handled by message-parser)
+ */
+function cleanContent(content: string, filePath: string): string {
+  // Don't clean markdown files
+  if (filePath.endsWith('.md')) {
+    return content;
+  }
+
+  let cleaned = content;
+
+  // Remove markdown code block syntax if present
+  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
+  const markdownMatch = cleaned.match(markdownCodeBlockRegex);
+
+  if (markdownMatch) {
+    cleaned = markdownMatch[1];
+  } else {
+    // Try to extract from CDATA
+    cleaned = extractFromCDATA(cleaned);
+  }
+
+  // Clean escaped tags
+  cleaned = cleanEscapedTags(cleaned);
+
+  return cleaned;
+}
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -23,25 +54,74 @@ function createBoltArtifactXML(id?: string, title?: string, body?: string): stri
 }
 
 function toBoltArtifactXML(a: any) {
-  const { id, title, shellActions, fileActions, modifyActions } = a;
+  const { id, title, actions } = a;
 
-  const shellBody = (shellActions || [])
-    .map((act: any) => `  <boltAction type="shell">${act.command}</boltAction>`)
-    .join('\n');
+  // Group modify actions by path
+  const modifyGroups = new Map<string, any[]>();
+  const otherActions: any[] = [];
 
-  const fileBody = (fileActions || [])
+  for (const act of actions) {
+    if (act.type === 'modify' && act.path && act.before && act.after) {
+      if (!modifyGroups.has(act.path)) {
+        modifyGroups.set(act.path, []);
+      }
+
+      // Clean before and after content
+      modifyGroups.get(act.path)!.push({
+        before: cleanContent(act.before, act.path),
+        after: cleanContent(act.after, act.path),
+      });
+    } else {
+      otherActions.push(act);
+    }
+  }
+
+  // Create grouped modify actions
+  const groupedModifyActions: any[] = [];
+
+  for (const [path, modifications] of modifyGroups) {
+    groupedModifyActions.push({
+      type: 'modify',
+      path,
+      modifications,
+    });
+  }
+
+  // Combine and process all actions
+  const allActions = [...groupedModifyActions, ...otherActions]
+    .filter(
+      (act: any) =>
+        (act.content && act.path) ||
+        (act.type === 'modify' && act.path && act.modifications) ||
+        (act.type === 'shell' && act.command && !act.path),
+    )
+    .sort((a: any, b: any) => {
+      if (a.type === 'shell' && b.type !== 'shell') {
+        return -1;
+      }
+
+      if (a.type !== 'shell' && b.type === 'shell') {
+        return 1;
+      }
+
+      return 0;
+    });
+
+  const body = allActions
     .map((act: any) => {
-      return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
+      if (act.type === 'modify' && act.modifications) {
+        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
+      }
+
+      if (act.path && act.content !== undefined) {
+        // Clean file content
+        const cleanedContent = cleanContent(act.content, act.path);
+        return `  <boltAction type="file" filePath="${act.path}">${cleanedContent}</boltAction>`;
+      }
+
+      return `  <boltAction type="shell">${act.command}</boltAction>`;
     })
     .join('\n');
-
-  const modifyBody = (modifyActions || [])
-    .map((act: any) => {
-      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
-    })
-    .join('\n');
-
-  const body = [shellBody, fileBody, modifyBody].filter(Boolean).join('\n');
 
   return createBoltArtifactXML(id, title, body);
 }
@@ -205,7 +285,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               return msg.content?.some(
-                (item: any) => item.type === 'tool-result' && item.toolName === TOOL_NAMES.GENERATE_ARTIFACT,
+                (item: any) =>
+                  item.type === 'tool-result' &&
+                  item.toolName === TOOL_NAMES.GENERATE_ARTIFACT &&
+                  item.output?.value?.[COMPLETE_FIELD] === true,
               );
             });
 
@@ -220,7 +303,28 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 `Model finished without generating artifact via ${TOOL_NAMES.GENERATE_ARTIFACT} tool. Retry attempt ${generateArtifactRetryCount}/${MAX_GENERATE_ARTIFACT_RETRIES}...`,
               );
 
-              // Add retry messages only if content is not empty
+              /*
+               * Collect tool-results from response to pass to streamText
+               * These will be added as ToolModelMessage in the core messages
+               */
+              const collectedToolResults: any[] = [];
+
+              if (response?.messages && response.messages.length > 0) {
+                for (const msg of response.messages) {
+                  if (msg.role === 'tool') {
+                    // Collect tool-results
+                    const toolResults = Array.isArray(msg.content)
+                      ? msg.content.filter((item: any) => item.type === 'tool-result')
+                      : [];
+
+                    if (toolResults.length > 0) {
+                      collectedToolResults.push(...toolResults);
+                    }
+                  }
+                }
+              }
+
+              // Add assistant's text response if present
               if (content && content.trim().length > 0) {
                 messages.push({
                   id: generateId(),
@@ -240,17 +344,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 ],
               });
 
-              // Retry with forced tool choice
+              // Retry with forced tool choice, passing tool results
               const retryResult = await streamText({
                 messages,
                 env,
-                options: {
-                  ...options,
-                  toolChoice: { type: 'tool', toolName: TOOL_NAMES.GENERATE_ARTIFACT },
-                },
+                options,
                 files,
                 tools: mcpTools,
                 abortSignal: request.signal,
+                toolResults: collectedToolResults.length > 0 ? collectedToolResults : undefined,
               });
 
               writer.merge(retryResult.toUIMessageStream({ sendReasoning: false }));
@@ -457,9 +559,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               case 'tool-output-available': {
                 if (generateArtifactInputs.has(chunk.toolCallId)) {
                   const artifactData = generateArtifactInputs.get(chunk.toolCallId);
+                  generateArtifactInputs.delete(chunk.toolCallId);
+
+                  if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
+                    break;
+                  }
 
                   const xmlContent = toBoltArtifactXML(artifactData);
-                  generateArtifactInputs.delete(chunk.toolCallId);
 
                   // only enqueue the generate artifact once
                   if (!isGenerateArtifact) {
