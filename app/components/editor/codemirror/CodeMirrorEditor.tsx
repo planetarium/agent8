@@ -249,20 +249,6 @@ function safeLayoutOperation(view: EditorView, operation: () => void, recreateVi
     logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_DURING_LAYOUT);
     recreateViewFn?.();
   }
-
-  /*
-   * view.requestMeasure({
-   *   read: () => ({}),
-   *   write: () => {
-   *     if (isViewAvailable(view)) {
-   *       operation();
-   *     } else {
-   *       logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_DURING_LAYOUT);
-   *       recreateViewFn?.();
-   *     }
-   *   },
-   * });
-   */
 }
 
 // Create common dispatchTransactions logic
@@ -341,15 +327,13 @@ function setEditorDocument(
   languageCompartment: Compartment,
   autoFocus: boolean,
   doc: TextEditorDocument,
-  shouldRestoreScroll: boolean,
+  isFileChanged: boolean,
   recreateViewFn?: () => void,
 ) {
-  // Step 1: Update document content and editable state
   const needsContentUpdate = doc.value !== view.state.doc.toString();
   const newEditableState = editable && !doc.isBinary;
 
   if (needsContentUpdate) {
-    // Combined update for better performance
     safeDispatch(
       view,
       {
@@ -369,9 +353,8 @@ function setEditorDocument(
     );
   }
 
-  // Step 2: Load language support and handle scroll/focus
   const handleScrollAndFocusIfNeeded = () => {
-    if (shouldRestoreScroll) {
+    if (isFileChanged) {
       safeLayoutOperation(view, () => handleScrollAndFocus(view, autoFocus, editable, doc), recreateViewFn);
     }
   };
@@ -383,7 +366,6 @@ function setEditorDocument(
         return;
       }
 
-      // Apply language support and theme configuration
       const success = safeDispatch(
         view,
         {
@@ -405,7 +387,6 @@ function setEditorDocument(
     });
 }
 
-// Handle scroll and focus
 function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: boolean, doc: TextEditorDocument) {
   if (!isViewAvailable(view)) {
     logger.warn(EDITOR_MESSAGES.SCROLL_FOCUS_UNAVAILABLE);
