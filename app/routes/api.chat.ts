@@ -11,32 +11,9 @@ import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
-import { MARKDOWN_CODE_BLOCK_REGEX, TOOL_NAMES } from '~/utils/constants';
-import { sanitizeXmlAttributeValue, cleanEscapedTags } from '~/lib/utils';
+import { TOOL_NAMES } from '~/utils/constants';
 import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
-import { extractFromCDATA } from '~/utils/stringUtils';
-
-/**
- * Cleans content by removing markdown code blocks and escaped tags
- */
-function cleanContent(content: string): string {
-  let cleaned = content;
-
-  // Remove markdown code block syntax if present
-  const markdownMatch = cleaned.match(MARKDOWN_CODE_BLOCK_REGEX);
-
-  if (markdownMatch) {
-    cleaned = markdownMatch[1];
-  } else {
-    // Try to extract from CDATA
-    cleaned = extractFromCDATA(cleaned);
-  }
-
-  // Clean escaped tags
-  cleaned = cleanEscapedTags(cleaned);
-
-  return cleaned;
-}
+import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -59,10 +36,10 @@ function toBoltArtifactXML(a: any) {
         modifyGroups.set(act.path, []);
       }
 
-      // Clean before and after content (skip for markdown files)
+      // Normalize before and after content (skip for markdown files)
       modifyGroups.get(act.path)!.push({
-        before: act.path.endsWith('.md') ? act.before : cleanContent(act.before),
-        after: act.path.endsWith('.md') ? act.after : cleanContent(act.after),
+        before: act.path.endsWith('.md') ? act.before : normalizeContent(act.before),
+        after: act.path.endsWith('.md') ? act.after : normalizeContent(act.after),
       });
     } else {
       otherActions.push(act);
@@ -107,9 +84,9 @@ function toBoltArtifactXML(a: any) {
       }
 
       if (act.path && act.content !== undefined) {
-        // Clean file content (skip for markdown files)
-        const cleanedContent = act.path.endsWith('.md') ? act.content : cleanContent(act.content);
-        return `  <boltAction type="file" filePath="${act.path}">${cleanedContent}</boltAction>`;
+        // Normalize file content (skip for markdown files)
+        const normalizedContent = act.path.endsWith('.md') ? act.content : normalizeContent(act.content);
+        return `  <boltAction type="file" filePath="${act.path}">${normalizedContent}</boltAction>`;
       }
 
       return `  <boltAction type="shell">${act.command}</boltAction>`;

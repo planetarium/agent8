@@ -9,7 +9,6 @@ export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
 export const DEV_TAG_REGEX = /<__DEV__>(.*?)<\/__DEV__>/gs;
-export const MARKDOWN_CODE_BLOCK_REGEX = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
 export const DEFAULT_MODEL = 'auto';
 export const PROMPT_COOKIE_KEY = 'cachedPrompt';
 
