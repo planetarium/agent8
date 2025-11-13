@@ -312,9 +312,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               if (response?.messages && response.messages.length > 0) {
                 for (const msg of response.messages) {
                   if (msg.role === 'tool') {
-                    // Collect tool-results
+                    // Collect tool-results (exclude GENERATE_ARTIFACT)
                     const toolResults = Array.isArray(msg.content)
-                      ? msg.content.filter((item: any) => item.type === 'tool-result')
+                      ? msg.content.filter(
+                          (item: any) => item.type === 'tool-result' && item.toolName !== TOOL_NAMES.GENERATE_ARTIFACT,
+                        )
                       : [];
 
                     if (toolResults.length > 0) {
