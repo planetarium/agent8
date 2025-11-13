@@ -18,14 +18,9 @@ import { extractFromCDATA } from '~/utils/stringUtils';
 
 /**
  * Cleans content by removing markdown code blocks and escaped tags
- * Only applies to non-markdown files (trim is handled by message-parser)
+ * Caller should check file type before calling (skip for .md files)
  */
-function cleanContent(content: string, filePath: string): string {
-  // Don't clean markdown files
-  if (filePath.endsWith('.md')) {
-    return content;
-  }
-
+function cleanContent(content: string): string {
   let cleaned = content;
 
   // Remove markdown code block syntax if present
@@ -66,10 +61,10 @@ function toBoltArtifactXML(a: any) {
         modifyGroups.set(act.path, []);
       }
 
-      // Clean before and after content
+      // Clean before and after content (skip for markdown files)
       modifyGroups.get(act.path)!.push({
-        before: cleanContent(act.before, act.path),
-        after: cleanContent(act.after, act.path),
+        before: act.path.endsWith('.md') ? act.before : cleanContent(act.before),
+        after: act.path.endsWith('.md') ? act.after : cleanContent(act.after),
       });
     } else {
       otherActions.push(act);
@@ -114,8 +109,8 @@ function toBoltArtifactXML(a: any) {
       }
 
       if (act.path && act.content !== undefined) {
-        // Clean file content
-        const cleanedContent = cleanContent(act.content, act.path);
+        // Clean file content (skip for markdown files)
+        const cleanedContent = act.path.endsWith('.md') ? act.content : cleanContent(act.content);
         return `  <boltAction type="file" filePath="${act.path}">${cleanedContent}</boltAction>`;
       }
 
