@@ -426,7 +426,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         workbench.setCurrentDocumentContent(update.content);
       }
     },
-    [selectedFile],
+    [selectedFile, workbench],
   );
 
   const onEditorScroll = useCallback<OnEditorScroll>((position) => {
