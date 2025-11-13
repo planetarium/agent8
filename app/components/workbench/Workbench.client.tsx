@@ -420,9 +420,14 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     await workbench.runPreview();
   }, [workbench]);
 
-  const onEditorChange = useCallback<OnEditorChange>((update) => {
-    workbench.setCurrentDocumentContent(update.content);
-  }, []);
+  const onEditorChange = useCallback<OnEditorChange>(
+    (update) => {
+      if (selectedFile === update.filePath) {
+        workbench.setCurrentDocumentContent(update.content);
+      }
+    },
+    [selectedFile, workbench],
+  );
 
   const onEditorScroll = useCallback<OnEditorScroll>((position) => {
     workbench.setCurrentDocumentScrollPosition(position);
