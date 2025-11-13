@@ -546,14 +546,16 @@ export async function getVibeStarter3dSpecPrompt(files: any): Promise<string> {
       vibeStarter3dSpec[version] = {};
 
       const specUrl = `https://app.unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/files/spec`;
-      const specResponse = await fetchWithCache(specUrl);
+      const request = new Request(specUrl);
+      const specResponse = await fetchWithCache(request);
       const html = await specResponse.text();
 
       const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
 
       for (const markdownFileName of markdownFileNames) {
         const markdownUrl = `https://unpkg.com/${VIBE_STARTER_3D_PACKAGE_NAME}@${version}/spec/${markdownFileName}`;
-        const markdownResponse = await fetchWithCache(markdownUrl);
+        const request = new Request(markdownUrl);
+        const markdownResponse = await fetchWithCache(request);
         const markdown = await markdownResponse.text();
         const keyName = path.basename(markdownFileName, '.md');
         vibeStarter3dSpec[version][keyName] = markdown;

@@ -123,15 +123,16 @@ async function getVibeLibraryDocs(
     savedDocs[version] = {};
 
     const docsUrl = `https://app.unpkg.com/${packageName}@${version}/files/docs`;
-
-    const docsResponse = await fetchWithCache(docsUrl);
+    const request = new Request(docsUrl);
+    const docsResponse = await fetchWithCache(request);
     const html = await docsResponse.text();
 
     const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
 
     for (const markdownFileName of markdownFileNames) {
       const markdownUrl = `https://unpkg.com/${packageName}@${version}/docs/${markdownFileName}`;
-      const markdownResponse = await fetchWithCache(markdownUrl);
+      const request = new Request(markdownUrl);
+      const markdownResponse = await fetchWithCache(request);
       const markdown = await markdownResponse.text();
       const keyName = path.basename(markdownFileName, '.md');
       savedDocs[version][keyName] = markdown;

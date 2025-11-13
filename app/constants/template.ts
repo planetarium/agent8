@@ -1,3 +1,5 @@
+import type { FileMap } from '~/lib/stores/files';
+
 export const TEMPLATE_3D_BASIC_QUARTERVIEW = {
   'README.md': {
     type: 'file',
@@ -205,7 +207,8 @@ export const TEMPLATE_3D_BASIC_QUARTERVIEW = {
       "import { useThree } from '@react-three/fiber';\nimport { Html } from '@react-three/drei';\n\n/**\n * Loading screen component\n */\nconst LoadingScreen = () => {\n  let isInThreeCanvas: boolean;\n  try {\n    useThree();\n    isInThreeCanvas = true;\n  } catch {\n    isInThreeCanvas = false;\n  }\n\n  const loadingContent = (\n    <div>\n      <style>{`\n        .loading-container {\n          inset: 0;\n          z-index: 50;\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          justify-content: center;\n          background-color: black;\n          color: white;\n          width: 100%;\n          height: 100%;\n        }\n        .loading-title {\n          font-size: 1.5rem;\n          font-weight: bold;\n          margin-bottom: 1rem;\n        }\n        .spinner {\n          width: 30px;\n          height: 30px;\n          border: 3px solid rgba(255, 255, 255, 0.3);\n          border-radius: 50%;\n          border-top-color: white;\n          animation: spin 1s ease-in-out infinite;\n        }\n        @keyframes spin {\n          to {\n            transform: rotate(360deg);\n          }\n        }\n      `}</style>\n      <div className=\"loading-container\">\n        <h2 className=\"loading-title\">Loading</h2>\n        <div className=\"spinner\"></div>\n      </div>\n    </div>\n  );\n\n  if (isInThreeCanvas) {\n    return (\n      <Html\n        center\n        style={{\n          width: '100vw',\n          height: '100vh',\n          position: 'absolute',\n          top: 0,\n          left: 0,\n          pointerEvents: 'none',\n        }}\n      >\n        {loadingContent}\n      </Html>\n    );\n  }\n\n  return loadingContent;\n};\n\nexport default LoadingScreen;\n",
     isBinary: false,
   },
-};
+} as FileMap;
+
 export const TEMPLATE_3D_BASIC_FREEVIEW = {
   'README.md': {
     type: 'file',
@@ -401,7 +404,8 @@ export const TEMPLATE_3D_BASIC_FREEVIEW = {
       "import { useThree } from '@react-three/fiber';\nimport { Html } from '@react-three/drei';\n\n/**\n * Loading screen component\n */\nconst LoadingScreen = () => {\n  let isInThreeCanvas: boolean;\n  try {\n    useThree();\n    isInThreeCanvas = true;\n  } catch {\n    isInThreeCanvas = false;\n  }\n\n  const loadingContent = (\n    <div>\n      <style>{`\n        .loading-container {\n          inset: 0;\n          z-index: 50;\n          display: flex;\n          flex-direction: column;\n          align-items: center;\n          justify-content: center;\n          background-color: black;\n          color: white;\n          width: 100%;\n          height: 100%;\n        }\n        .loading-title {\n          font-size: 1.5rem;\n          font-weight: bold;\n          margin-bottom: 1rem;\n        }\n        .spinner {\n          width: 30px;\n          height: 30px;\n          border: 3px solid rgba(255, 255, 255, 0.3);\n          border-radius: 50%;\n          border-top-color: white;\n          animation: spin 1s ease-in-out infinite;\n        }\n        @keyframes spin {\n          to {\n            transform: rotate(360deg);\n          }\n        }\n      `}</style>\n      <div className=\"loading-container\">\n        <h2 className=\"loading-title\">Loading</h2>\n        <div className=\"spinner\"></div>\n      </div>\n    </div>\n  );\n\n  if (isInThreeCanvas) {\n    return (\n      <Html\n        center\n        style={{\n          width: '100vw',\n          height: '100vh',\n          position: 'absolute',\n          top: 0,\n          left: 0,\n          pointerEvents: 'none',\n        }}\n      >\n        {loadingContent}\n      </Html>\n    );\n  }\n\n  return loadingContent;\n};\n\nexport default LoadingScreen;\n",
     isBinary: false,
   },
-};
+} as FileMap;
+
 export const TEMPLATE_3D_BASIC = {
   'package.json': {
     type: 'file',
@@ -494,7 +498,8 @@ export const TEMPLATE_3D_BASIC = {
     content: '{ "images": {} }\n',
     isBinary: false,
   },
-};
+} as FileMap;
+
 export const TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY = {
   'PROJECT.md': {
     type: 'file',
@@ -626,7 +631,8 @@ export const TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY = {
       'import Phaser from "phaser";\n\nexport class SpriteCharacter extends Phaser.Physics.Arcade.Sprite {\n  private moveSpeed: number = 200;\n  private jumpPower: number = 900;\n  private isAttacking: boolean = false;\n  private attackHitbox: Phaser.GameObjects.Rectangle | null = null;\n  private attackSound: Phaser.Sound.BaseSound | null = null;\n  private attackAnimComplete: boolean = false;\n\n  constructor(scene: Phaser.Scene, x: number, y: number, key: string) {\n    super(scene, x, y, key);\n\n    this.setupAnimations();\n\n    scene.add.existing(this);\n    scene.physics.add.existing(this);\n\n    this.setBounce(0.2);\n    this.setCollideWorldBounds(true);\n\n    this.body.setSize(62, 75);\n    this.body.setOffset(23, -5);\n  }\n\n  setupAnimations() {\n    // key 값을 기반으로 애니메이션 이름 생성\n    const spriteKey = this.texture.key;\n    const leftAnim = `${spriteKey}-left`;\n    const rightAnim = `${spriteKey}-right`;\n    const turnAnim = `${spriteKey}-turn`;\n    const jumpAnim = `${spriteKey}-jump`;\n    const attackAnim = `${spriteKey}-attack`;\n\n    // 해당 애니메이션이 이미 존재하는지 확인\n    if (this.scene.anims.exists(leftAnim)) return;\n\n    // 왼쪽 이동 애니메이션\n    this.scene.anims.create({\n      key: leftAnim,\n      frames: this.scene.anims.generateFrameNumbers(spriteKey, {\n        start: 4,\n        end: 7,\n      }),\n      frameRate: 10,\n      repeat: -1,\n    });\n\n    // 정지 애니메이션\n    this.scene.anims.create({\n      key: turnAnim,\n      frames: [{ key: spriteKey, frame: 0 }],\n      frameRate: 20,\n    });\n\n    // 오른쪽 이동 애니메이션\n    this.scene.anims.create({\n      key: rightAnim,\n      frames: this.scene.anims.generateFrameNumbers(spriteKey, {\n        start: 8,\n        end: 11,\n      }),\n      frameRate: 10,\n      repeat: -1,\n    });\n\n    // 점프 애니메이션\n    this.scene.anims.create({\n      key: jumpAnim,\n      frames: [{ key: spriteKey, frame: 3 }],\n      frameRate: 10,\n    });\n\n    // 공격 애니메이션\n    this.scene.anims.create({\n      key: attackAnim,\n      frames: this.scene.anims.generateFrameNumbers(spriteKey, {\n        start: 12,\n        end: 15,\n      }),\n      frameRate: 10,\n      repeat: 0,\n    });\n\n    // 공격 애니메이션 완료 이벤트 리스너\n    this.on(`animationcomplete-${attackAnim}`, this.onAttackAnimComplete, this);\n  }\n\n  onAttackAnimComplete() {\n    this.isAttacking = false;\n    this.attackAnimComplete = true;\n\n    if (this.attackHitbox) {\n      this.attackHitbox.destroy();\n      this.attackHitbox = null;\n    }\n  }\n\n  moveLeft() {\n    if (this.isAttacking) return;\n\n    this.setVelocityX(-this.moveSpeed);\n    this.anims.play(`${this.texture.key}-left`, true);\n    this.setFlipX(true);\n  }\n\n  moveRight() {\n    if (this.isAttacking) return;\n\n    this.setVelocityX(this.moveSpeed);\n    this.anims.play(`${this.texture.key}-right`, true);\n    this.setFlipX(false);\n  }\n\n  stop() {\n    if (this.isAttacking) return this;\n\n    this.setVelocityX(0);\n    this.anims.play(`${this.texture.key}-turn`);\n    return this;\n  }\n\n  jump() {\n    if (this.isAttacking) return false;\n\n    // body.touching.down과 body.blocked.down 둘 다 확인\n    if (this.body.touching.down || this.body.blocked.down) {\n      this.setVelocityY(-this.jumpPower);\n      this.anims.play(`${this.texture.key}-jump`);\n      console.log("Jumping!"); // 디버깅 로그\n      return true;\n    }\n    return false;\n  }\n\n  attack() {\n    this.isAttacking = true;\n    this.attackAnimComplete = false;\n    this.anims.play(`${this.texture.key}-attack`);\n\n    // 공격 중에는 이동 속도 감소\n    this.setVelocityX(this.body.velocity.x * 0.5);\n\n    // 공격 사운드 재생\n    if (this.attackSound) {\n      try {\n        this.attackSound.play();\n      } catch (error) {\n        console.error("Error playing attack sound:", error);\n      }\n    }\n\n    // 공격 히트박스 생성\n    this.createAttackHitbox();\n\n    // 안전장치: 애니메이션이 끝나지 않을 경우를 대비해 타이머 설정\n    this.scene.time.delayedCall(500, () => {\n      if (this.isAttacking && !this.attackAnimComplete) {\n        this.onAttackAnimComplete();\n      }\n    });\n\n    return true;\n  }\n\n  createAttackHitbox() {\n    // 기존 히트박스 제거\n    if (this.attackHitbox) {\n      this.attackHitbox.destroy();\n    }\n\n    // 캐릭터 방향에 따라 히트박스 위치 조정\n    const facingLeft = this.flipX;\n    const offsetX = facingLeft ? -50 : 50;\n\n    // 디버그 모드 확인\n    const isDebugMode = this.scene.physics.world.debugGraphic?.visible ?? false;\n\n    // 히트박스 생성 (디버그 모드일 때만 색상 표시)\n    this.attackHitbox = this.scene.add.rectangle(\n      this.x + offsetX,\n      this.y,\n      60,\n      100,\n      0xff0000,\n      isDebugMode ? 0.3 : 0 // 디버그 모드일 때만 알파값 설정\n    );\n\n    // 히트박스에 물리 속성 추가\n    this.scene.physics.add.existing(this.attackHitbox, false);\n\n    // 히트박스 자동 제거 타이머\n    this.scene.time.delayedCall(300, () => {\n      if (this.attackHitbox) {\n        this.attackHitbox.destroy();\n        this.attackHitbox = null;\n      }\n    });\n\n    return this.attackHitbox;\n  }\n\n  getAttackHitbox() {\n    return this.attackHitbox;\n  }\n\n  isInAttackState() {\n    return this.isAttacking;\n  }\n\n  update(cursors: Phaser.Types.Input.Keyboard.CursorKeys) {\n    // 공격 중이면 다른 입력 무시\n    if (this.isAttacking) return;\n\n    // 좌우 이동\n    if (cursors.left.isDown) {\n      this.moveLeft();\n    } else if (cursors.right.isDown) {\n      this.moveRight();\n    } else {\n      this.stop();\n    }\n\n    // 점프\n    if (cursors.up.isDown) {\n      this.jump();\n    }\n\n    // 공격\n    if (cursors.space.isDown && !this.isAttacking) {\n      this.attack();\n    }\n  }\n}\n',
     isBinary: false,
   },
-};
+} as FileMap;
+
 export const TEMPLATE_2D_PHASER_BASIC = {
   'PROJECT.md': {
     type: 'file',
@@ -751,7 +757,7 @@ export const TEMPLATE_2D_PHASER_BASIC = {
       "import Phaser from 'phaser';\nimport Assets from '../../assets.json';\nexport class MainScene extends Phaser.Scene {\n  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;\n  private ground: Phaser.GameObjects.Rectangle;\n\n  constructor() {\n    super({ key: 'MainScene' });\n  }\n\n  preload() {}\n\n  create() {\n    this.physics.world.setBounds(0, 0, this.sys.game.canvas.width, this.sys.game.canvas.height);\n\n    this.cameras.main.setBackgroundColor('#87CEEB');\n\n    this.ground = this.add.rectangle(this.cameras.main.width / 2, this.cameras.main.height - 30, this.cameras.main.width, 60, 0x00ff00);\n    this.physics.add.existing(this.ground, true); // true는 정적(static) 물리 객체로 설정\n  }\n\n  update() {}\n}\n",
     isBinary: false,
   },
-};
+} as FileMap;
 
 export const TEMPLATE_BASIC_VITE_REACT = {
   'postcss.config.js': {
@@ -840,4 +846,15 @@ export const TEMPLATE_BASIC_VITE_REACT = {
     content: '{ "images": {} }\n',
     isBinary: false,
   },
+} as FileMap;
+
+export const TEMPLATE_BASIC = TEMPLATE_BASIC_VITE_REACT;
+
+export const TEMPLATE_MAP: Record<string, FileMap> = {
+  '2d-phaser-basic': TEMPLATE_2D_PHASER_BASIC,
+  'basic-3d': TEMPLATE_3D_BASIC,
+  'basic-3d-freeview': TEMPLATE_3D_BASIC_FREEVIEW,
+  'basic-3d-quarterview': TEMPLATE_3D_BASIC_QUARTERVIEW,
+  '2d-phaser-sprite-character-gravity': TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY,
+  'basic-vite-react': TEMPLATE_BASIC_VITE_REACT,
 };
