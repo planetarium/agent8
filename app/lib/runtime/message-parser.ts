@@ -1,9 +1,8 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ModifyAction, ShellAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
-import { extractFromCDATA } from '~/utils/stringUtils';
+import { cleanEscapedTags, extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
-import { cleanEscapedTags } from '~/lib/utils';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';

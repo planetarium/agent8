@@ -5,6 +5,7 @@ import { getFileContents, getFullPath } from '~/utils/fileUtils';
 import { TOOL_NAMES, WORK_DIR } from '~/utils/constants';
 import { GENERATE_ARTIFACT_FIELDS, ACTION_FIELDS } from '~/lib/constants/tool-fields';
 import { createScopedLogger } from '~/utils/logger';
+import { normalizeContent } from '~/utils/stringUtils';
 
 const ACTION_SCHEMA = z.discriminatedUnion('type', [
   z.object({
@@ -155,8 +156,18 @@ export const createGenerateArtifactTool = (fileMap: FileMap | undefined, orchest
             const before = modifyAction[ACTION_FIELDS.BEFORE];
             const fileContent = getFileContents(fileMap, path);
 
-            if (fileContent && before && !fileContent.includes(before)) {
-              invalidModifications.push({ path, before });
+            if (fileContent && before) {
+              let isIncluded = fileContent.includes(before);
+
+              // If original doesn't match and it's not a markdown file, try normalized content
+              if (!isIncluded && !path.endsWith('.md')) {
+                const normalizedBefore = normalizeContent(before);
+                isIncluded = fileContent.includes(normalizedBefore);
+              }
+
+              if (!isIncluded) {
+                invalidModifications.push({ path, before });
+              }
             }
           }
         }

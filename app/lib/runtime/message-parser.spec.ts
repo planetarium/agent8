@@ -183,7 +183,7 @@ describe('StreamingMessageParser', () => {
 
       // Second chunk with new action that already contains the content from first action
       const secondChunk =
-        '<boltAction type="file" filePath="1.txt">```\n// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n\n```</boltAction></boltArtifact>';
+        '<boltAction type="file" filePath="1.txt">\n// Fire 8 missiles in a radial pattern\n        for (let i = 0; i < 8; i++) {\n\n</boltAction></boltArtifact>';
       parser.parse('message_1', firstChunk + secondChunk);
 
       // Check if actions were processed correctly

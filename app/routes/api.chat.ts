@@ -12,38 +12,8 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
-import { sanitizeXmlAttributeValue, cleanEscapedTags } from '~/lib/utils';
 import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
-import { extractFromCDATA } from '~/utils/stringUtils';
-
-/**
- * Cleans content by removing markdown code blocks and escaped tags
- * Only applies to non-markdown files (trim is handled by message-parser)
- */
-function cleanContent(content: string, filePath: string): string {
-  // Don't clean markdown files
-  if (filePath.endsWith('.md')) {
-    return content;
-  }
-
-  let cleaned = content;
-
-  // Remove markdown code block syntax if present
-  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const markdownMatch = cleaned.match(markdownCodeBlockRegex);
-
-  if (markdownMatch) {
-    cleaned = markdownMatch[1];
-  } else {
-    // Try to extract from CDATA
-    cleaned = extractFromCDATA(cleaned);
-  }
-
-  // Clean escaped tags
-  cleaned = cleanEscapedTags(cleaned);
-
-  return cleaned;
-}
+import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -66,10 +36,10 @@ function toBoltArtifactXML(a: any) {
         modifyGroups.set(act.path, []);
       }
 
-      // Clean before and after content
+      // Normalize before and after content (skip for markdown files)
       modifyGroups.get(act.path)!.push({
-        before: cleanContent(act.before, act.path),
-        after: cleanContent(act.after, act.path),
+        before: act.path.endsWith('.md') ? act.before : normalizeContent(act.before),
+        after: act.path.endsWith('.md') ? act.after : normalizeContent(act.after),
       });
     } else {
       otherActions.push(act);
@@ -114,9 +84,9 @@ function toBoltArtifactXML(a: any) {
       }
 
       if (act.path && act.content !== undefined) {
-        // Clean file content
-        const cleanedContent = cleanContent(act.content, act.path);
-        return `  <boltAction type="file" filePath="${act.path}">${cleanedContent}</boltAction>`;
+        // Normalize file content (skip for markdown files)
+        const normalizedContent = act.path.endsWith('.md') ? act.content : normalizeContent(act.content);
+        return `  <boltAction type="file" filePath="${act.path}">${normalizedContent}</boltAction>`;
       }
 
       return `  <boltAction type="shell">${act.command}</boltAction>`;
@@ -312,9 +282,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               if (response?.messages && response.messages.length > 0) {
                 for (const msg of response.messages) {
                   if (msg.role === 'tool') {
-                    // Collect tool-results
+                    // Collect tool-results (exclude GENERATE_ARTIFACT)
                     const toolResults = Array.isArray(msg.content)
-                      ? msg.content.filter((item: any) => item.type === 'tool-result')
+                      ? msg.content.filter(
+                          (item: any) => item.type === 'tool-result' && item.toolName !== TOOL_NAMES.GENERATE_ARTIFACT,
+                        )
                       : [];
 
                     if (toolResults.length > 0) {
