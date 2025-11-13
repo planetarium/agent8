@@ -11,21 +11,19 @@ import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
-import { TOOL_NAMES } from '~/utils/constants';
+import { MARKDOWN_CODE_BLOCK_REGEX, TOOL_NAMES } from '~/utils/constants';
 import { sanitizeXmlAttributeValue, cleanEscapedTags } from '~/lib/utils';
 import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
 import { extractFromCDATA } from '~/utils/stringUtils';
 
 /**
  * Cleans content by removing markdown code blocks and escaped tags
- * Caller should check file type before calling (skip for .md files)
  */
 function cleanContent(content: string): string {
   let cleaned = content;
 
   // Remove markdown code block syntax if present
-  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-  const markdownMatch = cleaned.match(markdownCodeBlockRegex);
+  const markdownMatch = cleaned.match(MARKDOWN_CODE_BLOCK_REGEX);
 
   if (markdownMatch) {
     cleaned = markdownMatch[1];
