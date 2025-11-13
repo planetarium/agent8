@@ -235,23 +235,6 @@ function safeDispatch(view: EditorView, spec: any, operation: string, recreateVi
   }
 }
 
-// Safe layout operation
-function safeLayoutOperation(view: EditorView, operation: () => void, recreateViewFn?: () => void) {
-  if (!isViewAvailable(view)) {
-    logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_LAYOUT);
-    recreateViewFn?.();
-
-    return;
-  }
-
-  if (isViewAvailable(view)) {
-    operation();
-  } else {
-    logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_DURING_LAYOUT);
-    recreateViewFn?.();
-  }
-}
-
 // Create common dispatchTransactions logic
 function createDispatchTransactions(
   onUpdate: (update: EditorUpdate) => void,
@@ -355,13 +338,15 @@ function setEditorDocument(
   }
 
   const scheduleScrollAndFocus = () => {
-    safeLayoutOperation(
-      view,
+    if (!isViewAvailable(view)) {
+      logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_LAYOUT);
+      recreateViewFn?.();
 
-      // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
-      () => requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc)),
-      recreateViewFn,
-    );
+      return;
+    }
+
+    // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
+    requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc));
   };
 
   getLanguage(doc.filePath)
