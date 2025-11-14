@@ -50,6 +50,14 @@ function createOrchestration(): Orchestration {
 
 const logger = createScopedLogger('stream-text');
 
+const MESSAGE_COUNT_FOR_LLM = 3;
+
+export function getMessagesForLLM(messages: UIMessage[]) {
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .slice(-MESSAGE_COUNT_FOR_LLM);
+}
+
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
   env?: Env;
@@ -81,6 +89,8 @@ export async function streamText(props: {
       }
     }
   }
+
+  console.log('#### [streamText] seen files:', orchestration.readSet);
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
@@ -215,8 +225,11 @@ export async function streamText(props: {
     } as ToolModelMessage);
   }
 
+  const messagesForLLM = convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM);
+  console.log('#### [streamText] messagesForLLM:', JSON.stringify(messagesForLLM, null, 2));
+
   // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
-  coreMessages.push(...convertToModelMessages(processedMessages).slice(-3));
+  coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
 
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {

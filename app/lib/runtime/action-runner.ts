@@ -6,7 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
-import { extractFromCDATA } from '~/utils/stringUtils';
+import { extractFromCDATA, normalizeContent } from '~/utils/stringUtils';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -405,7 +405,17 @@ export class ActionRunner {
 
         // Check if the text to find exists
         if (!currentFileContent.includes(mod.before)) {
-          throw new Error(`Text not found in file: ${mod.before}`);
+          const normalizedBefore = relativePath.endsWith('.md') ? mod.before : normalizeContent(mod.before);
+
+          if (currentFileContent.includes(normalizedBefore)) {
+            mod.before = normalizedBefore;
+            mod.after = normalizeContent(mod.after);
+            logger.debug(
+              `🔧 [Modify] Text not found in file: ${mod.before}. Using normalized content: ${normalizedBefore}`,
+            );
+          } else {
+            throw new Error(`Text not found in file: ${mod.before}`);
+          }
         }
 
         // Check if text appears multiple times
@@ -431,12 +441,14 @@ export class ActionRunner {
       const savedBytes = finalFileSize - modificationsSize;
       const savingsPercentage = ((savedBytes / finalFileSize) * 100).toFixed(1);
 
-      logger.info(`✅ [Modify] Successfully applied ${modifications.length} modification(s) to: ${relativePath}`);
-      logger.info(`📊 [Modify] File size comparison:`);
-      logger.info(`   - Original file: ${originalFileSize} bytes`);
-      logger.info(`   - Final file: ${finalFileSize} bytes`);
-      logger.info(`   - Modifications sent: ${modificationsSize} bytes`);
-      logger.info(`   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`);
+      logger.info(
+        `✅ [Modify] Successfully applied ${modifications.length} modification(s) to: ${relativePath}\n` +
+          `📊 File size comparison:\n` +
+          `   - Original file: ${originalFileSize} bytes\n` +
+          `   - Final file: ${finalFileSize} bytes\n` +
+          `   - Modifications sent: ${modificationsSize} bytes\n` +
+          `   - Bytes saved: ${savedBytes} bytes (${savingsPercentage}% savings vs sending full file)`,
+      );
     } catch (error) {
       logger.error(`❌ [Modify] Failed to apply modifications to ${relativePath}:`, error);
     }

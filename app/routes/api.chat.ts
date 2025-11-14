@@ -2,7 +2,7 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { streamText, getMessagesForLLM, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
 import { createScopedLogger } from '~/utils/logger';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
@@ -38,8 +38,8 @@ function toBoltArtifactXML(a: any) {
 
       // Normalize before and after content (skip for markdown files)
       modifyGroups.get(act.path)!.push({
-        before: act.path.endsWith('.md') ? act.before : normalizeContent(act.before),
-        after: act.path.endsWith('.md') ? act.after : normalizeContent(act.after),
+        before: act.before,
+        after: act.after,
       });
     } else {
       otherActions.push(act);
@@ -168,6 +168,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         // Track generate_artifact retry attempts
         let generateArtifactRetryCount = 0;
+        const collectedToolResults: any[] = [];
 
         for (const toolName in mcpTools) {
           if (mcpTools[toolName]) {
@@ -233,7 +234,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
-            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
+            const { model, provider, parts: lastUserMessageParts } = extractPropertiesFromMessage(lastUserMessage);
 
             if (totalUsage) {
               cumulativeUsage.promptTokens += totalUsage.inputTokens || 0;
@@ -277,8 +278,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                * Collect tool-results from response to pass to streamText
                * These will be added as ToolModelMessage in the core messages
                */
-              const collectedToolResults: any[] = [];
-
               if (response?.messages && response.messages.length > 0) {
                 for (const msg of response.messages) {
                   if (msg.role === 'tool') {
@@ -305,13 +304,36 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 });
               }
 
+              let retryMessageText = `Understood. I will now call the ${TOOL_NAMES.GENERATE_ARTIFACT} tool to generate the artifact with the changes I just described.\n\n[IMPORTANT: Continue responding in the SAME LANGUAGE as the user's original request above.]`;
+
+              // Create a copy of messages with the assistant message we're about to add
+              const tempMessages = [...messages];
+              tempMessages.push({
+                id: generateId(),
+                role: 'assistant',
+                parts: [{ type: 'text', text: retryMessageText }],
+              });
+
+              const messagesForLLM = getMessagesForLLM(tempMessages);
+              const hasUserInMessagesForLLM = messagesForLLM.some((msg: any) => msg.role === 'user');
+
+              if (!hasUserInMessagesForLLM) {
+                const userRequestText =
+                  lastUserMessageParts
+                    ?.filter((part: any) => part.type === 'text')
+                    .map((part: any) => part.text)
+                    .join(' ') || 'the requested task';
+
+                retryMessageText = `[User Request: ${userRequestText}]\n\n${retryMessageText}`;
+              }
+
               messages.push({
                 id: generateId(),
-                role: 'user',
+                role: 'assistant',
                 parts: [
                   {
                     type: 'text',
-                    text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\nYou described the changes but did not generate the artifact by calling the ${TOOL_NAMES.GENERATE_ARTIFACT} tool. You MUST generate it now with the changes you just described and verify the results. This is MANDATORY.`,
+                    text: retryMessageText,
                   },
                 ],
               });
