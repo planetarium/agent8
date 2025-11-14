@@ -195,7 +195,7 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - NEVER modify package.json with modify or file actions
       - Use shell action (${ACTION_FIELDS.TYPE}: 'shell') to add packages ONLY
 
-      **CRITICAL - Multiple Modifications (STRICT LIMIT)**:
+      **CRITICAL - Multiple Modifications**:
       - When you need to make many changes to a file, use file action (${ACTION_FIELDS.TYPE}: 'file') instead of multiple modify actions
       - Multiple modify actions are complex and error-prone - file action is simpler and more reliable
       - **RULE**: If you need 3+ changes to the same file, always use file action instead of modify actions

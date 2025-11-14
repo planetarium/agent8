@@ -90,8 +90,6 @@ export async function streamText(props: {
     }
   }
 
-  console.log('#### [streamText] seen files:', orchestration.readSet);
-
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
       const { model, provider, parts } = extractPropertiesFromMessage(message);
@@ -224,9 +222,6 @@ export async function streamText(props: {
       content: toolResults,
     } as ToolModelMessage);
   }
-
-  const messagesForLLM = convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM);
-  console.log('#### [streamText] messagesForLLM:', JSON.stringify(messagesForLLM, null, 2));
 
   // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
   coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
