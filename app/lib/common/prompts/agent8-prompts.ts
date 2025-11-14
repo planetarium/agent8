@@ -195,30 +195,21 @@ Remember: Proper documentation is as important as the code itself. It enables ef
       - NEVER modify package.json with modify or file actions
       - Use shell action (${ACTION_FIELDS.TYPE}: 'shell') to add packages ONLY
 
-      **CRITICAL - Multiple Modifications (STRICT LIMIT)**:
-      - **MAXIMUM 2 modify actions per file** - This is a hard limit
-      - Each modify action should have one ${ACTION_FIELDS.BEFORE} and one ${ACTION_FIELDS.AFTER}
-      - **If you need 3 or more changes to the same file**: You MUST use file action (${ACTION_FIELDS.TYPE}: 'file') instead
-      - **NEVER create 3, 4, 5+ modify actions for the same file** - This will cause reliability issues
+      **CRITICAL - Multiple Modifications**:
+      - When you need to make many changes to a file, use file action (${ACTION_FIELDS.TYPE}: 'file') instead of multiple modify actions
+      - Multiple modify actions are complex and error-prone - file action is simpler and more reliable
+      - **RULE**: If you need 3+ changes to the same file, always use file action instead of modify actions
 
-      ❌ WRONG - Too many modify actions for same file:
+      ❌ AVOID - Multiple modify actions for same file:
       [
         { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... },
         { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... },
-        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... },  // 3rd action - WRONG!
-        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... },  // 4th action - WRONG!
-        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... }   // 5th action - WRONG!
+        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "app.ts", ... }  // 3+ actions - use file instead!
       ]
 
-      ✅ CORRECT - Use file action for 3+ changes:
+      ✅ RECOMMENDED - Use file action for multiple changes:
       [
         { "${ACTION_FIELDS.TYPE}": "file", "${ACTION_FIELDS.PATH}": "app.ts", "${ACTION_FIELDS.CONTENT}": "complete updated file content" }
-      ]
-
-      ✅ ACCEPTABLE - Maximum 2 modify actions for same file:
-      [
-        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "utils.ts", "${ACTION_FIELDS.BEFORE}": "import { A } from 'a'", "${ACTION_FIELDS.AFTER}": "import { A, B } from 'a'" },
-        { "${ACTION_FIELDS.TYPE}": "modify", "${ACTION_FIELDS.PATH}": "utils.ts", "${ACTION_FIELDS.BEFORE}": "useA()", "${ACTION_FIELDS.AFTER}": "useB(useA())" }
       ]
 
       **CRITICAL - Before Field Accuracy**:
