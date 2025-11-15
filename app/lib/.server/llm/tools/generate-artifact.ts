@@ -174,7 +174,7 @@ export const createGenerateArtifactTool = (fileMap: FileMap | undefined, orchest
 
         if (invalidModifications.length > 0) {
           logger.warn('generate artifact validation failed: before text not found in file');
-          logger.warn('invalid modifications: ', invalidModifications);
+          logger.warn('invalid modifications: ', JSON.stringify(invalidModifications, null, 2));
 
           const errorDetails = invalidModifications
             .map(({ path, before }) => {
