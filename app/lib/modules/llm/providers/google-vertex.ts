@@ -173,6 +173,30 @@ class PythonParser {
 
     const startIdx = match.index + match[0].length;
     let i = startIdx;
+    const next3 = argsStr.substring(i, i + 3);
+
+    /* Handle triple quote strings (''' or """) */
+    if (next3 === "'''" || next3 === '"""') {
+      const tripleQuoteType = next3;
+      i += 3; // Skip opening triple quotes
+
+      let value = '';
+
+      while (i < argsStr.length) {
+        const current3 = argsStr.substring(i, i + 3);
+
+        /* Check for closing triple quotes */
+        if (current3 === tripleQuoteType) {
+          return value;
+        }
+
+        value += argsStr[i];
+        i++;
+      }
+
+      return null; // Unclosed triple quotes
+    }
+
     const quoteChar = argsStr[i]; // ', ", or [
 
     /* Handle string values (single or double quotes) */
@@ -634,10 +658,27 @@ class ArtifactParser {
     const objects = pythonParser.splitArrayObjects(arrayStr);
 
     for (const objStr of objects) {
+      let typeFromClassName = null;
       const typeName = pythonParser.buildObjectTypeName(TOOL_NAMES.GENERATE_ARTIFACT, GENERATE_ARTIFACT_FIELDS.ACTIONS);
 
       if (!objStr.includes(typeName)) {
-        continue;
+        const actionClassPrefix = `default_api.${TOOL_NAMES.GENERATE_ARTIFACT}`;
+
+        if (objStr.includes(`${actionClassPrefix}.FileAction`) || objStr.includes(`${actionClassPrefix}.Fileaction`)) {
+          typeFromClassName = 'file';
+        } else if (
+          objStr.includes(`${actionClassPrefix}.ModifyAction`) ||
+          objStr.includes(`${actionClassPrefix}.Modifyaction`)
+        ) {
+          typeFromClassName = 'modify';
+        } else if (
+          objStr.includes(`${actionClassPrefix}.ShellAction`) ||
+          objStr.includes(`${actionClassPrefix}.Shellaction`)
+        ) {
+          typeFromClassName = 'shell';
+        } else {
+          continue;
+        }
       }
 
       const action: any = {};
@@ -651,7 +692,7 @@ class ArtifactParser {
       }
 
       /* Extract type */
-      const type = pythonParser.extractFieldValue(objStr, ACTION_FIELDS.TYPE);
+      const type = pythonParser.extractFieldValue(objStr, ACTION_FIELDS.TYPE) ?? typeFromClassName;
 
       if (type !== null) {
         action[ACTION_FIELDS.TYPE] = type;
