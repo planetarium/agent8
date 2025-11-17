@@ -55,7 +55,7 @@
     "@ai-sdk/google": "^2.0.17",
     "@ai-sdk/google-vertex": "^3.0.54",
     "@ai-sdk/mistral": "^2.0.17",
-    "@ai-sdk/openai": "^2.0.42",
+    "@ai-sdk/openai": "^2.0.67",
     "@ai-sdk/provider": "^2.0.0",
     "@ai-sdk/react": "^2.0.59",
     "@ai-sdk/xai": "^2.0.23",
