@@ -97,11 +97,12 @@ export interface HandleChatErrorOptions {
   prompt?: string;
   elapsedTime?: number;
   toastType?: 'error' | 'warning';
+  sendChatError?: boolean;
 }
 
 // Comprehensive error handler that handles both toast and Slack notification
 export function handleChatError(message: string, options?: HandleChatErrorOptions): void {
-  const { error, context, prompt, elapsedTime, toastType = 'error' } = options ?? {};
+  const { error, context, prompt, elapsedTime, toastType = 'error', sendChatError = true } = options ?? {};
 
   // Check if error matches any filter
   const filter = getErrorFilter(error);
@@ -116,8 +117,8 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
     toast.warning(displayMessage);
   }
 
-  // Send Slack notification only if error is not filtered (don't await to avoid blocking UI)
-  if (!filter) {
+  // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
+  if (!filter && sendChatError) {
     sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime).catch((notificationError) => {
       logger.error('Failed to send error notification for:', message, notificationError);
     });
