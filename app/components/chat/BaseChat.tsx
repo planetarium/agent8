@@ -387,6 +387,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         if (attachmentList?.length >= MAX_ATTACHMENTS) {
           handleChatError(`Attachments are limited to ${MAX_ATTACHMENTS} files.`, {
             context: 'uploadFileAndAddToAttachmentList - attachment limit',
+            sendChatError: false,
           });
           return;
         }
