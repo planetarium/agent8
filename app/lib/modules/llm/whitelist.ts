@@ -36,9 +36,9 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'claude-3-7-sonnet-20250219',
   },
   {
-    label: 'GPT-5',
+    label: 'GPT-5.1',
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
-    modelName: 'openai/gpt-5',
+    modelName: 'openai/gpt-5.1',
     userSelectable: true,
   },
   {
