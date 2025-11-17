@@ -59,7 +59,7 @@ import { changeChatUrl } from '~/utils/url';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
 import { stripMetadata } from './UserMessage';
 import type { ProgressAnnotation } from '~/types/context';
-import { handleChatError } from '~/utils/errorNotification';
+import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
@@ -349,6 +349,19 @@ export const ChatImpl = memo(
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
 
+    // Helper function to report errors with automatic prompt and elapsed time injection
+    const reportError = (
+      message: string,
+      startTime: number,
+      options?: Partial<Omit<HandleChatErrorOptions, 'elapsedTime'>>,
+    ) => {
+      handleChatError(message, {
+        prompt: lastUserPromptRef.current,
+        ...options,
+        elapsedTime: getElapsedTime(startTime),
+      });
+    };
+
     const runAndPreview = async (message: UIMessage) => {
       workbench.clearAlert();
 
@@ -498,10 +511,12 @@ export const ChatImpl = memo(
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-          e,
-          'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
-          lastUserPromptRef.current,
-          getElapsedTime(chatRequestStartTimeRef.current),
+          {
+            error: e,
+            context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
+            prompt: lastUserPromptRef.current,
+            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+          },
         );
         setFakeLoading(false);
       },
@@ -658,13 +673,10 @@ export const ChatImpl = memo(
       }
 
       if (!commitSucceeded) {
-        handleChatError(
-          `Code commit failed`,
-          lastError instanceof Error ? lastError : String(lastError),
-          'handleCommit',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError(`Code commit failed`, startTime, {
+          error: lastError instanceof Error ? lastError : String(lastError),
+          context: 'handleCommit',
+        });
       }
     };
 
@@ -782,13 +794,9 @@ export const ChatImpl = memo(
         }
 
         if (!recoverySuccessful) {
-          handleChatError(
-            'Files are not loaded. Please try again later.',
-            undefined,
-            'sendMessage - files check',
-            messageContent,
-            getElapsedTime(fileRecoveryStartTime),
-          );
+          reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+            context: 'sendMessage - files check',
+          });
 
           return;
         }
@@ -923,13 +931,9 @@ export const ChatImpl = memo(
               const { success, message, data } = await createTaskBranch(projectPath);
 
               if (!success) {
-                handleChatError(
-                  message,
-                  undefined,
-                  'createTaskBranch - starter template',
-                  messageContent,
-                  getElapsedTime(templateSelectionStartTime),
-                );
+                reportError(message, templateSelectionStartTime, {
+                  context: 'createTaskBranch - starter template',
+                });
                 return;
               }
 
@@ -1033,31 +1037,22 @@ export const ChatImpl = memo(
           setCustomProgressAnnotations([]);
 
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
-          const elapsedTime = getElapsedTime(templateSelectionStartTime);
 
           // Check if error message has meaningful content
-          if (
-            errorMessage.trim() &&
-            errorMessage !== 'Not Found Template' &&
-            errorMessage !== 'Not Found Template Data'
-          ) {
-            handleChatError(
-              errorMessage,
-              error instanceof Error ? error : String(error),
-              'starter template selection',
-              messageContent,
-              elapsedTime,
-            );
-          } else {
-            handleChatError(
-              'Failed to import starter template\nRetry again after a few minutes.',
-              error instanceof Error ? error : String(error),
-              'starter template selection',
-              messageContent,
-              elapsedTime,
-              'warning',
-            );
-          }
+          const isMeaningfulErrorMessage =
+            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
+
+          reportError(
+            isMeaningfulErrorMessage
+              ? errorMessage
+              : 'Failed to import starter template\nRetry again after a few minutes.',
+            templateSelectionStartTime,
+            {
+              error: error instanceof Error ? error : String(error),
+              context: 'starter template selection',
+              toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
+            },
+          );
 
           setChatStarted(false);
           setFakeLoading(false);
@@ -1106,13 +1101,9 @@ export const ChatImpl = memo(
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
 
             if (!success) {
-              handleChatError(
-                message,
-                undefined,
-                'createTaskBranch - subsequent message',
-                messageContent,
-                getElapsedTime(createTaskBranchStartTime),
-              );
+              reportError(message, createTaskBranchStartTime, {
+                context: 'createTaskBranch - subsequent message',
+              });
               return;
             }
 
@@ -1153,13 +1144,10 @@ export const ChatImpl = memo(
         logger.error('Error sending message:', error);
 
         if (error instanceof Error) {
-          handleChatError(
-            'Error:' + error?.message,
+          reportError('Error:' + error?.message, sendMessageFinalStartTime, {
             error,
-            'sendMessage function',
-            lastUserPromptRef.current,
-            getElapsedTime(sendMessageFinalStartTime),
-          );
+            context: 'sendMessage function',
+          });
         }
       }
     };
@@ -1312,13 +1300,11 @@ export const ChatImpl = memo(
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
         logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-        handleChatError(
-          `Failed to import ${source.type === 'github' ? 'repository' : 'project'}`,
-          error instanceof Error ? error : String(error),
-          'handleTemplateImport',
-          undefined, // Prompt not required (not a chat request)
-          getElapsedTime(startTime),
-        );
+        reportError(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`, startTime, {
+          error: error instanceof Error ? error : String(error),
+          context: 'handleTemplateImport',
+          prompt: undefined, // Prompt not required (not a chat request)
+        });
       } finally {
         setFakeLoading(false);
       }
@@ -1338,13 +1324,9 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError(
-          'No commit hash found',
-          undefined,
-          'handleFork - commit hash validation',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError('No commit hash found', startTime, {
+          context: 'handleFork - commit hash validation',
+        });
 
         return;
       }
@@ -1372,25 +1354,18 @@ export const ChatImpl = memo(
           toast.success('Forked project successfully');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          handleChatError(
-            'Failed to fork project',
-            undefined,
-            'handleFork - fork result check',
-            lastUserPromptRef.current,
-            getElapsedTime(startTime),
-          );
+          reportError('Failed to fork project', startTime, {
+            context: 'handleFork - fork result check',
+          });
         }
       } catch (error) {
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
 
-        handleChatError(
-          'Failed to fork project',
-          error instanceof Error ? error : String(error),
-          'handleFork - catch block',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError('Failed to fork project', startTime, {
+          error: error instanceof Error ? error : String(error),
+          context: 'handleFork - catch block',
+        });
         logger.error('Error forking project:', error);
       }
     };
@@ -1404,13 +1379,9 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError(
-          'No commit hash found',
-          undefined,
-          'handleRevert - commit hash validation',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError('No commit hash found', startTime, {
+          context: 'handleRevert - commit hash validation',
+        });
 
         return;
       }
@@ -1442,24 +1413,17 @@ export const ChatImpl = memo(
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
               } else {
-                handleChatError(
-                  'No parent commit found',
-                  undefined,
-                  'handleRetry - parent commit check',
-                  lastUserPromptRef.current,
-                  getElapsedTime(startTime),
-                );
+                reportError('No parent commit found', startTime, {
+                  context: 'handleRetry - parent commit check',
+                });
 
                 return;
               }
             } catch (error) {
-              handleChatError(
-                'Failed to get commit data',
-                error instanceof Error ? error : String(error),
-                'handleRetry - getCommit',
-                lastUserPromptRef.current,
-                getElapsedTime(startTime),
-              );
+              reportError('Failed to get commit data', startTime, {
+                error: error instanceof Error ? error : String(error),
+                context: 'handleRetry - getCommit',
+              });
 
               return;
             }
@@ -1468,13 +1432,9 @@ export const ChatImpl = memo(
       }
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError(
-          'No commit hash found',
-          undefined,
-          'handleRetry - commit hash validation',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError('No commit hash found', startTime, {
+          context: 'handleRetry - commit hash validation',
+        });
 
         return;
       }
@@ -1490,13 +1450,9 @@ export const ChatImpl = memo(
         const commitHash = message.id?.split('-').pop();
 
         if (!commitHash || !isCommitHash(commitHash)) {
-          handleChatError(
-            'Invalid commit information',
-            undefined,
-            'handleViewDiff - commit validation',
-            lastUserPromptRef.current,
-            getElapsedTime(startTime),
-          );
+          reportError('Invalid commit information', startTime, {
+            context: 'handleViewDiff - commit validation',
+          });
 
           return;
         }
@@ -1507,13 +1463,10 @@ export const ChatImpl = memo(
         workbench.diffCommitHash.set(commitHash);
       } catch (error) {
         console.error('Diff view error:', error);
-        handleChatError(
-          'Error displaying diff view',
-          error instanceof Error ? error : String(error),
-          'handleViewDiff - catch block',
-          lastUserPromptRef.current,
-          getElapsedTime(startTime),
-        );
+        reportError('Error displaying diff view', startTime, {
+          error: error instanceof Error ? error : String(error),
+          context: 'handleViewDiff - catch block',
+        });
       }
     };
 

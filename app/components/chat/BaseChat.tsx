@@ -385,11 +385,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const uploadFileAndAddToAttachmentList = async (file: File) => {
       try {
         if (attachmentList?.length >= MAX_ATTACHMENTS) {
-          handleChatError(
-            `Attachments are limited to ${MAX_ATTACHMENTS} files.`,
-            undefined,
-            'uploadFileAndAddToAttachmentList - attachment limit',
-          );
+          handleChatError(`Attachments are limited to ${MAX_ATTACHMENTS} files.`, {
+            context: 'uploadFileAndAddToAttachmentList - attachment limit',
+          });
           return;
         }
 
@@ -402,11 +400,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
 
         if (!ATTACHMENT_EXTS.includes(fileExt)) {
-          handleChatError(
-            'Not allowed file type',
-            undefined,
-            'uploadFileAndAddToAttachmentList - file type validation',
-          );
+          handleChatError('Not allowed file type', {
+            context: 'uploadFileAndAddToAttachmentList - file type validation',
+          });
           return;
         }
 
@@ -426,11 +422,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         } else if (videoExtensions.includes(fileExt)) {
           fileType = 'video';
         } else {
-          handleChatError(
-            'Only media files are allowed',
-            undefined,
-            'uploadFileAndAddToAttachmentList - media file validation',
-          );
+          handleChatError('Only media files are allowed', {
+            context: 'uploadFileAndAddToAttachmentList - media file validation',
+          });
           return;
         }
 
@@ -524,7 +518,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           );
 
           console.error('Error uploading file:', error);
-          handleChatError(`Upload failed: ${error.message}`, error, 'uploadFileAndAddToAttachmentList - upload error');
+          handleChatError(`Upload failed: ${error.message}`, {
+            error,
+            context: 'uploadFileAndAddToAttachmentList - upload error',
+          });
 
           // Remove error state attachment after 3 seconds
           setTimeout(() => {
@@ -533,7 +530,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
       } catch (error: any) {
         console.error('Error handling file:', error);
-        handleChatError(`Upload failed: ${error.message}`, error, 'uploadFileAndAddToAttachmentList - general error');
+        handleChatError(`Upload failed: ${error.message}`, {
+          error,
+          context: 'uploadFileAndAddToAttachmentList - general error',
+        });
       }
     };
 

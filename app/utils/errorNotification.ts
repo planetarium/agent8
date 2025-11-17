@@ -91,15 +91,18 @@ export async function sendChatErrorWithToastMessage(
   });
 }
 
+export interface HandleChatErrorOptions {
+  error?: Error | string;
+  context?: string;
+  prompt?: string;
+  elapsedTime?: number;
+  toastType?: 'error' | 'warning';
+}
+
 // Comprehensive error handler that handles both toast and Slack notification
-export function handleChatError(
-  message: string,
-  error?: Error | string,
-  context?: string,
-  prompt?: string,
-  elapsedTime?: number,
-  toastType: 'error' | 'warning' = 'error',
-): void {
+export function handleChatError(message: string, options?: HandleChatErrorOptions): void {
+  const { error, context, prompt, elapsedTime, toastType = 'error' } = options ?? {};
+
   // Check if error matches any filter
   const filter = getErrorFilter(error);
 
