@@ -52,11 +52,9 @@ export class GitlabService {
     }
 
     try {
-      const users = email
-        ? await this.gitlab.Users.all({
-            search: email,
-          })
-        : [];
+      const users = await this.gitlab.Users.all({
+        search: email,
+      });
 
       const existingUser = users.find((user: any) => user.email?.toLowerCase() === email.toLowerCase());
 
