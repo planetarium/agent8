@@ -11,7 +11,6 @@ import type {
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
 import { isCommitHash } from './utils';
-import { isEmpty } from '~/utils/stringUtils';
 
 const logger = createScopedLogger('gitlabService');
 
@@ -48,7 +47,7 @@ export class GitlabService {
   }
 
   async getOrCreateUser(email: string): Promise<GitlabUser> {
-    if (isEmpty(email)) {
+    if (!email) {
       throw new Error('Failed to create or find user: email is required');
     }
 

@@ -73,12 +73,3 @@ export function normalizeContent(content: string): string {
 
   return normalized;
 }
-
-/**
- * Checks if the content is empty
- * @param content - The content to check
- * @returns True if the content is empty, false otherwise
- */
-export function isEmpty(content: string | null | undefined): boolean {
-  return !content || content.trim().length === 0;
-}
