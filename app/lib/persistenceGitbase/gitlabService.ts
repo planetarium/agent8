@@ -11,6 +11,7 @@ import type {
 import axios from 'axios';
 import { createScopedLogger } from '~/utils/logger';
 import { isCommitHash } from './utils';
+import { isEmpty } from '~/utils/stringUtils';
 
 const logger = createScopedLogger('gitlabService');
 
@@ -47,10 +48,16 @@ export class GitlabService {
   }
 
   async getOrCreateUser(email: string): Promise<GitlabUser> {
+    if (isEmpty(email)) {
+      throw new Error('Failed to create or find user: email is required');
+    }
+
     try {
-      const users = await this.gitlab.Users.all({
-        search: email,
-      });
+      const users = email
+        ? await this.gitlab.Users.all({
+            search: email,
+          })
+        : [];
 
       const existingUser = users.find((user: any) => user.email?.toLowerCase() === email.toLowerCase());
 
