@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
@@ -23,11 +23,11 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
   const description = requestData.description;
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   if (!email) {
-    return json({ success: false, message: 'User email is required' }, { status: 401 });
+    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -36,7 +36,7 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
     const hasPermission = await gitlabService.isProjectOwner(user.email, projectPath);
 
     if (!hasPermission) {
-      return json(
+      return Response.json(
         { success: false, message: 'You do not have permission to revert branches in this project' },
         { status: 403 },
       );
@@ -44,7 +44,7 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
 
     const updatedProject = await gitlabService.updateProjectDescription(email, projectPath, description);
 
-    return json({
+    return Response.json({
       success: true,
       message: 'Project description updated successfully',
       data: {
@@ -56,6 +56,9 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return json({ success: false, message: `Failed to update project description: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to update project description: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }

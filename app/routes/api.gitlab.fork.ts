@@ -1,4 +1,4 @@
-import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { unzipCode } from '~/lib/persistenceGitbase/utils';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
@@ -33,11 +33,11 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
   const email = user.email;
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   if (!email) {
-    return json({ success: false, message: 'User email is required' }, { status: 401 });
+    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -57,7 +57,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
             throw new Error('Project is not public');
           }
         } catch {
-          return json(
+          return Response.json(
             {
               success: false,
               message: 'You can only fork your own projects, public projects, or projects with verse remix permission',
@@ -70,12 +70,12 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
         verseData = await fetchVerse(metadata.fromVerseId, env);
 
         if (!verseData) {
-          return json({ success: false, message: 'Verse not found or not accessible' }, { status: 400 });
+          return Response.json({ success: false, message: 'Verse not found or not accessible' }, { status: 400 });
         }
 
         // Check if remix is allowed
         if (!verseData.allowRemix) {
-          return json({ success: false, message: 'This verse does not allow remixing' }, { status: 403 });
+          return Response.json({ success: false, message: 'This verse does not allow remixing' }, { status: 403 });
         }
 
         // Extract and validate project info from verse playUrl
@@ -83,7 +83,10 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
 
         // Validate that the requested projectPath matches the verse's project
         if (projectPath !== verseProjectPath) {
-          return json({ success: false, message: 'Project path does not match verse project' }, { status: 400 });
+          return Response.json(
+            { success: false, message: 'Project path does not match verse project' },
+            { status: 400 },
+          );
         }
 
         /*
@@ -113,7 +116,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Permission check failed';
-    return json({ success: false, message: errorMessage }, { status: 400 });
+    return Response.json({ success: false, message: errorMessage }, { status: 400 });
   }
 
   try {
@@ -131,7 +134,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
       if (commits.length > 0) {
         actualCommitSha = commits[0].id;
       } else {
-        return json({ success: false, message: 'No commits found in the repository' }, { status: 400 });
+        return Response.json({ success: false, message: 'No commits found in the repository' }, { status: 400 });
       }
     }
 
@@ -180,7 +183,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
       // Don't fail the fork operation if tag creation fails
     }
 
-    return json({
+    return Response.json({
       success: true,
       project: {
         path: newProject.path_with_namespace,

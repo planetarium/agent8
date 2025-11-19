@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 
 export const loader = publicProjectLoader;
@@ -15,12 +15,12 @@ async function publicProjectLoader({ context, request }: ActionFunctionArgs) {
 
   // Input validation
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   // Basic projectPath validation (prevent injection attacks)
   if (!/^[\w\-\/\.]+$/.test(projectPath)) {
-    return json({ success: false, message: 'Invalid project path format' }, { status: 400 });
+    return Response.json({ success: false, message: 'Invalid project path format' }, { status: 400 });
   }
 
   try {
@@ -31,7 +31,7 @@ async function publicProjectLoader({ context, request }: ActionFunctionArgs) {
 
     // Only allow access to public projects
     if (projectData.visibility !== 'public') {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Project not found or not accessible',
@@ -40,7 +40,7 @@ async function publicProjectLoader({ context, request }: ActionFunctionArgs) {
       );
     }
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         id: projectData.id,
@@ -53,7 +53,7 @@ async function publicProjectLoader({ context, request }: ActionFunctionArgs) {
     });
   } catch {
     // Don't expose internal errors - just return generic message
-    return json(
+    return Response.json(
       {
         success: false,
         message: 'Project not found or not accessible',

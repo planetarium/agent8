@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
@@ -16,7 +16,7 @@ async function projectsLoader({ context, request }: ActionFunctionArgs) {
   const email = user.email;
 
   if (!email) {
-    return json({ success: false, message: 'User email is required' }, { status: 401 });
+    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -31,7 +31,7 @@ async function projectsLoader({ context, request }: ActionFunctionArgs) {
   try {
     const result = await gitlabService.getUserProjects(email, parsedPage, parsedPerPage);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         projects: result.projects,
@@ -46,7 +46,7 @@ async function projectsLoader({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return json({ success: false, message: `Failed to fetch projects: ${errorMessage}` }, { status: 500 });
+    return Response.json({ success: false, message: `Failed to fetch projects: ${errorMessage}` }, { status: 500 });
   }
 }
 
@@ -60,7 +60,7 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
   const email = user.email;
 
   if (!email) {
-    return json({ success: false, message: 'User email is required' }, { status: 401 });
+    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -74,7 +74,7 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
       };
 
       if (!projectName) {
-        return json({ success: false, message: 'Project name is required' }, { status: 400 });
+        return Response.json({ success: false, message: 'Project name is required' }, { status: 400 });
       }
 
       // Get or create GitLab user
@@ -83,7 +83,7 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
       // Create project
       const project = await gitlabService.createProject(gitlabUser, projectName, description);
 
-      return json({
+      return Response.json({
         success: true,
         id: project.id,
         name: project.name,
@@ -96,7 +96,7 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return json({ success: false, message: `Failed to create project: ${errorMessage}` }, { status: 500 });
+      return Response.json({ success: false, message: `Failed to create project: ${errorMessage}` }, { status: 500 });
     }
   }
 
@@ -107,31 +107,34 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
       const projectId = url.searchParams.get('projectId');
 
       if (!projectId) {
-        return json({ success: false, message: 'Project ID is required' }, { status: 400 });
+        return Response.json({ success: false, message: 'Project ID is required' }, { status: 400 });
       }
 
       // Check permission
       const hasPermission = await gitlabService.isProjectOwner(email, projectId);
 
       if (!hasPermission) {
-        return json({ success: false, message: 'You do not have permission to delete this project' }, { status: 403 });
+        return Response.json(
+          { success: false, message: 'You do not have permission to delete this project' },
+          { status: 403 },
+        );
       }
 
       // Delete project
       await gitlabService.deleteProject(projectId);
 
-      return json({
+      return Response.json({
         success: true,
         message: 'Project deleted successfully',
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return json({ success: false, message: `Failed to delete project: ${errorMessage}` }, { status: 500 });
+      return Response.json({ success: false, message: `Failed to delete project: ${errorMessage}` }, { status: 500 });
     }
   }
 
   // For 405 Method Not Allowed, include the Allow header with supported methods
-  return json(
+  return Response.json(
     { success: false, message: 'Invalid method' },
     {
       status: 405,

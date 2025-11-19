@@ -1,4 +1,4 @@
-import { json } from '@remix-run/cloudflare';
+import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
@@ -17,11 +17,11 @@ async function commitDetailLoader({ context, request, params }: LoaderFunctionAr
   const projectPath = url.searchParams.get('projectPath');
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   if (!commitHash) {
-    return json({ success: false, message: 'Commit hash is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Commit hash is required' }, { status: 400 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -29,7 +29,7 @@ async function commitDetailLoader({ context, request, params }: LoaderFunctionAr
   try {
     const commit = await gitlabService.getCommit(projectPath, commitHash);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         commit,
@@ -40,6 +40,9 @@ async function commitDetailLoader({ context, request, params }: LoaderFunctionAr
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    return json({ success: false, message: `Failed to fetch commit details: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to fetch commit details: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
