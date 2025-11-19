@@ -769,6 +769,12 @@ export default class GoogleVertexProvider extends BaseProvider {
       provider: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
       maxTokenAllowed: 65535,
     },
+    {
+      name: 'gemini-3-pro-preview',
+      label: 'Gemini 3 Pro',
+      provider: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+      maxTokenAllowed: 65535,
+    },
   ];
 
   async getDynamicModels(): Promise<ModelInfo[]> {
