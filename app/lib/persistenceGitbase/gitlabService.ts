@@ -673,9 +673,8 @@ export class GitlabService {
   }
 
   async isProjectOwner(email: string, projectId: number | string): Promise<boolean> {
-    const user = await this.getOrCreateUser(email);
-
     try {
+      const user = await this.getOrCreateUser(email);
       const project = await this.gitlab.Projects.show(projectId);
 
       if (project.namespace && user.namespace_id) {
