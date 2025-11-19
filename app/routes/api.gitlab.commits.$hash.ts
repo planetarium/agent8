@@ -2,7 +2,6 @@ import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { logger } from '~/utils/logger';
-import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 
 export const loader = withV8AuthUser(commitDetailLoader);
 
