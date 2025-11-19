@@ -11,9 +11,13 @@ export const loader = withV8AuthUser(userLoader);
 async function userLoader({ context }: LoaderFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
+  const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
 
   const gitlabService = new GitlabService(env);
-  const email = user.email;
 
   try {
     // Get or create GitLab user

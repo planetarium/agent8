@@ -13,10 +13,13 @@ export const loader = withV8AuthUser(projectsLoader);
 async function projectsLoader({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
+  const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
 
   const gitlabService = new GitlabService(env);
-
-  const email = user.email;
 
   const url = new URL(request.url);
   const page = url.searchParams.get('page') || '1';
@@ -54,9 +57,13 @@ async function projectsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
-  const gitlabService = new GitlabService(env);
-
   const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
+
+  const gitlabService = new GitlabService(env);
 
   // Create a new project (POST method)
   if (request.method === 'POST') {

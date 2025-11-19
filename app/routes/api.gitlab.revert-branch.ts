@@ -11,6 +11,11 @@ export const action = withV8AuthUser(revertBranchAction);
 async function revertBranchAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
+  const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
 
   if (request.method !== 'POST') {
     return json(

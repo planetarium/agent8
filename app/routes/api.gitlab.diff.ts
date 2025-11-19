@@ -12,7 +12,7 @@ async function getDiffLoader({ context, request }: LoaderFunctionArgs) {
   const commitHash = url.searchParams.get('commitHash');
 
   if (!projectPath || !commitHash) {
-    return new Response('Project path and commit hash are required', { status: 400 });
+    return json({ success: false, message: 'Project path and commit hash are required' }, { status: 400 });
   }
 
   const gitlabService = new GitlabService(env);

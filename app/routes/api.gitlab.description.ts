@@ -27,7 +27,7 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
   }
 
   if (!email) {
-    return json({ success: false, message: 'User email is required' }, { status: 400 });
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);

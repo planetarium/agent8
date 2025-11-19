@@ -33,7 +33,11 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
   const email = user.email;
 
   if (!projectPath) {
-    return new Response('Project path is required', { status: 400 });
+    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+  }
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);

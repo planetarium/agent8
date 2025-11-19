@@ -48,7 +48,7 @@ export class GitlabService {
 
   async getOrCreateUser(email: string): Promise<GitlabUser> {
     if (!email) {
-      throw new Error('Failed to create or find user: email is required');
+      throw new Error('Failed to create or find user: user email is required');
     }
 
     try {
@@ -673,30 +673,21 @@ export class GitlabService {
   }
 
   async isProjectOwner(email: string, projectId: number | string): Promise<boolean> {
-    try {
-      const user = await this.getOrCreateUser(email);
-      let project;
+    const user = await this.getOrCreateUser(email);
 
-      try {
-        project = await this.gitlab.Projects.show(projectId);
-      } catch (projectError) {
-        logger.error(`Error loading project:`, projectError);
-        return false;
-      }
+    try {
+      const project = await this.gitlab.Projects.show(projectId);
 
       if (project.namespace && user.namespace_id) {
         const projectNamespaceId = project.namespace.id;
         const userNamespaceId = user.namespace_id;
 
-        if (projectNamespaceId === userNamespaceId) {
-          return true;
-        }
+        return projectNamespaceId === userNamespaceId;
       }
 
       return false;
-    } catch (error) {
-      logger.error(error);
-
+    } catch (projectError) {
+      logger.error(`Error loading project:`, projectError);
       return false;
     }
   }

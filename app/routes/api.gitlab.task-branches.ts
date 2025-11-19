@@ -15,16 +15,21 @@ async function branchesLoader({ context, request }: ActionFunctionArgs) {
 
   const url = new URL(request.url);
   const projectPath = url.searchParams.get('projectPath');
+  const email = user.email;
 
   if (!projectPath) {
     return json({ success: false, message: 'Project path is required' }, { status: 400 });
+  }
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
 
   try {
     // Check project access permission
-    const accessCheck = await gitlabService.checkProjectAccess(user.email, projectPath);
+    const accessCheck = await gitlabService.checkProjectAccess(email, projectPath);
 
     if (!accessCheck.hasAccess) {
       return json({ success: false, message: accessCheck.reason || 'Project not found' }, { status: 404 });
@@ -56,6 +61,11 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
   }
 
   const user = context.user as { email: string; isActivated: boolean };
+  const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
 
   // Get request body as JSON
   const requestData = (await request.json()) as {
@@ -76,7 +86,7 @@ async function branchesAction({ context, request }: ActionFunctionArgs) {
 
   try {
     // Verify the user owns this specific project (not just a project with same name)
-    const isOwner = await gitlabService.isProjectOwner(user.email, projectPath);
+    const isOwner = await gitlabService.isProjectOwner(email, projectPath);
 
     if (!isOwner) {
       return json({ success: false, message: 'You do not have permission to access this project' }, { status: 403 });

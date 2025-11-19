@@ -83,9 +83,13 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
-  const gitlabService = new GitlabService(env);
-
   const email = user.email;
+
+  if (!email) {
+    return json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
+
+  const gitlabService = new GitlabService(env);
 
   // JSON 데이터로 받기
   const requestData = (await request.json()) as {
