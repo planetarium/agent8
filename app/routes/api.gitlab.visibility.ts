@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
@@ -16,13 +16,13 @@ async function visibilityLoader({ context, request }: ActionFunctionArgs) {
   const projectPath = url.searchParams.get('projectPath');
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   try {
     const visibility = await gitlabService.getProjectVisibility(projectPath);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         visibility,
@@ -30,7 +30,10 @@ async function visibilityLoader({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return json({ success: false, message: `Failed to get project visibility: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to get project visibility: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
 
@@ -40,7 +43,6 @@ async function visibilityLoader({ context, request }: ActionFunctionArgs) {
 async function visibilityAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
-  const gitlabService = new GitlabService(env);
 
   if (request.method === 'PATCH') {
     try {
@@ -50,16 +52,21 @@ async function visibilityAction({ context, request }: ActionFunctionArgs) {
       };
 
       if (!projectPath) {
-        return json({ success: false, message: 'Project path is required' }, { status: 400 });
+        return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
       }
 
       if (!visibility || !['public', 'private'].includes(visibility)) {
-        return json({ success: false, message: 'Valid visibility (public/private) is required' }, { status: 400 });
+        return Response.json(
+          { success: false, message: 'Valid visibility (public/private) is required' },
+          { status: 400 },
+        );
       }
+
+      const gitlabService = new GitlabService(env);
 
       const project = await gitlabService.updateProjectVisibility(user.email, projectPath, visibility);
 
-      return json({
+      return Response.json({
         success: true,
         data: {
           visibility: project.visibility,
@@ -67,11 +74,14 @@ async function visibilityAction({ context, request }: ActionFunctionArgs) {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return json({ success: false, message: `Failed to update project visibility: ${errorMessage}` }, { status: 500 });
+      return Response.json(
+        { success: false, message: `Failed to update project visibility: ${errorMessage}` },
+        { status: 500 },
+      );
     }
   }
 
-  return json(
+  return Response.json(
     { success: false, message: 'Invalid method' },
     {
       status: 405,

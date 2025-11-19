@@ -48,6 +48,10 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
     return json({ error: 'projectRepo is required' }, { status: 400 });
   }
 
+  if (!email) {
+    return json({ error: 'User email is required' }, { status: 401 });
+  }
+
   try {
     const cacheKey = `${templateName}`;
     const now = Date.now();

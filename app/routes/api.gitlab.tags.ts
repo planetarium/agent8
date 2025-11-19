@@ -1,4 +1,4 @@
-import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 
@@ -14,7 +14,7 @@ async function tagsLoader({ context, request }: LoaderFunctionArgs) {
   const projectPath = url.searchParams.get('projectPath');
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -22,12 +22,12 @@ async function tagsLoader({ context, request }: LoaderFunctionArgs) {
   try {
     const tags = await gitlabService.getTags(projectPath);
 
-    return json({
+    return Response.json({
       success: true,
       tags,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return json({ success: false, message: errorMessage }, { status: 500 });
+    return Response.json({ success: false, message: errorMessage }, { status: 500 });
   }
 }
