@@ -11,8 +11,6 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
 
-  const email = user.email;
-
   // JSON 데이터로 받기
   const requestData = (await request.json()) as {
     projectPath: string;
@@ -24,10 +22,6 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
 
   if (!projectPath) {
     return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
-  }
-
-  if (!email) {
-    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
 
   const gitlabService = new GitlabService(env);
@@ -42,7 +36,7 @@ async function descriptionAction({ context, request }: ActionFunctionArgs) {
       );
     }
 
-    const updatedProject = await gitlabService.updateProjectDescription(email, projectPath, description);
+    const updatedProject = await gitlabService.updateProjectDescription(user.email, projectPath, description);
 
     return Response.json({
       success: true,

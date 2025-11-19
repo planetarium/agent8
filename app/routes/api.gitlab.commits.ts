@@ -85,14 +85,11 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
 async function commitsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
-
   const email = user.email;
 
   if (!email) {
     return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
   }
-
-  const gitlabService = new GitlabService(env);
 
   // JSON 데이터로 받기
   const requestData = (await request.json()) as {
@@ -128,6 +125,8 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
   if (files.find((file) => file.path === '.secret')) {
     return Response.json({ success: false, message: 'Secret file is not allowed' }, { status: 400 });
   }
+
+  const gitlabService = new GitlabService(env);
 
   try {
     // Get or create GitLab user

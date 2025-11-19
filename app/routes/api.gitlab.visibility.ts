@@ -43,7 +43,6 @@ async function visibilityLoader({ context, request }: ActionFunctionArgs) {
 async function visibilityAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
-  const gitlabService = new GitlabService(env);
 
   if (request.method === 'PATCH') {
     try {
@@ -62,6 +61,8 @@ async function visibilityAction({ context, request }: ActionFunctionArgs) {
           { status: 400 },
         );
       }
+
+      const gitlabService = new GitlabService(env);
 
       const project = await gitlabService.updateProjectVisibility(user.email, projectPath, visibility);
 

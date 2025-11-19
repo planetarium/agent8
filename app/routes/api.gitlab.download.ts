@@ -10,7 +10,6 @@ export const loader = withV8AuthUser(downloadLoader);
 async function downloadLoader({ context, request }: LoaderFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
-  const email = user.email;
 
   const url = new URL(request.url);
   const projectPath = url.searchParams.get('projectPath');
@@ -20,15 +19,11 @@ async function downloadLoader({ context, request }: LoaderFunctionArgs) {
     return new Response('Project path is required', { status: 400 });
   }
 
-  if (!email) {
-    return new Response('User email is required', { status: 401 });
-  }
-
   const gitlabService = new GitlabService(env);
 
   try {
     // Check project access permission
-    const accessCheck = await gitlabService.checkProjectAccess(email, projectPath);
+    const accessCheck = await gitlabService.checkProjectAccess(user.email, projectPath);
 
     if (!accessCheck.hasAccess) {
       return new Response(accessCheck.reason || 'Project not found', { status: 404 });

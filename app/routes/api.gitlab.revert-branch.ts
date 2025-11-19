@@ -55,11 +55,11 @@ async function revertBranchAction({ context, request }: ActionFunctionArgs) {
     const gitlabService = new GitlabService(env);
 
     // Get or create GitLab user to verify permissions
-    const gitlabUser = await gitlabService.getOrCreateUser(user.email);
+    const gitlabUser = await gitlabService.getOrCreateUser(email);
     const project = await gitlabService.findProject(gitlabUser.username, projectPath.split('/')[1]);
 
     // Check if user has permission to modify this project
-    const hasPermission = await gitlabService.isProjectOwner(user.email, project.id);
+    const hasPermission = await gitlabService.isProjectOwner(email, project.id);
 
     if (!hasPermission) {
       return Response.json(
