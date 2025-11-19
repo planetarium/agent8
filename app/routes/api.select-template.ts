@@ -27,7 +27,7 @@ export const loader = withV8AuthUser(selectTemplateAction, { checkCredit: true }
 
 async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
-  const CACHE_TTL = env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 24 * 60 * 60 * 1000 : 60 * 1000;
+  const CACHE_TTL = env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 60 * 1000 : 60 * 1000;
   const url = new URL(request.url);
   const templateName = url.searchParams.get('templateName');
   const title = url.searchParams.get('title') || '';

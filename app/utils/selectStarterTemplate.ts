@@ -241,6 +241,10 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
 
 async function getTemplateFileMap(githubRepo: string, path: string, env?: Env): Promise<FileMap> {
   try {
+    if (TEMPLATE_MAP[path]) {
+      return TEMPLATE_MAP[path];
+    }
+
     const files = await getGitHubRepoContent(githubRepo, path, env);
 
     const fileMap: FileMap = {};
