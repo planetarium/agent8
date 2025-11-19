@@ -465,7 +465,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          let isGenerateArtifact = false;
           const generateArtifactInputs = new Map<string, unknown>();
 
           return (chunk, controller) => {
@@ -561,26 +560,21 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
                   const xmlContent = toBoltArtifactXML(artifactData);
 
-                  // only enqueue the generate artifact once
-                  if (!isGenerateArtifact) {
-                    controller.enqueue({
-                      type: 'text-start',
-                      id: chunk.toolCallId,
-                    });
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: chunk.toolCallId,
+                  });
 
-                    controller.enqueue({
-                      type: 'text-delta',
-                      id: chunk.toolCallId,
-                      delta: '\n' + xmlContent + '\n',
-                    });
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.toolCallId,
+                    delta: '\n' + xmlContent + '\n',
+                  });
 
-                    controller.enqueue({
-                      type: 'text-end',
-                      id: chunk.toolCallId,
-                    });
-
-                    isGenerateArtifact = true;
-                  }
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: chunk.toolCallId,
+                  });
 
                   break;
                 }

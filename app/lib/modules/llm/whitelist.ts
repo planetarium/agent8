@@ -47,6 +47,12 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'openai/o4-mini',
   },
   {
+    label: 'Gemini 3 Pro',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+    modelName: 'gemini-3-pro-preview',
+    userSelectable: true,
+  },
+  {
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'google/gemini-2.5-pro',
@@ -55,7 +61,6 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
     modelName: 'gemini-2.5-pro',
-    userSelectable: true,
   },
   {
     label: 'Gemini 2.5 Pro',
