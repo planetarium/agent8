@@ -239,12 +239,8 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
   }
 };
 
-async function getTemplateFileMap(githubRepo: string, path: string, env?: Env): Promise<FileMap> {
+async function getTemplateFileMap(githubRepo: string, path: string, env?: Env): Promise<FileMap | undefined> {
   try {
-    if (TEMPLATE_MAP[path]) {
-      return TEMPLATE_MAP[path];
-    }
-
     const files = await getGitHubRepoContent(githubRepo, path, env);
 
     const fileMap: FileMap = {};
@@ -259,15 +255,22 @@ async function getTemplateFileMap(githubRepo: string, path: string, env?: Env): 
   } catch (error) {
     console.log('[Template] GitHub fetch failed, using fallback:', path, error);
 
-    return TEMPLATE_MAP[path] ?? TEMPLATE_BASIC;
+    return TEMPLATE_MAP[path];
   }
 }
 
 export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
-  const fileMap = await getTemplateFileMap(githubRepo, path, env);
+  let isFallback = false;
+  let fileMap = await getTemplateFileMap(githubRepo, path, env);
+
+  if (!fileMap) {
+    fileMap = TEMPLATE_BASIC;
+    isFallback = true;
+  }
+
   const messages = generateTemplateMessages(fileMap, title);
 
-  return { fileMap, messages };
+  return { fileMap, messages, isFallback };
 }
 
 export async function getZipTemplates(zipFile: File, title?: string) {
