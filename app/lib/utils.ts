@@ -132,7 +132,8 @@ export async function fetchWithCache(request: Request, options: FetchWithCacheOp
 
         const originalCacheControl = response.headers.get(CACHE_HEADERS.CACHE_CONTROL);
 
-        response = new Response(response.body, response);
+        const responseBody = await response.arrayBuffer();
+        response = new Response(responseBody, response);
 
         if (overrideCacheControl) {
           response.headers.set(CACHE_HEADERS.CACHE_CONTROL, overrideCacheControl);
