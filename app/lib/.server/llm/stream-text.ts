@@ -36,7 +36,11 @@ import {
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
-import { createGenerateArtifactTool } from './tools/generate-artifact';
+import {
+  createSubmitFileActionTool,
+  createSubmitModifyActionTool,
+  createSubmitShellActionTool,
+} from './tools/submit-actions';
 import { createUnknownToolHandler } from './tools/error-handle';
 import { is3dProject } from '~/lib/utils';
 
@@ -151,14 +155,18 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const submitArtifactActionTool = createGenerateArtifactTool(files, orchestration);
+  const submitFileActionTool = createSubmitFileActionTool(files, orchestration);
+  const submitModifyActionTool = createSubmitModifyActionTool(files, orchestration);
+  const submitShellActionTool = createSubmitShellActionTool();
   const unknownToolHandlerTool = createUnknownToolHandler();
 
   let combinedTools: Record<string, any> = {
     ...tools,
     ...codebaseTools,
     ...resourcesTools,
-    [TOOL_NAMES.GENERATE_ARTIFACT]: submitArtifactActionTool,
+    [TOOL_NAMES.SUBMIT_FILE_ACTION]: submitFileActionTool,
+    [TOOL_NAMES.SUBMIT_MODIFY_ACTION]: submitModifyActionTool,
+    [TOOL_NAMES.SUBMIT_SHELL_ACTION]: submitShellActionTool,
     [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
 
@@ -239,7 +247,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15)],
+    stopWhen: [stepCountIs(30)],
     messages: coreMessages,
     tools: combinedTools,
     toolChoice: 'auto',
