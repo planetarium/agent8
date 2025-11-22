@@ -49,7 +49,7 @@ export type Messages = UIMessage[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 function createOrchestration(): Orchestration {
-  return { readSet: new Set(), submitted: false };
+  return { readSet: new Set(), updatedSet: new Set() };
 }
 
 const logger = createScopedLogger('stream-text');
@@ -267,16 +267,6 @@ export async function streamText(props: {
       }
 
       return null;
-    },
-
-    prepareStep: async () => {
-      if (orchestration.submitted) {
-        return {
-          activeTools: [],
-        };
-      }
-
-      return undefined;
     },
     ...options,
   });

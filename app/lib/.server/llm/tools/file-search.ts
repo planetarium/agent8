@@ -63,10 +63,6 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
       'READ ONLY TOOL : Read the full contents of files from the specified paths. Use this tool when you need to examine the complete contents of specific files. This tool only provides read functionality and cannot change the state of files. Changes to files should be performed through output, not tool calls. CRITICAL: If it has already been read, it should not be called again with the same path.',
     inputSchema: z.object({
       pathList: z.union([z.array(z.string()), z.string()]).describe('The list of paths to the files you want to read.'),
-      internalMessage: z
-        .string()
-        .optional()
-        .describe('INTERNAL USE ONLY - NEVER use this parameter directly. This is for system repair messages only.'),
     }),
     outputSchema: z.object({
       files: z.array(
@@ -80,7 +76,7 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
       complete: z.boolean(),
       systemMessage: z.string().optional(),
     }),
-    async execute({ pathList, internalMessage }) {
+    async execute({ pathList }) {
       const out: Array<{
         path: string;
         content?: string;
@@ -123,8 +119,13 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         complete: true,
       };
 
-      if (internalMessage) {
-        result.systemMessage = internalMessage;
+      const skippedFiles = out.filter((f) => f.skippedAsDuplicate);
+
+      if (skippedFiles.length > 0) {
+        result.systemMessage = `⚠️ ${skippedFiles.length} file(s) were skipped because they were already read in this conversation:
+${skippedFiles.map((f) => `- ${f.path}`).join('\n')}
+
+These files have already been provided to you earlier in this conversation. Please refer to the previously read content for these files instead of requesting them again.`;
       }
 
       return result;

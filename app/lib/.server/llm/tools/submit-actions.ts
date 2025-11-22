@@ -46,15 +46,44 @@ export const createSubmitFileActionTool = (fileMap: FileMap | undefined, orchest
 
       logger.info(`Submitting file action for: ${path}`);
 
-      // Mark as submitted
-      orchestration.submitted = true;
+      // Check if file exists and needs to be read first
+      if (fileMap && needReadFile(fileMap, path)) {
+        const seen = orchestration.readSet;
+
+        if (!seen.has(path)) {
+          logger.warn(`Existing file not read: ${path}`);
+
+          const raw = getFileContents(fileMap, path);
+
+          if (raw != null) {
+            seen.add(path);
+            return {
+              [COMPLETE_FIELD]: false,
+              existing_file: { path, content: raw },
+              systemMessage: `CRITICAL: File "${path}" already exists and must be read before overwriting.
+
+⚠️ DO NOT use ${TOOL_NAMES.READ_FILES_CONTENTS} tool - the complete file content is already provided above in 'existing_file'.
+
+IMPORTANT CONSIDERATIONS:
+1. Review the 'existing_file.content' to understand the current implementation
+2. Maintain consistent style, imports, and patterns from the existing file
+3. Preserve any important configurations or logic
+4. Submit ${TOOL_NAMES.SUBMIT_FILE_ACTION} again with your improved content
+
+The existing file content is ready for you to review - no additional tool calls needed.`,
+            };
+          }
+        }
+      }
+
+      orchestration.updatedSet.add(path);
 
       return {
         [COMPLETE_FIELD]: true,
         path,
-        content,
+        content_size: content.length,
         type: 'file',
-        systemMessage: 'File action submitted successfully.',
+        systemMessage: `File "${path}" created successfully (${content.length} characters).`,
       };
     },
   });
@@ -87,6 +116,20 @@ export const createSubmitModifyActionTool = (fileMap: FileMap | undefined, orche
 
       logger.info(`Submitting modify action for: ${path} with ${items.length} modifications`);
 
+      // Check if file was already modified in this conversation
+      if (orchestration.updatedSet.has(path)) {
+        logger.warn(`File already modified in this conversation: ${path}`);
+        return {
+          [COMPLETE_FIELD]: false,
+          systemMessage: `CRITICAL: File "${path}" was already modified in this conversation.
+
+⚠️ You cannot use ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} on files that have been modified in this conversation.
+
+REQUIRED ACTION:
+Use ${TOOL_NAMES.SUBMIT_FILE_ACTION} instead with the complete updated file content, including all your changes.`,
+        };
+      }
+
       // Check if file needs to be read first
       if (fileMap && needReadFile(fileMap, path)) {
         const seen = orchestration.readSet;
@@ -110,7 +153,7 @@ NEXT STEPS:
 2. Find the EXACT text segment you want to modify (copy it character-by-character)
 3. Submit ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} again with the exact 'before' text from the file
 
-The file content is ready for you to use - no additional tool calls needed.`,
+The existing file content is ready for you to use - no additional tool calls needed.`,
             };
           }
         }
@@ -156,15 +199,14 @@ The file content is ready for you to use - no additional tool calls needed.`,
         }
       }
 
-      // Mark as submitted
-      orchestration.submitted = true;
+      orchestration.updatedSet.add(path);
 
       return {
         [COMPLETE_FIELD]: true,
         path,
-        items,
+        modifications_count: items.length,
         type: 'modify',
-        systemMessage: 'Modify action submitted successfully.',
+        systemMessage: `File "${path}" modified successfully (${items.length} ${items.length === 1 ? 'change' : 'changes'} applied).`,
       };
     },
   });
@@ -215,7 +257,7 @@ export const createSubmitShellActionTool = () => {
         [COMPLETE_FIELD]: true,
         command,
         type: 'shell',
-        systemMessage: 'Shell action submitted successfully.',
+        systemMessage: `Shell command executed successfully: ${command}`,
       };
     },
   });
