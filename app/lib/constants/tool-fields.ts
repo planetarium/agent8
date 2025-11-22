@@ -4,20 +4,26 @@
  */
 
 /**
- * Generate artifact field names
+ * Submit file action field names
  */
-export const GENERATE_ARTIFACT_FIELDS = {
-  ID: 'id',
-  TITLE: 'title',
-  SUMMARY: 'summary',
-  ACTIONS: 'actions',
-} as const;
-
-export const ACTION_FIELDS = {
-  TYPE: 'type',
+export const SUBMIT_FILE_ACTION_FIELDS = {
   PATH: 'path',
   CONTENT: 'content',
+} as const;
+
+/**
+ * Submit modify action field names
+ */
+export const SUBMIT_MODIFY_ACTION_FIELDS = {
+  PATH: 'path',
+  ITEMS: 'items',
   BEFORE: 'before',
   AFTER: 'after',
+} as const;
+
+/**
+ * Submit shell action field names
+ */
+export const SUBMIT_SHELL_ACTION_FIELDS = {
   COMMAND: 'command',
 } as const;

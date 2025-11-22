@@ -65,51 +65,59 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
     }
   }, [actions]);
 
+  const withHeader = artifact.title || actions.length > 1;
+
+  const header = (
+    <div className="flex">
+      <button
+        className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
+        onClick={() => {
+          const showWorkbench = workbenchStore.showWorkbench.get();
+          workbenchStore.showWorkbench.set(!showWorkbench);
+        }}
+      >
+        {artifact.type == 'bundled' && (
+          <>
+            <div className="p-4">
+              {allActionFinished ? (
+                <div className={'i-ph:files-light'} style={{ fontSize: '2rem' }}></div>
+              ) : (
+                <div className={'i-svg-spinners:90-ring-with-bg'} style={{ fontSize: '2rem' }}></div>
+              )}
+            </div>
+            <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
+          </>
+        )}
+        <div className="px-5 p-3.5 w-full text-left">
+          <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
+          <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
+        </div>
+      </button>
+      <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
+      <AnimatePresence>
+        {actions.length && artifact.type !== 'bundled' && (
+          <motion.button
+            initial={{ width: 0 }}
+            animate={{ width: 'auto' }}
+            exit={{ width: 0 }}
+            transition={{ duration: 0.15, ease: cubicEasingFn }}
+            className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
+            onClick={toggleActions}
+          >
+            <div className="p-4">
+              <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
+            </div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
   return (
-    <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
-      <div className="flex">
-        <button
-          className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
-          onClick={() => {
-            const showWorkbench = workbenchStore.showWorkbench.get();
-            workbenchStore.showWorkbench.set(!showWorkbench);
-          }}
-        >
-          {artifact.type == 'bundled' && (
-            <>
-              <div className="p-4">
-                {allActionFinished ? (
-                  <div className={'i-ph:files-light'} style={{ fontSize: '2rem' }}></div>
-                ) : (
-                  <div className={'i-svg-spinners:90-ring-with-bg'} style={{ fontSize: '2rem' }}></div>
-                )}
-              </div>
-              <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-            </>
-          )}
-          <div className="px-5 p-3.5 w-full text-left">
-            <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
-            <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
-          </div>
-        </button>
-        <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-        <AnimatePresence>
-          {actions.length && artifact.type !== 'bundled' && (
-            <motion.button
-              initial={{ width: 0 }}
-              animate={{ width: 'auto' }}
-              exit={{ width: 0 }}
-              transition={{ duration: 0.15, ease: cubicEasingFn }}
-              className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
-              onClick={toggleActions}
-            >
-              <div className="p-4">
-                <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-              </div>
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </div>
+    <div
+      className={`${withHeader ? 'artifact' : 'single-action-artifact'} border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150`}
+    >
+      {withHeader && header}
       <AnimatePresence>
         {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
           <motion.div
@@ -119,9 +127,9 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             exit={{ height: '0px' }}
             transition={{ duration: 0.15 }}
           >
-            <div className="bg-bolt-elements-artifacts-borderColor h-[1px]" />
+            {withHeader && <div className="bg-bolt-elements-artifacts-borderColor h-[1px]" />}
 
-            <div className="p-5 text-left bg-bolt-elements-actions-background">
+            <div className={`${withHeader ? 'p-5' : 'p-3'} text-left bg-bolt-elements-actions-background`}>
               <ActionList actions={actions} />
             </div>
           </motion.div>

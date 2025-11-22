@@ -2,7 +2,7 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
-import { streamText, getMessagesForLLM, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
 import { createScopedLogger } from '~/utils/logger';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
@@ -12,8 +12,13 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
-import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/generate-artifact';
 import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
+import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/submit-actions';
+import {
+  SUBMIT_FILE_ACTION_FIELDS,
+  SUBMIT_MODIFY_ACTION_FIELDS,
+  SUBMIT_SHELL_ACTION_FIELDS,
+} from '~/lib/constants/tool-fields';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -23,84 +28,39 @@ function createBoltArtifactXML(id?: string, title?: string, body?: string): stri
   return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
 }
 
-function toBoltArtifactXML(a: any) {
-  const { id, title, actions } = a;
+function toBoltSubmitActionsXML(artifactCounter: number, toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number], input: any) {
+  let xmlContent = '';
 
-  // Group modify actions by path
-  const modifyGroups = new Map<string, any[]>();
-  const otherActions: any[] = [];
+  if (toolName === TOOL_NAMES.SUBMIT_FILE_ACTION) {
+    const normalizedContent = input[SUBMIT_FILE_ACTION_FIELDS.PATH].endsWith('.md')
+      ? input[SUBMIT_FILE_ACTION_FIELDS.CONTENT]
+      : normalizeContent(input[SUBMIT_FILE_ACTION_FIELDS.CONTENT]);
+    xmlContent = `  <boltAction type="file" filePath="${input[SUBMIT_FILE_ACTION_FIELDS.PATH]}">${normalizedContent}</boltAction>`;
+  } else if (toolName === TOOL_NAMES.SUBMIT_MODIFY_ACTION) {
+    xmlContent = `  <boltAction type="modify" filePath="${input[SUBMIT_MODIFY_ACTION_FIELDS.PATH]}"><![CDATA[${JSON.stringify(input[SUBMIT_MODIFY_ACTION_FIELDS.ITEMS])}]]></boltAction>`;
+  } else if (toolName === TOOL_NAMES.SUBMIT_SHELL_ACTION) {
+    let command = input[SUBMIT_SHELL_ACTION_FIELDS.COMMAND];
 
-  for (const act of actions) {
-    if (act.type === 'modify' && act.path && act.before && act.after) {
-      if (!modifyGroups.has(act.path)) {
-        modifyGroups.set(act.path, []);
-      }
+    // Normalize package manager commands to bun
+    command = command
+      .replace(/^npm add /, 'bun add ')
+      .replace(/^yarn add /, 'bun add ')
+      .replace(/^pnpm add /, 'bun add ');
 
-      // Normalize before and after content (skip for markdown files)
-      modifyGroups.get(act.path)!.push({
-        before: act.before,
-        after: act.after,
-      });
-    } else {
-      otherActions.push(act);
-    }
+    xmlContent = `  <boltAction type="shell">${command}</boltAction>`;
   }
 
-  // Create grouped modify actions
-  const groupedModifyActions: any[] = [];
-
-  for (const [path, modifications] of modifyGroups) {
-    groupedModifyActions.push({
-      type: 'modify',
-      path,
-      modifications,
-    });
-  }
-
-  // Combine and process all actions
-  const allActions = [...groupedModifyActions, ...otherActions]
-    .filter(
-      (act: any) =>
-        (act.content && act.path) ||
-        (act.type === 'modify' && act.path && act.modifications) ||
-        (act.type === 'shell' && act.command && !act.path),
-    )
-    .sort((a: any, b: any) => {
-      if (a.type === 'shell' && b.type !== 'shell') {
-        return -1;
-      }
-
-      if (a.type !== 'shell' && b.type === 'shell') {
-        return 1;
-      }
-
-      return 0;
-    });
-
-  const body = allActions
-    .map((act: any) => {
-      if (act.type === 'modify' && act.modifications) {
-        return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
-      }
-
-      if (act.path && act.content !== undefined) {
-        // Normalize file content (skip for markdown files)
-        const normalizedContent = act.path.endsWith('.md') ? act.content : normalizeContent(act.content);
-        return `  <boltAction type="file" filePath="${act.path}">${normalizedContent}</boltAction>`;
-      }
-
-      return `  <boltAction type="shell">${act.command}</boltAction>`;
-    })
-    .join('\n');
-
-  return createBoltArtifactXML(id, title, body);
+  return createBoltArtifactXML(`artifact-${artifactCounter}`, undefined, xmlContent);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
-const MAX_GENERATE_ARTIFACT_RETRIES = 2;
-
+const SUBMIT_ACTIONS_TOOLS = [
+  TOOL_NAMES.SUBMIT_FILE_ACTION,
+  TOOL_NAMES.SUBMIT_MODIFY_ACTION,
+  TOOL_NAMES.SUBMIT_SHELL_ACTION,
+] as const;
 const logger = createScopedLogger('api.chat');
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
@@ -166,10 +126,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const progressUnsubscribers: Array<() => void> = [];
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
-        // Track generate_artifact retry attempts
-        let generateArtifactRetryCount = 0;
-        const collectedToolResults: any[] = [];
-
         for (const toolName in mcpTools) {
           if (mcpTools[toolName]) {
             const tool = mcpTools[toolName];
@@ -231,10 +187,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
+          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
+            logger.info(`finishReason: ${finishReason}`);
+            logger.info(`cachedInputTokens: ${totalUsage?.cachedInputTokens}`);
+
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
-            const { model, provider, parts: lastUserMessageParts } = extractPropertiesFromMessage(lastUserMessage);
+            const { model, provider } = extractPropertiesFromMessage(lastUserMessage);
 
             if (totalUsage) {
               cumulativeUsage.promptTokens += totalUsage.inputTokens || 0;
@@ -247,111 +206,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
-            }
-
-            // Check if generate_artifact tool was called
-            const hasGenerateArtifact = response?.messages?.some((msg: any) => {
-              if (msg.role !== 'tool') {
-                return false;
-              }
-
-              return msg.content?.some(
-                (item: any) =>
-                  item.type === 'tool-result' &&
-                  item.toolName === TOOL_NAMES.GENERATE_ARTIFACT &&
-                  item.output?.value?.[COMPLETE_FIELD] === true,
-              );
-            });
-
-            logger.info(
-              `onFinish callback: finishReason(${finishReason}), hasGenerateArtifact(${hasGenerateArtifact}), content length(${content.trim().length})`,
-            );
-
-            // Retry if tool was not called and response is not empty
-            if (!hasGenerateArtifact && generateArtifactRetryCount < MAX_GENERATE_ARTIFACT_RETRIES) {
-              generateArtifactRetryCount++;
-              logger.warn(
-                `Model finished without generating artifact via ${TOOL_NAMES.GENERATE_ARTIFACT} tool. Retry attempt ${generateArtifactRetryCount}/${MAX_GENERATE_ARTIFACT_RETRIES}...`,
-              );
-
-              /*
-               * Collect tool-results from response to pass to streamText
-               * These will be added as ToolModelMessage in the core messages
-               */
-              if (response?.messages && response.messages.length > 0) {
-                for (const msg of response.messages) {
-                  if (msg.role === 'tool') {
-                    // Collect tool-results (exclude GENERATE_ARTIFACT)
-                    const toolResults = Array.isArray(msg.content)
-                      ? msg.content.filter(
-                          (item: any) => item.type === 'tool-result' && item.toolName !== TOOL_NAMES.GENERATE_ARTIFACT,
-                        )
-                      : [];
-
-                    if (toolResults.length > 0) {
-                      collectedToolResults.push(...toolResults);
-                    }
-                  }
-                }
-              }
-
-              // Add assistant's text response if present
-              if (content && content.trim().length > 0) {
-                messages.push({
-                  id: generateId(),
-                  role: 'assistant',
-                  parts: [{ type: 'text', text: content }],
-                });
-              }
-
-              let retryMessageText = `Understood. I will now call the ${TOOL_NAMES.GENERATE_ARTIFACT} tool to generate the artifact with the changes I just described.\n\n[IMPORTANT: Continue responding in the SAME LANGUAGE as the user's original request above.]`;
-
-              // Create a copy of messages with the assistant message we're about to add
-              const tempMessages = [...messages];
-              tempMessages.push({
-                id: generateId(),
-                role: 'assistant',
-                parts: [{ type: 'text', text: retryMessageText }],
-              });
-
-              const messagesForLLM = getMessagesForLLM(tempMessages);
-              const hasUserInMessagesForLLM = messagesForLLM.some((msg: any) => msg.role === 'user');
-
-              if (!hasUserInMessagesForLLM) {
-                const userRequestText =
-                  lastUserMessageParts
-                    ?.filter((part: any) => part.type === 'text')
-                    .map((part: any) => part.text)
-                    .join(' ') || 'the requested task';
-
-                retryMessageText = `[User Request: ${userRequestText}]\n\n${retryMessageText}`;
-              }
-
-              messages.push({
-                id: generateId(),
-                role: 'assistant',
-                parts: [
-                  {
-                    type: 'text',
-                    text: retryMessageText,
-                  },
-                ],
-              });
-
-              // Retry with forced tool choice, passing tool results
-              const retryResult = await streamText({
-                messages,
-                env,
-                options,
-                files,
-                tools: mcpTools,
-                abortSignal: request.signal,
-                toolResults: collectedToolResults.length > 0 ? collectedToolResults : undefined,
-              });
-
-              writer.merge(retryResult.toUIMessageStream({ sendReasoning: false }));
-
-              return;
             }
 
             if (finishReason !== 'length') {
@@ -465,7 +319,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          const generateArtifactInputs = new Map<string, unknown>();
+          let artifactCounter = 0;
+          const submitActionsInputs = new Map<
+            string,
+            { toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number]; input: unknown }
+          >();
 
           return (chunk, controller) => {
             const messageType = chunk.type;
@@ -515,8 +373,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool call message
               case 'tool-input-available': {
-                if (chunk.toolName === TOOL_NAMES.GENERATE_ARTIFACT) {
-                  generateArtifactInputs.set(chunk.toolCallId, chunk.input);
+                if (SUBMIT_ACTIONS_TOOLS.includes(chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number])) {
+                  submitActionsInputs.set(chunk.toolCallId, {
+                    toolName: chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number],
+                    input: chunk.input,
+                  });
 
                   break;
                 }
@@ -550,16 +411,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool result message
               case 'tool-output-available': {
-                if (generateArtifactInputs.has(chunk.toolCallId)) {
-                  const artifactData = generateArtifactInputs.get(chunk.toolCallId);
-                  generateArtifactInputs.delete(chunk.toolCallId);
+                if (submitActionsInputs.has(chunk.toolCallId)) {
+                  const { toolName, input } = submitActionsInputs.get(chunk.toolCallId)!;
+                  submitActionsInputs.delete(chunk.toolCallId);
 
                   if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
                     break;
                   }
 
-                  const xmlContent = toBoltArtifactXML(artifactData);
-
+                  const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input);
                   controller.enqueue({
                     type: 'text-start',
                     id: chunk.toolCallId,
@@ -606,8 +466,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               case 'tool-output-error': {
-                // Skip generateArtifact.
-                if (generateArtifactInputs.has(chunk.toolCallId)) {
+                // Skip submit actions.
+                if (submitActionsInputs.has(chunk.toolCallId)) {
                   break;
                 }
 

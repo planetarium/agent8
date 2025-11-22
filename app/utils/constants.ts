@@ -23,19 +23,19 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
@@ -88,7 +88,9 @@ export const TOOL_NAMES = {
   UNKNOWN_HANDLER: '__system_unknownToolHandler',
   INVALID_TOOL_INPUT_HANDLER: '__system_invalidToolInputHandler',
 
-  GENERATE_ARTIFACT: 'generate_artifact',
+  SUBMIT_FILE_ACTION: 'submit_file_action',
+  SUBMIT_MODIFY_ACTION: 'submit_modify_action',
+  SUBMIT_SHELL_ACTION: 'submit_shell_action',
   SEARCH_FILE_CONTENTS: 'search_file_contents',
   READ_FILES_CONTENTS: 'read_files_contents',
 } as const;

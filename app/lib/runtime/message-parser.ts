@@ -271,9 +271,7 @@ export class StreamingMessageParser {
               const type = this.#extractAttribute(artifactTag, 'type') as string;
               let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
-              if (!artifactTitle) {
-                logger.warn('Artifact title missing');
-              } else {
+              if (artifactTitle) {
                 artifactTitle = cleanEscapedTags(artifactTitle);
               }
 
