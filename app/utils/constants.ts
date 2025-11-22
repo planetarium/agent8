@@ -23,19 +23,19 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
