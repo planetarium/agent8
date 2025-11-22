@@ -161,7 +161,8 @@ export default class GoogleVertexProvider extends BaseProvider {
         clientEmail: credentials.clientEmail,
         privateKey: credentials.privateKey,
       },
-      fetch: this._createCustomFetch(),
+
+      // fetch: this._createCustomFetch(),
     };
   }
 
