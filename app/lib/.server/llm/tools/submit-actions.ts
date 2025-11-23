@@ -78,12 +78,19 @@ The existing file content is ready for you to review - no additional tool calls 
 
       orchestration.updatedSet.add(path);
 
+      const codeFilesCount = Array.from(orchestration.updatedSet).filter((p) => !p.endsWith('.md')).length;
+      let progressMessage = `File "${path}" created successfully (${content.length} characters). Total code files modified in this conversation: ${codeFilesCount}.`;
+
+      if (codeFilesCount >= 5) {
+        progressMessage += `\n\n⚠️ You have now modified ${codeFilesCount} code files in this conversation. Unless absolutely necessary, you should:\n1. Update PROJECT/Status.md with any remaining work\n2. Complete your current response\n3. Let the user continue in the next request`;
+      }
+
       return {
         [COMPLETE_FIELD]: true,
         path,
         content_size: content.length,
         type: 'file',
-        systemMessage: `File "${path}" created successfully (${content.length} characters).`,
+        systemMessage: progressMessage,
       };
     },
   });
@@ -201,12 +208,19 @@ The existing file content is ready for you to use - no additional tool calls nee
 
       orchestration.updatedSet.add(path);
 
+      const codeFilesCount = Array.from(orchestration.updatedSet).filter((p) => !p.endsWith('.md')).length;
+      let progressMessage = `File "${path}" modified successfully (${items.length} ${items.length === 1 ? 'change' : 'changes'} applied). Total code files modified in this conversation: ${codeFilesCount}.`;
+
+      if (codeFilesCount >= 5) {
+        progressMessage += `\n\n⚠️ You have now modified ${codeFilesCount} code files in this conversation. Unless absolutely necessary, you should:\n1. Update PROJECT/Status.md with any remaining work\n2. Complete your current response\n3. Let the user continue in the next request`;
+      }
+
       return {
         [COMPLETE_FIELD]: true,
         path,
         modifications_count: items.length,
         type: 'modify',
-        systemMessage: `File "${path}" modified successfully (${items.length} ${items.length === 1 ? 'change' : 'changes'} applied).`,
+        systemMessage: progressMessage,
       };
     },
   });
