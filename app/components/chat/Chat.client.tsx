@@ -757,6 +757,9 @@ export const ChatImpl = memo(
         return;
       }
 
+      chatRequestStartTimeRef.current = performance.now();
+      lastUserPromptRef.current = messageContent;
+
       if (chatStarted && Object.keys(files).length === 0) {
         const fileRecoveryStartTime = performance.now();
         let recoverySuccessful = false;
@@ -1115,9 +1118,6 @@ export const ChatImpl = memo(
             setMessages(() => []);
           }
         }
-
-        chatRequestStartTimeRef.current = performance.now();
-        lastUserPromptRef.current = messageContent;
 
         // Send new message immediately - useChat will use the latest state
         sendChatMessage({
