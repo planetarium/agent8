@@ -36,9 +36,9 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'claude-3-7-sonnet-20250219',
   },
   {
-    label: 'GPT-5',
+    label: 'GPT-5.1',
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
-    modelName: 'openai/gpt-5',
+    modelName: 'openai/gpt-5.1',
     userSelectable: true,
   },
   {
@@ -47,9 +47,25 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'openai/o4-mini',
   },
   {
+    label: 'Gemini 3 Pro',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+    modelName: 'gemini-3-pro-preview',
+    userSelectable: true,
+  },
+  {
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'google/gemini-2.5-pro',
+  },
+  {
+    label: 'Gemini 2.5 Pro',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+    modelName: 'gemini-2.5-pro',
+  },
+  {
+    label: 'Gemini 2.5 Pro',
+    providerName: PROVIDER_NAMES.GOOGLE,
+    modelName: 'gemini-2.5-pro',
   },
   {
     label: 'Gemini 2.5 Flash',
@@ -57,15 +73,9 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     modelName: 'google/gemini-2.5-flash',
   },
   {
-    label: 'Gemini 2.5 Pro',
+    label: 'Gemini 2.5 Flash',
     providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
-    modelName: 'gemini-2.5-pro',
-    userSelectable: true,
-  },
-  {
-    label: 'Gemini 2.5 Pro',
-    providerName: PROVIDER_NAMES.GOOGLE,
-    modelName: 'gemini-2.5-pro',
+    modelName: 'gemini-2.5-flash',
   },
   {
     label: 'Grok4',
@@ -77,6 +87,11 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'x-ai/grok-4',
     userSelectable: true,
+  },
+  {
+    label: 'Grok Code Fast 1',
+    providerName: PROVIDER_NAMES.OPEN_ROUTER,
+    modelName: 'x-ai/grok-code-fast-1',
   },
 ];
 

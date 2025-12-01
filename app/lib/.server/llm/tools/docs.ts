@@ -65,7 +65,7 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
     if (currentVibeStarter3dDocs) {
       Object.keys(tools).forEach((key) => {
         if (currentVibeStarter3dDocs.hasOwnProperty(key)) {
-          logger.debug(`Found vibe-starter-3d docTools key: ${key}`);
+          // logger.debug(`Found vibe-starter-3d docTools key: ${key}`);
 
           tools[key].execute = async () => {
             return { content: currentVibeStarter3dDocs[key] };
@@ -84,7 +84,7 @@ export async function createDocTools(env: Env, files: any): Promise<Record<strin
     if (currentVibeStarter3dEnvironmentDocs) {
       Object.keys(tools).forEach((key) => {
         if (currentVibeStarter3dEnvironmentDocs.hasOwnProperty(key)) {
-          logger.debug(`Found vibe-starter-3d-environment docTools key: ${key}`);
+          // logger.debug(`Found vibe-starter-3d-environment docTools key: ${key}`);
 
           tools[key].execute = async () => {
             return { content: currentVibeStarter3dEnvironmentDocs[key] };
@@ -123,15 +123,16 @@ async function getVibeLibraryDocs(
     savedDocs[version] = {};
 
     const docsUrl = `https://app.unpkg.com/${packageName}@${version}/files/docs`;
-
-    const docsResponse = await fetchWithCache(docsUrl);
+    const request = new Request(docsUrl);
+    const docsResponse = await fetchWithCache(request);
     const html = await docsResponse.text();
 
     const markdownFileNames = extractMarkdownFileNamesFromUnpkgHtml(html);
 
     for (const markdownFileName of markdownFileNames) {
       const markdownUrl = `https://unpkg.com/${packageName}@${version}/docs/${markdownFileName}`;
-      const markdownResponse = await fetchWithCache(markdownUrl);
+      const request = new Request(markdownUrl);
+      const markdownResponse = await fetchWithCache(request);
       const markdown = await markdownResponse.text();
       const keyName = path.basename(markdownFileName, '.md');
       savedDocs[version][keyName] = markdown;

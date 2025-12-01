@@ -1,9 +1,8 @@
 import type { ActionType, BoltAction, BoltActionData, FileAction, ModifyAction, ShellAction } from '~/types/actions';
 import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
-import { extractFromCDATA } from '~/utils/stringUtils';
+import { cleanEscapedTags, extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
-import { cleanEscapedTags } from '~/lib/utils';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
@@ -54,32 +53,8 @@ interface MessageState {
   actionId: number;
 }
 
-export function cleanoutFileContent(content: string, filePath: string): string {
-  return cleanoutContent(content, filePath) + '\n';
-}
-
-export function cleanoutContent(content: string, filePath: string): string {
-  let processedContent = content.trim();
-
-  // Remove markdown code block syntax if present and file is not markdown
-  if (!filePath.endsWith('.md')) {
-    processedContent = cleanoutCodeblockSyntax(processedContent);
-    processedContent = cleanEscapedTags(processedContent);
-  }
-
-  return processedContent;
-}
-
-function cleanoutCodeblockSyntax(content: string) {
-  const markdownCodeBlockRegex = /^\s*```\w*\n([\s\S]*?)\n\s*```\s*$/;
-
-  const markdownMatch = content.match(markdownCodeBlockRegex);
-
-  if (markdownMatch) {
-    return markdownMatch[1];
-  }
-
-  return extractFromCDATA(content);
+function cleanoutFileContent(content: string): string {
+  return content.trim() + '\n';
 }
 
 export class StreamingMessageParser {
@@ -130,7 +105,7 @@ export class StreamingMessageParser {
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
+              content = cleanoutFileContent(content);
             } else {
               content = extractFromCDATA(content);
             }
@@ -194,7 +169,7 @@ export class StreamingMessageParser {
             let content = currentAction.content.trim();
 
             if ('type' in currentAction && currentAction.type === 'file') {
-              content = cleanoutFileContent(content, currentAction.filePath);
+              content = cleanoutFileContent(content);
             }
 
             currentAction.content = content;
@@ -218,7 +193,7 @@ export class StreamingMessageParser {
             i = artifactCloseIndex + ARTIFACT_TAG_CLOSE.length;
           } else {
             if ('type' in currentAction && currentAction.type === 'file') {
-              const content = cleanoutFileContent(input.slice(i), currentAction.filePath);
+              const content = cleanoutFileContent(input.slice(i));
 
               this._options.callbacks?.onActionStream?.({
                 artifactId: currentArtifact.id,
@@ -296,9 +271,7 @@ export class StreamingMessageParser {
               const type = this.#extractAttribute(artifactTag, 'type') as string;
               let artifactId = this.#extractAttribute(artifactTag, 'id') as string;
 
-              if (!artifactTitle) {
-                logger.warn('Artifact title missing');
-              } else {
+              if (artifactTitle) {
                 artifactTitle = cleanEscapedTags(artifactTitle);
               }
 

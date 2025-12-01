@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
 import { getTemplates } from '~/utils/selectStarterTemplate';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
@@ -41,35 +40,44 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
   const temporaryMode = JSON.parse(parsedCookies.temporaryMode || 'false');
 
   if (!templateName || !repo || !path) {
-    return json({ error: 'templateName, repo, and path are required' }, { status: 400 });
+    return Response.json({ error: 'templateName, repo, and path are required' }, { status: 400 });
   }
 
   if (!projectRepo) {
-    return json({ error: 'projectRepo is required' }, { status: 400 });
+    return Response.json({ error: 'projectRepo is required' }, { status: 400 });
+  }
+
+  if (!email) {
+    return Response.json({ error: 'User email is required' }, { status: 401 });
   }
 
   try {
     const cacheKey = `${templateName}`;
     const now = Date.now();
+    let template = templateCache[cacheKey];
 
     // Check if we have a valid cached response
-    if (!templateCache[cacheKey] || templateCache[cacheKey].expiresAt < now) {
+    if (!template || template.expiresAt < now) {
       // Cache miss or expired, fetch from GitHub
       logger.info(`Cache miss for template: ${cacheKey}, fetching from GitHub`);
 
-      const { fileMap, messages } = await getTemplates(repo, path, title, env);
+      const { fileMap, messages, isFallback } = await getTemplates(repo, path, title, env);
 
-      // Store in cache
-      templateCache[cacheKey] = {
+      template = {
         data: messages,
         fileMap,
         timestamp: now,
         expiresAt: now + CACHE_TTL,
       };
+
+      if (!isFallback) {
+        // Store in cache
+        templateCache[cacheKey] = template;
+      }
     }
 
     const gitlabService = new GitlabService(env, temporaryMode);
-    const fileMap = templateCache[cacheKey].fileMap;
+    const fileMap = template.fileMap;
 
     if (gitlabService.enabled) {
       const files = [];
@@ -87,8 +95,8 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
       const project = await gitlabService.createProject(gitlabUser, projectRepo, title);
       const commit = await gitlabService.commitFiles(project.id, files, 'Initial commit');
 
-      return json({
-        data: templateCache[cacheKey].data,
+      return Response.json({
+        data: template.data,
         fileMap,
         project: {
           id: project.id,
@@ -97,18 +105,18 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
           description: project.description,
         },
         commit: { id: commit.id },
-        cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+        cachedAt: new Date(template.timestamp).toISOString(),
       });
     }
 
-    return json({
-      data: templateCache[cacheKey].data,
+    return Response.json({
+      data: template.data,
       fileMap,
-      cachedAt: new Date(templateCache[cacheKey].timestamp).toISOString(),
+      cachedAt: new Date(template.timestamp).toISOString(),
     });
   } catch (error) {
     console.error('Error fetching template:', error);
-    return json({ error: 'Failed to fetch template', details: (error as Error).message }, { status: 500 });
+    return Response.json({ error: 'Failed to fetch template', details: (error as Error).message }, { status: 500 });
   }
 }
 
@@ -116,7 +124,7 @@ async function selectTemplateAction({ request, context }: ActionFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   // Only allow POST requests for cache management
   if (request.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, { status: 405 });
+    return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
 
   try {
@@ -134,20 +142,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (templateCache[cacheKey]) {
           delete templateCache[cacheKey];
-          return json({ success: true, message: `Cache cleared for ${cacheKey}` });
+          return Response.json({ success: true, message: `Cache cleared for ${cacheKey}` });
         }
 
-        return json({ success: false, message: 'Cache entry not found' });
+        return Response.json({ success: false, message: 'Cache entry not found' });
       } else {
         // Clear all cache
         Object.keys(templateCache).forEach((key) => delete templateCache[key]);
-        return json({ success: true, message: 'All cache cleared' });
+        return Response.json({ success: true, message: 'All cache cleared' });
       }
     }
 
-    return json({ error: 'Invalid action' }, { status: 400 });
+    return Response.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Error processing cache action:', error);
-    return json({ error: 'Failed to process request' }, { status: 500 });
+    return Response.json({ error: 'Failed to process request' }, { status: 500 });
   }
 }

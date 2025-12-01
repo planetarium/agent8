@@ -4,44 +4,26 @@
  */
 
 /**
- * Submit artifact field names
+ * Submit file action field names
  */
-export const SUBMIT_ARTIFACT_FIELDS = {
-  ID: 'id',
-  TITLE: 'title',
-  SUMMARY: 'summary',
-  FILE_ACTIONS: 'fileActions',
-  MODIFY_ACTIONS: 'modifyActions',
-  SHELL_ACTIONS: 'shellActions',
-} as const;
-
-/**
- * File action field names
- */
-export const FILE_ACTION_FIELDS = {
+export const SUBMIT_FILE_ACTION_FIELDS = {
   PATH: 'path',
   CONTENT: 'content',
 } as const;
 
 /**
- * Modify action field names
+ * Submit modify action field names
  */
-export const MODIFY_ACTION_FIELDS = {
+export const SUBMIT_MODIFY_ACTION_FIELDS = {
   PATH: 'path',
-  MODIFICATIONS: 'modifications',
-} as const;
-
-/**
- * Modification field names
- */
-export const MODIFICATION_FIELDS = {
+  ITEMS: 'items',
   BEFORE: 'before',
   AFTER: 'after',
 } as const;
 
 /**
- * Shell action field names
+ * Submit shell action field names
  */
-export const SHELL_ACTION_FIELDS = {
+export const SUBMIT_SHELL_ACTION_FIELDS = {
   COMMAND: 'command',
 } as const;

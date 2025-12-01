@@ -12,7 +12,13 @@ import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
-import { sanitizeXmlAttributeValue } from '~/lib/utils';
+import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
+import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/submit-actions';
+import {
+  SUBMIT_FILE_ACTION_FIELDS,
+  SUBMIT_MODIFY_ACTION_FIELDS,
+  SUBMIT_SHELL_ACTION_FIELDS,
+} from '~/lib/constants/tool-fields';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -22,35 +28,39 @@ function createBoltArtifactXML(id?: string, title?: string, body?: string): stri
   return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
 }
 
-function toBoltArtifactXML(a: any) {
-  const { id, title, shellActions, fileActions, modifyActions } = a;
+function toBoltSubmitActionsXML(artifactCounter: number, toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number], input: any) {
+  let xmlContent = '';
 
-  const shellBody = (shellActions || [])
-    .map((act: any) => `  <boltAction type="shell">${act.command}</boltAction>`)
-    .join('\n');
+  if (toolName === TOOL_NAMES.SUBMIT_FILE_ACTION) {
+    const normalizedContent = input[SUBMIT_FILE_ACTION_FIELDS.PATH].endsWith('.md')
+      ? input[SUBMIT_FILE_ACTION_FIELDS.CONTENT]
+      : normalizeContent(input[SUBMIT_FILE_ACTION_FIELDS.CONTENT]);
+    xmlContent = `  <boltAction type="file" filePath="${input[SUBMIT_FILE_ACTION_FIELDS.PATH]}">${normalizedContent}</boltAction>`;
+  } else if (toolName === TOOL_NAMES.SUBMIT_MODIFY_ACTION) {
+    xmlContent = `  <boltAction type="modify" filePath="${input[SUBMIT_MODIFY_ACTION_FIELDS.PATH]}"><![CDATA[${JSON.stringify(input[SUBMIT_MODIFY_ACTION_FIELDS.ITEMS])}]]></boltAction>`;
+  } else if (toolName === TOOL_NAMES.SUBMIT_SHELL_ACTION) {
+    let command = input[SUBMIT_SHELL_ACTION_FIELDS.COMMAND];
 
-  const fileBody = (fileActions || [])
-    .map((act: any) => {
-      return `  <boltAction type="file" filePath="${act.path}">${act.content}</boltAction>`;
-    })
-    .join('\n');
+    // Normalize package manager commands to bun
+    command = command
+      .replace(/^npm add /, 'bun add ')
+      .replace(/^yarn add /, 'bun add ')
+      .replace(/^pnpm add /, 'bun add ');
 
-  const modifyBody = (modifyActions || [])
-    .map((act: any) => {
-      return `  <boltAction type="modify" filePath="${act.path}"><![CDATA[${JSON.stringify(act.modifications)}]]></boltAction>`;
-    })
-    .join('\n');
+    xmlContent = `  <boltAction type="shell">${command}</boltAction>`;
+  }
 
-  const body = [shellBody, fileBody, modifyBody].filter(Boolean).join('\n');
-
-  return createBoltArtifactXML(id, title, body);
+  return createBoltArtifactXML(`artifact-${artifactCounter}`, undefined, xmlContent);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
 
 const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
-const MAX_SUBMIT_ARTIFACT_RETRIES = 2;
-
+const SUBMIT_ACTIONS_TOOLS = [
+  TOOL_NAMES.SUBMIT_FILE_ACTION,
+  TOOL_NAMES.SUBMIT_MODIFY_ACTION,
+  TOOL_NAMES.SUBMIT_SHELL_ACTION,
+] as const;
 const logger = createScopedLogger('api.chat');
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
@@ -116,9 +126,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const progressUnsubscribers: Array<() => void> = [];
         logger.info(`MCP tools count: ${Object.keys(mcpTools).length}`);
 
-        // Track submit_artifact retry attempts
-        let submitArtifactRetryCount = 0;
-
         for (const toolName in mcpTools) {
           if (mcpTools[toolName]) {
             const tool = mcpTools[toolName];
@@ -180,9 +187,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         const options: StreamingOptions = {
           toolChoice: 'auto',
-          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata, response }) => {
-            console.log('=== ON_FINISH CALLBACK ===');
-            console.log('finishReason:', finishReason);
+          onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
+            logger.info(`finishReason: ${finishReason}`);
+            logger.info(`cachedInputTokens: ${totalUsage?.cachedInputTokens}`);
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
@@ -199,60 +206,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
               cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
-            }
-
-            // Check if submit_artifact tool was called
-            const hasSubmitArtifact = response?.messages?.some(
-              (msg: any) =>
-                msg.role === 'assistant' &&
-                msg.toolCalls?.some((tc: any) => tc.toolName === TOOL_NAMES.SUBMIT_ARTIFACT),
-            );
-
-            // Retry if tool was not called and response is not empty
-            if (
-              !hasSubmitArtifact &&
-              (finishReason === 'stop' || finishReason === 'unknown') &&
-              content.trim().length > 0 &&
-              submitArtifactRetryCount < MAX_SUBMIT_ARTIFACT_RETRIES
-            ) {
-              submitArtifactRetryCount++;
-              logger.warn(
-                `Model finished without calling ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. Retry attempt ${submitArtifactRetryCount}/${MAX_SUBMIT_ARTIFACT_RETRIES}...`,
-              );
-
-              // Add retry messages
-              messages.push({
-                id: generateId(),
-                role: 'assistant',
-                parts: [{ type: 'text', text: content }],
-              });
-              messages.push({
-                id: generateId(),
-                role: 'user',
-                parts: [
-                  {
-                    type: 'text',
-                    text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\nYou described the changes but did not call the ${TOOL_NAMES.SUBMIT_ARTIFACT} tool. You MUST call it now with the changes you just described. This is MANDATORY.`,
-                  },
-                ],
-              });
-
-              // Retry with forced tool choice
-              const retryResult = await streamText({
-                messages,
-                env,
-                options: {
-                  ...options,
-                  toolChoice: { type: 'tool', toolName: TOOL_NAMES.SUBMIT_ARTIFACT },
-                },
-                files,
-                tools: mcpTools,
-                abortSignal: request.signal,
-              });
-
-              writer.merge(retryResult.toUIMessageStream({ sendReasoning: false }));
-
-              return;
             }
 
             if (finishReason !== 'length') {
@@ -305,7 +258,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
             logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
-            messages.push({ id: generateId(), role: 'assistant', parts: [{ type: 'text', text: content }] });
+            // Only add assistant message if content is not empty
+            if (content && content.trim().length > 0) {
+              messages.push({ id: generateId(), role: 'assistant', parts: [{ type: 'text', text: content }] });
+            }
+
             messages.push({
               id: generateId(),
               role: 'user',
@@ -362,8 +319,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     }).pipeThrough(
       new TransformStream({
         transform: (() => {
-          let isSubmitArtifact = false;
-          const submitArtifactInputs = new Map<string, unknown>();
+          let artifactCounter = 0;
+          const submitActionsInputs = new Map<
+            string,
+            { toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number]; input: unknown }
+          >();
 
           return (chunk, controller) => {
             const messageType = chunk.type;
@@ -413,8 +373,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool call message
               case 'tool-input-available': {
-                if (chunk.toolName === TOOL_NAMES.SUBMIT_ARTIFACT) {
-                  submitArtifactInputs.set(chunk.toolCallId, chunk.input);
+                if (SUBMIT_ACTIONS_TOOLS.includes(chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number])) {
+                  submitActionsInputs.set(chunk.toolCallId, {
+                    toolName: chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number],
+                    input: chunk.input,
+                  });
 
                   break;
                 }
@@ -448,32 +411,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               // tool result message
               case 'tool-output-available': {
-                if (submitArtifactInputs.has(chunk.toolCallId)) {
-                  const artifactData = submitArtifactInputs.get(chunk.toolCallId);
+                if (submitActionsInputs.has(chunk.toolCallId)) {
+                  const { toolName, input } = submitActionsInputs.get(chunk.toolCallId)!;
+                  submitActionsInputs.delete(chunk.toolCallId);
 
-                  const xmlContent = toBoltArtifactXML(artifactData);
-                  submitArtifactInputs.delete(chunk.toolCallId);
-
-                  // only enqueue the submit artifact once
-                  if (!isSubmitArtifact) {
-                    controller.enqueue({
-                      type: 'text-start',
-                      id: chunk.toolCallId,
-                    });
-
-                    controller.enqueue({
-                      type: 'text-delta',
-                      id: chunk.toolCallId,
-                      delta: '\n' + xmlContent + '\n',
-                    });
-
-                    controller.enqueue({
-                      type: 'text-end',
-                      id: chunk.toolCallId,
-                    });
-
-                    isSubmitArtifact = true;
+                  if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
+                    break;
                   }
+
+                  const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input);
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: chunk.toolCallId,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.toolCallId,
+                    delta: '\n' + xmlContent + '\n',
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: chunk.toolCallId,
+                  });
 
                   break;
                 }
@@ -505,8 +466,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               }
 
               case 'tool-output-error': {
-                // Skip submitArtifact.
-                if (submitArtifactInputs.has(chunk.toolCallId)) {
+                // Skip submit actions.
+                if (submitActionsInputs.has(chunk.toolCallId)) {
                   break;
                 }
 

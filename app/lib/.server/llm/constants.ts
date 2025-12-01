@@ -23,7 +23,7 @@ export type FileMap = Record<string, Dirent | undefined>;
 
 export type Orchestration = {
   readSet: Set<string>;
-  submitted: boolean;
+  updatedSet: Set<string>;
 };
 
 export const TOOL_ERROR = {

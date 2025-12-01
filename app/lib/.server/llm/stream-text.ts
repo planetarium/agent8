@@ -5,10 +5,11 @@ import {
   type SystemModelMessage,
   type UIMessage,
   NoSuchToolError,
-  InvalidToolInputError,
-  hasToolCall,
+  type ToolContent,
+  type ToolModelMessage,
+  type ModelMessage,
 } from 'ai';
-import { MAX_TOKENS, TOOL_ERROR, type FileMap, type Orchestration } from './constants';
+import { MAX_TOKENS, type FileMap, type Orchestration } from './constants';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -30,11 +31,16 @@ import {
   getProjectPackagesPrompt,
   getAgent8Prompt,
   getVibeStarter3dSpecPrompt,
+  getResponseFormatPrompt,
+  getWorkflowPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
-import { createInvalidToolInputHandler } from './tools/error-handle';
-import { createSubmitArtifactActionTool } from './tools/action';
+import {
+  createSubmitFileActionTool,
+  createSubmitModifyActionTool,
+  createSubmitShellActionTool,
+} from './tools/submit-actions';
 import { createUnknownToolHandler } from './tools/error-handle';
 import { is3dProject } from '~/lib/utils';
 
@@ -43,10 +49,18 @@ export type Messages = UIMessage[];
 export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model' | 'messages' | 'prompt' | 'system'>;
 
 function createOrchestration(): Orchestration {
-  return { readSet: new Set(), submitted: false };
+  return { readSet: new Set(), updatedSet: new Set() };
 }
 
 const logger = createScopedLogger('stream-text');
+
+const MESSAGE_COUNT_FOR_LLM = 3;
+
+export function getMessagesForLLM(messages: UIMessage[]) {
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .slice(-MESSAGE_COUNT_FOR_LLM);
+}
 
 export async function streamText(props: {
   messages: Array<Omit<UIMessage, 'id'>>;
@@ -55,15 +69,30 @@ export async function streamText(props: {
   files?: FileMap;
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
+  toolResults?: ToolContent;
 }) {
-  const { messages, env: serverEnv, options, files, tools, abortSignal } = props;
-  const toolRepairAttempts = new Map<string, number>();
-  const MAX_REPAIR_ATTEMPTS = 3;
-
+  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
   const orchestration = createOrchestration();
+
+  // Populate orchestration.readSet from toolResults if provided (for retry scenarios)
+  if (toolResults && Array.isArray(toolResults)) {
+    for (const toolResult of toolResults) {
+      if (toolResult.type === 'tool-result' && toolResult.toolName === TOOL_NAMES.READ_FILES_CONTENTS) {
+        const output = toolResult.output?.value as any;
+
+        if (output?.files && Array.isArray(output.files)) {
+          for (const file of output.files) {
+            if (file.path && file.content) {
+              orchestration.readSet.add(file.path);
+            }
+          }
+        }
+      }
+    }
+  }
 
   const processedMessages = messages.map((message) => {
     if (message.role === 'user') {
@@ -126,16 +155,18 @@ export async function streamText(props: {
 
   const codebaseTools = await createSearchCodebase(serverEnv as Env);
   const resourcesTools = await createSearchResources(serverEnv as Env);
-  const invalidToolInputHandler = createInvalidToolInputHandler();
-  const submitArtifactActionTool = createSubmitArtifactActionTool(files, orchestration);
+  const submitFileActionTool = createSubmitFileActionTool(files, orchestration);
+  const submitModifyActionTool = createSubmitModifyActionTool(files, orchestration);
+  const submitShellActionTool = createSubmitShellActionTool();
   const unknownToolHandlerTool = createUnknownToolHandler();
 
   let combinedTools: Record<string, any> = {
     ...tools,
     ...codebaseTools,
     ...resourcesTools,
-    [TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER]: invalidToolInputHandler,
-    [TOOL_NAMES.SUBMIT_ARTIFACT]: submitArtifactActionTool,
+    [TOOL_NAMES.SUBMIT_FILE_ACTION]: submitFileActionTool,
+    [TOOL_NAMES.SUBMIT_MODIFY_ACTION]: submitModifyActionTool,
+    [TOOL_NAMES.SUBMIT_SHELL_ACTION]: submitShellActionTool,
     [TOOL_NAMES.UNKNOWN_HANDLER]: unknownToolHandlerTool,
   };
 
@@ -161,7 +192,7 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
-  const coreMessages = [
+  const coreMessages: ModelMessage[] = [
     ...[
       systemPrompt,
       getProjectFilesPrompt(files),
@@ -182,8 +213,26 @@ export async function streamText(props: {
       role: 'system',
       content: getProjectMdPrompt(files),
     } as SystemModelMessage,
-    ...convertToModelMessages(processedMessages).slice(-3),
+    {
+      role: 'system',
+      content: getResponseFormatPrompt(),
+    } as SystemModelMessage,
+    {
+      role: 'system',
+      content: getWorkflowPrompt(),
+    } as SystemModelMessage,
   ];
+
+  // Add tool results before recent messages (for retry scenarios with previous file reads)
+  if (toolResults && toolResults.length > 0) {
+    coreMessages.push({
+      role: 'tool',
+      content: toolResults,
+    } as ToolModelMessage);
+  }
+
+  // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
+  coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
 
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {
@@ -198,7 +247,7 @@ export async function streamText(props: {
     }),
     abortSignal,
     maxOutputTokens: dynamicMaxTokens,
-    stopWhen: [stepCountIs(15), hasToolCall(TOOL_NAMES.SUBMIT_ARTIFACT)],
+    stopWhen: [stepCountIs(30)],
     messages: coreMessages,
     tools: combinedTools,
     toolChoice: 'auto',
@@ -215,58 +264,9 @@ export async function streamText(props: {
             originalArgs: JSON.stringify(toolCall.input),
           }),
         };
-      } else if (InvalidToolInputError.isInstance(error)) {
-        // For SUBMIT_ARTIFACT tool, if it's a MISSING_FILE_CONTEXT error, try to repair by reading the missing files.
-        if (toolCall.toolName === TOOL_NAMES.SUBMIT_ARTIFACT && error.message) {
-          const match = error.message.match(/Error message:\s*({.*})/);
-
-          if (match) {
-            const errorData = match[1];
-            const parsedError = JSON.parse(errorData);
-
-            if (parsedError.name === TOOL_ERROR.MISSING_FILE_CONTEXT && parsedError.paths) {
-              return {
-                type: 'tool-call',
-                toolCallId: toolCall.toolCallId,
-                toolName: TOOL_NAMES.READ_FILES_CONTENTS,
-                input: JSON.stringify({ pathList: parsedError.paths }),
-              };
-            }
-          }
-        }
-
-        // For all other InvalidToolInputError cases, use the generic repair handler.
-        const toolName = toolCall.toolName;
-        const currentAttempts = toolRepairAttempts.get(toolName) || 0;
-
-        if (currentAttempts >= MAX_REPAIR_ATTEMPTS) {
-          logger.warn(`Max repair attempts (${MAX_REPAIR_ATTEMPTS}) reached for toolCallId: ${toolCall.toolCallId}`);
-          return null;
-        }
-
-        toolRepairAttempts.set(toolName, currentAttempts + 1);
-
-        return {
-          type: 'tool-call',
-          toolCallId: toolCall.toolCallId,
-          toolName: TOOL_NAMES.INVALID_TOOL_INPUT_HANDLER,
-          input: JSON.stringify({
-            originalTool: toolCall.toolName,
-          }),
-        };
       }
 
       return null;
-    },
-
-    prepareStep: async () => {
-      if (orchestration.submitted) {
-        return {
-          activeTools: [],
-        };
-      }
-
-      return undefined;
     },
     ...options,
   });

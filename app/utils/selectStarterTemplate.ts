@@ -5,13 +5,8 @@ import { STARTER_TEMPLATES } from './constants';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
-import {
-  TEMPLATE_2D_PHASER_BASIC,
-  TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY,
-  TEMPLATE_3D_BASIC,
-  TEMPLATE_3D_BASIC_QUARTERVIEW,
-  TEMPLATE_BASIC_VITE_REACT,
-} from '~/constants/template';
+import { TEMPLATE_BASIC, TEMPLATE_MAP } from '~/constants/template';
+import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
 
 // Zod schema for template selection response
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
@@ -159,6 +154,7 @@ export const selectStarterTemplate = async (options: { message: string }) => {
 
 const getGitHubRepoContent = async (repoName: string, path: string = '', env?: Env): Promise<FileMap> => {
   const baseUrl = 'https://api.github.com';
+  const cacheOptions: FetchWithCacheOptions = { onlyUrl: true, forcePublic: true, ignoreVary: true };
 
   try {
     const token = Cookies.get('githubToken') || import.meta.env.VITE_GITHUB_ACCESS_TOKEN || env?.GITHUB_TOKEN;
@@ -174,10 +170,9 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
 
     const ref = env?.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
 
-    // Fetch contents of the path
-    const response = await fetch(`${baseUrl}/repos/${repoName}/contents/${path}?ref=${ref}`, {
-      headers,
-    });
+    const url = `${baseUrl}/repos/${repoName}/contents/${path}?ref=${ref}`;
+    const request = new Request(url, { headers });
+    const response = await fetchWithCache(request, cacheOptions);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -198,7 +193,6 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
         const filePath = `${data.path}`;
         fileMap[filePath] = {
           type: 'file',
-
           content,
           isBinary: false,
         };
@@ -219,10 +213,8 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
         } else if (item.type === 'file') {
           // Fetch file content (construct URL with ref if provided)
           const fileUrl = `${baseUrl}/repos/${repoName}/contents/${item.path}?ref=${ref}`;
-
-          const fileResponse = await fetch(fileUrl, {
-            headers,
-          });
+          const request = new Request(fileUrl, { headers });
+          const fileResponse = await fetchWithCache(request, cacheOptions);
           const fileData: any = await fileResponse.json();
 
           // TextDecoder를 사용하여 UTF-8로 올바르게 디코딩
@@ -247,34 +239,7 @@ const getGitHubRepoContent = async (repoName: string, path: string = '', env?: E
   }
 };
 
-export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
-  if (path === '2d-phaser-basic') {
-    return {
-      fileMap: TEMPLATE_2D_PHASER_BASIC as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_2D_PHASER_BASIC as FileMap, title),
-    };
-  } else if (path === 'basic-3d') {
-    return {
-      fileMap: TEMPLATE_3D_BASIC as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_3D_BASIC as FileMap, title),
-    };
-  } else if (path === 'basic-3d-quarterview') {
-    return {
-      fileMap: TEMPLATE_3D_BASIC_QUARTERVIEW as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_3D_BASIC_QUARTERVIEW as FileMap, title),
-    };
-  } else if (path === '2d-phaser-sprite-character-gravity') {
-    return {
-      fileMap: TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_2D_PHASER_SPRITE_CHARACTER_GRAVITY as FileMap, title),
-    };
-  } else if (path === 'basic-vite-react') {
-    return {
-      fileMap: TEMPLATE_BASIC_VITE_REACT as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_BASIC_VITE_REACT as FileMap, title),
-    };
-  }
-
+async function getTemplateFileMap(githubRepo: string, path: string, env?: Env): Promise<FileMap | undefined> {
   try {
     const files = await getGitHubRepoContent(githubRepo, path, env);
 
@@ -286,13 +251,26 @@ export async function getTemplates(githubRepo: string, path: string, title?: str
       }
     }
 
-    return { fileMap, messages: generateTemplateMessages(fileMap, title) };
-  } catch {
-    return {
-      fileMap: TEMPLATE_BASIC_VITE_REACT as FileMap,
-      messages: generateTemplateMessages(TEMPLATE_BASIC_VITE_REACT as FileMap, title),
-    };
+    return fileMap;
+  } catch (error) {
+    console.log('[Template] GitHub fetch failed, using fallback:', path, error);
+
+    return TEMPLATE_MAP[path];
   }
+}
+
+export async function getTemplates(githubRepo: string, path: string, title?: string, env?: Env) {
+  let isFallback = false;
+  let fileMap = await getTemplateFileMap(githubRepo, path, env);
+
+  if (!fileMap) {
+    fileMap = TEMPLATE_BASIC;
+    isFallback = true;
+  }
+
+  const messages = generateTemplateMessages(fileMap, title);
+
+  return { fileMap, messages, isFallback };
 }
 
 export async function getZipTemplates(zipFile: File, title?: string) {

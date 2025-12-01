@@ -1,11 +1,13 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import type { GitlabProject } from '~/lib/persistenceGitbase/types';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
-import { logger } from '~/utils/logger';
+import { createScopedLogger } from '~/utils/logger';
 
 export const action = withV8AuthUser(commitsAction);
 export const loader = withV8AuthUser(commitsLoader);
+
+const logger = createScopedLogger('api.gitlab.commits');
 
 /**
  * Loader function for getting project commits
@@ -23,7 +25,7 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
   const all = url.searchParams.get('all') === 'true';
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   const parsedPage = parseInt(page, 10);
@@ -39,7 +41,7 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
     const accessCheck = await gitlabService.checkProjectAccess(user.email, projectPath);
 
     if (!accessCheck.hasAccess) {
-      return json({ success: false, message: accessCheck.reason || 'Project not found' }, { status: 404 });
+      return Response.json({ success: false, message: accessCheck.reason || 'Project not found' }, { status: 404 });
     }
 
     const result = await gitlabService.getProjectCommits(
@@ -51,7 +53,7 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
       all,
     );
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         project: result.project,
@@ -70,7 +72,10 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    return json({ success: false, message: `Failed to fetch project commits: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to fetch project commits: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
 
@@ -80,10 +85,11 @@ async function commitsLoader({ context, request }: ActionFunctionArgs) {
 async function commitsAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
   const user = context?.user as { email: string; isActivated: boolean };
-
-  const gitlabService = new GitlabService(env);
-
   const email = user.email;
+
+  if (!email) {
+    return Response.json({ success: false, message: 'User email is required' }, { status: 401 });
+  }
 
   // JSON 데이터로 받기
   const requestData = (await request.json()) as {
@@ -109,16 +115,18 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
   const deletedFiles = requestData.deletedFiles;
 
   if (!projectName && !isFirstCommit) {
-    return json({ success: false, message: 'Project name is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project name is required' }, { status: 400 });
   }
 
   if (!files || !Array.isArray(files) || files.length === 0) {
-    return json({ success: false, message: 'Files are required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Files are required' }, { status: 400 });
   }
 
   if (files.find((file) => file.path === '.secret')) {
-    return json({ success: false, message: 'Secret file is not allowed' }, { status: 400 });
+    return Response.json({ success: false, message: 'Secret file is not allowed' }, { status: 400 });
   }
+
+  const gitlabService = new GitlabService(env);
 
   try {
     // Get or create GitLab user
@@ -132,12 +140,12 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
       project = await gitlabService.getProject(gitlabUser, projectName);
     }
 
-    logger.info('project', project);
+    logger.info('project', JSON.stringify(project));
 
     // Commit files
     const commit = await gitlabService.commitFiles(project.id, files, commitMessage, branch, baseCommit, deletedFiles);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         commitHash: commit.id,
@@ -157,6 +165,6 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return json({ success: false, message: `Failed to commit files: ${errorMessage}` }, { status: 500 });
+    return Response.json({ success: false, message: `Failed to commit files: ${errorMessage}` }, { status: 500 });
   }
 }

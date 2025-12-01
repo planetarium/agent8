@@ -74,6 +74,7 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         }),
       ),
       complete: z.boolean(),
+      systemMessage: z.string().optional(),
     }),
     async execute({ pathList }) {
       const out: Array<{
@@ -82,15 +83,25 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
         error?: string;
         skippedAsDuplicate?: boolean;
       }> = [];
-      const paths = Array.isArray(pathList) ? pathList : [pathList];
+
+      let paths: string[];
+
+      if (typeof pathList === 'string') {
+        try {
+          const parsed = JSON.parse(pathList);
+          paths = Array.isArray(parsed) ? parsed : [pathList];
+        } catch {
+          paths = [pathList];
+        }
+      } else {
+        paths = Array.isArray(pathList) ? pathList : [pathList];
+      }
 
       for (const path of paths) {
         if (seen.has(path)) {
           out.push({ path, skippedAsDuplicate: true });
           continue;
         }
-
-        seen.add(path);
 
         const raw = getFileContents(fileMap, path);
 
@@ -99,10 +110,25 @@ export const createFilesReadTool = (fileMap: FileMap, orchestration: Orchestrati
           continue;
         }
 
+        seen.add(path);
         out.push({ path, content: raw });
       }
 
-      return { files: out, complete: true };
+      const result: { files: typeof out; complete: boolean; systemMessage?: string } = {
+        files: out,
+        complete: true,
+      };
+
+      const skippedFiles = out.filter((f) => f.skippedAsDuplicate);
+
+      if (skippedFiles.length > 0) {
+        result.systemMessage = `⚠️ ${skippedFiles.length} file(s) were skipped because they were already read in this conversation:
+${skippedFiles.map((f) => `- ${f.path}`).join('\n')}
+
+These files have already been provided to you earlier in this conversation. Please refer to the previously read content for these files instead of requesting them again.`;
+      }
+
+      return result;
     },
   });
 };

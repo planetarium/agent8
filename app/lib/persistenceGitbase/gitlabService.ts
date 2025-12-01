@@ -70,6 +70,10 @@ export class GitlabService {
   }
 
   async getOrCreateUser(email: string): Promise<GitlabUser> {
+    if (!email) {
+      throw new Error('Failed to create or find user: user email is required');
+    }
+
     try {
       const users = await this.gitlab.Users.all({
         search: email,
@@ -307,7 +311,6 @@ export class GitlabService {
               filePath,
             };
             actions.push(action);
-            logger.info(`Added delete action for file: ${filePath}`);
           } else {
             logger.warn(`Skipped delete action for non-existent file: ${filePath}`);
           }
@@ -695,28 +698,18 @@ export class GitlabService {
   async isProjectOwner(email: string, projectId: number | string): Promise<boolean> {
     try {
       const user = await this.getOrCreateUser(email);
-      let project;
-
-      try {
-        project = await this.gitlab.Projects.show(projectId);
-      } catch (projectError) {
-        logger.error(`Error loading project:`, projectError);
-        return false;
-      }
+      const project = await this.gitlab.Projects.show(projectId);
 
       if (project.namespace && user.namespace_id) {
         const projectNamespaceId = project.namespace.id;
         const userNamespaceId = user.namespace_id;
 
-        if (projectNamespaceId === userNamespaceId) {
-          return true;
-        }
+        return projectNamespaceId === userNamespaceId;
       }
 
       return false;
-    } catch (error) {
-      logger.error(error);
-
+    } catch (projectError) {
+      logger.error(`Error loading project:`, projectError);
       return false;
     }
   }

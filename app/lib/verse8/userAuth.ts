@@ -39,7 +39,7 @@ export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: st
 
     return {
       userUid: data?.userUid || data?.userAddress || '',
-      isActivated: data?.isActivated || false,
+      isActivated: data?.isActivated || true,
       email: data?.email || '',
       walletAddress: data?.walletAddress || '',
       name: data?.name || '',

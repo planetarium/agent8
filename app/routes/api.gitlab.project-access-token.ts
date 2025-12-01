@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { GitlabService } from '~/lib/persistenceGitbase/gitlabService';
 import { withV8AuthUser } from '~/lib/verse8/middleware';
 import { createScopedLogger } from '~/utils/logger';
@@ -20,7 +20,7 @@ async function projectAccessTokenLoader({ context, request }: ActionFunctionArgs
   const projectPath = url.searchParams.get('projectPath');
 
   if (!projectPath) {
-    return json({ success: false, message: 'Project path is required' }, { status: 400 });
+    return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
   }
 
   try {
@@ -30,7 +30,7 @@ async function projectAccessTokenLoader({ context, request }: ActionFunctionArgs
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Access denied: You are not the owner of this project',
@@ -44,7 +44,7 @@ async function projectAccessTokenLoader({ context, request }: ActionFunctionArgs
     const tokenStatus = await gitlabService.getActiveProjectAccessToken(project.id);
     const tokensList = await gitlabService.getActiveProjectAccessTokensList(project.id);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         projectPath,
@@ -56,7 +56,7 @@ async function projectAccessTokenLoader({ context, request }: ActionFunctionArgs
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to get project access token status', { projectPath, error: errorMessage });
 
-    return json(
+    return Response.json(
       { success: false, message: `Failed to get project access token status: ${errorMessage}` },
       { status: 500 },
     );
@@ -85,7 +85,7 @@ async function projectAccessTokenAction({ context, request }: ActionFunctionArgs
     }
   }
 
-  return json({ success: false, message: 'Method not allowed' }, { status: 405 });
+  return Response.json({ success: false, message: 'Method not allowed' }, { status: 405 });
 }
 
 /**
@@ -101,7 +101,7 @@ async function createProjectAccessToken(
     const { projectPath } = body;
 
     if (!projectPath) {
-      return json({ success: false, message: 'Project path is required' }, { status: 400 });
+      return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
     }
 
     const gitlabService = new GitlabService(env);
@@ -110,7 +110,7 @@ async function createProjectAccessToken(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Access denied: You are not the owner of this project',
@@ -124,7 +124,7 @@ async function createProjectAccessToken(
     const activeTokens = await gitlabService.getActiveProjectAccessTokensList(project.id);
 
     if (activeTokens.length >= 3) {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Token limit reached: Maximum 3 active tokens allowed per project',
@@ -140,7 +140,7 @@ async function createProjectAccessToken(
     const gitUrl = `${gitlabService.gitlabUrl}/${projectPath}.git`;
     const cloneCommand = `git clone -b develop https://oauth2:${tokenData.token}@${gitlabService.gitlabUrl.replace('https://', '')}/${projectPath}.git`;
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         token: tokenData.token,
@@ -160,7 +160,10 @@ async function createProjectAccessToken(
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return json({ success: false, message: `Failed to create project access token: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to create project access token: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }
 
@@ -175,7 +178,7 @@ async function revokeAllProjectAccessTokens(
 ) {
   try {
     if (!projectPath) {
-      return json({ success: false, message: 'Project path is required' }, { status: 400 });
+      return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
     }
 
     const gitlabService = new GitlabService(env);
@@ -184,7 +187,7 @@ async function revokeAllProjectAccessTokens(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Access denied: You are not the owner of this project',
@@ -197,7 +200,7 @@ async function revokeAllProjectAccessTokens(
 
     await gitlabService.revokeAllProjectAccessTokens(project.id);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         message: 'All project access tokens have been revoked',
@@ -208,7 +211,7 @@ async function revokeAllProjectAccessTokens(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to revoke project access tokens', { error: errorMessage });
 
-    return json(
+    return Response.json(
       { success: false, message: `Failed to revoke project access tokens: ${errorMessage}` },
       { status: 500 },
     );
@@ -227,7 +230,7 @@ async function revokeProjectAccessToken(
 ) {
   try {
     if (!projectPath) {
-      return json({ success: false, message: 'Project path is required' }, { status: 400 });
+      return Response.json({ success: false, message: 'Project path is required' }, { status: 400 });
     }
 
     const gitlabService = new GitlabService(env);
@@ -236,7 +239,7 @@ async function revokeProjectAccessToken(
     const isOwner = await gitlabService.isProjectOwner(user.email, project.id);
 
     if (!isOwner) {
-      return json(
+      return Response.json(
         {
           success: false,
           message: 'Access denied: You are not the owner of this project',
@@ -250,7 +253,7 @@ async function revokeProjectAccessToken(
     await gitlabService.revokeProjectAccessToken(project.id, tokenId);
     logger.info(`Successfully revoked token ${tokenId} for project ${projectPath}`);
 
-    return json({
+    return Response.json({
       success: true,
       data: {
         message: 'Token revoked successfully',
@@ -262,6 +265,9 @@ async function revokeProjectAccessToken(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to revoke project access token', { error: errorMessage, tokenId });
 
-    return json({ success: false, message: `Failed to revoke project access token: ${errorMessage}` }, { status: 500 });
+    return Response.json(
+      { success: false, message: `Failed to revoke project access token: ${errorMessage}` },
+      { status: 500 },
+    );
   }
 }

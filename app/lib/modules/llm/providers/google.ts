@@ -16,6 +16,7 @@ export default class GoogleProvider extends BaseProvider {
   staticModels: ModelInfo[] = [
     { name: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: PROVIDER_NAMES.GOOGLE, maxTokenAllowed: 65535 },
     { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: PROVIDER_NAMES.GOOGLE, maxTokenAllowed: 65535 },
+    { name: 'gemini-3-pro-preview', label: 'Gemini 3 Pro', provider: PROVIDER_NAMES.GOOGLE, maxTokenAllowed: 65535 },
   ];
 
   async getDynamicModels(
