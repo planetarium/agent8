@@ -198,6 +198,14 @@ const getDefaultMCPServers = (): MCPServer[] => {
         description: 'Create 2D game assets in various styles',
       },
       {
+        name: 'Spritesheet',
+        url: 'https://mcp-spritesheet.verse8.io/mcp',
+        enabled: true,
+        version: 2,
+        v8AuthIntegrated: true,
+        description: 'Generate sprite sheets for game animations',
+      },
+      {
         name: 'Cinematic',
         url: 'https://mcp-cinematic.verse8.io/mcp',
         enabled: true,
