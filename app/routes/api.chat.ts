@@ -188,8 +188,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         const options: StreamingOptions = {
           toolChoice: 'auto',
           onFinish: async ({ text: content, finishReason, totalUsage, providerMetadata }) => {
-            logger.info(`finishReason: ${finishReason}`);
-            logger.info(`cachedInputTokens: ${totalUsage?.cachedInputTokens}`);
+            const inputTokens = totalUsage?.inputTokens || 0;
+            const cachedInputTokens = totalUsage?.cachedInputTokens || 0;
+            const cachedRatio =
+              inputTokens > 0 && cachedInputTokens > 0 ? cachedInputTokens / (inputTokens + cachedInputTokens) : 0;
+            logger.info(
+              `finishReason: ${finishReason}, inputTokens: ${inputTokens}, cachedInputTokens: ${cachedInputTokens}, cachedPercentage: ${Math.round(cachedRatio * 100)}%`,
+            );
 
             const lastUserMessage = messages.filter((x) => x.role == 'user').slice(-1)[0];
 
