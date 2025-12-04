@@ -31,8 +31,6 @@ import {
   getProjectPackagesPrompt,
   getAgent8Prompt,
   getVibeStarter3dSpecPrompt,
-  getResponseFormatPrompt,
-  getWorkflowPrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
@@ -192,35 +190,37 @@ export async function streamText(props: {
 
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  /*
+   * ============================================
+   * Prompt Classification (by change frequency: low → high)
+   * ============================================
+   */
+
+  // 1. Static - Shared across all users/projects (highest cache hit rate)
+  const staticPrompts = [systemPrompt];
+
+  // 2. Project Type - Shared among 2D/3D users respectively
+  const projectTypePrompts = [vibeStarter3dSpecPrompt, getProjectDocsPrompt(files)];
+
+  // 3. Project Context - Shared within same project sessions
+  const projectContextPrompts = [
+    getProjectFilesPrompt(files),
+    getProjectPackagesPrompt(files),
+    getResourceSystemPrompt(files),
+  ];
+
+  // 4. Dynamic - Frequently changed (low cache hit rate)
+  const dynamicPrompts = [getProjectMdPrompt(files)];
+
+  // Compose system messages in order of change frequency (low → high)
   const coreMessages: ModelMessage[] = [
-    ...[
-      systemPrompt,
-      getProjectFilesPrompt(files),
-      getProjectDocsPrompt(files),
-      vibeStarter3dSpecPrompt,
-      getProjectPackagesPrompt(files),
-      getResourceSystemPrompt(files),
-    ]
-      .filter(Boolean)
-      .map(
-        (content) =>
-          ({
-            role: 'system',
-            content,
-          }) as SystemModelMessage,
-      ),
-    {
-      role: 'system',
-      content: getProjectMdPrompt(files),
-    } as SystemModelMessage,
-    {
-      role: 'system',
-      content: getResponseFormatPrompt(),
-    } as SystemModelMessage,
-    {
-      role: 'system',
-      content: getWorkflowPrompt(),
-    } as SystemModelMessage,
+    ...[...staticPrompts, ...projectTypePrompts, ...projectContextPrompts, ...dynamicPrompts].filter(Boolean).map(
+      (content) =>
+        ({
+          role: 'system',
+          content,
+        }) as SystemModelMessage,
+    ),
   ];
 
   // Add tool results before recent messages (for retry scenarios with previous file reads)

@@ -425,6 +425,9 @@ There are tools available to resolve coding tasks. Please follow these guideline
 `;
   }
 
+  systemPrompt += getResponseFormatPrompt();
+  systemPrompt += getWorkflowPrompt();
+
   return systemPrompt;
 };
 
@@ -790,7 +793,7 @@ function createFilesContext(files: any, useRelativePath?: boolean) {
   return `<existing_files>\n${fileContexts.join('\n')}\n</existing_files>`;
 }
 
-export function getResponseFormatPrompt() {
+function getResponseFormatPrompt() {
   return `
 # Response Format - CRITICAL REQUIREMENTS
 
@@ -856,7 +859,7 @@ export function getResponseFormatPrompt() {
 `;
 }
 
-export function getWorkflowPrompt() {
+function getWorkflowPrompt() {
   return `
 # Workflow - Follow these steps in order
 
