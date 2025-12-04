@@ -77,9 +77,9 @@ Update PROJECT/*.md files by calling ${TOOL_NAMES.SUBMIT_FILE_ACTION}. **These f
 Example (PARALLEL - all at once):
 \`\`\`
 "Updating project documentation"
-[${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Context.md]   ─┐
-[${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Structure.md] ─┼→ PARALLEL (independent files)
-[${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Status.md]    ─┘
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Context.md]   ─┐
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Structure.md] ─┼→ PARALLEL (independent files)
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Status.md]    ─┘
 \`\`\`
 
 **Documentation Structure**:
@@ -907,9 +907,9 @@ function getWorkflowPrompt() {
    - Brief description of ALL actions you're about to take
    - Call ALL independent tools in a SINGLE response
    - Example: "Creating GameScene, PlayerController, and updating App.tsx"
-     [${TOOL_NAMES.SUBMIT_FILE_ACTION} - GameScene.tsx]        ─┐
-     [${TOOL_NAMES.SUBMIT_FILE_ACTION} - PlayerController.tsx] ─┼→ ALL AT ONCE
-     [${TOOL_NAMES.SUBMIT_MODIFY_ACTION} - App.tsx]            ─┘
+     [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - GameScene.tsx]        ─┐
+     [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PlayerController.tsx] ─┼→ ALL AT ONCE
+     [Call ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} - App.tsx]            ─┘
 
    **SEQUENTIAL CALLS (WHEN REQUIRED)** - Only when dependencies exist:
    - Read file → Modify file (must read first)
