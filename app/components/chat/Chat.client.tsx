@@ -493,9 +493,9 @@ export const ChatImpl = memo(
         const extractedData = data?.data || data;
 
         // Handle server-side errors (data-error with reason and message)
-        const errorData = extractedData as { reason?: string; message?: string } | null;
+        const errorData = extractedData as { type: string; reason: string; message: string } | null;
 
-        if (errorData?.reason && errorData?.message) {
+        if (errorData?.type === 'error') {
           handleChatError(errorData.message, {
             error: errorData.message,
             context: `useChat onData callback, reason: ${errorData.reason}, model: ${model}, provider: ${provider.name}`,

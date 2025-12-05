@@ -252,6 +252,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 writer.write({
                   type: 'data-error',
                   data: {
+                    type: 'error',
                     reason: 'credit-consume',
                     message: error instanceof Error ? error.message : 'Failed to consume user credit',
                   },
