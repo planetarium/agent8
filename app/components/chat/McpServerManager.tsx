@@ -27,10 +27,19 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
   const disabledServerNames = import.meta.env?.VITE_DISABLED_SERVER_NAMES
     ? JSON.parse(import.meta.env.VITE_DISABLED_SERVER_NAMES)
     : ['All-in-one'];
+
+  const hiddenServerNames = ['Spritesheet'];
   const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
+  const isHiddenServer = (serverName: string) => hiddenServerNames.includes(serverName);
   const isDefaultServer = (serverName: string) => defaultServerNames.includes(serverName);
 
-  const hasActiveTools = mcpServers.some((server) => server.enabled && !isDisabledServer(server.name));
+  const linkedServers: Record<string, string[]> = {
+    Image: ['Spritesheet'],
+  };
+
+  const hasActiveTools = mcpServers.some(
+    (server) => server.enabled && !isDisabledServer(server.name) && !isHiddenServer(server.name),
+  );
 
   const getServerIcon = (serverName: string) => {
     switch (serverName) {
@@ -89,12 +98,22 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
   }, [showServerManager]);
 
   const handleToggleServer = (index: number, enabled: boolean) => {
-    toggleMCPServer(index, enabled);
+    const server = mcpServers[index];
 
-    if (enabled) {
-      toggleMCPServerV8Auth(index, true);
-    } else {
-      toggleMCPServerV8Auth(index, false);
+    toggleMCPServer(index, enabled);
+    toggleMCPServerV8Auth(index, enabled);
+
+    const linkedServerNames = linkedServers[server.name];
+
+    if (linkedServerNames) {
+      linkedServerNames.forEach((linkedName) => {
+        const linkedIndex = mcpServers.findIndex((s) => s.name === linkedName);
+
+        if (linkedIndex !== -1) {
+          toggleMCPServer(linkedIndex, enabled);
+          toggleMCPServerV8Auth(linkedIndex, enabled);
+        }
+      });
     }
   };
 
@@ -153,7 +172,9 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
         <div ref={triggerContainerRef} className="flex items-center justify-center gap-3">
           {mcpServers
             .map((server, index) => ({ server, index }))
-            .filter((item) => item.server.enabled && !isDisabledServer(item.server.name))
+            .filter(
+              (item) => item.server.enabled && !isDisabledServer(item.server.name) && !isHiddenServer(item.server.name),
+            )
             .map(({ server, index }) => (
               <div
                 key={index}
@@ -215,7 +236,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
                 <div className="max-h-[325px] tablet:max-h-[364.95px] overflow-y-auto">
                   {mcpServers
                     .map((server, index) => ({ server, index }))
-                    .filter((item) => !isDisabledServer(item.server.name))
+                    .filter((item) => !isDisabledServer(item.server.name) && !isHiddenServer(item.server.name))
                     .map(({ server, index }) => (
                       <div
                         key={index}
