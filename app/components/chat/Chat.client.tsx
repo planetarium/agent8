@@ -348,6 +348,7 @@ export const ChatImpl = memo(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
+    const isPageUnloadingRef = useRef<boolean>(false);
 
     // Helper function to report errors with automatic prompt and elapsed time injection
     const reportError = (
@@ -491,6 +492,20 @@ export const ChatImpl = memo(
         // Extract the inner 'data' property if it exists
         const extractedData = data?.data || data;
 
+        // Handle server-side errors (data-error with reason and message)
+        const errorData = extractedData as { reason?: string; message?: string } | null;
+
+        if (errorData?.reason && errorData?.message) {
+          handleChatError(errorData.message, {
+            error: errorData.message,
+            context: `useChat onData callback, reason: ${errorData.reason}, model: ${model}, provider: ${provider.name}`,
+            prompt: lastUserPromptRef.current,
+            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+          });
+
+          return;
+        }
+
         // Keep only the latest data of each type to prevent memory bloat
         setChatData((prev) => {
           const hasType = (obj: any): obj is { type: string } => obj && typeof obj === 'object' && 'type' in obj;
@@ -501,6 +516,11 @@ export const ChatImpl = memo(
         });
       },
       onError: (e) => {
+        if (isPageUnloadingRef.current) {
+          logger.debug('Skipping error notification, page is unloading');
+          return;
+        }
+
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
           component: 'Chat',
@@ -595,6 +615,19 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
+    }, []);
+
+    // Detect page reload/unload
+    useEffect(() => {
+      const handleBeforeUnload = () => {
+        isPageUnloadingRef.current = true;
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
     }, []);
 
     useEffect(() => {
