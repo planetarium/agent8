@@ -18,6 +18,7 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { triggerRestoreEvent } from '~/lib/stores/restore';
 import { handleChatError } from '~/utils/errorNotification';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 // Restore Confirmation Modal Component
 interface RestoreConfirmModalProps {
@@ -219,11 +220,10 @@ export function HeaderVersionHistoryButton() {
       await workbenchStore.runPreview();
     } catch (error) {
       toast.dismiss(toastId);
-      handleChatError(
-        'Failed to load preview',
-        error instanceof Error ? error : String(error),
-        'handlePreview - preview process',
-      );
+      handleChatError('Failed to load preview', {
+        error: error instanceof Error ? error : String(error),
+        context: 'handlePreview - preview process',
+      });
     }
   };
 
@@ -250,10 +250,14 @@ export function HeaderVersionHistoryButton() {
         throw new Error('No files found in commit');
       }
 
-      // Get container instance
+      // Reinitialize container to restart terminal
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+      await workbenchStore.reinitializeContainer(accessToken);
+
+      // Get container instance after reinitialization
       const containerInstance = await workbenchStore.container;
 
-      // Remove existing directories
+      // Remove existing directories to ensure clean state
       try {
         await containerInstance.fs.rm('/src', { recursive: true, force: true });
         await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
@@ -265,21 +269,8 @@ export function HeaderVersionHistoryButton() {
       await containerInstance.mount(convertFileMapToFileSystemTree(files));
       workbenchStore.resetAllFileModifications();
 
-      // Refresh preview if it exists
-      const previews = workbenchStore.previews.get();
-      const currentPreview = previews.find((p: any) => p.ready);
-
-      if (currentPreview) {
-        workbenchStore.previews.set(
-          previews.map((p: any) => {
-            if (p.baseUrl === currentPreview.baseUrl) {
-              return { ...p, refreshAt: Date.now() };
-            }
-
-            return p;
-          }),
-        );
-      }
+      // Run preview to start dev server with restored files
+      await workbenchStore.runPreview();
 
       // Save restore point to GitLab
       try {
@@ -293,7 +284,7 @@ export function HeaderVersionHistoryButton() {
       // Update URL with revertTo parameter to ensure commits are based on this version
       window.history.replaceState(null, '', `/chat/${repo.path}?revertTo=${commitHash}`);
 
-      // Trigger restore event to add message to chat immediately
+      // Trigger restore event to add message to chat
       triggerRestoreEvent(commitHash, selectedVersionForRestore.commitTitle);
 
       toast.dismiss(toastId);
@@ -302,11 +293,10 @@ export function HeaderVersionHistoryButton() {
       setIsOpen(false);
     } catch (error) {
       toast.dismiss(toastId);
-      handleChatError(
-        'Failed to restore version',
-        error instanceof Error ? error : String(error),
-        'handleRestoreVersion - restore process',
-      );
+      handleChatError('Failed to restore version', {
+        error: error instanceof Error ? error : String(error),
+        context: 'handleRestoreVersion - restore process',
+      });
     }
   };
 

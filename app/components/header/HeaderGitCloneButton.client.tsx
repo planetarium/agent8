@@ -247,13 +247,13 @@ export function HeaderGitCloneButton() {
       <Tooltip.Root delayDuration={100}>
         <Tooltip.Trigger asChild>
           <button
-            className="relative flex h-10 justify-center items-center gap-2 py-3 px-4 rounded-[4px] border border-white/12 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed hover:border-interactive-neutral-hovered active:border-interactive-neutral-pressed focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
+            className="relative flex h-10 justify-center items-center gap-1.5 py-[10px] px-[14px] rounded-[4px] bg-transparent focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
             onClick={() => setIsModalOpen(true)}
           >
-            <div className="text-white/80 hover:text-white">
+            <div className="text-white">
               <CodeIcon width={20} height={20} />
             </div>
-            <span className="text-sm font-semibold leading-[142.9%] text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
+            <span className="text-heading-xs text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
               Git Access
             </span>
           </button>

@@ -349,12 +349,18 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     return () => unsubscribe();
   }, []);
 
+  // Handle chats loading
+  useEffect(() => {
+    if (loaded && chats.length > 0) {
+      setInitialMessages(chats);
+    } else if (!loaded) {
+      setInitialMessages([]);
+    }
+  }, [loaded, chats]);
+
+  // Handle files mounting
   useEffect(() => {
     if (loaded) {
-      if (chats.length > 0) {
-        setInitialMessages(chats);
-      }
-
       if (Object.keys(files).length > 0) {
         workbench.container.then(async (containerInstance) => {
           try {
@@ -400,10 +406,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           title: project.description.split('\n')[0],
         });
       }
-    } else {
-      setInitialMessages([]);
     }
-  }, [loaded, files, chats, project, workbench]);
+  }, [loaded, files, project, workbench]);
 
   const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
 
@@ -823,6 +827,14 @@ export const ChatImpl = memo(
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
             reloadTaskBranches(repoStore.get().path);
+
+            // Clear revertTo parameter after successful commit to prevent reverting to old state
+            const url = new URL(window.location.href);
+
+            if (url.searchParams.has('revertTo')) {
+              url.searchParams.delete('revertTo');
+              window.history.replaceState(null, '', url.pathname + url.search);
+            }
           });
 
           logger.info('✅ Commit succeeded');
@@ -1566,16 +1578,13 @@ export const ChatImpl = memo(
       const commitHash = selectedMessageForVersion.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError('No commit hash found', undefined, 'handleSaveVersion - commit hash validation');
+        handleChatError('No commit hash found', {
+          context: 'handleSaveVersion - commit hash validation',
+        });
         setIsSaveVersionModalOpen(false);
 
         return;
       }
-
-      const commitTitle =
-        selectedMessageForVersion.parts[0]?.type === 'text'
-          ? selectedMessageForVersion.parts[0].text.slice(0, 100)
-          : 'Saved version';
 
       // Close modal first
       setIsSaveVersionModalOpen(false);
@@ -1584,6 +1593,24 @@ export const ChatImpl = memo(
       const toastId = toast.loading('Saving version...');
 
       try {
+        // Get commit to extract user message (commit title)
+        const { data } = await getCommit(repoStore.get().path, commitHash);
+        const commitMessage = data.commit.message;
+
+        /*
+         * Extract user message from commit message
+         * First try to extract from <V8UserMessage> tag, otherwise use first line
+         * Apply stripMetadata to remove model/provider/attachments info
+         */
+        const userMessageMatch = commitMessage.match(/<V8UserMessage>([\s\S]*?)<\/V8UserMessage>/);
+        const rawUserMessage = userMessageMatch ? userMessageMatch[1].trim() : commitMessage.split('\n')[0];
+
+        // Apply stripMetadata first, then get first line
+        const cleanedMessage = stripMetadata(rawUserMessage).trim();
+        const commitTitle = cleanedMessage
+          ? cleanedMessage.split('\n')[0].slice(0, 100) || 'Saved version'
+          : 'Saved version';
+
         const { saveVersion } = await import('~/lib/persistenceGitbase/api.client');
         await saveVersion(repoStore.get().path, commitHash, commitTitle, title || undefined, description || undefined);
 
@@ -1597,7 +1624,10 @@ export const ChatImpl = memo(
       } catch (error) {
         // Dismiss loading toast and show error
         toast.dismiss(toastId);
-        handleChatError('Failed to save version', error instanceof Error ? error : String(error), 'handleSaveVersion');
+        handleChatError('Failed to save version', {
+          error: error instanceof Error ? error : String(error),
+          context: 'handleSaveVersion',
+        });
       }
     };
 

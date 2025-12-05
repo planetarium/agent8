@@ -232,12 +232,11 @@ export function useGitbaseChatHistory() {
 
             if (messageTimes.length > 0) {
               const minTime = Math.min(...messageTimes);
-              const maxTime = Math.max(...messageTimes);
 
-              // Filter restore messages within the commit time range
+              // Filter restore messages: include all restores from the earliest commit onwards
               const filteredHistory = restoreHistory.filter((entry: RestoreHistoryEntry) => {
                 const restoreTime = new Date(entry.restoredAt).getTime();
-                return restoreTime >= minTime && restoreTime <= maxTime;
+                return restoreTime >= minTime; // Include all restores from minTime onwards
               });
 
               restoreMessages = filteredHistory.map((entry: RestoreHistoryEntry) => ({

@@ -11,6 +11,7 @@ import { getElapsedTime } from '~/utils/performance';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { triggerRestoreEvent } from '~/lib/stores/restore';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 import { Button } from '~/components/ui/Button';
 import CustomButton from '~/components/ui/CustomButton';
@@ -361,13 +362,11 @@ export function HeaderCommitHistoryButton() {
     const commitInfo = selectedCommit.title || selectedCommit.message.split('\n')[0];
 
     if (!commitHash || !isCommitHash(commitHash)) {
-      handleChatError(
-        'No commit hash found',
-        undefined,
-        'handleRestore - commit hash validation',
-        commitInfo || undefined,
-        getElapsedTime(startTime),
-      );
+      handleChatError('No commit hash found', {
+        context: 'handleRestore - commit hash validation',
+        prompt: commitInfo || undefined,
+        elapsedTime: getElapsedTime(startTime),
+      });
       return;
     }
 
@@ -381,10 +380,14 @@ export function HeaderCommitHistoryButton() {
         throw new Error('No files found in commit');
       }
 
-      // Get container instance
+      // Reinitialize container to restart terminal
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+      await workbenchStore.reinitializeContainer(accessToken);
+
+      // Get container instance after reinitialization
       const containerInstance = await workbenchStore.container;
 
-      // Remove existing directories
+      // Remove existing directories to ensure clean state
       try {
         await containerInstance.fs.rm('/src', { recursive: true, force: true });
         await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
@@ -396,21 +399,8 @@ export function HeaderCommitHistoryButton() {
       await containerInstance.mount(convertFileMapToFileSystemTree(files));
       workbenchStore.resetAllFileModifications();
 
-      // Refresh preview if it exists
-      const previews = workbenchStore.previews.get();
-      const currentPreview = previews.find((p: any) => p.ready);
-
-      if (currentPreview) {
-        workbenchStore.previews.set(
-          previews.map((p: any) => {
-            if (p.baseUrl === currentPreview.baseUrl) {
-              return { ...p, refreshAt: Date.now() };
-            }
-
-            return p;
-          }),
-        );
-      }
+      // Run preview to start dev server with restored files
+      await workbenchStore.runPreview();
 
       // Save restore point to GitLab
       try {
@@ -424,7 +414,7 @@ export function HeaderCommitHistoryButton() {
       // Update URL with revertTo parameter to ensure commits are based on this version
       window.history.replaceState(null, '', `/chat/${repo.path}?revertTo=${commitHash}`);
 
-      // Trigger restore event to add message to chat immediately
+      // Trigger restore event to add message to chat
       triggerRestoreEvent(commitHash, selectedCommit.title);
 
       toast.dismiss(toastId);
@@ -433,13 +423,12 @@ export function HeaderCommitHistoryButton() {
       setIsOpen(false);
     } catch (error) {
       toast.dismiss(toastId);
-      handleChatError(
-        'Failed to restore project',
-        error instanceof Error ? error : String(error),
-        'handleRestore - restore process',
-        commitInfo || undefined,
-        getElapsedTime(startTime),
-      );
+      handleChatError('Failed to restore project', {
+        error: error instanceof Error ? error : String(error),
+        context: 'handleRestore - restore process',
+        prompt: commitInfo || undefined,
+        elapsedTime: getElapsedTime(startTime),
+      });
     }
   };
 
