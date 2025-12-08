@@ -11,7 +11,7 @@ import {
   setRestorePoint,
 } from '~/lib/persistenceGitbase/api.client';
 import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { CloseIcon, StarLineIcon, RestoreIcon, DeleteIcon, PlayIcon } from '~/components/ui/Icons';
+import { CloseIcon, StarLineIcon, RestoreIcon, DeleteIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -184,48 +184,6 @@ export function HeaderVersionHistoryButton() {
   };
 
   const hasMore = displayedVersions.length < allVersions.length;
-
-  // Preview version (load files without saving restore point)
-  const handlePreviewClick = async (version: VersionEntry) => {
-    const commitHash = version.commitHash;
-    const toastId = toast.loading('Loading preview...');
-
-    try {
-      // Fetch files from the specific commit
-      const files = await fetchProjectFiles(repo.path, commitHash);
-
-      if (!files || Object.keys(files).length === 0) {
-        throw new Error('No files found in commit');
-      }
-
-      // Get container instance
-      const containerInstance = await workbenchStore.container;
-
-      // Remove existing directories
-      try {
-        await containerInstance.fs.rm('/src', { recursive: true, force: true });
-        await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
-      } catch {
-        // Ignore error if directories don't exist
-      }
-
-      // Mount the files from the commit
-      await containerInstance.mount(convertFileMapToFileSystemTree(files));
-      workbenchStore.resetAllFileModifications();
-
-      toast.dismiss(toastId);
-      toast.success('Files loaded. Starting preview...');
-
-      // Run preview (starts dev server)
-      await workbenchStore.runPreview();
-    } catch (error) {
-      toast.dismiss(toastId);
-      handleChatError('Failed to load preview', {
-        error: error instanceof Error ? error : String(error),
-        context: 'handlePreview - preview process',
-      });
-    }
-  };
 
   // Open restore confirmation modal
   const handleRestoreClick = (version: VersionEntry) => {
@@ -448,14 +406,6 @@ export function HeaderVersionHistoryButton() {
 
                           {/* Actions */}
                           <div className="flex justify-end items-start gap-2 self-stretch">
-                            <CustomButton
-                              variant="secondary-ghost"
-                              size="md"
-                              onClick={() => handlePreviewClick(version)}
-                            >
-                              <PlayIcon size={20} />
-                              Preview
-                            </CustomButton>
                             <CustomButton
                               variant="secondary-ghost"
                               size="md"
