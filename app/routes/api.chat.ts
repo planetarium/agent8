@@ -19,6 +19,7 @@ import {
   SUBMIT_MODIFY_ACTION_FIELDS,
   SUBMIT_SHELL_ACTION_FIELDS,
 } from '~/lib/constants/tool-fields';
+import type { DataErrorPayload } from '~/types/stream-events';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -249,14 +250,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               } catch (error) {
                 logger.error('Failed to consume user credit:', error);
 
-                writer.write({
+                const errorPayload: DataErrorPayload = {
                   type: 'data-error',
                   data: {
                     type: 'error',
                     reason: 'credit-consume',
                     message: error instanceof Error ? error.message : 'Failed to consume user credit',
                   },
-                });
+                };
+                writer.write(errorPayload);
               }
 
               // stream.close();

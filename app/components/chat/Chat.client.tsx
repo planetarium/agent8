@@ -63,6 +63,7 @@ import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotif
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
+import { isServerError } from '~/types/stream-events';
 
 const logger = createScopedLogger('Chat');
 
@@ -490,15 +491,13 @@ export const ChatImpl = memo(
         }
 
         // Extract the inner 'data' property if it exists
-        const extractedData = data?.data || data;
+        const extractedData = data.data || data;
 
         // Handle server-side errors (data-error with reason and message)
-        const errorData = extractedData as { type: string; reason: string; message: string } | null;
-
-        if (errorData?.type === 'error') {
-          handleChatError(errorData.message, {
-            error: errorData.message,
-            context: `useChat onData callback, reason: ${errorData.reason}, model: ${model}, provider: ${provider.name}`,
+        if (data.type === 'data-error' && isServerError(extractedData)) {
+          handleChatError(extractedData.message, {
+            error: extractedData.message,
+            context: `useChat onData callback, reason: ${extractedData.reason}, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
             elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
           });
