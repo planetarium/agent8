@@ -723,9 +723,21 @@ export const CodeMirrorEditor = memo(
 
     // Handle document changes and loading
     useEffect(() => {
-      const editorStates = editorStatesRef.current!;
-      const view = viewRef.current!;
-      const theme = themeRef.current!;
+      const editorStates = editorStatesRef.current;
+      const view = viewRef.current;
+      const theme = themeRef.current;
+
+      if (!view || !editorStates || !theme) {
+        return;
+      }
+
+      /*
+       * Skip during IME composition (CJK languages)
+       * Updating document while composing would interrupt the input process
+       */
+      if (view.composing) {
+        return;
+      }
 
       // Handle no document case
       if (!doc) {
