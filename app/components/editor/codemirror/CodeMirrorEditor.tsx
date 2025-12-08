@@ -261,7 +261,7 @@ function createDispatchTransactions(
       const documentChanged = transactions.some((transaction) => transaction.docChanged);
       const shouldNotify = documentChanged || !isRecreating;
 
-      if (shouldNotify) {
+      if (shouldNotify && !view.composing) {
         onUpdate({
           selection: view.state.selection,
           content: view.state.doc.toString(),
@@ -314,7 +314,8 @@ function setEditorDocument(
   doc: TextEditorDocument,
   recreateViewFn?: () => void,
 ) {
-  const needsContentUpdate = doc.value !== view.state.doc.toString();
+  const shouldPreserveEditorContent = editable && (view.hasFocus || view.composing);
+  const needsContentUpdate = !shouldPreserveEditorContent && doc.value !== view.state.doc.toString();
   const newEditableState = editable && !doc.isBinary;
 
   if (needsContentUpdate) {
@@ -544,7 +545,6 @@ export const CodeMirrorEditor = memo(
     const [languageCompartment] = useState(new Compartment());
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView>();
-    const themeRef = useRef<Theme>();
     const docRef = useRef<EditorDocument>();
     const editorStatesRef = useRef<EditorStates>();
     const onScrollRef = useRef(onScroll);
@@ -593,16 +593,10 @@ export const CodeMirrorEditor = memo(
           });
 
           // Restore state
-          if (currentDoc && themeRef.current) {
-            const state = newEditorState(
-              currentDoc,
-              themeRef.current,
-              settings,
-              onScrollRef,
-              debounceScroll,
-              onSaveRef,
-              [languageCompartment.of([])],
-            );
+          if (currentDoc && theme) {
+            const state = newEditorState(currentDoc, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
+              languageCompartment.of([]),
+            ]);
             newView.setState(state);
 
             if (selection) {
@@ -623,8 +617,8 @@ export const CodeMirrorEditor = memo(
           logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
 
           // Fallback: create minimal working view
-          if (containerRef.current && themeRef.current) {
-            const state = newEditorState('', themeRef.current, settings, onScrollRef, debounceScroll, onSaveRef, [
+          if (containerRef.current && theme) {
+            const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
               languageCompartment.of([]),
             ]);
             const fallbackView = new EditorView({
@@ -646,7 +640,6 @@ export const CodeMirrorEditor = memo(
       onChangeRef.current = onChange;
       onSaveRef.current = onSave;
       docRef.current = doc;
-      themeRef.current = theme;
     });
 
     // AI completion detection and final state synchronization
@@ -725,17 +718,8 @@ export const CodeMirrorEditor = memo(
     useEffect(() => {
       const editorStates = editorStatesRef.current;
       const view = viewRef.current;
-      const theme = themeRef.current;
 
-      if (!view || !editorStates || !theme) {
-        return;
-      }
-
-      /*
-       * Skip during IME composition (CJK languages)
-       * Updating document while composing would interrupt the input process
-       */
-      if (view.composing) {
+      if (!view || !editorStates) {
         return;
       }
 
