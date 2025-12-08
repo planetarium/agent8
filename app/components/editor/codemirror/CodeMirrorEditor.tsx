@@ -761,6 +761,9 @@ export const CodeMirrorEditor = memo(
         editorStates.set(doc.filePath, state);
       }
 
+      // Apply state and load document
+      view.setState(state);
+
       setEditorDocument(
         view,
         theme,
