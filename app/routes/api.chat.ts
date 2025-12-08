@@ -19,6 +19,7 @@ import {
   SUBMIT_MODIFY_ACTION_FIELDS,
   SUBMIT_SHELL_ACTION_FIELDS,
 } from '~/lib/constants/tool-fields';
+import type { DataErrorPayload } from '~/types/stream-events';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -241,15 +242,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               });
               await new Promise((resolve) => setTimeout(resolve, 0));
 
-              const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
-              await consumeUserCredit({
-                model: { provider, name: model },
-                inputTokens: cumulativeUsage.promptTokens,
-                outputTokens: cumulativeUsage.completionTokens,
-                cacheRead: cumulativeUsage.cacheRead,
-                cacheWrite: cumulativeUsage.cacheWrite,
-                description: `Generate Response`,
-              });
+              try {
+                const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
+                await consumeUserCredit({
+                  model: { provider, name: model },
+                  inputTokens: cumulativeUsage.promptTokens,
+                  outputTokens: cumulativeUsage.completionTokens,
+                  cacheRead: cumulativeUsage.cacheRead,
+                  cacheWrite: cumulativeUsage.cacheWrite,
+                  description: `Generate Response`,
+                });
+              } catch (error) {
+                logger.error('Failed to consume user credit:', error);
+
+                const errorPayload: DataErrorPayload = {
+                  type: 'data-error',
+                  data: {
+                    type: 'error',
+                    reason: 'credit-consume',
+                    message: error instanceof Error ? error.message : 'Failed to consume user credit',
+                  },
+                };
+                writer.write(errorPayload);
+              }
 
               // stream.close();
               return;
