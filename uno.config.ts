@@ -142,6 +142,7 @@ export default defineConfig({
     'text-secondary': 'text-bolt-color-textSecondary',
     'text-tertiary': 'text-bolt-color-textTertiary',
     'text-subtle': 'text-[var(--color-text-subtle)]',
+    'text-disabled': 'text-[var(--color-text-disabled)]',
 
     // Typography Design System
     'text-heading-2xs': 'font-primary text-[12px] font-semibold leading-[133.4%] not-italic',
@@ -175,11 +176,11 @@ export default defineConfig({
     'border-interactive-neutral': 'border-[var(--color-border-interactive-neutral)]',
     'hover:border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
     'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
-    'disabled:border-disabled': 'disabled:border-[var(--color-border-disabled)]',
+    'border-disabled': 'disabled:border-[var(--color-border-disabled)]',
     'border-primary': 'border-[var(--color-border-primary)]',
     'border-secondary': 'border-[var(--color-border-secondary,rgba(255,255,255,0.22))]',
     'border-tertiary': 'border-[var(--color-border-tertiary)]',
-    'disabled:bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
+    'bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
     'bg-interactive-gradient':
       'bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end)_100%)]',
     'hover:bg-interactive-gradient-hovered':
