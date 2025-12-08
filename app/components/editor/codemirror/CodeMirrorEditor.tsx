@@ -592,7 +592,7 @@ export const CodeMirrorEditor = memo(
           });
 
           // Restore state
-          if (currentDoc && theme) {
+          if (currentDoc) {
             const state = newEditorState(currentDoc, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
               languageCompartment.of([]),
             ]);
@@ -616,7 +616,7 @@ export const CodeMirrorEditor = memo(
           logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
 
           // Fallback: create minimal working view
-          if (containerRef.current && theme) {
+          if (containerRef.current) {
             const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
               languageCompartment.of([]),
             ]);
