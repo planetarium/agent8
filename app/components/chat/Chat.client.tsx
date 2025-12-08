@@ -63,7 +63,7 @@ import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotif
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
-import { isServerError } from '~/types/stream-events';
+import type { ServerErrorData } from '~/types/stream-events';
 
 const logger = createScopedLogger('Chat');
 
@@ -71,6 +71,10 @@ const MAX_COMMIT_RETRIES = 2;
 const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
+
+function isServerError(data: unknown): data is ServerErrorData {
+  return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
+}
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
