@@ -314,8 +314,7 @@ function setEditorDocument(
   doc: TextEditorDocument,
   recreateViewFn?: () => void,
 ) {
-  const shouldPreserveEditorContent = editable && (view.hasFocus || view.composing);
-  const needsContentUpdate = !shouldPreserveEditorContent && doc.value !== view.state.doc.toString();
+  const needsContentUpdate = doc.value !== view.state.doc.toString();
   const newEditableState = editable && !doc.isBinary;
 
   if (needsContentUpdate) {
