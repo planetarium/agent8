@@ -63,6 +63,8 @@ import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotif
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
+import { setupEnvContent } from '~/utils/envUtils';
+import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 
 const logger = createScopedLogger('Chat');
 
@@ -909,6 +911,25 @@ export const ChatImpl = memo(
 
           if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
             throw new Error('Not Found Template Data');
+          }
+
+          // Inject .env into fileMap so Agent can read it in the first response
+          const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+          if (accessToken) {
+            try {
+              const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
+
+              if (user.isActivated && user.walletAddress) {
+                temResp.fileMap['.env'] = {
+                  type: 'file',
+                  content: setupEnvContent(user),
+                  isBinary: false,
+                };
+              }
+            } catch (error) {
+              logger.warn('Failed to generate .env for first message:', error);
+            }
           }
 
           const processedFileMap = Object.entries(temResp.fileMap).reduce(
