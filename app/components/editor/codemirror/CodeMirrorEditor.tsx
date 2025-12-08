@@ -261,7 +261,7 @@ function createDispatchTransactions(
       const documentChanged = transactions.some((transaction) => transaction.docChanged);
       const shouldNotify = documentChanged || !isRecreating;
 
-      if (shouldNotify && !view.composing) {
+      if (shouldNotify) {
         onUpdate({
           selection: view.state.selection,
           content: view.state.doc.toString(),
@@ -723,6 +723,11 @@ export const CodeMirrorEditor = memo(
         return;
       }
 
+      // Skip during IME composition (CJK languages)
+      if (view.composing) {
+        return;
+      }
+
       // Handle no document case
       if (!doc) {
         const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
@@ -757,9 +762,6 @@ export const CodeMirrorEditor = memo(
         editorStates.set(doc.filePath, state);
       }
 
-      // Apply state and load document
-      view.setState(state);
-
       setEditorDocument(
         view,
         theme,
@@ -769,7 +771,7 @@ export const CodeMirrorEditor = memo(
         doc as TextEditorDocument,
         recreateEditorView,
       );
-    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange]);
+    });
 
     // Render
 
