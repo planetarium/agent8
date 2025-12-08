@@ -72,19 +72,14 @@ Your main goal is to build the game project from user's request.
 <project_documentation>
 **P0 (MANDATORY)**: You MUST maintain a PROJECT/*.md file in the root directory of every project. This file serves as the central documentation for the entire project and must be kept up-to-date with every change.
 
-Update PROJECT/*.md files by calling ${TOOL_NAMES.SUBMIT_FILE_ACTION} for each documentation file that needs updates.
+Update PROJECT/*.md files by calling ${TOOL_NAMES.SUBMIT_FILE_ACTION}. **These files are INDEPENDENT - always update them in PARALLEL with a single response.**
 
-Example:
+Example (PARALLEL - all at once):
 \`\`\`
-${TOOL_NAMES.SUBMIT_FILE_ACTION}({
-  ${SUBMIT_FILE_ACTION_FIELDS.PATH}: "PROJECT/Context.md",
-  ${SUBMIT_FILE_ACTION_FIELDS.CONTENT}: "# Project Context\\n## Overview\\n..."
-})
-
-${TOOL_NAMES.SUBMIT_FILE_ACTION}({
-  ${SUBMIT_FILE_ACTION_FIELDS.PATH}: "PROJECT/Structure.md",
-  ${SUBMIT_FILE_ACTION_FIELDS.CONTENT}: "# File Structure\\n## Core Files\\n..."
-})
+"Updating project documentation"
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Context.md]   ─┐
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Structure.md] ─┼→ PARALLEL (independent files)
+[Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PROJECT/Status.md]    ─┘
 \`\`\`
 
 **Documentation Structure**:
@@ -424,6 +419,9 @@ There are tools available to resolve coding tasks. Please follow these guideline
 - Your responses should sound natural to users, not like technical tool calls
 `;
   }
+
+  systemPrompt += getResponseFormatPrompt();
+  systemPrompt += getWorkflowPrompt();
 
   return systemPrompt;
 };
@@ -790,7 +788,7 @@ function createFilesContext(files: any, useRelativePath?: boolean) {
   return `<existing_files>\n${fileContexts.join('\n')}\n</existing_files>`;
 }
 
-export function getResponseFormatPrompt() {
+function getResponseFormatPrompt() {
   return `
 # Response Format - CRITICAL REQUIREMENTS
 
@@ -816,27 +814,33 @@ export function getResponseFormatPrompt() {
    - If task requires >5 code files: Do 5 most critical now, document rest in Status.md
    - If task requires ≤5 files: Proceed with all changes
 
-5. **Iterative action execution** - Repeat for each action until current phase complete:
+5. **Action execution with parallel tool calls** - Execute actions efficiently:
 
-   For each action:
-   a) Use any necessary tools first (search, read additional files)
-   b) Write ONE LINE describing what you're about to do
-   c) Call the appropriate action tool
-   d) Verify the result
-   e) Move to next action or stop if request is complete
+   **PARALLEL TOOL CALLS (PREFERRED)** - Call multiple tools at once when:
+   - Creating/modifying INDEPENDENT files (no dependencies between them)
+   - Installing packages + creating files that use them
+   - Modifying multiple unrelated files
 
-   **Example flow**:
-   "I'll add a login feature to the navigation bar."
-   [Read related files]
+   **SEQUENTIAL TOOL CALLS (REQUIRED)** - Call one at a time when:
+   - Reading a file BEFORE modifying it (read must complete first)
+   - File B imports from File A (create A first, then B)
+   - Modification depends on previous tool's result
 
-   "Installing react-icons package"
-   [Call ${TOOL_NAMES.SUBMIT_SHELL_ACTION}]
+   **Example flow - PARALLEL**:
+   "I'll add a login feature with LoginButton component and update navigation."
+   [Read related files - Navigation.tsx, App.tsx]
 
-   "Creating LoginButton component"
-   [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION}]
+   "Installing react-icons and creating LoginButton"
+   [Call ${TOOL_NAMES.SUBMIT_SHELL_ACTION} - bun add react-icons]  ─┐
+   [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - LoginButton.tsx]       ─┼→ PARALLEL (independent)
+   [Call ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} - Navigation.tsx]      ─┘
 
-   "Adding LoginButton to navigation"
-   [Call ${TOOL_NAMES.SUBMIT_MODIFY_ACTION}]
+   **Example flow - SEQUENTIAL** (when dependencies exist):
+   "Reading auth config before modifying"
+   [Call ${TOOL_NAMES.READ_FILES_CONTENTS} - auth.config.ts]  ← must complete first
+
+   "Updating auth config based on current content"
+   [Call ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} - auth.config.ts] ← depends on read result
 
 6. **Present final summary** when all actions are complete
    - If phased work: State what was completed and what's documented in Status.md
@@ -846,17 +850,17 @@ export function getResponseFormatPrompt() {
 ❌ Calling action tools without reading files first
 ❌ Silent tool execution without explanation
 ❌ Writing tool calls as text or code (e.g., "print(tool_name(...))", "tool_code") - USE actual tool calls
-❌ Trying to complete everything in a single tool call
+❌ Calling tools ONE BY ONE when they are INDEPENDENT - use PARALLEL calls instead
 ❌ Modifying more than 5 code files without documenting remaining work in Status.md
 
 **Remember**:
-- Initial explanation → Read files (ONCE) → Check & install dependencies (ONCE) → Plan scope (ONCE) → [Brief description → Action tool] (REPEAT until done) → Final summary
-- Each action should be small, focused, and described in one line
+- Initial explanation → Read files (ONCE) → Check & install dependencies (ONCE) → Plan scope (ONCE) → PARALLEL tool calls for independent actions → Final summary
+- MAXIMIZE parallel tool calls to reduce round trips and improve efficiency
 - Large tasks (>5 code files) = work in phases, use Status.md to track progress
 `;
 }
 
-export function getWorkflowPrompt() {
+function getWorkflowPrompt() {
   return `
 # Workflow - Follow these steps in order
 
@@ -897,22 +901,24 @@ export function getWorkflowPrompt() {
    - [ ] Refactor 4 remaining utility files
    \`\`\`
 
-6. **Iterative action submission** - Repeat until current phase is complete:
+6. **Action submission with parallel tool calls** - Execute efficiently:
 
-   For each action:
-   a) **Use any necessary tools first** (search, read additional files, etc.)
-   b) **Brief one-line description** of what you're about to do
-      - Example: "Creating the Button component"
-      - Example: "Adding useState import to Game.tsx"
-      - Example: "Installing three.js package"
-   c) **Call the appropriate action tool**:
-      - ${TOOL_NAMES.SUBMIT_FILE_ACTION} for creating/overwriting files
-      - ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} for modifying existing files
-      - ${TOOL_NAMES.SUBMIT_SHELL_ACTION} for shell commands
-   d) **Verify the result** - Check if submission succeeded
-   e) **Continue to next action** - If submission failed, fix and retry; if succeeded, move to next action
+   **PARALLEL CALLS (PREFERRED)** - Maximize efficiency by calling multiple tools at once:
+   - Brief description of ALL actions you're about to take
+   - Call ALL independent tools in a SINGLE response
+   - Example: "Creating GameScene, PlayerController, and updating App.tsx"
+     [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - GameScene.tsx]        ─┐
+     [Call ${TOOL_NAMES.SUBMIT_FILE_ACTION} - PlayerController.tsx] ─┼→ ALL AT ONCE
+     [Call ${TOOL_NAMES.SUBMIT_MODIFY_ACTION} - App.tsx]            ─┘
 
-   **CRITICAL**: Do NOT try to complete everything in one go. Break down the work into small, manageable actions.
+   **SEQUENTIAL CALLS (WHEN REQUIRED)** - Only when dependencies exist:
+   - Read file → Modify file (must read first)
+   - Create module → Import in another file
+
+   **CRITICAL**:
+   - PREFER parallel calls to minimize round trips
+   - Only use sequential when there's a TRUE dependency
+   - Each failed tool should be retried individually
 
    **WHEN TO STOP**:
    - If working on a phase (5 files limit): Stop when current phase is complete and Status.md is updated
@@ -923,8 +929,8 @@ export function getWorkflowPrompt() {
 
 **REMEMBER**:
 - Steps 1-5 happen ONCE at the beginning
-- Step 6 REPEATS until the current phase is fulfilled
-- Each iteration of step 6 should be focused and atomic (one clear action at a time)
+- Step 6: Call MULTIPLE independent tools in PARALLEL to minimize round trips
+- Only use sequential calls when there's a TRUE dependency (read before modify, etc.)
 - Large tasks (>5 files) = work in phases, document next steps in Status.md
 `;
 }
