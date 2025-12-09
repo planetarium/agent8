@@ -1,4 +1,4 @@
-import { VIBE_STARTER_3D_PACKAGE_NAME, WORK_DIR } from '~/utils/constants';
+import { REACT_THREE_FIBER_PACKAGE_NAME, VIBE_STARTER_3D_PACKAGE_NAME, WORK_DIR } from '~/utils/constants';
 import semver from 'semver';
 import type { Cache } from '@cloudflare/workers-types';
 
@@ -221,7 +221,10 @@ export function is3dProject(files: any): boolean {
   if (packageJson?.type === 'file' && packageJson?.content?.length > 0) {
     const packageContent = JSON.parse(packageJson.content);
 
-    if (packageContent.dependencies?.hasOwnProperty(VIBE_STARTER_3D_PACKAGE_NAME)) {
+    if (
+      packageContent.dependencies?.hasOwnProperty(REACT_THREE_FIBER_PACKAGE_NAME) ||
+      packageContent.dependencies?.hasOwnProperty(VIBE_STARTER_3D_PACKAGE_NAME)
+    ) {
       return true;
     }
   }
