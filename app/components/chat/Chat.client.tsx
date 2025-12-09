@@ -64,7 +64,7 @@ import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
-import { setupEnvContent } from '~/utils/envUtils';
+import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 
 const logger = createScopedLogger('Chat');
@@ -959,7 +959,7 @@ export const ChatImpl = memo(
               if (user.isActivated && user.walletAddress) {
                 temResp.fileMap['.env'] = {
                   type: 'file',
-                  content: setupEnvContent(user),
+                  content: getEnvContent(user.walletAddress),
                   isBinary: false,
                 };
               }

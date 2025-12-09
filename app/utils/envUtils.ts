@@ -1,12 +1,14 @@
-import type { V8User } from '~/lib/verse8/userAuth';
+/**
+ * Generate unique verse ID for Agent8 projects
+ */
+export function generateVerseId(account: string): string {
+  return `${account}-${Date.now()}`;
+}
 
 /**
- * Setup .env content for Agent8 projects
- * Creates unique VITE_AGENT8_ACCOUNT and VITE_AGENT8_VERSE values per project
+ * Generate .env content for Agent8 projects
  */
-export function setupEnvContent(user: V8User): string {
-  const account = user.walletAddress;
-  const verseId = `${account}-${Date.now()}`;
-
+export function getEnvContent(account: string): string {
+  const verseId = generateVerseId(account);
   return `VITE_AGENT8_ACCOUNT=${account}\nVITE_AGENT8_VERSE=${verseId}`;
 }
