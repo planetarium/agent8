@@ -101,6 +101,7 @@ export const SHELL_COMMANDS = {
   BUILD_PROJECT: 'bun run build',
 } as const;
 
+export const REACT_THREE_FIBER_PACKAGE_NAME = '@react-three/fiber';
 export const VIBE_STARTER_3D_PACKAGE_NAME = 'vibe-starter-3d';
 export const VIBE_STARTER_3D_ENVIRONMENT_PACKAGE_NAME = 'vibe-starter-3d-environment';
 
