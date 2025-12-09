@@ -788,6 +788,249 @@ function createFilesContext(files: any, useRelativePath?: boolean) {
   return `<existing_files>\n${fileContexts.join('\n')}\n</existing_files>`;
 }
 
+function getCommonPerformancePrompt() {
+  return `
+# Performance Guidelines
+
+## Optimize State Updates
+
+### Use Zustand Store Efficiently
+
+When using Zustand for state management, avoid subscribing to entire store in components that only need specific values.
+
+\`\`\`tsx
+// ❌ Bad: Component re-renders on any store change
+const store = useStore();
+const count = store.count;
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Component only re-renders when count changes
+const count = useStore((state) => state.count);
+\`\`\`
+
+### Update Store Only When Meaningful Change Occurs
+
+When updating store with frequently changing values, only update when the change is significant.
+
+\`\`\`tsx
+// ❌ Bad: Updates store on every tiny change
+setValue(newValue); // Triggers re-render every time
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Only update store when change is significant
+const lastValue = useRef(initialValue);
+const THRESHOLD = 0.1;
+
+const updateValueIfNeeded = (newValue: number) => {
+  if (Math.abs(lastValue.current - newValue) > THRESHOLD) {
+    lastValue.current = newValue;
+    setValue(newValue);
+  }
+};
+\`\`\`
+
+## Prevent Unnecessary Re-renders
+
+### Memoize Components
+
+\`\`\`tsx
+// ✅ Good: Memoize components that don't need frequent updates
+const StaticObject = memo(function StaticObject({ position }: Props) {
+  return <div style={{ transform: \`translate(\${position.x}px, \${position.y}px)\` }} />;
+});
+\`\`\`
+
+### Avoid Inline Objects in Props
+
+\`\`\`tsx
+// ❌ Bad: New object created every render
+<Component style={{ color: 'red' }} />
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Stable reference
+const style = useMemo(() => ({ color: 'red' }), []);
+<Component style={style} />
+\`\`\`
+`;
+}
+
+function get3DPerformancePrompt() {
+  return `
+## useFrame Optimization
+
+The \`useFrame\` hook runs every frame (typically 60 times per second). Performing heavy operations inside it will significantly degrade performance.
+
+### Avoid Heavy Operations in useFrame
+
+\`\`\`tsx
+// ❌ Bad: Creating new objects and accessing properties every frame
+useFrame((state: RootState) => {
+  if (meshRef.current) {
+    const time = state.clock.getElapsedTime();
+    const opacity = 0.3 + Math.sin(time * 2) * 0.2;
+    if (meshRef.current.material && !Array.isArray(meshRef.current.material)) {
+      meshRef.current.material.opacity = opacity;
+    }
+  }
+});
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Cache references and minimize operations
+const meshRef = useRef<Mesh>(null);
+const materialRef = useRef<MeshStandardMaterial>(null);
+
+useEffect(() => {
+  // Cache material reference once
+  if (meshRef.current && meshRef.current.material && !Array.isArray(meshRef.current.material)) {
+    materialRef.current = meshRef.current.material as MeshStandardMaterial;
+  }
+}, []);
+
+useFrame((state: RootState) => {
+  if (materialRef.current) {
+    const newOpacity = 0.3 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
+    // Only update when change is significant enough
+    if (Math.abs(materialRef.current.opacity - newOpacity) > 0.01) {
+      materialRef.current.opacity = newOpacity;
+    }
+  }
+});
+\`\`\`
+
+### useFrame Best Practices
+
+1. **Cache references**: Store refs to frequently accessed objects outside useFrame
+2. **Early return**: Exit early if the operation isn't needed
+
+\`\`\`tsx
+// ✅ Good: Early return pattern
+useFrame(() => {
+  if (!meshRef.current || !isAnimating) return;
+
+  // Animation logic here
+});
+\`\`\`
+
+## Reuse Materials and Geometries
+
+Creating new materials or geometries for each mesh wastes memory and reduces performance.
+
+\`\`\`tsx
+// ❌ Bad: New geometry and material created for each instance
+function Box() {
+  return (
+    <mesh>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="red" />
+    </mesh>
+  );
+}
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Share geometry and material across instances
+const sharedGeometry = new BoxGeometry(1, 1, 1);
+const sharedMaterial = new MeshStandardMaterial({ color: 'red' });
+
+function Box() {
+  return <mesh geometry={sharedGeometry} material={sharedMaterial} />;
+}
+\`\`\`
+
+\`\`\`tsx
+// ✅ Good: Or use useMemo for component-scoped sharing
+function Boxes({ count }: { count: number }) {
+  const geometry = useMemo(() => new BoxGeometry(1, 1, 1), []);
+  const material = useMemo(() => new MeshStandardMaterial({ color: 'red' }), []);
+
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <mesh key={i} geometry={geometry} material={material} position={[i * 2, 0, 0]} />
+      ))}
+    </>
+  );
+}
+\`\`\`
+
+## Instance Mesh for Many Similar Objects
+
+When rendering many similar objects, use \`InstancedMesh\` instead of individual meshes.
+
+\`\`\`tsx
+// ✅ Good: Use instancing for many similar objects
+function Trees({ count }: { count: number }) {
+  const meshRef = useRef<InstancedMesh>(null);
+  const tempObject = useMemo(() => new Object3D(), []);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+
+    for (let i = 0; i < count; i++) {
+      tempObject.position.set(
+        Math.random() * 100 - 50,
+        0,
+        Math.random() * 100 - 50
+      );
+      tempObject.updateMatrix();
+      meshRef.current.setMatrixAt(i, tempObject.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, [count, tempObject]);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+      <coneGeometry args={[0.5, 2, 8]} />
+      <meshStandardMaterial color="green" />
+    </instancedMesh>
+  );
+}
+\`\`\`
+
+## Dispose Resources Properly
+
+Always clean up Three.js resources when components unmount to prevent memory leaks.
+
+\`\`\`tsx
+useEffect(() => {
+  const geometry = new BoxGeometry();
+  const material = new MeshStandardMaterial();
+
+  return () => {
+    geometry.dispose();
+    material.dispose();
+  };
+}, []);
+\`\`\`
+
+For textures loaded dynamically:
+
+\`\`\`tsx
+useEffect(() => {
+  const texture = textureLoader.load('/texture.png');
+
+  return () => {
+    texture.dispose();
+  };
+}, []);
+\`\`\`
+`;
+}
+
+export function getPerformancePrompt(is3D: boolean = false) {
+  const common = getCommonPerformancePrompt();
+
+  if (!is3D) {
+    return common;
+  }
+
+  return `${common}\n${get3DPerformancePrompt()}`;
+}
+
 function getResponseFormatPrompt() {
   return `
 # Response Format - CRITICAL REQUIREMENTS
