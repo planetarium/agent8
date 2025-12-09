@@ -63,6 +63,7 @@ import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotif
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
+import type { ServerErrorData } from '~/types/stream-events';
 import { setupEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 
@@ -72,6 +73,10 @@ const MAX_COMMIT_RETRIES = 2;
 const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
+
+function isServerError(data: unknown): data is ServerErrorData {
+  return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
+}
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
@@ -350,6 +355,7 @@ export const ChatImpl = memo(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
+    const isPageUnloadingRef = useRef<boolean>(false);
 
     // Helper function to report errors with automatic prompt and elapsed time injection
     const reportError = (
@@ -491,7 +497,19 @@ export const ChatImpl = memo(
         }
 
         // Extract the inner 'data' property if it exists
-        const extractedData = data?.data || data;
+        const extractedData = data.data || data;
+
+        // Handle server-side errors (data-error with reason and message)
+        if (data.type === 'data-error' && isServerError(extractedData)) {
+          handleChatError(extractedData.message, {
+            error: extractedData.message,
+            context: `useChat onData callback, reason: ${extractedData.reason}, model: ${model}, provider: ${provider.name}`,
+            prompt: lastUserPromptRef.current,
+            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+          });
+
+          return;
+        }
 
         // Keep only the latest data of each type to prevent memory bloat
         setChatData((prev) => {
@@ -503,6 +521,11 @@ export const ChatImpl = memo(
         });
       },
       onError: (e) => {
+        if (isPageUnloadingRef.current) {
+          logger.debug('Skipping error notification, page is unloading');
+          return;
+        }
+
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
           component: 'Chat',
@@ -597,6 +620,19 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
+    }, []);
+
+    // Detect page reload/unload
+    useEffect(() => {
+      const handleBeforeUnload = () => {
+        isPageUnloadingRef.current = true;
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
     }, []);
 
     useEffect(() => {
