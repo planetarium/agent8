@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { ConfirmDialog } from '~/components/ui/ConfirmDialog';
+import type { ProgressAnnotation } from '~/types/context';
 
 interface TaskMessagesProps {
   id?: string;
@@ -21,6 +22,7 @@ interface TaskMessagesProps {
   reloadTaskBranches?: (projectPath: string) => void;
   messages?: UIMessage[];
   annotations?: JSONValue[];
+  progressAnnotations?: ProgressAnnotation[];
   onRetry?: (message: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
   onRevert?: (message: UIMessage) => void;

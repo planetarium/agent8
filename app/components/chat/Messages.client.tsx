@@ -14,6 +14,7 @@ import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon } from '~/components/
 import { toast } from 'react-toastify';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
+import type { ProgressAnnotation } from '~/types/context';
 
 interface MessagesProps {
   id?: string;
@@ -21,6 +22,7 @@ interface MessagesProps {
   isStreaming?: boolean;
   messages?: UIMessage[];
   annotations?: JSONValue[];
+  progressAnnotations?: ProgressAnnotation[];
   onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
   onRevert?: (message: UIMessage) => void;
@@ -40,6 +42,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       isStreaming = false,
       messages = [],
       annotations = [],
+      progressAnnotations = [],
       onRetry,
       onViewDiff,
       onSaveVersion,
@@ -49,6 +52,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       loadingBefore,
       loadBefore,
     } = props;
+
+    // Check if response is being generated (same condition as "Generating Response" UI)
+    const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
 
     return (
       <div
@@ -150,7 +156,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     </div>
                   </div>
 
-                  {isEnabledGitbasePersistence && !isUserMessage && (
+                  {isEnabledGitbasePersistence && !isUserMessage && !isGenerating && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
                         <CustomIconButton
