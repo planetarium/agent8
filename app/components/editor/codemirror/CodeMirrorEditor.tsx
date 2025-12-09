@@ -773,7 +773,7 @@ export const CodeMirrorEditor = memo(
         doc as TextEditorDocument,
         recreateEditorView,
       );
-    }, [doc?.filePath, editable]);
+    }, [doc?.value, doc?.filePath, editable]);
 
     // Render
 
