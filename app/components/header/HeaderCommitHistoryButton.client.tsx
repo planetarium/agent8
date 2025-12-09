@@ -181,7 +181,6 @@ export function HeaderCommitHistoryButton() {
     try {
       const params = new URLSearchParams({
         projectPath: repo.path,
-        all: 'true',
         page: page.toString(),
         perPage: COMMITS_PER_PAGE.toString(),
       });
@@ -191,12 +190,11 @@ export function HeaderCommitHistoryButton() {
 
       if (data.success && data.data) {
         const filteredCommits = data.data.commits.filter((commit) => !commit.message.startsWith('Merge branch'));
-        const reversedCommits = [...filteredCommits].reverse();
 
         if (append) {
-          setCommits((prev) => [...prev, ...reversedCommits]);
+          setCommits((prev) => [...prev, ...filteredCommits]);
         } else {
-          setCommits(reversedCommits);
+          setCommits(filteredCommits);
         }
 
         setHasMore(data.data.pagination.hasMore);

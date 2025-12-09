@@ -3,15 +3,17 @@ import { atom } from 'nanostores';
 export interface VersionEvent {
   type: 'save' | 'delete';
   commitHash: string;
+  commitTitle?: string;
   timestamp: number;
 }
 
 export const versionEventStore = atom<VersionEvent | null>(null);
 
-export function triggerVersionSave(commitHash: string) {
+export function triggerVersionSave(commitHash: string, commitTitle: string) {
   versionEventStore.set({
     type: 'save',
     commitHash,
+    commitTitle,
     timestamp: Date.now(),
   });
 }

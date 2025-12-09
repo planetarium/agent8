@@ -22,3 +22,6 @@ export { RestoreIcon } from './RestoreIcon';
 export { StarLineIcon } from './StarLineIcon';
 export { DeleteIcon } from './DeleteIcon';
 export { PlayIcon } from './PlayIcon';
+export { DiffIcon } from './DiffIcon';
+export { RefreshIcon } from './RefreshIcon';
+export { CopyLineIcon } from './CopyLineIcon';

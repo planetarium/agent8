@@ -4,68 +4,13 @@ import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
 
 import { repoStore } from '~/lib/stores/repo';
-import {
-  getVersionHistory,
-  deleteVersion,
-  fetchProjectFiles,
-  setRestorePoint,
-} from '~/lib/persistenceGitbase/api.client';
+import { getVersionHistory, deleteVersion } from '~/lib/persistenceGitbase/api.client';
 import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { CloseIcon, StarLineIcon, RestoreIcon, DeleteIcon } from '~/components/ui/Icons';
+import { CloseIcon, StarLineIcon, DeleteIcon, RestoreIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
-import { workbenchStore } from '~/lib/stores/workbench';
-import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
-import { triggerRestoreEvent } from '~/lib/stores/restore';
-import { handleChatError } from '~/utils/errorNotification';
-import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
-
-// Restore Confirmation Modal Component
-interface RestoreConfirmModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  version: VersionEntry | null;
-}
-
-function RestoreConfirmModal({ isOpen, onClose, onConfirm, version }: RestoreConfirmModalProps) {
-  if (!isOpen || !version) {
-    return null;
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex justify-center items-start gap-2 self-stretch">
-          <span className="text-primary text-heading-md flex-[1_0_0]">
-            Are you sure you want to restore this version?
-          </span>
-          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div className="flex justify-end items-center gap-3 self-stretch">
-            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
-              Cancel
-            </CustomButton>
-            <CustomButton variant="primary-filled" size="lg" onClick={onConfirm}>
-              <RestoreIcon size={24} color="#f3f5f8" />
-              Restore
-            </CustomButton>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
+import { RestoreConfirmModal } from '~/components/ui/Restore';
+import { restoreVersion } from '~/utils/restoreVersion';
 
 // Delete Confirmation Modal Component
 interface DeleteConfirmModalProps {
@@ -197,65 +142,15 @@ export function HeaderVersionHistoryButton() {
       return;
     }
 
-    const commitHash = selectedVersionForRestore.commitHash;
-    const toastId = toast.loading('Restoring version...');
-
-    try {
-      // Fetch files from the specific commit
-      const files = await fetchProjectFiles(repo.path, commitHash);
-
-      if (!files || Object.keys(files).length === 0) {
-        throw new Error('No files found in commit');
-      }
-
-      // Reinitialize container to restart terminal
-      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
-      await workbenchStore.reinitializeContainer(accessToken);
-
-      // Get container instance after reinitialization
-      const containerInstance = await workbenchStore.container;
-
-      // Remove existing directories to ensure clean state
-      try {
-        await containerInstance.fs.rm('/src', { recursive: true, force: true });
-        await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
-      } catch {
-        // Ignore error if directories don't exist
-      }
-
-      // Mount the files from the commit
-      await containerInstance.mount(convertFileMapToFileSystemTree(files));
-      workbenchStore.resetAllFileModifications();
-
-      // Run preview to start dev server with restored files
-      await workbenchStore.runPreview();
-
-      // Save restore point to GitLab
-      try {
-        await setRestorePoint(repo.path, commitHash, selectedVersionForRestore.commitTitle);
-      } catch (err) {
-        console.warn('Failed to save restore point to GitLab:', err);
-
-        // Continue even if saving fails
-      }
-
-      // Update URL with revertTo parameter to ensure commits are based on this version
-      window.history.replaceState(null, '', `/chat/${repo.path}?revertTo=${commitHash}`);
-
-      // Trigger restore event to add message to chat
-      triggerRestoreEvent(commitHash, selectedVersionForRestore.commitTitle);
-
-      toast.dismiss(toastId);
-      toast.success('Version restored successfully');
-      setIsRestoreModalOpen(false);
-      setIsOpen(false);
-    } catch (error) {
-      toast.dismiss(toastId);
-      handleChatError('Failed to restore version', {
-        error: error instanceof Error ? error : String(error),
-        context: 'handleRestoreVersion - restore process',
-      });
-    }
+    await restoreVersion({
+      projectPath: repo.path,
+      commitHash: selectedVersionForRestore.commitHash,
+      commitTitle: selectedVersionForRestore.commitTitle,
+      onSuccess: () => {
+        setIsRestoreModalOpen(false);
+        setIsOpen(false);
+      },
+    });
   };
 
   // Open delete confirmation modal
@@ -472,7 +367,6 @@ export function HeaderVersionHistoryButton() {
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onConfirm={handleRestoreConfirm}
-        version={selectedVersionForRestore}
       />
 
       {/* Delete Confirmation Modal */}

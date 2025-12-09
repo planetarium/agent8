@@ -6,13 +6,14 @@ import { UserMessage } from './UserMessage';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
-import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import Lottie from 'lottie-react';
 import { loadingAnimationData } from '~/utils/animationData';
 import { extractAllTextContent } from '~/utils/message';
-import { StarLineIcon } from '~/components/ui/Icons';
+import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon } from '~/components/ui/Icons';
+import { toast } from 'react-toastify';
 import CustomButton from '~/components/ui/CustomButton';
+import CustomIconButton from '~/components/ui/CustomIconButton';
 
 interface MessagesProps {
   id?: string;
@@ -25,7 +26,8 @@ interface MessagesProps {
   onRevert?: (message: UIMessage) => void;
   onViewDiff?: (message: UIMessage) => void;
   onSaveVersion?: (message: UIMessage) => void;
-  savedVersionHashes?: Set<string>;
+  onRestoreVersion?: (commitHash: string, commitTitle: string) => void;
+  savedVersions?: Map<string, string>;
   hasMore?: boolean;
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -39,11 +41,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       messages = [],
       annotations = [],
       onRetry,
-      onFork,
-      onRevert,
       onViewDiff,
       onSaveVersion,
-      savedVersionHashes,
+      onRestoreVersion,
+      savedVersions,
       hasMore,
       loadingBefore,
       loadBefore,
@@ -80,8 +81,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const messageMetadata = message.metadata as any;
               const isHidden = messageMetadata?.annotations?.includes('hidden');
               const isRestoreMessage = messageMetadata?.annotations?.includes('restore-message');
+              const isForkMessage = messageText.startsWith('Fork from');
               const isUserMessage = role === 'user';
-              const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
 
@@ -104,117 +105,114 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 );
               }
 
-              return (
-                <div
-                  key={index}
-                  className={classNames(
-                    'flex items-start self-stretch',
-                    isUserMessage
-                      ? 'py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-4'
-                      : 'gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]',
-                    {
-                      'bg-gray-800 bg-opacity-70 mt-4': !isUserMessage && !isStreaming,
-                      'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                        isStreaming && isLast,
-                    },
-                  )}
-                >
-                  <div className="grid grid-col-1 w-full">
-                    {isUserMessage ? (
-                      <UserMessage content={messageText} />
-                    ) : (
-                      <AssistantMessage
-                        content={messageText}
-                        annotations={annotations}
-                        metadata={messageMetadata}
-                        forceExpanded={isLast}
-                      />
-                    )}
+              // Special rendering for fork messages
+              if (isForkMessage) {
+                const forkSource = messageText.replace('Fork from ', '');
+
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
+                  >
+                    <div className="flex items-center gap-2 self-stretch">
+                      <span className="text-body-md-medium text-secondary">Forked from</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{forkSource}</span>
+                    </div>
                   </div>
-                  {isEnabledGitbasePersistence && (
-                    <>
-                      {!isUserMessage ? (
-                        <div className="flex items-start gap-2 mt-2.5">
-                          {messageId &&
-                            isCommitHash(messageId.split('-').pop() as string) &&
-                            (() => {
-                              const commitHash = messageId.split('-').pop() as string;
-                              const isSaved = savedVersionHashes?.has(commitHash);
+                );
+              }
 
-                              return isSaved ? (
-                                <CustomButton variant="primary-text" size="sm">
-                                  Restore
-                                </CustomButton>
-                              ) : (
-                                <button
-                                  onClick={() => onSaveVersion?.(message)}
-                                  className="p-1.5 rounded-md hover:bg-bolt-elements-background-depth-2 bg-transparent transition-colors"
-                                  title="Save as version"
-                                >
-                                  <StarLineIcon size={20} />
-                                </button>
-                              );
-                            })()}
-                          <Dropdown
-                            trigger={
-                              <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                            }
-                          >
-                            {messageId && isCommitHash(messageId.split('-').pop() as string) && (
-                              <>
-                                {index > 0 && messages[index - 1]?.role === 'user' && (
-                                  <DropdownItem
-                                    onSelect={() => {
-                                      const prevUserMessage = messages[index - 1];
-                                      const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
-                                      onRetry?.(prevUserMessage, prevPrevMessage);
-                                    }}
-                                  >
-                                    <span className="i-ph:arrow-clockwise text-xl" />
-                                    Retry chat
-                                  </DropdownItem>
-                                )}
-                                <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
-                                  <span className="i-ph:arrow-u-up-left text-xl" />
-                                  Revert to this message
-                                </DropdownItem>
-
-                                <DropdownItem onSelect={() => onViewDiff?.(message)}>
-                                  <span className="i-ph:git-diff text-xl" />
-                                  View diff for this message
-                                </DropdownItem>
-                              </>
-                            )}
-                            <DropdownItem onSelect={() => onFork?.(message)}>
-                              <span className="i-ph:git-fork text-xl" />
-                              Fork chat from this message
-                            </DropdownItem>
-                          </Dropdown>
-                        </div>
+              return (
+                <Fragment key={index}>
+                  <div
+                    className={classNames(
+                      'flex self-stretch',
+                      isUserMessage
+                        ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
+                        : 'flex-col justify-center items-center gap-0 p-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3',
+                      {
+                        'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
+                          isStreaming && isLast,
+                      },
+                    )}
+                  >
+                    <div className="grid grid-col-1 w-full">
+                      {isUserMessage ? (
+                        <UserMessage content={messageText} />
                       ) : (
-                        !isFirstMessage && (
-                          <div className="flex items-start mt-2.5">
-                            <Dropdown
-                              trigger={
-                                <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                              }
-                            >
-                              <DropdownItem
-                                onSelect={() => {
-                                  const prevMessage = index > 0 ? messages[index - 1] : undefined;
-                                  onRetry?.(message, prevMessage);
-                                }}
-                              >
-                                <span className="i-ph:arrow-clockwise text-xl" />
-                                Retry chat
-                              </DropdownItem>
-                            </Dropdown>
-                          </div>
-                        )
+                        <AssistantMessage
+                          content={messageText}
+                          annotations={annotations}
+                          metadata={messageMetadata}
+                          forceExpanded={isLast}
+                        />
                       )}
-                    </>
+                    </div>
+                  </div>
+
+                  {isEnabledGitbasePersistence && !isUserMessage && (
+                    <div className="flex justify-between items-center px-2 mt-0.5">
+                      <div className="flex items-start gap-3">
+                        <CustomIconButton
+                          variant="secondary-transparent"
+                          size="sm"
+                          icon={<DiffIcon size={20} />}
+                          onClick={() => onViewDiff?.(message)}
+                          title="View diff"
+                        />
+                        <CustomIconButton
+                          variant="secondary-transparent"
+                          size="sm"
+                          icon={<CopyLineIcon size={20} />}
+                          onClick={() => {
+                            navigator.clipboard.writeText(messageText);
+                            toast.success('Copied to clipboard');
+                          }}
+                          title="Copy response"
+                        />
+                        {index > 0 && messages[index - 1]?.role === 'user' && (
+                          <CustomIconButton
+                            variant="secondary-transparent"
+                            size="sm"
+                            icon={<RefreshIcon size={20} />}
+                            onClick={() => {
+                              const prevUserMessage = messages[index - 1];
+                              const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
+                              onRetry?.(prevUserMessage, prevPrevMessage);
+                            }}
+                            title="Retry chat"
+                          />
+                        )}
+                      </div>
+                      {messageId &&
+                        isCommitHash(messageId.split('-').pop() as string) &&
+                        (() => {
+                          const commitHash = messageId.split('-').pop() as string;
+                          const savedTitle = savedVersions?.get(commitHash);
+
+                          return savedTitle ? (
+                            <CustomButton
+                              variant="primary-text"
+                              size="sm"
+                              onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
+                            >
+                              Restore
+                            </CustomButton>
+                          ) : (
+                            <CustomButton
+                              variant="secondary-text"
+                              size="sm"
+                              onClick={() => onSaveVersion?.(message)}
+                              title="Save as version"
+                            >
+                              <StarLineIcon size={20} />
+                              Save
+                            </CustomButton>
+                          );
+                        })()}
+                    </div>
                   )}
-                </div>
+                </Fragment>
               );
             })
           : null}

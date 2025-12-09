@@ -67,6 +67,8 @@ import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
 import CustomButton from '~/components/ui/CustomButton';
 import { CloseIcon } from '~/components/ui/Icons';
+import { RestoreConfirmModal } from '~/components/ui/Restore';
+import { restoreVersion } from '~/utils/restoreVersion';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 
@@ -292,7 +294,11 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   const [ready, setReady] = useState(false);
   const [isSaveVersionModalOpen, setIsSaveVersionModalOpen] = useState<boolean>(false);
   const [selectedMessageForVersion, setSelectedMessageForVersion] = useState<UIMessage | null>(null);
-  const [savedVersionHashes, setSavedVersionHashes] = useState<Set<string>>(new Set());
+  const [savedVersions, setSavedVersions] = useState<Map<string, string>>(new Map());
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
+  const [selectedRestoreInfo, setSelectedRestoreInfo] = useState<{ commitHash: string; commitTitle: string } | null>(
+    null,
+  );
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
 
@@ -321,8 +327,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
         try {
           const { getVersionHistory } = await import('~/lib/persistenceGitbase/api.client');
           const versions = await getVersionHistory(repoStore.get().path);
-          const hashes = new Set<string>(versions.map((v: VersionEntry) => v.commitHash));
-          setSavedVersionHashes(hashes);
+          const versionMap = new Map<string, string>(versions.map((v: VersionEntry) => [v.commitHash, v.commitTitle]));
+          setSavedVersions(versionMap);
         } catch (error) {
           console.error('Failed to fetch version history:', error);
         }
@@ -336,16 +342,21 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   useEffect(() => {
     const unsubscribe = versionEventStore.subscribe((event) => {
       if (event) {
-        if (event.type === 'save') {
-          // Add to savedVersionHashes
-          setSavedVersionHashes((prev) => new Set([...prev, event.commitHash]));
-        } else if (event.type === 'delete') {
-          // Remove from savedVersionHashes
-          setSavedVersionHashes((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(event.commitHash);
+        if (event.type === 'save' && event.commitTitle) {
+          // Add to savedVersions
+          setSavedVersions((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(event.commitHash, event.commitTitle!);
 
-            return newSet;
+            return newMap;
+          });
+        } else if (event.type === 'delete') {
+          // Remove from savedVersions
+          setSavedVersions((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(event.commitHash);
+
+            return newMap;
           });
         }
       }
@@ -448,7 +459,11 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           setIsSaveVersionModalOpen={setIsSaveVersionModalOpen}
           selectedMessageForVersion={selectedMessageForVersion}
           setSelectedMessageForVersion={setSelectedMessageForVersion}
-          savedVersionHashes={savedVersionHashes}
+          savedVersions={savedVersions}
+          isRestoreModalOpen={isRestoreModalOpen}
+          setIsRestoreModalOpen={setIsRestoreModalOpen}
+          selectedRestoreInfo={selectedRestoreInfo}
+          setSelectedRestoreInfo={setSelectedRestoreInfo}
         />
       )}
       <ToastContainer />
@@ -487,7 +502,11 @@ interface ChatProps {
   setIsSaveVersionModalOpen: (open: boolean) => void;
   selectedMessageForVersion: UIMessage | null;
   setSelectedMessageForVersion: (message: UIMessage | null) => void;
-  savedVersionHashes: Set<string>;
+  savedVersions: Map<string, string>;
+  isRestoreModalOpen: boolean;
+  setIsRestoreModalOpen: (open: boolean) => void;
+  selectedRestoreInfo: { commitHash: string; commitTitle: string } | null;
+  setSelectedRestoreInfo: (info: { commitHash: string; commitTitle: string } | null) => void;
 }
 
 export const ChatImpl = memo(
@@ -510,7 +529,11 @@ export const ChatImpl = memo(
     setIsSaveVersionModalOpen,
     selectedMessageForVersion,
     setSelectedMessageForVersion,
-    savedVersionHashes,
+    savedVersions,
+    isRestoreModalOpen,
+    setIsRestoreModalOpen,
+    selectedRestoreInfo,
+    setSelectedRestoreInfo,
   }: ChatProps) => {
     useShortcuts();
 
@@ -1605,6 +1628,29 @@ export const ChatImpl = memo(
       setIsSaveVersionModalOpen(true);
     };
 
+    // Open restore version confirmation modal
+    const handleRestoreVersionClick = (commitHash: string, commitTitle: string) => {
+      setSelectedRestoreInfo({ commitHash, commitTitle });
+      setIsRestoreModalOpen(true);
+    };
+
+    // Actual restore version logic after confirmation
+    const handleRestoreVersionConfirm = async () => {
+      if (!selectedRestoreInfo) {
+        return;
+      }
+
+      await restoreVersion({
+        projectPath: repoStore.get().path,
+        commitHash: selectedRestoreInfo.commitHash,
+        commitTitle: selectedRestoreInfo.commitTitle,
+        onSuccess: () => {
+          setIsRestoreModalOpen(false);
+          setSelectedRestoreInfo(null);
+        },
+      });
+    };
+
     // Actual save version logic after confirmation
     const handleSaveVersionConfirm = async (title: string, description: string) => {
       if (!selectedMessageForVersion) {
@@ -1652,7 +1698,7 @@ export const ChatImpl = memo(
 
         // Trigger version save event
         const { triggerVersionSave } = await import('~/lib/stores/versionEvent');
-        triggerVersionSave(commitHash);
+        triggerVersionSave(commitHash, commitTitle);
 
         // Dismiss loading toast and show success
         toast.dismiss(toastId);
@@ -1785,7 +1831,8 @@ export const ChatImpl = memo(
           handleFork={handleFork}
           handleRevert={handleRevert}
           handleSaveVersion={handleSaveVersionClick}
-          savedVersionHashes={savedVersionHashes}
+          handleRestoreVersion={handleRestoreVersionClick}
+          savedVersions={savedVersions}
           onViewDiff={handleViewDiff}
           description={description}
           messages={messages.map((message, i) => {
@@ -1846,6 +1893,16 @@ export const ChatImpl = memo(
               ? selectedMessageForVersion.parts[0].text.slice(0, 100)
               : null
           }
+        />
+
+        {/* Restore Version Confirmation Modal */}
+        <RestoreConfirmModal
+          isOpen={isRestoreModalOpen}
+          onClose={() => {
+            setIsRestoreModalOpen(false);
+            setSelectedRestoreInfo(null);
+          }}
+          onConfirm={handleRestoreVersionConfirm}
         />
       </>
     );
