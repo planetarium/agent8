@@ -749,7 +749,8 @@ export const CodeMirrorEditor = memo(
         logger.warn(EDITOR_MESSAGES.EMPTY_FILE_PATH);
       }
 
-      prevFilePathRef.current = doc.filePath;
+      // Detect file change
+      const isFileChanged = prevFilePathRef.current !== doc.filePath;
 
       // Get or create editor state for this file
       let state = editorStates.get(doc.filePath);
@@ -761,8 +762,11 @@ export const CodeMirrorEditor = memo(
         editorStates.set(doc.filePath, state);
       }
 
-      // Apply state and load document
-      view.setState(state);
+      if (isFileChanged) {
+        view.setState(state);
+      }
+
+      prevFilePathRef.current = doc.filePath;
 
       setEditorDocument(
         view,
