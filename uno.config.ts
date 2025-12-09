@@ -120,6 +120,7 @@ export default defineConfig({
     'text-heading-6xl',
     'text-body-sm',
     'text-body-md-regular',
+    'text-body-md-regular-relaxed',
     'text-body-md-medium',
     'text-body-lg-regular',
     'text-body-lg-medium',
@@ -138,6 +139,7 @@ export default defineConfig({
     'max-w-chat': 'max-w-[var(--chat-max-width)]',
     'max-w-chat-before-start': 'max-w-[var(--chat-max-width-before-start)]',
     'bg-primary': 'bg-[var(--color-bg-primary,#111315)]',
+    'bg-tertiary': 'bg-[var(--color-bg-tertiary,#32363C)]',
     'text-primary': 'text-bolt-color-textPrimary',
     'text-secondary': 'text-bolt-color-textSecondary',
     'text-tertiary': 'text-bolt-color-textTertiary',
@@ -160,6 +162,7 @@ export default defineConfig({
     // Body Typography
     'text-body-sm': 'font-primary text-[12px] font-normal leading-[133.4%] not-italic',
     'text-body-md-regular': 'font-primary text-[14px] font-normal leading-[142.9%] not-italic',
+    'text-body-md-regular-relaxed': 'font-primary text-[13px] font-normal leading-[171.4%] not-italic',
     'text-body-md-medium': 'font-primary text-[14px] font-medium leading-[142.9%] not-italic',
     'text-body-lg-regular': 'font-primary text-[16px] font-normal leading-[150%] not-italic',
     'text-body-lg-medium': 'font-primary text-[16px] font-medium leading-[150%] not-italic',

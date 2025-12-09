@@ -3,8 +3,6 @@ import { Fragment } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { useStore } from '@nanostores/react';
-import { profileStore } from '~/lib/stores/profile';
 import { forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
@@ -50,7 +48,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       loadingBefore,
       loadBefore,
     } = props;
-    const profile = useStore(profileStore);
 
     return (
       <div
@@ -110,28 +107,18 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               return (
                 <div
                   key={index}
-                  className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                    'border border-gray-700 bg-bolt-elements-messages-background mt-4 py-4': isUserMessage,
-                    'bg-gray-800 bg-opacity-70 mt-4': !isStreaming && !isUserMessage,
-                    'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                      isStreaming && isLast,
-                  })}
-                >
-                  {isUserMessage && (
-                    <div className="flex items-center justify-center w-[40px] h-[40px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0 self-start -mt-0.5">
-                      {profile?.avatar ? (
-                        <img
-                          src={profile.avatar}
-                          alt={profile?.username || 'User'}
-                          className="w-full h-full object-cover"
-                          loading="eager"
-                          decoding="sync"
-                        />
-                      ) : (
-                        <div className="i-ph:user-fill text-2xl" />
-                      )}
-                    </div>
+                  className={classNames(
+                    'flex items-start self-stretch',
+                    isUserMessage
+                      ? 'py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-4'
+                      : 'gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]',
+                    {
+                      'bg-gray-800 bg-opacity-70 mt-4': !isUserMessage && !isStreaming,
+                      'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
+                        isStreaming && isLast,
+                    },
                   )}
+                >
                   <div className="grid grid-col-1 w-full">
                     {isUserMessage ? (
                       <UserMessage content={messageText} />
@@ -175,6 +162,18 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           >
                             {messageId && isCommitHash(messageId.split('-').pop() as string) && (
                               <>
+                                {index > 0 && messages[index - 1]?.role === 'user' && (
+                                  <DropdownItem
+                                    onSelect={() => {
+                                      const prevUserMessage = messages[index - 1];
+                                      const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
+                                      onRetry?.(prevUserMessage, prevPrevMessage);
+                                    }}
+                                  >
+                                    <span className="i-ph:arrow-clockwise text-xl" />
+                                    Retry chat
+                                  </DropdownItem>
+                                )}
                                 <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
                                   <span className="i-ph:arrow-u-up-left text-xl" />
                                   Revert to this message

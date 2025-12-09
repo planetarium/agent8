@@ -191,7 +191,6 @@ export function useGitbaseChatHistory() {
           branch: taskBranch,
           untilCommit,
           page,
-          all: true, // Get all commits including unreachable ones
         })) as CommitResponse;
 
         if (!data.success) {

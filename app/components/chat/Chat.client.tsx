@@ -477,7 +477,7 @@ interface ChatProps {
   enabledTaskMode: boolean;
   setEnabledTaskMode: (enabled: boolean) => void;
   reloadTaskBranches: (projectPath: string) => Promise<void>;
-  revertTo: (hash: string) => void;
+  revertTo: (hash: string) => Promise<void>;
   hasMore: boolean;
   loadBefore: () => Promise<void>;
   loadingBefore: boolean;
@@ -1596,7 +1596,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      revertTo(commitHash);
+      await revertTo(commitHash);
     };
 
     // Open save version confirmation modal
@@ -1717,7 +1717,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      revertTo(commitHash);
+      await revertTo(commitHash);
       setInput(stripMetadata(extractTextContent(message)));
     };
 

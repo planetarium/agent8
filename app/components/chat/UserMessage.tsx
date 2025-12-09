@@ -15,7 +15,7 @@ export function UserMessage({ content }: UserMessageProps) {
   const attachments = content ? extractAttachments(content) : [];
 
   return (
-    <div className="overflow-hidden pt-[4px]">
+    <div className="overflow-hidden pt-[4px] text-body-md-regular-relaxed text-secondary">
       <div className="flex flex-col gap-4">
         {textContent && <Markdown html>{textContent}</Markdown>}
         {attachments.length > 0 && (
