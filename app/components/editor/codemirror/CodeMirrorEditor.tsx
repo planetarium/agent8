@@ -1,9 +1,3 @@
-/*
- * ============================================================================
- * 1. IMPORTS & EXTERNAL DEPENDENCIES
- * ============================================================================
- */
-
 import { acceptCompletion, autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { bracketMatching, foldGutter, indentOnInput, indentUnit } from '@codemirror/language';
@@ -16,6 +10,7 @@ import {
   StateField,
   Transaction,
   type Extension,
+  type TransactionSpec,
 } from '@codemirror/state';
 import {
   drawSelection,
@@ -29,7 +24,7 @@ import {
   tooltips,
   type Tooltip,
 } from '@codemirror/view';
-import { memo, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Theme } from '~/types/theme';
 import { classNames } from '~/utils/classNames';
 import { debounce } from '~/utils/debounce';
@@ -38,12 +33,6 @@ import { BinaryContent } from './BinaryContent';
 import { getTheme, reconfigureTheme } from './cm-theme';
 import { indentKeyBinding } from './indent';
 import { getLanguage } from './languages';
-
-/*
- * ============================================================================
- * 2. CONSTANTS & CONFIGURATION
- * ============================================================================
- */
 
 const logger = createScopedLogger('CodeMirrorEditor');
 
@@ -63,24 +52,14 @@ const EDITOR_MESSAGES = {
   VIEW_NOT_AVAILABLE: 'View not available for operation, recreating view',
   RECREATION_SKIPPED: 'Skipping recreation: already in progress or view not available',
   VIEW_UNAVAILABLE_LAYOUT: 'View not available for layout operation, recreating view',
-  VIEW_UNAVAILABLE_DURING_LAYOUT: 'View became unavailable during layout operation',
   RECREATION_SUCCESS: 'EditorView successfully recreated',
   RECREATION_FAILED: 'Failed to recreate EditorView',
   LANGUAGE_LOAD_ERROR: 'Error loading language support',
-  VIEW_UNAVAILABLE_AFTER_LANGUAGE: 'View no longer available after language loading',
-  SCROLL_FOCUS_UNAVAILABLE: 'View not available for scroll/focus operations',
   FOCUS_FAILED: 'Failed to set focus',
   SCROLL_FAILED: 'Failed to set scroll position',
-  SCROLL_RESET_FAILED: 'Failed to reset scroll position',
   AI_COMPLETION_SYNC: 'Final state synchronization',
   AI_COMPLETION_FAILED: 'Final state synchronization failed',
 } as const;
-
-/*
- * ============================================================================
- * 3. TYPE DEFINITIONS
- * ============================================================================
- */
 
 export interface EditorDocument {
   value: string;
@@ -112,7 +91,6 @@ export type OnSaveCallback = () => void;
 
 interface CodeMirrorEditorProps {
   theme: Theme;
-  id?: unknown;
   doc?: EditorDocument;
   editable?: boolean;
   debounceChange?: number;
@@ -127,12 +105,6 @@ interface CodeMirrorEditorProps {
 
 type TextEditorDocument = EditorDocument & { value: string };
 type EditorStates = Map<string, EditorState>;
-
-/*
- * ============================================================================
- * 4. CODEMIRROR STATE & EFFECTS
- * ============================================================================
- */
 
 const readOnlyTooltipStateEffect = StateEffect.define<boolean>();
 const editableStateEffect = StateEffect.define<boolean>();
@@ -204,43 +176,25 @@ function getReadOnlyTooltip(state: EditorState): Tooltip[] {
     }));
 }
 
-/*
- * ============================================================================
- * 5. UTILITY FUNCTIONS
- * ============================================================================
- */
-
 // Check if editor view is available
 function isViewAvailable(view: EditorView): boolean {
   return !!(view && view.dom && view.dom.isConnected);
 }
 
-// Safe dispatch execution
-function safeDispatch(view: EditorView, spec: any, operation: string, recreateViewFn?: () => void): boolean {
+// Dispatch transaction to view (throws on failure)
+function dispatchToView(view: EditorView, transaction: TransactionSpec): void {
   if (!isViewAvailable(view)) {
-    logger.warn(`${EDITOR_MESSAGES.VIEW_NOT_AVAILABLE}: ${operation}`);
-    recreateViewFn?.();
-
-    return false;
+    throw new Error(EDITOR_MESSAGES.VIEW_NOT_AVAILABLE);
   }
 
-  try {
-    view.dispatch(spec);
-    return true;
-  } catch (error) {
-    logger.error(`Error in ${operation}, recreating view:`, error);
-    recreateViewFn?.();
-
-    return false;
-  }
+  view.dispatch(transaction);
 }
 
 // Create common dispatchTransactions logic
 function createDispatchTransactions(
   onUpdate: (update: EditorUpdate) => void,
-  editorStatesRef: MutableRefObject<EditorStates | undefined>,
-  docRef: MutableRefObject<EditorDocument | undefined>,
-  isRecreating = false,
+  editorStatesRef: RefObject<EditorStates | undefined>,
+  doc: EditorDocument | undefined,
 ) {
   return function dispatchTransactions(this: EditorView, transactions: readonly Transaction[]) {
     const view = this;
@@ -257,21 +211,16 @@ function createDispatchTransactions(
       (newSelection === undefined || previousSelection === undefined || !newSelection.eq(previousSelection));
 
     // Only notify of changes if we have a document and something actually changed
-    if (docRef.current && (transactions.some((transaction) => transaction.docChanged) || selectionChanged)) {
-      const documentChanged = transactions.some((transaction) => transaction.docChanged);
-      const shouldNotify = documentChanged || !isRecreating;
-
-      if (shouldNotify) {
-        onUpdate({
-          selection: view.state.selection,
-          content: view.state.doc.toString(),
-          filePath: docRef.current.filePath,
-        });
-      }
+    if (doc && (transactions.some((transaction) => transaction.docChanged) || selectionChanged)) {
+      onUpdate({
+        selection: view.state.selection,
+        content: view.state.doc.toString(),
+        filePath: doc.filePath,
+      });
 
       // Save the current state for this file path
-      if (editorStatesRef.current && docRef.current.filePath) {
-        editorStatesRef.current.set(docRef.current.filePath, view.state);
+      if (editorStatesRef.current && doc.filePath) {
+        editorStatesRef.current.set(doc.filePath, view.state);
       }
     }
 
@@ -279,102 +228,100 @@ function createDispatchTransactions(
   };
 }
 
-// Set empty document
-function setNoDocument(view: EditorView, recreateViewFn?: () => void) {
-  // Clear all content and reset cursor to start
-  safeDispatch(
-    view,
-    {
-      selection: { anchor: 0 },
-      changes: {
-        from: 0,
-        to: view.state.doc.length,
-        insert: '',
-      },
-    },
-    'clear document',
-    recreateViewFn,
-  );
-
-  // Reset scroll position to top-left
-  try {
-    view.scrollDOM.scrollTo(0, 0);
-  } catch (error) {
-    logger.warn(EDITOR_MESSAGES.SCROLL_RESET_FAILED, error);
-  }
-}
-
-// Set editor document
+// Set editor document (returns false if view recreation is needed)
 function setEditorDocument(
-  view: EditorView,
+  editorViewRef: RefObject<EditorView | undefined>,
   theme: Theme,
   editable: boolean,
   languageCompartment: Compartment,
   autoFocus: boolean,
   doc: TextEditorDocument,
-  recreateViewFn?: () => void,
-) {
-  const needsContentUpdate = doc.value !== view.state.doc.toString();
-  const newEditableState = editable && !doc.isBinary;
+): boolean {
+  const editorView = editorViewRef.current;
 
-  if (needsContentUpdate) {
-    safeDispatch(
-      view,
-      {
-        selection: { anchor: 0 },
-        changes: { from: 0, to: view.state.doc.length, insert: doc.value },
-        effects: [editableStateEffect.of(newEditableState)],
-      },
-      'document and state update',
-      recreateViewFn,
-    );
-  } else {
-    safeDispatch(
-      view,
-      { effects: [editableStateEffect.of(newEditableState)] },
-      'editable state update',
-      recreateViewFn,
-    );
+  if (!editorView) {
+    return false;
   }
 
-  const scheduleScrollAndFocus = () => {
-    if (!isViewAvailable(view)) {
-      logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_LAYOUT);
-      recreateViewFn?.();
+  const needsContentUpdate = doc.value !== editorView.state.doc.toString();
+  const newEditableState = editable && !doc.isBinary;
+  let transaction;
 
-      return;
+  if (needsContentUpdate) {
+    transaction = {
+      selection: { anchor: 0 },
+      changes: { from: 0, to: editorView.state.doc.length, insert: doc.value },
+      effects: [editableStateEffect.of(newEditableState)],
+    };
+
+    try {
+      dispatchToView(editorView, transaction);
+    } catch (error) {
+      logger.warn('setEditorDocument: document and state update failed', error);
+      return false;
     }
+  } else {
+    transaction = { effects: [editableStateEffect.of(newEditableState)] };
 
-    // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
-    requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc));
-  };
+    try {
+      dispatchToView(editorView, transaction);
+    } catch (error) {
+      logger.warn('setEditorDocument: editable state update failed', error);
+      return false;
+    }
+  }
 
   getLanguage(doc.filePath)
     .then((languageSupport) => {
-      if (!languageSupport) {
-        scheduleScrollAndFocus();
+      const editorView = editorViewRef.current;
+
+      if (!editorView) {
         return;
       }
 
-      const success = safeDispatch(
-        view,
-        {
-          effects: [languageCompartment.reconfigure([languageSupport]), reconfigureTheme(theme)],
-        },
-        'language configuration',
-        recreateViewFn,
-      );
-
-      if (!success) {
-        logger.warn('Language configuration failed');
+      if (!languageSupport) {
+        scheduleScrollAndFocus(editorView, autoFocus, editable, doc);
+        return;
       }
 
-      scheduleScrollAndFocus();
+      try {
+        dispatchToView(editorView, {
+          effects: [languageCompartment.reconfigure([languageSupport]), reconfigureTheme(theme)],
+        });
+      } catch (error) {
+        logger.warn('setEditorDocument: language configuration failed', error);
+        return;
+      }
+
+      scheduleScrollAndFocus(editorView, autoFocus, editable, doc);
     })
     .catch((error) => {
-      logger.error(EDITOR_MESSAGES.LANGUAGE_LOAD_ERROR, error);
-      scheduleScrollAndFocus();
+      logger.warn(EDITOR_MESSAGES.LANGUAGE_LOAD_ERROR, error);
+
+      const editorView = editorViewRef.current;
+
+      if (!editorView) {
+        return false;
+      }
+
+      scheduleScrollAndFocus(editorView, autoFocus, editable, doc);
+
+      return true;
     });
+
+  return true;
+}
+
+// Schedule scroll and focus after layout
+function scheduleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: boolean, doc: TextEditorDocument) {
+  if (!isViewAvailable(view)) {
+    logger.warn(EDITOR_MESSAGES.VIEW_UNAVAILABLE_LAYOUT);
+
+    return;
+  }
+
+  // requestAnimationFrame to ensure the scroll and focus are performed after the layout is completed
+  requestAnimationFrame(() => handleScrollAndFocus(view, autoFocus, editable, doc));
 }
 
 function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: boolean, doc: TextEditorDocument) {
@@ -383,6 +330,9 @@ function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: bo
   const newLeft = doc.scroll?.left ?? 0;
   const newTop = doc.scroll?.top ?? 0;
   const needsScrolling = currentLeft !== newLeft || currentTop !== newTop;
+
+  // Force viewport recalculation to ensure all visible lines are rendered
+  view.requestMeasure();
 
   // Handle focus management for editable editors
   if (autoFocus && editable) {
@@ -417,20 +367,14 @@ function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: bo
   }
 }
 
-/*
- * ============================================================================
- * 6. EDITOR STATE CREATION
- * ============================================================================
- */
-
 // Create new editor state with extensions
 function newEditorState(
   content: string,
   theme: Theme,
   settings: EditorSettings | undefined,
-  onScrollRef: MutableRefObject<OnScrollCallback | undefined>,
+  onScroll: OnScrollCallback | undefined,
   debounceScroll: number,
-  onFileSaveRef: MutableRefObject<OnSaveCallback | undefined>,
+  onSave: OnSaveCallback | undefined,
   extensions: Extension[],
 ) {
   return EditorState.create({
@@ -442,7 +386,7 @@ function newEditorState(
             return;
           }
 
-          onScrollRef.current?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
+          onScroll?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
         }, debounceScroll),
         keydown: (event, view) => {
           if (view.state.readOnly) {
@@ -467,7 +411,7 @@ function newEditorState(
           key: 'Mod-s',
           preventDefault: true,
           run: () => {
-            onFileSaveRef.current?.();
+            onSave?.();
             return true;
           },
         },
@@ -517,15 +461,8 @@ function newEditorState(
   });
 }
 
-/*
- * ============================================================================
- * 7. MAIN COMPONENT
- * ============================================================================
- */
-
 export const CodeMirrorEditor = memo(
   ({
-    id,
     doc,
     debounceScroll = EDITOR_DEFAULTS.DEBOUNCE_SCROLL,
     debounceChange = EDITOR_DEFAULTS.DEBOUNCE_CHANGE,
@@ -543,12 +480,10 @@ export const CodeMirrorEditor = memo(
     // State and references
     const [languageCompartment] = useState(new Compartment());
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const viewRef = useRef<EditorView>();
-    const docRef = useRef<EditorDocument>();
-    const editorStatesRef = useRef<EditorStates>();
-    const onScrollRef = useRef(onScroll);
-    const onChangeRef = useRef(onChange);
-    const onSaveRef = useRef(onSave);
+    const editorViewRef = useRef<EditorView>();
+    const editorStatesRef = useRef<EditorStates>(new Map());
+    const docValueRef = useRef<string | undefined>();
+    const docFilePathRef = useRef<string | undefined>();
 
     // Track previous editable state for AI completion detection
     const prevEditableRef = useRef<boolean>(editable);
@@ -556,115 +491,121 @@ export const CodeMirrorEditor = memo(
     // Track previous file path to detect file changes
     const prevFilePathRef = useRef<string | undefined>();
 
-    // EditorView recreation function (infinite recursion prevention)
-    const recreateEditorView = (() => {
-      let isRecreating = false;
+    // EditorView recreation function
+    const recreateEditorView = () => {
+      if (!editorViewRef.current || !containerRef.current) {
+        logger.warn(EDITOR_MESSAGES.RECREATION_SKIPPED);
+        return;
+      }
 
-      return () => {
-        if (isRecreating || !viewRef.current || !containerRef.current) {
-          logger.warn(EDITOR_MESSAGES.RECREATION_SKIPPED);
-          return;
+      logger.info('Starting EditorView recreation');
+
+      try {
+        // Backup current state
+        const currentDoc = editorViewRef.current.state.doc.toString();
+        const scrollPos = {
+          left: editorViewRef.current.scrollDOM?.scrollLeft || 0,
+          top: editorViewRef.current.scrollDOM?.scrollTop || 0,
+        };
+        const selection = editorViewRef.current.state.selection;
+
+        // Clean up existing view
+        editorViewRef.current.destroy();
+
+        // Create new view
+        const onUpdate = debounce((update: EditorUpdate) => {
+          onChange?.(update);
+        }, debounceChange);
+
+        const newView = new EditorView({
+          parent: containerRef.current,
+          dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, doc),
+        });
+
+        // Restore state
+        if (currentDoc) {
+          const state = newEditorState(currentDoc, theme, settings, onScroll, debounceScroll, onSave, [
+            languageCompartment.of([]),
+          ]);
+          newView.setState(state);
+
+          if (selection) {
+            newView.dispatch({ selection });
+          }
         }
 
-        isRecreating = true;
-        logger.info('Starting EditorView recreation');
+        // Restore scroll position
+        requestAnimationFrame(() => {
+          if (newView.scrollDOM) {
+            newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
+          }
+        });
 
-        try {
-          // Backup current state
-          const currentDoc = viewRef.current.state.doc.toString();
-          const scrollPos = {
-            left: viewRef.current.scrollDOM?.scrollLeft || 0,
-            top: viewRef.current.scrollDOM?.scrollTop || 0,
-          };
-          const selection = viewRef.current.state.selection;
+        editorViewRef.current = newView;
+        logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
+      } catch (error) {
+        logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
 
-          // Clean up existing view
-          viewRef.current.destroy();
-
-          // Create new view
-          const onUpdate = debounce((update: EditorUpdate) => {
-            onChangeRef.current?.(update);
-          }, debounceChange);
-
-          const newView = new EditorView({
+        // Fallback: create minimal working view
+        if (containerRef.current) {
+          const state = newEditorState('', theme, settings, onScroll, debounceScroll, onSave, [
+            languageCompartment.of([]),
+          ]);
+          const fallbackView = new EditorView({
             parent: containerRef.current,
-            dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, docRef, true),
+            state,
+            dispatchTransactions: createDispatchTransactions(() => undefined, editorStatesRef, doc),
           });
-
-          // Restore state
-          if (currentDoc) {
-            const state = newEditorState(currentDoc, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
-              languageCompartment.of([]),
-            ]);
-            newView.setState(state);
-
-            if (selection) {
-              newView.dispatch({ selection });
-            }
-          }
-
-          // Restore scroll position
-          requestAnimationFrame(() => {
-            if (newView.scrollDOM) {
-              newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
-            }
-          });
-
-          viewRef.current = newView;
-          logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
-        } catch (error) {
-          logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
-
-          // Fallback: create minimal working view
-          if (containerRef.current) {
-            const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
-              languageCompartment.of([]),
-            ]);
-            const fallbackView = new EditorView({
-              parent: containerRef.current,
-              state,
-              dispatchTransactions: createDispatchTransactions(() => undefined, editorStatesRef, docRef, true),
-            });
-            viewRef.current = fallbackView;
-          }
-        } finally {
-          isRecreating = false;
+          editorViewRef.current = fallbackView;
         }
-      };
-    })();
+      }
+    };
 
-    // Update callback references on every render
+    // Initialize CodeMirror editor view (mount only)
     useEffect(() => {
-      onScrollRef.current = onScroll;
-      onChangeRef.current = onChange;
-      onSaveRef.current = onSave;
-      docRef.current = doc;
-    });
+      const onUpdate = debounce((update: EditorUpdate) => {
+        onChange?.(update);
+      }, debounceChange);
+
+      const view = new EditorView({
+        parent: containerRef.current!,
+        dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, doc),
+      });
+
+      editorViewRef.current = view;
+      docValueRef.current = undefined;
+      docFilePathRef.current = undefined;
+
+      // Cleanup on unmount
+      return () => {
+        editorViewRef.current?.destroy();
+        editorViewRef.current = undefined;
+      };
+    }, []);
 
     // AI completion detection and final state synchronization
     useEffect(() => {
       // Detect AI streaming completion (editable: false → true)
-      if (!prevEditableRef.current && editable && doc?.value && viewRef.current) {
-        // Use existing safeDispatch for safety and consistency
-        const success = safeDispatch(
-          viewRef.current,
-          {
-            changes: {
-              from: 0,
-              to: viewRef.current.state.doc.length,
-              insert: doc.value,
-            },
-            selection: { anchor: doc.value.length }, // Move cursor to end of file
-            annotations: [Transaction.addToHistory.of(false)], // Don't add to undo history
+      if (!prevEditableRef.current && editable && doc?.value && editorViewRef.current) {
+        const transaction: TransactionSpec = {
+          changes: {
+            from: 0,
+            to: editorViewRef.current.state.doc.length,
+            insert: doc.value,
           },
-          EDITOR_MESSAGES.AI_COMPLETION_SYNC,
-          recreateEditorView,
-        );
+          selection: { anchor: doc.value.length }, // Move cursor to end of file
+          annotations: [Transaction.addToHistory.of(false)], // Don't add to undo history.
+          effects: [editableStateEffect.of(true)], // Make editor editable.
+        };
 
-        if (success) {
+        try {
+          dispatchToView(editorViewRef.current, transaction);
           logger.info(EDITOR_MESSAGES.AI_COMPLETION_SYNC);
-        } else {
-          logger.warn(EDITOR_MESSAGES.AI_COMPLETION_FAILED);
+        } catch (error) {
+          logger.warn(EDITOR_MESSAGES.AI_COMPLETION_FAILED, error);
+          recreateEditorView();
+
+          return;
         }
       }
 
@@ -672,68 +613,53 @@ export const CodeMirrorEditor = memo(
       prevEditableRef.current = editable;
     }, [editable]);
 
-    // Initialize CodeMirror editor view (mount only)
-    useEffect(() => {
-      const onUpdate = debounce((update: EditorUpdate) => {
-        onChangeRef.current?.(update);
-      }, debounceChange);
-
-      const view = new EditorView({
-        parent: containerRef.current!,
-        dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, docRef, false),
-      });
-
-      viewRef.current = view;
-
-      // Cleanup on unmount
-      return () => {
-        viewRef.current?.destroy();
-        viewRef.current = undefined;
-      };
-    }, []);
-
     // Handle theme changes
     useEffect(() => {
-      if (!viewRef.current) {
+      if (!editorViewRef.current) {
         return;
       }
 
-      safeDispatch(
-        viewRef.current,
-        {
-          effects: [reconfigureTheme(theme)],
-        },
-        'theme reconfiguration',
-        recreateEditorView,
-      );
+      try {
+        dispatchToView(editorViewRef.current, { effects: [reconfigureTheme(theme)] });
+      } catch (error) {
+        logger.warn('theme change failed', error);
+        recreateEditorView();
+      }
     }, [theme]);
-
-    // Reset editor states on ID change
-    useEffect(() => {
-      editorStatesRef.current = new Map<string, EditorState>();
-    }, [id]);
 
     // Handle document changes and loading
     useEffect(() => {
       const editorStates = editorStatesRef.current;
-      const view = viewRef.current;
+      const editorView = editorViewRef.current;
 
-      if (!view || !editorStates) {
+      if (!editorView || !editorStates) {
         return;
       }
 
       // Skip during IME composition (CJK languages)
-      if (view.composing) {
+      if (editorView.composing) {
         return;
       }
 
       // Handle no document case
       if (!doc) {
-        const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
+        const state = newEditorState('', theme, settings, onScroll, debounceScroll, onSave, [
           languageCompartment.of([]),
         ]);
-        view.setState(state);
-        setNoDocument(view, recreateEditorView);
+        editorView.setState(state);
+
+        // Clear document and reset scroll
+        try {
+          dispatchToView(editorView, {
+            selection: { anchor: 0 },
+            changes: { from: 0, to: editorView.state.doc.length, insert: '' },
+          });
+          editorView.scrollDOM.scrollTo(0, 0);
+        } catch (error) {
+          logger.warn('Clear document and scroll reset failed', error);
+          recreateEditorView();
+        }
+
         prevFilePathRef.current = undefined;
 
         return;
@@ -743,6 +669,13 @@ export const CodeMirrorEditor = memo(
       if (doc.isBinary) {
         return;
       }
+
+      if (docValueRef.current === doc.value || docFilePathRef.current === doc.filePath) {
+        return;
+      }
+
+      docValueRef.current = doc.value;
+      docFilePathRef.current = doc.filePath;
 
       // Warn about empty file paths (affects language detection)
       if (doc.filePath === '') {
@@ -755,28 +688,30 @@ export const CodeMirrorEditor = memo(
       let state = editorStates.get(doc.filePath);
 
       if (!state) {
-        state = newEditorState(doc.value, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
+        state = newEditorState(doc.value, theme, settings, onScroll, debounceScroll, onSave, [
           languageCompartment.of([]),
         ]);
         editorStates.set(doc.filePath, state);
       }
 
       // Apply state and load document
-      view.setState(state);
+      editorView.setState(state);
 
-      setEditorDocument(
-        view,
+      const success = setEditorDocument(
+        editorViewRef,
         theme,
         editable,
         languageCompartment,
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
-        recreateEditorView,
       );
-    });
+
+      if (!success) {
+        recreateEditorView();
+      }
+    }, [doc, autoFocusOnDocumentChange]);
 
     // Render
-
     return (
       <div className={classNames('relative h-full', className)}>
         {doc?.isBinary && <BinaryContent />}
@@ -786,12 +721,4 @@ export const CodeMirrorEditor = memo(
   },
 );
 
-/*
- * ============================================================================
- * 8. COMPONENT EXPORT & DISPLAY NAME
- * ============================================================================
- */
-
 export default CodeMirrorEditor;
-
-CodeMirrorEditor.displayName = 'CodeMirrorEditor';
