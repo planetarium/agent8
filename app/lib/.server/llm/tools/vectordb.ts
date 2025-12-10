@@ -207,7 +207,8 @@ export async function createSearchResources(env: Env): Promise<Record<string, an
           }
 
           return {
-            content: `Found ${results.length} relevant 3D game resources`,
+            content: `Found ${results.length} relevant 3D game resources.
+⚠️ Use ONLY exact URLs from items (no inference). Save metadata with URLs for reuse.`,
             items: results,
           };
         } catch (error) {
