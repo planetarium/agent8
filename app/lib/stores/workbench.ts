@@ -27,6 +27,7 @@ import {
   getTags,
 } from '~/lib/persistenceGitbase/api.client';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken, type V8User } from '~/lib/verse8/userAuth';
+import { generateVerseId } from '~/utils/envUtils';
 import type { BoltShell } from '~/utils/shell';
 import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
@@ -1108,7 +1109,7 @@ export class WorkbenchStore {
 
     envVars.VITE_AGENT8_ACCOUNT = user.walletAddress || user.userUid;
 
-    const verseId = envVars.VITE_AGENT8_ACCOUNT + '-' + new Date().getTime();
+    const verseId = generateVerseId(envVars.VITE_AGENT8_ACCOUNT);
     envVars.VITE_AGENT8_VERSE = verseId;
 
     const updatedEnvContent = Object.entries(envVars)
