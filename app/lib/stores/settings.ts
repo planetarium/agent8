@@ -237,13 +237,26 @@ const getDefaultMCPServers = (): MCPServer[] => {
         v8AuthIntegrated: true,
         description: 'Design CSS styles for game interfaces',
       },
+      {
+        name: 'Crossramp',
+        url: 'https://mcp-crossramp.verse8.io/mcp',
+        enabled: true,
+        version: 2,
+        v8AuthIntegrated: true,
+        description: 'Deploy game projects and ERC20 tokens on the testnet',
+      },
     ];
   }
 
   return defaultServers;
 };
 
-// Get initial MCP server settings from localStorage
+/**
+ * Servers that should always be enabled and not stored in localStorage.
+ * These are managed by code only - users cannot toggle them.
+ */
+const FORCED_SERVERS = ['Crossramp'];
+
 const getInitialMCPServers = (): MCPServer[] => {
   if (!isBrowser) {
     return [];
@@ -254,9 +267,11 @@ const getInitialMCPServers = (): MCPServer[] => {
     const defaultServers = getDefaultMCPServers();
 
     if (!stored || stored === '[]' || stored === '""' || stored.indexOf('"version":2') === -1) {
-      // No stored servers, use defaults
-      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers));
+      /* No stored servers, use defaults. Exclude always-enabled servers from localStorage. */
+      const serversToStore = defaultServers.filter((s) => !FORCED_SERVERS.includes(s.name));
+      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(serversToStore));
 
+      // Cookies should include all servers (for API routes)
       if (typeof Cookies !== 'undefined') {
         Cookies.set(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(defaultServers), {
           expires: 365,
@@ -293,24 +308,29 @@ const getInitialMCPServers = (): MCPServer[] => {
       }
     });
 
-    // Check if result is different from stored servers
-    const resultJson = JSON.stringify(resultServers);
-    const storedJson = JSON.stringify(storedServers);
+    /* Always-enabled servers: use default values (not from localStorage). These are managed by code only. */
+    const forcedServers = defaultServers.filter((s) => FORCED_SERVERS.includes(s.name));
+    const userConfigurableServers = resultServers.filter((s) => !FORCED_SERVERS.includes(s.name));
+    const finalServers = [...userConfigurableServers, ...forcedServers];
 
-    if (resultJson !== storedJson) {
-      // Update localStorage and cookies with combined result
-      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, resultJson);
+    // Only store user-configurable servers in localStorage (exclude always-enabled)
+    const storedJson = JSON.stringify(storedServers.filter((s: MCPServer) => !FORCED_SERVERS.includes(s.name)));
+    const newStoredJson = JSON.stringify(finalServers.filter((s) => !FORCED_SERVERS.includes(s.name)));
 
-      if (typeof Cookies !== 'undefined') {
-        Cookies.set(SETTINGS_KEYS.MCP_SERVERS, resultJson, {
-          expires: 365,
-          path: '/',
-          sameSite: 'lax',
-        });
-      }
+    if (newStoredJson !== storedJson) {
+      localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, newStoredJson);
     }
 
-    return resultServers;
+    // Cookies should include all servers (for API routes)
+    if (typeof Cookies !== 'undefined') {
+      Cookies.set(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(finalServers), {
+        expires: 365,
+        path: '/',
+        sameSite: 'lax',
+      });
+    }
+
+    return finalServers;
   } catch (error) {
     console.error('Failed to parse MCP server settings:', error);
     return getDefaultMCPServers(); // Return defaults on error
@@ -381,7 +401,7 @@ export const updateTemporaryMode = (enabled: boolean) => {
   temporaryModeStore.set(enabled);
   localStorage.setItem(SETTINGS_KEYS.TEMPORARY_MODE, JSON.stringify(enabled));
   Cookies.set(SETTINGS_KEYS.TEMPORARY_MODE, JSON.stringify(enabled), {
-    expires: 365, // 1년간 유효
+    expires: 365,
     path: '/',
     sameSite: 'lax',
   });
@@ -532,17 +552,18 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
 // MCP Servers management functions
 export const updateMCPServers = (servers: MCPServer[]) => {
   mcpServersStore.set(servers);
-  localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(servers));
 
-  // Also save to cookie for API routes
+  // Exclude always-enabled servers from localStorage (they are managed by code only)
+  const serversToStore = servers.filter((s) => !FORCED_SERVERS.includes(s.name));
+  localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(serversToStore));
+
+  // Cookies should include all servers (for API routes)
   try {
-    // Use the same key name as localStorage for consistency
     Cookies.set(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(servers), {
-      expires: 365, // 1년간 유효
+      expires: 365,
       path: '/',
       sameSite: 'lax',
     });
-    console.log('MCP servers saved to cookies:', servers);
   } catch (e) {
     console.error('Failed to set mcpServers cookie:', e);
   }
