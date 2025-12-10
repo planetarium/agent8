@@ -31,6 +31,7 @@ import {
   getProjectPackagesPrompt,
   getAgent8Prompt,
   getVibeStarter3dSpecPrompt,
+  getPerformancePrompt,
 } from '~/lib/common/prompts/agent8-prompts';
 import { createDocTools } from './tools/docs';
 import { createSearchCodebase, createSearchResources } from './tools/vectordb';
@@ -188,6 +189,7 @@ export async function streamText(props: {
     };
   }
 
+  const performancePrompt = getPerformancePrompt(is3dProject(files));
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
   /*
@@ -200,7 +202,7 @@ export async function streamText(props: {
   const staticPrompts = [systemPrompt];
 
   // 2. Project Type - Shared among 2D/3D users respectively
-  const projectTypePrompts = [vibeStarter3dSpecPrompt, getProjectDocsPrompt(files)];
+  const projectTypePrompts = [performancePrompt, vibeStarter3dSpecPrompt, getProjectDocsPrompt(files)];
 
   // 3. Project Context - Shared within same project sessions
   const projectContextPrompts = [
