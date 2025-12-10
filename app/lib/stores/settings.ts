@@ -314,9 +314,8 @@ const getInitialMCPServers = (): MCPServer[] => {
     const finalServers = [...userConfigurableServers, ...forcedServers];
 
     // Only store user-configurable servers in localStorage (exclude always-enabled)
-    const serversToStore = finalServers.filter((s) => !FORCED_SERVERS.includes(s.name));
     const storedJson = JSON.stringify(storedServers.filter((s: MCPServer) => !FORCED_SERVERS.includes(s.name)));
-    const newStoredJson = JSON.stringify(serversToStore);
+    const newStoredJson = JSON.stringify(finalServers.filter((s) => !FORCED_SERVERS.includes(s.name)));
 
     if (newStoredJson !== storedJson) {
       localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, newStoredJson);
