@@ -237,6 +237,14 @@ const getDefaultMCPServers = (): MCPServer[] => {
         v8AuthIntegrated: true,
         description: 'Design CSS styles for game interfaces',
       },
+      {
+        name: 'Crossramp',
+        url: 'https://mcp-crossramp.verse8.io/mcp',
+        enabled: true,
+        version: 2,
+        v8AuthIntegrated: true,
+        description: 'Deploy game projects and ERC20 tokens on the testnet',
+      },
     ];
   }
 
@@ -290,6 +298,15 @@ const getInitialMCPServers = (): MCPServer[] => {
       } else {
         // Add stored server if it's not in default list
         resultServers.push(storedServer);
+      }
+    });
+
+    // Force always-enabled servers (these should always be on regardless of stored state)
+    const alwaysEnabledServers = ['Crossramp'];
+
+    resultServers.forEach((server, index) => {
+      if (alwaysEnabledServers.includes(server.name)) {
+        resultServers[index] = { ...server, enabled: true, v8AuthIntegrated: true };
       }
     });
 

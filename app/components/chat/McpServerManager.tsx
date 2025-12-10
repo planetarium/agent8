@@ -28,7 +28,7 @@ const McpServerManager: React.FC<{ chatStarted?: boolean }> = ({ chatStarted = f
     ? JSON.parse(import.meta.env.VITE_DISABLED_SERVER_NAMES)
     : ['All-in-one'];
 
-  const hiddenServerNames = ['Spritesheet'];
+  const hiddenServerNames = ['Spritesheet', 'Crossramp'];
   const isDisabledServer = (serverName: string) => disabledServerNames.includes(serverName);
   const isHiddenServer = (serverName: string) => hiddenServerNames.includes(serverName);
   const isDefaultServer = (serverName: string) => defaultServerNames.includes(serverName);
