@@ -352,9 +352,8 @@ function newEditorState(
   return EditorState.create({
     doc: content,
     extensions: [
-      // Update listener for change detection and state saving
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
+        if (update.docChanged && !update.state.readOnly) {
           debouncedOnChange?.({
             content: update.state.doc.toString(),
             selection: update.state.selection,
