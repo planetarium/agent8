@@ -173,6 +173,8 @@ export default defineConfig({
     'text-interactive-on-primary': 'text-[var(--color-text-interactive-on-primary)]',
     'text-interactive-on-primary-hovered': 'text-[var(--color-text-interactive-on-primary-hovered)]',
     'text-interactive-on-primary-pressed': 'text-[var(--color-text-interactive-on-primary-pressed)]',
+    'text-interactive-hovered': 'text-[var(--color-text-interactive-hovered)]',
+    'text-interactive-pressed': 'text-[var(--color-text-interactive-pressed)]',
     'bg-interactive-neutral': 'bg-[var(--color-bg-interactive-neutral)]',
     'bg-interactive-neutral-hovered': 'bg-[var(--color-bg-interactive-neutral-hovered)]',
     'bg-interactive-neutral-pressed': 'bg-[var(--color-bg-interactive-neutral-pressed)]',

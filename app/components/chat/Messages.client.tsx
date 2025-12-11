@@ -3,19 +3,20 @@ import { Fragment, forwardRef } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
 import { toast } from 'react-toastify';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { loadingAnimationData } from '~/utils/animationData';
 import { extractAllTextContent } from '~/utils/message';
-import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon } from '~/components/ui/Icons';
+import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon, PlayIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import type { ProgressAnnotation } from '~/types/context';
 import ProgressCompilation from './ProgressCompilation';
-import * as Tooltip from '@radix-ui/react-tooltip';
 
 interface MessagesProps {
   id?: string;
@@ -172,7 +173,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <Tooltip.Portal>
                             <Tooltip.Content
                               className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-                              sideOffset={-11}
                               side="bottom"
                             >
                               View diff
@@ -195,7 +195,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <Tooltip.Portal>
                             <Tooltip.Content
                               className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-                              sideOffset={-11}
                               side="bottom"
                             >
                               Copy
@@ -220,7 +219,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             <Tooltip.Portal>
                               <Tooltip.Content
                                 className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-                                sideOffset={-11}
                                 side="bottom"
                               >
                                 Retry
@@ -230,32 +228,57 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           </Tooltip.Root>
                         )}
                       </div>
-                      {messageId &&
-                        isCommitHash(messageId.split('-').pop() as string) &&
-                        (() => {
-                          const commitHash = messageId.split('-').pop() as string;
-                          const savedTitle = savedVersions?.get(commitHash);
+                      <div className="flex items-center">
+                        {messageId &&
+                          isCommitHash(messageId.split('-').pop() as string) &&
+                          (() => {
+                            const commitHash = messageId.split('-').pop() as string;
+                            const savedTitle = savedVersions?.get(commitHash);
 
-                          return savedTitle ? (
-                            <CustomButton
-                              variant="primary-text"
-                              size="sm"
-                              onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
-                            >
-                              Restore
-                            </CustomButton>
-                          ) : (
-                            <CustomButton
-                              variant="secondary-text"
-                              size="sm"
-                              onClick={() => onSaveVersion?.(message)}
-                              title="Save as version"
-                            >
-                              <StarLineIcon size={20} />
-                              Save
-                            </CustomButton>
-                          );
-                        })()}
+                            return savedTitle ? (
+                              <CustomButton
+                                variant="primary-text"
+                                size="sm"
+                                onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
+                              >
+                                Restore
+                              </CustomButton>
+                            ) : (
+                              <CustomButton
+                                variant="secondary-text"
+                                size="sm"
+                                onClick={() => onSaveVersion?.(message)}
+                                title="Save as version"
+                              >
+                                <StarLineIcon size={20} />
+                                Save
+                              </CustomButton>
+                            );
+                          })()}
+                        {isLast && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomButton
+                                variant="primary-text"
+                                size="sm"
+                                onClick={() => workbenchStore.runPreview()}
+                              >
+                                <PlayIcon color="currentColor" size={20} />
+                                Preview
+                              </CustomButton>
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                side="bottom"
+                              >
+                                Run Preview
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
+                      </div>
                     </div>
                   )}
                 </Fragment>
