@@ -473,10 +473,6 @@ export class WorkbenchStore {
   }
 
   setDocumentContentByPath(filePath: string, newContent: string) {
-    if (!filePath) {
-      return;
-    }
-
     const originalContent = this.#filesStore.getFile(filePath)?.content;
     const unsavedChanges = originalContent !== undefined && originalContent !== newContent;
 

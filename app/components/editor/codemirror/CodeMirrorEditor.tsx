@@ -9,7 +9,6 @@ import {
   StateEffect,
   StateField,
   Transaction,
-  type Extension,
   type TransactionSpec,
 } from '@codemirror/state';
 import {
@@ -326,127 +325,6 @@ function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: bo
   }
 }
 
-// Create new editor state with extensions
-function newEditorState(
-  content: string,
-  theme: Theme,
-  filePath: string,
-  settings: EditorSettings | undefined,
-  debounceScroll: number,
-  debounceChange: number,
-  editorStatesRef: RefObject<EditorStates | undefined>,
-  extensions: Extension[],
-  onSave: OnSaveCallback | undefined,
-  onScroll: OnScrollCallback | undefined,
-  onChange: OnChangeCallback | undefined,
-) {
-  // Create debounced onChange handler
-  const debouncedOnChange = debounce((update: { content: string; selection: EditorSelection; filePath: string }) => {
-    onChange?.({
-      content: update.content,
-      selection: update.selection,
-      filePath: update.filePath,
-    });
-  }, debounceChange);
-
-  return EditorState.create({
-    doc: content,
-    extensions: [
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged && !update.state.readOnly) {
-          debouncedOnChange?.({
-            content: update.state.doc.toString(),
-            selection: update.state.selection,
-            filePath: filePath ?? '',
-          });
-
-          // Save the current state for this file path
-          if (editorStatesRef?.current && filePath) {
-            editorStatesRef.current.set(filePath, update.state);
-          }
-        }
-      }),
-      EditorView.domEventHandlers({
-        scroll: debounce((event, view) => {
-          if (event.target !== view.scrollDOM) {
-            return;
-          }
-
-          onScroll?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
-        }, debounceScroll),
-        keydown: (event, view) => {
-          if (view.state.readOnly) {
-            view.dispatch({
-              effects: [readOnlyTooltipStateEffect.of(event.key !== 'Escape')],
-            });
-
-            return true;
-          }
-
-          return false;
-        },
-      }),
-      getTheme(theme, settings),
-      history(),
-      keymap.of([
-        ...defaultKeymap,
-        ...historyKeymap,
-        ...searchKeymap,
-        { key: 'Tab', run: acceptCompletion },
-        {
-          key: 'Mod-s',
-          preventDefault: true,
-          run: () => {
-            onSave?.();
-            return true;
-          },
-        },
-        indentKeyBinding,
-      ]),
-      indentUnit.of('\t'),
-      autocompletion({
-        closeOnBlur: false,
-      }),
-      tooltips({
-        position: 'absolute',
-        parent: document.body,
-        tooltipSpace: (view) => {
-          const rect = view.dom.getBoundingClientRect();
-
-          return {
-            top: rect.top - EDITOR_DEFAULTS.TOOLTIP_OFFSET_TOP,
-            left: rect.left,
-            bottom: rect.bottom,
-            right: rect.right + EDITOR_DEFAULTS.TOOLTIP_OFFSET_RIGHT,
-          };
-        },
-      }),
-      closeBrackets(),
-      lineNumbers(),
-      dropCursor(),
-      drawSelection(),
-      bracketMatching(),
-      EditorState.tabSize.of(settings?.tabSize ?? EDITOR_DEFAULTS.DEFAULT_TAB_SIZE),
-      indentOnInput(),
-      editableTooltipField,
-      editableStateField,
-      EditorState.readOnly.from(editableStateField, (editable) => !editable),
-      highlightActiveLineGutter(),
-      highlightActiveLine(),
-      foldGutter({
-        markerDOM: (open) => {
-          const icon = document.createElement('div');
-
-          icon.className = `fold-icon ${open ? 'i-ph-caret-down-bold' : 'i-ph-caret-right-bold'}`;
-
-          return icon;
-        },
-      }),
-      ...extensions,
-    ],
-  });
-}
-
 export const CodeMirrorEditor = memo(
   ({
     doc,
@@ -473,6 +351,118 @@ export const CodeMirrorEditor = memo(
 
     // Track previous editable state for AI completion detection
     const prevEditableRef = useRef<boolean>(editable);
+
+    // Create editor state with language compartment
+    const createEditorState = (content: string = '', filePath: string = '') => {
+      // Create debounced onChange handler
+      const debouncedOnChange = debounce(
+        (update: { content: string; selection: EditorSelection; filePath: string }) => {
+          onChange?.({
+            content: update.content,
+            selection: update.selection,
+            filePath: update.filePath,
+          });
+        },
+        debounceChange,
+      );
+
+      return EditorState.create({
+        doc: content,
+        extensions: [
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged && !update.state.readOnly) {
+              debouncedOnChange?.({
+                content: update.state.doc.toString(),
+                selection: update.state.selection,
+                filePath,
+              });
+
+              // Save the current state for this file path
+              if (editorStatesRef?.current && filePath) {
+                editorStatesRef.current.set(filePath, update.state);
+              }
+            }
+          }),
+          EditorView.domEventHandlers({
+            scroll: debounce((event, view) => {
+              if (event.target !== view.scrollDOM) {
+                return;
+              }
+
+              onScroll?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
+            }, debounceScroll),
+            keydown: (event, view) => {
+              if (view.state.readOnly) {
+                view.dispatch({
+                  effects: [readOnlyTooltipStateEffect.of(event.key !== 'Escape')],
+                });
+
+                return true;
+              }
+
+              return false;
+            },
+          }),
+          getTheme(theme, settings),
+          history(),
+          keymap.of([
+            ...defaultKeymap,
+            ...historyKeymap,
+            ...searchKeymap,
+            { key: 'Tab', run: acceptCompletion },
+            {
+              key: 'Mod-s',
+              preventDefault: true,
+              run: () => {
+                onSave?.();
+                return true;
+              },
+            },
+            indentKeyBinding,
+          ]),
+          indentUnit.of('\t'),
+          autocompletion({
+            closeOnBlur: false,
+          }),
+          tooltips({
+            position: 'absolute',
+            parent: document.body,
+            tooltipSpace: (view) => {
+              const rect = view.dom.getBoundingClientRect();
+
+              return {
+                top: rect.top - EDITOR_DEFAULTS.TOOLTIP_OFFSET_TOP,
+                left: rect.left,
+                bottom: rect.bottom,
+                right: rect.right + EDITOR_DEFAULTS.TOOLTIP_OFFSET_RIGHT,
+              };
+            },
+          }),
+          closeBrackets(),
+          lineNumbers(),
+          dropCursor(),
+          drawSelection(),
+          bracketMatching(),
+          EditorState.tabSize.of(settings?.tabSize ?? EDITOR_DEFAULTS.DEFAULT_TAB_SIZE),
+          indentOnInput(),
+          editableTooltipField,
+          editableStateField,
+          EditorState.readOnly.from(editableStateField, (editable) => !editable),
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          foldGutter({
+            markerDOM: (open) => {
+              const icon = document.createElement('div');
+
+              icon.className = `fold-icon ${open ? 'i-ph-caret-down-bold' : 'i-ph-caret-right-bold'}`;
+
+              return icon;
+            },
+          }),
+          languageCompartment.of([]),
+        ],
+      });
+    };
 
     // Track previous file path to detect file changes
     const prevFilePathRef = useRef<string | undefined>();
@@ -504,19 +494,7 @@ export const CodeMirrorEditor = memo(
 
         // Restore state
         if (currentDoc) {
-          const state = newEditorState(
-            currentDoc,
-            theme,
-            doc?.filePath ?? '',
-            settings,
-            debounceScroll,
-            debounceChange,
-            editorStatesRef,
-            [languageCompartment.of([])],
-            onSave,
-            onScroll,
-            onChange,
-          );
+          const state = createEditorState(currentDoc, doc?.filePath);
           newView.setState(state);
 
           if (selection) {
@@ -538,19 +516,7 @@ export const CodeMirrorEditor = memo(
 
         // Fallback: create minimal working view
         if (containerRef.current) {
-          const state = newEditorState(
-            '',
-            theme,
-            doc?.filePath ?? '',
-            settings,
-            debounceScroll,
-            debounceChange,
-            editorStatesRef,
-            [languageCompartment.of([])],
-            onSave,
-            onScroll,
-            onChange,
-          );
+          const state = createEditorState(undefined, doc?.filePath);
           const fallbackView = new EditorView({
             parent: containerRef.current,
             state,
@@ -637,19 +603,7 @@ export const CodeMirrorEditor = memo(
 
       // Handle no document case
       if (!doc) {
-        const state = newEditorState(
-          '',
-          theme,
-          '',
-          settings,
-          debounceScroll,
-          debounceChange,
-          editorStatesRef,
-          [languageCompartment.of([])],
-          onSave,
-          onScroll,
-          onChange,
-        );
+        const state = createEditorState();
         editorView.setState(state);
 
         // Clear document and reset scroll
@@ -692,19 +646,7 @@ export const CodeMirrorEditor = memo(
       let state = editorStates.get(doc.filePath);
 
       if (!state) {
-        state = newEditorState(
-          doc.value,
-          theme,
-          doc.filePath,
-          settings,
-          debounceScroll,
-          debounceChange,
-          editorStatesRef,
-          [languageCompartment.of([])],
-          onSave,
-          onScroll,
-          onChange,
-        );
+        state = createEditorState(doc.value, doc.filePath);
         editorStates.set(doc.filePath, state);
       }
 
