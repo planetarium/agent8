@@ -422,11 +422,9 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
   const onEditorChange = useCallback<OnEditorChange>(
     (update) => {
-      if (selectedFile === update.filePath) {
-        workbench.setCurrentDocumentContent(update.content);
-      }
+      workbench.setDocumentContentByPath(update.filePath, update.content);
     },
-    [selectedFile, workbench],
+    [workbench],
   );
 
   const onEditorScroll = useCallback<OnEditorScroll>((position) => {
