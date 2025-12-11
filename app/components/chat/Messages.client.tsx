@@ -241,12 +241,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     )}
                   </div>
 
-                  {isEnabledGitbasePersistence && !isUserMessage && (
-                    <div
-                      className={classNames('flex justify-between items-center px-2 mt-0.5', {
-                        'pointer-events-none': isGenerating,
-                      })}
-                    >
+                  {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
+                    <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
