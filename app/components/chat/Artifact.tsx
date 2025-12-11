@@ -3,12 +3,17 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { computed } from 'nanostores';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createHighlighter, type BundledLanguage, type BundledTheme, type HighlighterGeneric } from 'shiki';
+import Lottie from 'lottie-react';
+
 import type { ActionState } from '~/lib/runtime/action-runner';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { useWorkbenchArtifacts } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { WORK_DIR } from '~/utils/constants';
+import { checkCircleAnimationData } from '~/utils/animationData';
+
+import { FileIcon } from '~/components/ui/Icons';
 
 const highlighterOptions = {
   langs: ['shell'],
@@ -114,9 +119,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   );
 
   return (
-    <div
-      className={`${withHeader ? 'artifact' : 'single-action-artifact'} border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150`}
-    >
+    <div className={`${withHeader ? 'artifact' : 'single-action-artifact'} flex flex-col overflow-hidden w-full`}>
       {withHeader && header}
       <AnimatePresence>
         {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
@@ -127,9 +130,8 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             exit={{ height: '0px' }}
             transition={{ duration: 0.15 }}
           >
-            {withHeader && <div className="bg-bolt-elements-artifacts-borderColor h-[1px]" />}
-
-            <div className={`${withHeader ? 'p-5' : 'p-3'} text-left bg-bolt-elements-actions-background`}>
+            {withHeader && <div className="h-[1px]" />}
+            <div className="text-left">
               <ActionList actions={actions} />
             </div>
           </motion.div>
@@ -194,7 +196,7 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                 ease: cubicEasingFn,
               }}
             >
-              <div className="flex items-center gap-1.5 text-sm">
+              <div className="flex items-center gap-2">
                 <div className={classNames('text-lg', getIconColor(action.status))}>
                   {status === 'running' ? (
                     <>
@@ -207,34 +209,42 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                   ) : status === 'pending' ? (
                     <div className="i-ph:circle-duotone"></div>
                   ) : status === 'complete' ? (
-                    <div className="i-ph:check"></div>
+                    <div style={{ width: '20px', height: '20px' }}>
+                      <Lottie animationData={checkCircleAnimationData} loop={false} />
+                    </div>
                   ) : status === 'failed' || status === 'aborted' ? (
                     <div className="i-ph:x"></div>
                   ) : null}
                 </div>
                 {type === 'file' ? (
-                  <div>
-                    Create{' '}
-                    <code
-                      className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
-                      onClick={() => openArtifactInWorkbench(action.filePath)}
-                    >
-                      {action.filePath}
-                    </code>
+                  <div className="flex items-center gap-1 flex-[1_0_0]">
+                    <span className="text-body-sm text-tertiary">Create</span>
+                    <div className="flex items-center gap-0.5">
+                      <FileIcon />
+                      <code
+                        className="text-body-sm text-accent-primary hover:underline cursor-pointer"
+                        onClick={() => openArtifactInWorkbench(action.filePath)}
+                      >
+                        {action.filePath}
+                      </code>
+                    </div>
                   </div>
                 ) : type === 'modify' ? (
-                  <div>
-                    Modify{' '}
-                    <code
-                      className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
-                      onClick={() => openArtifactInWorkbench(action.filePath)}
-                    >
-                      {action.filePath}
-                    </code>
+                  <div className="flex items-center gap-1 flex-[1_0_0]">
+                    <span className="text-body-sm text-tertiary">Modify</span>
+                    <div className="flex items-center gap-0.5">
+                      <FileIcon />
+                      <code
+                        className="text-body-sm text-accent-primary hover:underline cursor-pointer"
+                        onClick={() => openArtifactInWorkbench(action.filePath)}
+                      >
+                        {action.filePath}
+                      </code>
+                    </div>
                   </div>
                 ) : type === 'shell' ? (
                   <div className="flex items-center w-full min-h-[28px]">
-                    <span className="flex-1">Run command</span>
+                    <span className="flex-1 text-body-sm text-tertiary">Run command</span>
                   </div>
                 ) : type === 'start' ? (
                   <a
@@ -244,7 +254,7 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                     }}
                     className="flex items-center w-full min-h-[28px]"
                   >
-                    <span className="flex-1">Start Application</span>
+                    <span className="flex-1 text-body-sm text-tertiary">Start Application</span>
                   </a>
                 ) : null}
               </div>

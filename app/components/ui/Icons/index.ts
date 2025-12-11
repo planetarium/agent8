@@ -25,3 +25,5 @@ export { PlayIcon } from './PlayIcon';
 export { DiffIcon } from './DiffIcon';
 export { RefreshIcon } from './RefreshIcon';
 export { CopyLineIcon } from './CopyLineIcon';
+export { FileIcon } from './FileIcon';
+export { CheckCircleLinedIcon } from './CheckCircleLinedIcon';
