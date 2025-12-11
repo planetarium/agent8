@@ -1254,8 +1254,7 @@ export class WorkbenchStore {
         throw new Error('Failed to publish');
       }
 
-      const taskBranch = repoStore.get().taskBranch;
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      const lastCommitHash = await getLastCommitHash(repoStore.get().path, 'develop');
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;

@@ -2,7 +2,7 @@ import type { UIMessage } from 'ai';
 import axios from 'axios';
 import { stripMetadata } from '~/components/chat/UserMessage';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { WORK_DIR } from '~/utils/constants';
 import { isCommitHash, unzipCode } from './utils';
 import type { FileMap } from '~/lib/stores/files';
@@ -43,11 +43,10 @@ export const getCommit = async (projectPath: string, commitHash: string) => {
 export const commitChanges = async (message: UIMessage, callback?: (commitHash: string) => void) => {
   const projectName = repoStore.get().name;
   const projectPath = repoStore.get().path;
-  const taskBranch = repoStore.get().taskBranch || 'develop';
   const title = repoStore.get().title;
   const isFirstCommit = !projectPath;
 
-  logger.info(`Starting commit process - Project: ${projectName}, Path: ${projectPath}, Branch: ${taskBranch}`);
+  logger.info(`Starting commit process - Project: ${projectName}, Path: ${projectPath}, Branch: develop`);
 
   // Get revertTo from URL query parameters
   const url = new URL(window.location.href);
@@ -149,7 +148,6 @@ export const commitChanges = async (message: UIMessage, callback?: (commitHash: 
   const prompt = (message as any).parts?.find((part: any) => part.type === 'data-prompt')?.data?.prompt || null;
   const userMessage = prompt || 'Commit changes';
   const commitMessage = `${stripMetadata(userMessage)}
-<V8Metadata>${JSON.stringify({ taskBranch })}</V8Metadata>
 <V8UserMessage>
 ${userMessage}
 </V8UserMessage>
@@ -172,7 +170,7 @@ ${truncateMessage(
     deletedFiles,
     commitMessage,
     baseCommit: revertTo,
-    branch: taskBranch,
+    branch: 'develop',
   });
 
   const result = response.data;
@@ -186,7 +184,6 @@ ${truncateMessage(
       name: result.data.project.name,
       path: result.data.project.path,
       title: result.data.project.description.split('\n')[0] || result.data.project.name,
-      taskBranch,
     });
     changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   }
@@ -204,7 +201,6 @@ export const commitUserChanged = async () => {
   const modifiedFiles = workbenchStore.getModifiedFiles();
   const projectName = repoStore.get().name;
   const title = repoStore.get().title;
-  const taskBranch = repoStore.get().taskBranch || 'develop';
 
   const url = new URL(window.location.href);
   const revertToParam = url.searchParams.get('revertTo');
@@ -228,7 +224,7 @@ export const commitUserChanged = async () => {
     files,
     commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
     baseCommit: revertTo,
-    branch: taskBranch,
+    branch: 'develop',
   });
 
   const result = response.data;
@@ -372,51 +368,6 @@ export const getCommitDiff = async (projectPath: string, commitHash: string) => 
       projectPath,
       commitHash,
     },
-  });
-
-  return response.data;
-};
-
-export const getTaskBranches = async (projectPath: string) => {
-  const response = await axios.get('/api/gitlab/task-branches', {
-    params: {
-      projectPath,
-    },
-  });
-
-  return response.data;
-};
-
-export const createTaskBranch = async (projectPath: string) => {
-  const url = new URL(window.location.href);
-  const revertToParam = url.searchParams.get('revertTo');
-  const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
-
-  const response = await axios.post('/api/gitlab/task-branches', {
-    projectPath,
-    action: 'create',
-    baseRef: revertTo || 'develop',
-  });
-
-  return response.data;
-};
-
-export const mergeTaskBranch = async (projectPath: string, fromBranch: string) => {
-  const response = await axios.post('/api/gitlab/task-branches', {
-    projectPath,
-    action: 'merge',
-    from: fromBranch,
-    to: DEFAULT_TASK_BRANCH,
-  });
-
-  return response.data;
-};
-
-export const removeTaskBranch = async (projectPath: string, branchName: string) => {
-  const response = await axios.post('/api/gitlab/task-branches', {
-    projectPath,
-    action: 'remove',
-    from: branchName,
   });
 
   return response.data;

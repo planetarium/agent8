@@ -44,13 +44,12 @@ import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
 import {
   commitChanges,
-  createTaskBranch,
   fetchProjectFiles,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
@@ -275,22 +274,8 @@ interface ChatComponentProps {
 export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
-  const {
-    loaded,
-    loading,
-    chats,
-    files,
-    project,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
-    revertTo,
-    hasMore,
-    loadBefore,
-    loadingBefore,
-    error,
-  } = useGitbaseChatHistory();
+  const { loaded, loading, chats, files, project, revertTo, hasMore, loadBefore, loadingBefore, error } =
+    useGitbaseChatHistory();
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
@@ -447,10 +432,6 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           description={title}
           initialMessages={initialMessages}
           setInitialMessages={setInitialMessages}
-          enabledTaskMode={enabledTaskMode}
-          setEnabledTaskMode={setEnabledTaskMode}
-          taskBranches={taskBranches}
-          reloadTaskBranches={reloadTaskBranches}
           revertTo={revertTo}
           hasMore={hasMore}
           loadBefore={loadBefore}
@@ -490,10 +471,6 @@ interface ChatProps {
   initialMessages: UIMessage[];
   setInitialMessages: (messages: UIMessage[]) => void;
   description?: string;
-  taskBranches: any[];
-  enabledTaskMode: boolean;
-  setEnabledTaskMode: (enabled: boolean) => void;
-  reloadTaskBranches: (projectPath: string) => Promise<void>;
   revertTo: (hash: string) => Promise<void>;
   hasMore: boolean;
   loadBefore: () => Promise<void>;
@@ -517,10 +494,6 @@ export const ChatImpl = memo(
     description,
     initialMessages,
     setInitialMessages,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
     revertTo,
     hasMore,
     loadBefore,
@@ -887,7 +860,6 @@ export const ChatImpl = memo(
 
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
-            reloadTaskBranches(repoStore.get().path);
 
             // Clear revertTo parameter after successful commit to prevent reverting to old state
             const url = new URL(window.location.href);
@@ -1182,26 +1154,10 @@ export const ChatImpl = memo(
               throw new Error('Cannot create project');
             }
 
-            let branchName = 'develop';
-
-            if (enabledTaskMode) {
-              const { success, message, data } = await createTaskBranch(projectPath);
-
-              if (!success) {
-                reportError(message, templateSelectionStartTime, {
-                  context: 'createTaskBranch - starter template',
-                });
-                return;
-              }
-
-              branchName = data.branchName;
-            }
-
             repoStore.set({
               name: projectName,
               path: projectPath,
               title,
-              taskBranch: branchName,
             });
 
             // Record prompt activity for first request
@@ -1215,7 +1171,6 @@ export const ChatImpl = memo(
               name: projectRepo,
               path: projectRepo,
               title,
-              taskBranch: 'develop',
             });
 
             // Record prompt activity for first request
@@ -1351,25 +1306,6 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
-          }
-
-          if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
-            const createTaskBranchStartTime = performance.now();
-            const { success, message, data } = await createTaskBranch(repoStore.get().path);
-
-            if (!success) {
-              reportError(message, createTaskBranchStartTime, {
-                context: 'createTaskBranch - subsequent message',
-              });
-              return;
-            }
-
-            repoStore.set({
-              ...repoStore.get(),
-              taskBranch: data.branchName,
-            });
-
-            setMessages(() => []);
           }
         }
 
@@ -1511,7 +1447,6 @@ export const ChatImpl = memo(
             name: source.title,
             path: '',
             title: source.title,
-            taskBranch: DEFAULT_TASK_BRANCH,
           });
 
           // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
@@ -1831,10 +1766,6 @@ export const ChatImpl = memo(
           }}
           enhancingPrompt={enhancingPrompt}
           promptEnhanced={promptEnhanced}
-          enabledTaskMode={enabledTaskMode}
-          setEnabledTaskMode={setEnabledTaskMode}
-          taskBranches={taskBranches}
-          reloadTaskBranches={reloadTaskBranches}
           sendMessage={sendMessage}
           model={model}
           setModel={handleModelChange}

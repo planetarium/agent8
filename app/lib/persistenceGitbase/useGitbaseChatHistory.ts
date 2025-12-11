@@ -5,7 +5,6 @@ import { repoStore } from '~/lib/stores/repo';
 import {
   getProjectCommits,
   fetchProjectFiles,
-  getTaskBranches,
   revertBranch,
   getRestorePoint,
   getRestoreHistory,
@@ -63,9 +62,7 @@ export function useGitbaseChatHistory() {
     description: '',
   });
   const [chats, setChats] = useState<UIMessage[]>([]);
-  const [enabledTaskMode, setEnabledTaskMode] = useState(true);
   const [files, setFiles] = useState<FileMap>({});
-  const [taskBranches, setTaskBranches] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingBefore, setLoadingBefore] = useState(false);
@@ -76,11 +73,6 @@ export function useGitbaseChatHistory() {
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
   const [cachedRestoreHistory, setCachedRestoreHistory] = useState<RestoreHistoryEntry[]>([]);
   const prevRequestParams = useRef<{ [key: string]: any }>({});
-
-  const loadTaskBranches = useCallback(async (projectPath: string) => {
-    const { data } = await getTaskBranches(projectPath);
-    setTaskBranches(data);
-  }, []);
 
   const loadFiles = useCallback(
     async (projectPath: string, commitSha?: string) => {
@@ -109,13 +101,11 @@ export function useGitbaseChatHistory() {
   const load = useCallback(
     async ({
       page = 1,
-      taskBranch,
       untilCommit,
       fileCommit,
       force,
     }: {
       page?: number;
-      taskBranch?: string;
       untilCommit?: string;
       fileCommit?: string;
       force?: boolean;
@@ -129,7 +119,7 @@ export function useGitbaseChatHistory() {
         return;
       }
 
-      logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
+      logger.debug(`loaded, page: ${page}, untilCommit: ${untilCommit}`);
 
       if (!force) {
         // 이미 로딩 중이면 종료
@@ -140,7 +130,6 @@ export function useGitbaseChatHistory() {
         if (
           projectPath === prevRequestParams.current.projectPath &&
           page === prevRequestParams.current.page &&
-          taskBranch === prevRequestParams.current.taskBranch &&
           untilCommit === prevRequestParams.current.untilCommit
         ) {
           return;
@@ -156,23 +145,9 @@ export function useGitbaseChatHistory() {
       }
 
       try {
-        const queryParams = new URLSearchParams({
-          projectPath,
-          page: page.toString(),
-        });
-
-        if (taskBranch) {
-          queryParams.append('branch', taskBranch);
-        }
-
-        if (untilCommit) {
-          queryParams.append('untilCommit', untilCommit);
-        }
-
         prevRequestParams.current = {
           projectPath,
           page,
-          taskBranch,
           untilCommit,
         };
 
@@ -181,14 +156,11 @@ export function useGitbaseChatHistory() {
             lastActionStore.set({ action: 'LOAD' });
           }
 
-          await Promise.all([
-            loadFiles(projectPath, fileCommit || untilCommit || taskBranch || undefined),
-            loadTaskBranches(projectPath),
-          ]);
+          await loadFiles(projectPath, fileCommit || untilCommit || undefined);
         }
 
         const data = (await getProjectCommits(projectPath, {
-          branch: taskBranch,
+          branch: 'develop',
           untilCommit,
           page,
         })) as CommitResponse;
@@ -364,7 +336,6 @@ export function useGitbaseChatHistory() {
 
     await load({
       page: currentPage + 1,
-      taskBranch: prevRequestParams.current.taskBranch,
       untilCommit: prevRequestParams.current.untilCommit,
     });
   }, [loading, hasMore, currentPage, load]);
@@ -390,23 +361,16 @@ export function useGitbaseChatHistory() {
       }
 
       // Initial load on mount or projectPath change
-      if (
-        projectPath &&
-        (projectPath !== prevRequestParams.current.projectPath ||
-          repoStore.get().taskBranch !== prevRequestParams.current.taskBranch)
-      ) {
+      if (projectPath && projectPath !== prevRequestParams.current.projectPath) {
         // Always load all chat history (don't filter by untilCommit)
-        load({ page: 1, taskBranch: repoStore.get().taskBranch, fileCommit: revertToCommit, untilCommit: undefined });
+        load({ page: 1, fileCommit: revertToCommit, untilCommit: undefined });
       }
     };
 
     initializeLoad();
 
-    const unsubscribe = repoStore.subscribe(async (state) => {
-      if (
-        projectPath !== prevRequestParams.current.projectPath ||
-        state.taskBranch !== prevRequestParams.current.taskBranch
-      ) {
+    const unsubscribe = repoStore.subscribe(async () => {
+      if (projectPath !== prevRequestParams.current.projectPath) {
         // Read revertTo from URL or GitLab
         const url = new URL(window.location.href);
         const revertToParam = url.searchParams.get('revertTo');
@@ -424,7 +388,7 @@ export function useGitbaseChatHistory() {
           }
         }
 
-        load({ page: 1, taskBranch: state.taskBranch, fileCommit: revertToCommit, untilCommit: undefined });
+        load({ page: 1, fileCommit: revertToCommit, untilCommit: undefined });
       }
     });
 
@@ -477,18 +441,14 @@ export function useGitbaseChatHistory() {
       setLoading(true);
 
       try {
-        await revertBranch(projectPath, repoStore.get().taskBranch, hash);
-        await load({ page: 1, taskBranch: repoStore.get().taskBranch, untilCommit: hash, force: true });
+        await revertBranch(projectPath, 'develop', hash);
+        await load({ page: 1, untilCommit: hash, force: true });
       } finally {
         setLoading(false);
       }
     },
     project,
     files,
-    taskBranches,
-    reloadTaskBranches: loadTaskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
     loading: loading || loadingFiles,
     loadingBefore,
     error,

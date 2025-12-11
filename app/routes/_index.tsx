@@ -8,7 +8,7 @@ import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
 
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
@@ -254,7 +254,6 @@ export default function Index() {
         name: repoName,
         path: repoPath,
         title: repoName,
-        taskBranch: DEFAULT_TASK_BRANCH,
       });
     }
   }, [repoPath, repoName]);

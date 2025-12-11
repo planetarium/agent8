@@ -23,14 +23,9 @@ import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
-import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import McpServerManager from '~/components/chat/McpServerManager';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { useStore } from '@nanostores/react';
-import { TaskMessages } from './TaskMessages.client';
-import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
@@ -76,12 +71,6 @@ interface BaseChatProps {
   provider?: ProviderInfo;
   setProvider?: (provider: ProviderInfo) => void;
   providerList?: ProviderInfo[];
-  enabledTaskMode?: boolean;
-  setEnabledTaskMode?: (enabled: boolean) => void;
-  taskBranches?: any[];
-  reloadTaskBranches?: (projectPath: string) => void;
-  currentTaskBranch?: any;
-  setCurrentTaskBranch?: (branch: any) => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -125,16 +114,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setProvider,
       providerList,
       input = '',
-
-      /*
-       * enabledTaskMode,
-       * setEnabledTaskMode,
-       */
-
-      taskBranches,
-      reloadTaskBranches,
       handleInputChange,
-
       sendMessage,
       handleStop,
       attachmentList = [],
@@ -167,7 +147,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [transcript, setTranscript] = useState('');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(3);
-    const repo = useStore(repoStore);
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
@@ -834,55 +813,25 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             >
               <ClientOnly>
                 {() => {
-                  const currentTaskBranch = repo.taskBranch;
-
                   return chatStarted ? (
-                    <>
-                      {currentTaskBranch !== DEFAULT_TASK_BRANCH ? (
-                        <TaskMessages
-                          ref={messageRef}
-                          taskBranches={taskBranches}
-                          currentTaskBranch={currentTaskBranch}
-                          reloadTaskBranches={reloadTaskBranches}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
-                          messages={messages}
-                          annotations={data}
-                          isStreaming={isStreaming}
-                          progressAnnotations={progressAnnotations}
-                          onRetry={handleRetry}
-                          onFork={handleFork}
-                          onRevert={handleRevert}
-                          onViewDiff={onViewDiff}
-                          hasMore={hasMore}
-                          loadBefore={loadBefore}
-                          loadingBefore={loadingBefore}
-                        />
-                      ) : (
-                        <Messages
-                          ref={messageRef}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
-                          messages={messages}
-                          annotations={data}
-                          isStreaming={isStreaming}
-                          progressAnnotations={progressAnnotations}
-                          onRetry={handleRetry}
-                          onFork={handleFork}
-                          onRevert={handleRevert}
-                          onSaveVersion={handleSaveVersion}
-                          onRestoreVersion={handleRestoreVersion}
-                          savedVersions={savedVersions}
-                          onViewDiff={onViewDiff}
-                          hasMore={hasMore}
-                          loadBefore={loadBefore}
-                          loadingBefore={loadingBefore}
-                        />
-                      )}
-                      {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
-                        <div className="mb-5">
-                          <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
-                        </div>
-                      )}
-                    </>
+                    <Messages
+                      ref={messageRef}
+                      className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
+                      messages={messages}
+                      annotations={data}
+                      isStreaming={isStreaming}
+                      progressAnnotations={progressAnnotations}
+                      onRetry={handleRetry}
+                      onFork={handleFork}
+                      onRevert={handleRevert}
+                      onSaveVersion={handleSaveVersion}
+                      onRestoreVersion={handleRestoreVersion}
+                      savedVersions={savedVersions}
+                      onViewDiff={onViewDiff}
+                      hasMore={hasMore}
+                      loadBefore={loadBefore}
+                      loadingBefore={loadingBefore}
+                    />
                   ) : null;
                 }}
               </ClientOnly>
@@ -930,8 +879,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       />
                     )}
                 </div>
-
-                {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
 
                 <div
                   className={classNames(

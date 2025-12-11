@@ -1,20 +1,20 @@
 import type { JSONValue, UIMessage } from 'ai';
-import { Fragment } from 'react';
+import { Fragment, forwardRef } from 'react';
+import type { ForwardedRef } from 'react';
+import Lottie from 'lottie-react';
+import { toast } from 'react-toastify';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { forwardRef } from 'react';
-import type { ForwardedRef } from 'react';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
-import Lottie from 'lottie-react';
 import { loadingAnimationData } from '~/utils/animationData';
 import { extractAllTextContent } from '~/utils/message';
 import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon } from '~/components/ui/Icons';
-import { toast } from 'react-toastify';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import type { ProgressAnnotation } from '~/types/context';
+import ProgressCompilation from './ProgressCompilation';
 
 interface MessagesProps {
   id?: string;
@@ -229,6 +229,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             </div>
           </div>
         )}
+        {isGenerating && <ProgressCompilation data={progressAnnotations} />}
       </div>
     );
   },
