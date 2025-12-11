@@ -32,7 +32,6 @@ import { useStore } from '@nanostores/react';
 import { TaskMessages } from './TaskMessages.client';
 import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
-import { shouldIgnorePreviewError } from '~/utils/previewErrorFilters';
 import { AttachmentSelector } from './AttachmentSelector';
 
 import { ColorTab } from '~/components/ui/ColorTab';
@@ -890,32 +889,29 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 )}
               >
                 <div className="bg-bolt-elements-background-depth-2">
-                  {!isStreaming &&
-                    actionAlert &&
-                    actionAlert.content &&
-                    !shouldIgnorePreviewError(actionAlert.content) && (
-                      <ChatAlert
-                        autoFixChance={autoFixChance}
-                        alert={actionAlert}
-                        clearAlert={() => clearAlert?.()}
-                        postMessage={(message, isAutoFix = false) => {
-                          if (isStreaming) {
-                            return;
-                          }
+                  {!isStreaming && actionAlert && actionAlert.content && (
+                    <ChatAlert
+                      autoFixChance={autoFixChance}
+                      alert={actionAlert}
+                      clearAlert={() => clearAlert?.()}
+                      postMessage={(message, isAutoFix = false) => {
+                        if (isStreaming) {
+                          return;
+                        }
 
-                          if (isAutoFix && lastActionStore.get().action !== 'SEND_MESSAGE') {
-                            return;
-                          }
+                        if (isAutoFix && lastActionStore.get().action !== 'SEND_MESSAGE') {
+                          return;
+                        }
 
-                          sendMessage?.({} as any, message);
-                          clearAlert?.();
+                        sendMessage?.({} as any, message);
+                        clearAlert?.();
 
-                          if (isAutoFix) {
-                            setAutoFixChance(autoFixChance - 1);
-                          }
-                        }}
-                      />
-                    )}
+                        if (isAutoFix) {
+                          setAutoFixChance(autoFixChance - 1);
+                        }
+                      }}
+                    />
+                  )}
                 </div>
 
                 {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}

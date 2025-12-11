@@ -92,7 +92,7 @@ export const Terminal = memo(
           if (viteErrorPatterns.some((pattern) => pattern.test(recentText))) {
             logger.debug('Vite error detected');
 
-            workbenchStore.actionAlert.set({
+            workbenchStore.setAlert({
               type: 'vite',
               title: 'Vite Error',
               description: 'An error occurred while running Vite build or dev server',

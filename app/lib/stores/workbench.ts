@@ -6,6 +6,7 @@ import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
+import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
@@ -206,7 +207,7 @@ export class WorkbenchStore {
 
       this.#containerRejecter(error);
 
-      this.actionAlert.set({
+      this.setAlert({
         type: 'preview',
         title: 'Container Initialization Failed',
         description: error instanceof Error ? error.message : String(error),
@@ -341,7 +342,7 @@ export class WorkbenchStore {
       if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {
         const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
 
-        this.actionAlert.set({
+        this.setAlert({
           type: 'preview',
           title: isPromise ? 'Unhandled Promise Rejection' : 'Uncaught Exception',
           description: message.message || 'An error occurred in the preview',
@@ -423,6 +424,19 @@ export class WorkbenchStore {
 
   get alert() {
     return this.actionAlert;
+  }
+
+  setAlert(alert: ActionAlert | undefined) {
+    if (!alert) {
+      this.actionAlert.set(undefined);
+      return;
+    }
+
+    if (shouldIgnoreError(alert)) {
+      return;
+    }
+
+    this.actionAlert.set(alert);
   }
 
   clearAlert() {
@@ -607,7 +621,7 @@ export class WorkbenchStore {
             return;
           }
 
-          this.actionAlert.set(alert);
+          this.setAlert(alert);
         },
       ),
     });
@@ -1287,7 +1301,7 @@ export class WorkbenchStore {
 
   #handleBuildError(output: string) {
     logger.error('[Publish] Build Failed:', output);
-    this.actionAlert.set({
+    this.setAlert({
       type: 'build',
       title: 'Build Error',
       description: 'Failed to build the project',
