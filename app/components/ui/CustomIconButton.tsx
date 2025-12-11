@@ -39,12 +39,10 @@ const CustomIconButton = React.forwardRef<HTMLButtonElement, CustomIconButtonPro
         'rounded-radius-4 border-interactive-neutral text-interactive-neutral bg-transparent hover:border-interactive-neutral-hovered hover:text-interactive-neutral-hovered active:border-interactive-neutral-pressed active:bg-interactive-neutral-pressed active:text-interactive-neutral-pressed',
     };
 
-    const disabledStyle = disabled ? 'opacity-50 cursor-not-allowed border-disabled bg-disabled' : '';
-
     return (
       <button
         ref={ref}
-        className={classNames(baseStyles, sizeStyles[size], variantStyles[variant], disabledStyle, className)}
+        className={classNames(baseStyles, sizeStyles[size], variantStyles[variant], className)}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}
         {...props}

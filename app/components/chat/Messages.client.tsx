@@ -1,22 +1,24 @@
-import type { JSONValue, UIMessage } from 'ai';
-import { Fragment, forwardRef } from 'react';
+import { Fragment, forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
+
+import type { JSONValue, UIMessage } from 'ai';
+import type { ProgressAnnotation } from '~/types/context';
+
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import { classNames } from '~/utils/classNames';
+import { extractAllTextContent } from '~/utils/message';
+import { loadingAnimationData } from '~/utils/animationData';
+
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { isCommitHash } from '~/lib/persistenceGitbase/utils';
-import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
-import { workbenchStore } from '~/lib/stores/workbench';
-import { loadingAnimationData } from '~/utils/animationData';
-import { extractAllTextContent } from '~/utils/message';
-import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon, PlayIcon } from '~/components/ui/Icons';
+import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon, PlayIcon, ChevronRightIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
-import type { ProgressAnnotation } from '~/types/context';
-import ProgressCompilation from './ProgressCompilation';
 
 interface MessagesProps {
   id?: string;
@@ -57,6 +59,32 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Check if response is being generated (same condition as "Generating Response" UI)
     const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
+
+    // Track expanded state for each message
+    const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
+
+    // Auto-expand last message when it's being generated or just completed
+    const lastAssistantIndex = messages.reduce((lastIdx, msg, idx) => (msg.role === 'assistant' ? idx : lastIdx), -1);
+
+    useEffect(() => {
+      if (lastAssistantIndex >= 0) {
+        setExpandedMessages((prev) => new Set(prev).add(lastAssistantIndex));
+      }
+    }, [lastAssistantIndex]);
+
+    const toggleExpanded = (index: number) => {
+      setExpandedMessages((prev) => {
+        const newSet = new Set(prev);
+
+        if (newSet.has(index)) {
+          newSet.delete(index);
+        } else {
+          newSet.add(index);
+        }
+
+        return newSet;
+      });
+    };
 
     return (
       <div
@@ -137,11 +165,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       'flex self-stretch',
                       isUserMessage
                         ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
-                        : 'flex-col justify-center items-center gap-0 p-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3',
-                      {
-                        'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                          isStreaming && isLast,
-                      },
+                        : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3',
                     )}
                   >
                     <div className="grid grid-col-1 w-full">
@@ -152,14 +176,77 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           content={messageText}
                           annotations={annotations}
                           metadata={messageMetadata}
-                          forceExpanded={isLast}
+                          expanded={expandedMessages.has(index)}
                         />
                       )}
                     </div>
+
+                    {/* Response status indicator for AI messages */}
+                    {!isUserMessage && (
+                      <div className="flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary border-t border-tertiary rounded-b-[23px] rounded-bl-none">
+                        <div className="flex items-center gap-3">
+                          {isLast && isGenerating ? (
+                            <>
+                              <style>
+                                {`
+                                @keyframes textColorWave {
+                                  0% { color: var(--color-text-primary, #FFF); }
+                                  50% { color: #6b7280; }
+                                  100% { color: var(--color-text-primary, #FFF); }
+                                }
+                              `}
+                              </style>
+                              <div style={{ width: '24px', height: '24px' }}>
+                                <Lottie animationData={loadingAnimationData} loop={true} />
+                              </div>
+                              <span
+                                className="text-heading-xs"
+                                style={{ animation: 'textColorWave 2s ease-in-out infinite' }}
+                              >
+                                Generating Response...
+                              </span>
+                            </>
+                          ) : isLast ? (
+                            <span
+                              className="text-heading-xs"
+                              style={{
+                                background:
+                                  'linear-gradient(90deg, var(--color-text-accent-subtle-gradient-start, #72E7F8) 0%, var(--color-text-accent-subtle-gradient-end, #FFD876) 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                              }}
+                            >
+                              Response Generated
+                            </span>
+                          ) : (
+                            <span className="text-heading-xs text-subtle">Response Generated</span>
+                          )}
+                        </div>
+                        {!(isLast && isGenerating) && (
+                          <button
+                            onClick={() => toggleExpanded(index)}
+                            className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
+                          >
+                            {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                            <ChevronRightIcon
+                              width={16}
+                              height={16}
+                              fill="currentColor"
+                              className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                            />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {isEnabledGitbasePersistence && !isUserMessage && !isGenerating && (
-                    <div className="flex justify-between items-center px-2 mt-0.5">
+                  {isEnabledGitbasePersistence && !isUserMessage && (
+                    <div
+                      className={classNames('flex justify-between items-center px-2 mt-0.5', {
+                        'pointer-events-none': isGenerating,
+                      })}
+                    >
                       <div className="flex items-start gap-3">
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
@@ -168,6 +255,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               size="sm"
                               icon={<DiffIcon size={20} />}
                               onClick={() => onViewDiff?.(message)}
+                              disabled={isGenerating}
                             />
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
@@ -190,6 +278,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 navigator.clipboard.writeText(messageText);
                                 toast.success('Copied to clipboard');
                               }}
+                              disabled={isGenerating}
                             />
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
@@ -214,6 +303,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
                                   onRetry?.(prevUserMessage, prevPrevMessage);
                                 }}
+                                disabled={isGenerating}
                               />
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
@@ -285,14 +375,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               );
             })
           : null}
-        {isGenerating && <ProgressCompilation data={progressAnnotations} />}
-        {isStreaming && (
-          <div className="flex items-center justify-center flex-grow mt-10 mb-12">
-            <div style={{ width: '60px', height: '60px', aspectRatio: '1/1' }}>
-              <Lottie animationData={loadingAnimationData} loop={true} />
-            </div>
-          </div>
-        )}
       </div>
     );
   },
