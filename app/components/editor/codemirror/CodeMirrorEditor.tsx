@@ -476,54 +476,33 @@ export const CodeMirrorEditor = memo(
 
       logger.info('Starting EditorView recreation');
 
-      try {
-        // Backup current state
-        const currentDoc = editorViewRef.current.state.doc.toString();
-        const scrollPos = {
-          left: editorViewRef.current.scrollDOM?.scrollLeft || 0,
-          top: editorViewRef.current.scrollDOM?.scrollTop || 0,
-        };
-        const selection = editorViewRef.current.state.selection;
+      const currentDoc = editorViewRef.current.state.doc.toString();
+      const scrollPos = {
+        left: editorViewRef.current.scrollDOM?.scrollLeft || 0,
+        top: editorViewRef.current.scrollDOM?.scrollTop || 0,
+      };
+      const state = createEditorState(currentDoc, doc?.filePath);
+      const selection = editorViewRef.current.state.selection;
 
-        // Clean up existing view
-        editorViewRef.current.destroy();
+      // Clean up existing view
+      editorViewRef.current.destroy();
 
-        const newView = new EditorView({
-          parent: containerRef.current,
-        });
+      const newView = new EditorView({
+        parent: containerRef.current,
+        state,
+        selection,
+      });
 
-        // Restore state
-        if (currentDoc) {
-          const state = createEditorState(currentDoc, doc?.filePath);
-          newView.setState(state);
-
-          if (selection) {
-            newView.dispatch({ selection });
-          }
+      // Restore scroll position
+      requestAnimationFrame(() => {
+        if (newView.scrollDOM) {
+          newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
         }
+      });
 
-        // Restore scroll position
-        requestAnimationFrame(() => {
-          if (newView.scrollDOM) {
-            newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
-          }
-        });
+      logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
 
-        editorViewRef.current = newView;
-        logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
-      } catch (error) {
-        logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
-
-        // Fallback: create minimal working view
-        if (containerRef.current) {
-          const state = createEditorState(undefined, doc?.filePath);
-          const fallbackView = new EditorView({
-            parent: containerRef.current,
-            state,
-          });
-          editorViewRef.current = fallbackView;
-        }
-      }
+      editorViewRef.current = newView;
     };
 
     // Initialize CodeMirror editor view (mount only)
