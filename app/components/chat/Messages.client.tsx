@@ -15,6 +15,7 @@ import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import type { ProgressAnnotation } from '~/types/context';
 import ProgressCompilation from './ProgressCompilation';
+import * as Tooltip from '@radix-ui/react-tooltip';
 
 interface MessagesProps {
   id?: string;
@@ -159,35 +160,74 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !isGenerating && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        <CustomIconButton
-                          variant="secondary-transparent"
-                          size="sm"
-                          icon={<DiffIcon size={20} />}
-                          onClick={() => onViewDiff?.(message)}
-                          title="View diff"
-                        />
-                        <CustomIconButton
-                          variant="secondary-transparent"
-                          size="sm"
-                          icon={<CopyLineIcon size={20} />}
-                          onClick={() => {
-                            navigator.clipboard.writeText(messageText);
-                            toast.success('Copied to clipboard');
-                          }}
-                          title="Copy response"
-                        />
+                        <Tooltip.Root delayDuration={100}>
+                          <Tooltip.Trigger asChild>
+                            <CustomIconButton
+                              variant="secondary-transparent"
+                              size="sm"
+                              icon={<DiffIcon size={20} />}
+                              onClick={() => onViewDiff?.(message)}
+                            />
+                          </Tooltip.Trigger>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                              sideOffset={-11}
+                              side="bottom"
+                            >
+                              View diff
+                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        </Tooltip.Root>
+                        <Tooltip.Root delayDuration={100}>
+                          <Tooltip.Trigger asChild>
+                            <CustomIconButton
+                              variant="secondary-transparent"
+                              size="sm"
+                              icon={<CopyLineIcon size={20} />}
+                              onClick={() => {
+                                navigator.clipboard.writeText(messageText);
+                                toast.success('Copied to clipboard');
+                              }}
+                            />
+                          </Tooltip.Trigger>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                              sideOffset={-11}
+                              side="bottom"
+                            >
+                              Copy
+                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        </Tooltip.Root>
                         {index > 0 && messages[index - 1]?.role === 'user' && (
-                          <CustomIconButton
-                            variant="secondary-transparent"
-                            size="sm"
-                            icon={<RefreshIcon size={20} />}
-                            onClick={() => {
-                              const prevUserMessage = messages[index - 1];
-                              const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
-                              onRetry?.(prevUserMessage, prevPrevMessage);
-                            }}
-                            title="Retry chat"
-                          />
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<RefreshIcon size={20} />}
+                                onClick={() => {
+                                  const prevUserMessage = messages[index - 1];
+                                  const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
+                                  onRetry?.(prevUserMessage, prevPrevMessage);
+                                }}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                sideOffset={-11}
+                                side="bottom"
+                              >
+                                Retry
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
                         )}
                       </div>
                       {messageId &&
@@ -222,6 +262,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               );
             })
           : null}
+        {isGenerating && <ProgressCompilation data={progressAnnotations} />}
         {isStreaming && (
           <div className="flex items-center justify-center flex-grow mt-10 mb-12">
             <div style={{ width: '60px', height: '60px', aspectRatio: '1/1' }}>
@@ -229,7 +270,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             </div>
           </div>
         )}
-        {isGenerating && <ProgressCompilation data={progressAnnotations} />}
       </div>
     );
   },
