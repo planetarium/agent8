@@ -354,10 +354,6 @@ function newEditorState(
     extensions: [
       // Update listener for change detection and state saving
       EditorView.updateListener.of((update) => {
-        if (editorStatesRef?.current && filePath) {
-          editorStatesRef.current.set(filePath, update.state);
-        }
-
         if (update.docChanged) {
           debouncedOnChange?.({
             content: update.state.doc.toString(),
