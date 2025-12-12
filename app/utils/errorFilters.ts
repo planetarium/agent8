@@ -216,7 +216,10 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
     return true;
   }
 
-  logger.debug('[ErrorFilter] description:', description, 'content:', content);
+  logger.debug('[ErrorFilter] Alert details:', {
+    description,
+    content,
+  });
 
   // check IGNORED_ERROR_PATTERNS for any type (preview, vite, build, etc.)
   if (alert.type in IGNORED_ERROR_PATTERNS) {
@@ -234,17 +237,17 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
     const stackTraceMessage = content.match(STACK_TRACE_SECTION_PATTERN)?.[0];
 
     if (!stackTraceMessage) {
-      logger.debug('[ErrorFilter] No stack trace message found, returning false');
+      logger.debug('[ErrorFilter] No stack trace message found, showing error');
       return false;
     }
 
     if (hasWorkbenchFileInMessage(stackTraceMessage)) {
-      logger.debug('[ErrorFilter] ✅ Workbench file found in stack trace, showing error to AI');
+      logger.debug('[ErrorFilter] ✅ Workbench file found in stack trace, showing error');
       return false;
     }
 
     if (hasAssetsUrlInMessage(stackTraceMessage)) {
-      logger.debug('[ErrorFilter] ✅ Asset URL found, showing error to AI');
+      logger.debug('[ErrorFilter] ✅ Asset URL found, showing error');
       return false;
     }
 
