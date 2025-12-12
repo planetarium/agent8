@@ -484,30 +484,30 @@ export class WorkbenchStore {
       return;
     }
 
+    this.setDocumentContentByPath(filePath, newContent);
+  }
+
+  setDocumentContentByPath(filePath: string, newContent: string) {
     const originalContent = this.#filesStore.getFile(filePath)?.content;
     const unsavedChanges = originalContent !== undefined && originalContent !== newContent;
 
     this.#editorStore.updateFile(filePath, newContent);
 
-    const currentDocument = this.currentDocument.get();
+    const previousUnsavedFiles = this.unsavedFiles.get();
 
-    if (currentDocument) {
-      const previousUnsavedFiles = this.unsavedFiles.get();
-
-      if (unsavedChanges && previousUnsavedFiles?.has(currentDocument.filePath)) {
-        return;
-      }
-
-      const newUnsavedFiles = new Set(previousUnsavedFiles);
-
-      if (unsavedChanges) {
-        newUnsavedFiles.add(currentDocument.filePath);
-      } else {
-        newUnsavedFiles.delete(currentDocument.filePath);
-      }
-
-      this.unsavedFiles.set(newUnsavedFiles);
+    if (unsavedChanges && previousUnsavedFiles?.has(filePath)) {
+      return;
     }
+
+    const newUnsavedFiles = new Set(previousUnsavedFiles);
+
+    if (unsavedChanges) {
+      newUnsavedFiles.add(filePath);
+    } else {
+      newUnsavedFiles.delete(filePath);
+    }
+
+    this.unsavedFiles.set(newUnsavedFiles);
   }
 
   setCurrentDocumentScrollPosition(position: ScrollPosition) {

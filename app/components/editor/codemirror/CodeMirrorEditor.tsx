@@ -9,7 +9,6 @@ import {
   StateEffect,
   StateField,
   Transaction,
-  type Extension,
   type TransactionSpec,
 } from '@codemirror/state';
 import {
@@ -190,44 +189,6 @@ function dispatchToView(view: EditorView, transaction: TransactionSpec): void {
   view.dispatch(transaction);
 }
 
-// Create common dispatchTransactions logic
-function createDispatchTransactions(
-  onUpdate: (update: EditorUpdate) => void,
-  editorStatesRef: RefObject<EditorStates | undefined>,
-  doc: EditorDocument | undefined,
-) {
-  return function dispatchTransactions(this: EditorView, transactions: readonly Transaction[]) {
-    const view = this;
-    const previousSelection = view.state.selection;
-
-    // Apply all transactions to the view
-    view.update(transactions);
-
-    const newSelection = view.state.selection;
-
-    // Check if selection actually changed (handles edge cases with undefined selections)
-    const selectionChanged =
-      newSelection !== previousSelection &&
-      (newSelection === undefined || previousSelection === undefined || !newSelection.eq(previousSelection));
-
-    // Only notify of changes if we have a document and something actually changed
-    if (doc && (transactions.some((transaction) => transaction.docChanged) || selectionChanged)) {
-      onUpdate({
-        selection: view.state.selection,
-        content: view.state.doc.toString(),
-        filePath: doc.filePath,
-      });
-
-      // Save the current state for this file path
-      if (editorStatesRef.current && doc.filePath) {
-        editorStatesRef.current.set(doc.filePath, view.state);
-      }
-    }
-
-    return undefined;
-  };
-}
-
 // Set editor document (returns false if view recreation is needed)
 function setEditorDocument(
   editorViewRef: RefObject<EditorView | undefined>,
@@ -331,9 +292,6 @@ function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: bo
   const newTop = doc.scroll?.top ?? 0;
   const needsScrolling = currentLeft !== newLeft || currentTop !== newTop;
 
-  // Force viewport recalculation to ensure all visible lines are rendered
-  view.requestMeasure();
-
   // Handle focus management for editable editors
   if (autoFocus && editable) {
     try {
@@ -367,100 +325,6 @@ function handleScrollAndFocus(view: EditorView, autoFocus: boolean, editable: bo
   }
 }
 
-// Create new editor state with extensions
-function newEditorState(
-  content: string,
-  theme: Theme,
-  settings: EditorSettings | undefined,
-  onScroll: OnScrollCallback | undefined,
-  debounceScroll: number,
-  onSave: OnSaveCallback | undefined,
-  extensions: Extension[],
-) {
-  return EditorState.create({
-    doc: content,
-    extensions: [
-      EditorView.domEventHandlers({
-        scroll: debounce((event, view) => {
-          if (event.target !== view.scrollDOM) {
-            return;
-          }
-
-          onScroll?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
-        }, debounceScroll),
-        keydown: (event, view) => {
-          if (view.state.readOnly) {
-            view.dispatch({
-              effects: [readOnlyTooltipStateEffect.of(event.key !== 'Escape')],
-            });
-
-            return true;
-          }
-
-          return false;
-        },
-      }),
-      getTheme(theme, settings),
-      history(),
-      keymap.of([
-        ...defaultKeymap,
-        ...historyKeymap,
-        ...searchKeymap,
-        { key: 'Tab', run: acceptCompletion },
-        {
-          key: 'Mod-s',
-          preventDefault: true,
-          run: () => {
-            onSave?.();
-            return true;
-          },
-        },
-        indentKeyBinding,
-      ]),
-      indentUnit.of('\t'),
-      autocompletion({
-        closeOnBlur: false,
-      }),
-      tooltips({
-        position: 'absolute',
-        parent: document.body,
-        tooltipSpace: (view) => {
-          const rect = view.dom.getBoundingClientRect();
-
-          return {
-            top: rect.top - EDITOR_DEFAULTS.TOOLTIP_OFFSET_TOP,
-            left: rect.left,
-            bottom: rect.bottom,
-            right: rect.right + EDITOR_DEFAULTS.TOOLTIP_OFFSET_RIGHT,
-          };
-        },
-      }),
-      closeBrackets(),
-      lineNumbers(),
-      dropCursor(),
-      drawSelection(),
-      bracketMatching(),
-      EditorState.tabSize.of(settings?.tabSize ?? EDITOR_DEFAULTS.DEFAULT_TAB_SIZE),
-      indentOnInput(),
-      editableTooltipField,
-      editableStateField,
-      EditorState.readOnly.from(editableStateField, (editable) => !editable),
-      highlightActiveLineGutter(),
-      highlightActiveLine(),
-      foldGutter({
-        markerDOM: (open) => {
-          const icon = document.createElement('div');
-
-          icon.className = `fold-icon ${open ? 'i-ph-caret-down-bold' : 'i-ph-caret-right-bold'}`;
-
-          return icon;
-        },
-      }),
-      ...extensions,
-    ],
-  });
-}
-
 export const CodeMirrorEditor = memo(
   ({
     doc,
@@ -488,6 +352,118 @@ export const CodeMirrorEditor = memo(
     // Track previous editable state for AI completion detection
     const prevEditableRef = useRef<boolean>(editable);
 
+    // Create editor state with language compartment
+    const createEditorState = (content: string = '', filePath: string = '') => {
+      // Create debounced onChange handler
+      const debouncedOnChange = debounce(
+        (update: { content: string; selection: EditorSelection; filePath: string }) => {
+          onChange?.({
+            content: update.content,
+            selection: update.selection,
+            filePath: update.filePath,
+          });
+        },
+        debounceChange,
+      );
+
+      return EditorState.create({
+        doc: content,
+        extensions: [
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged && !update.state.readOnly) {
+              debouncedOnChange?.({
+                content: update.state.doc.toString(),
+                selection: update.state.selection,
+                filePath,
+              });
+
+              // Save the current state for this file path
+              if (editorStatesRef?.current && filePath) {
+                editorStatesRef.current.set(filePath, update.state);
+              }
+            }
+          }),
+          EditorView.domEventHandlers({
+            scroll: debounce((event, view) => {
+              if (event.target !== view.scrollDOM) {
+                return;
+              }
+
+              onScroll?.({ left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop });
+            }, debounceScroll),
+            keydown: (event, view) => {
+              if (view.state.readOnly) {
+                view.dispatch({
+                  effects: [readOnlyTooltipStateEffect.of(event.key !== 'Escape')],
+                });
+
+                return true;
+              }
+
+              return false;
+            },
+          }),
+          getTheme(theme, settings),
+          history(),
+          keymap.of([
+            ...defaultKeymap,
+            ...historyKeymap,
+            ...searchKeymap,
+            { key: 'Tab', run: acceptCompletion },
+            {
+              key: 'Mod-s',
+              preventDefault: true,
+              run: () => {
+                onSave?.();
+                return true;
+              },
+            },
+            indentKeyBinding,
+          ]),
+          indentUnit.of('\t'),
+          autocompletion({
+            closeOnBlur: false,
+          }),
+          tooltips({
+            position: 'absolute',
+            parent: document.body,
+            tooltipSpace: (view) => {
+              const rect = view.dom.getBoundingClientRect();
+
+              return {
+                top: rect.top - EDITOR_DEFAULTS.TOOLTIP_OFFSET_TOP,
+                left: rect.left,
+                bottom: rect.bottom,
+                right: rect.right + EDITOR_DEFAULTS.TOOLTIP_OFFSET_RIGHT,
+              };
+            },
+          }),
+          closeBrackets(),
+          lineNumbers(),
+          dropCursor(),
+          drawSelection(),
+          bracketMatching(),
+          EditorState.tabSize.of(settings?.tabSize ?? EDITOR_DEFAULTS.DEFAULT_TAB_SIZE),
+          indentOnInput(),
+          editableTooltipField,
+          editableStateField,
+          EditorState.readOnly.from(editableStateField, (editable) => !editable),
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          foldGutter({
+            markerDOM: (open) => {
+              const icon = document.createElement('div');
+
+              icon.className = `fold-icon ${open ? 'i-ph-caret-down-bold' : 'i-ph-caret-right-bold'}`;
+
+              return icon;
+            },
+          }),
+          languageCompartment.of([]),
+        ],
+      });
+    };
+
     // Track previous file path to detect file changes
     const prevFilePathRef = useRef<string | undefined>();
 
@@ -500,76 +476,39 @@ export const CodeMirrorEditor = memo(
 
       logger.info('Starting EditorView recreation');
 
-      try {
-        // Backup current state
-        const currentDoc = editorViewRef.current.state.doc.toString();
-        const scrollPos = {
-          left: editorViewRef.current.scrollDOM?.scrollLeft || 0,
-          top: editorViewRef.current.scrollDOM?.scrollTop || 0,
-        };
-        const selection = editorViewRef.current.state.selection;
+      const currentDoc = editorViewRef.current.state.doc.toString();
+      const scrollPos = {
+        left: editorViewRef.current.scrollDOM?.scrollLeft || 0,
+        top: editorViewRef.current.scrollDOM?.scrollTop || 0,
+      };
+      const state = createEditorState(currentDoc, doc?.filePath);
+      const selection = editorViewRef.current.state.selection;
 
-        // Clean up existing view
-        editorViewRef.current.destroy();
+      // Clean up existing view
+      editorViewRef.current.destroy();
 
-        // Create new view
-        const onUpdate = debounce((update: EditorUpdate) => {
-          onChange?.(update);
-        }, debounceChange);
+      const newView = new EditorView({
+        parent: containerRef.current,
+        state,
+        selection,
+      });
 
-        const newView = new EditorView({
-          parent: containerRef.current,
-          dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, doc),
-        });
-
-        // Restore state
-        if (currentDoc) {
-          const state = newEditorState(currentDoc, theme, settings, onScroll, debounceScroll, onSave, [
-            languageCompartment.of([]),
-          ]);
-          newView.setState(state);
-
-          if (selection) {
-            newView.dispatch({ selection });
-          }
+      // Restore scroll position
+      requestAnimationFrame(() => {
+        if (newView.scrollDOM) {
+          newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
         }
+      });
 
-        // Restore scroll position
-        requestAnimationFrame(() => {
-          if (newView.scrollDOM) {
-            newView.scrollDOM.scrollTo(scrollPos.left, scrollPos.top);
-          }
-        });
+      logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
 
-        editorViewRef.current = newView;
-        logger.info(EDITOR_MESSAGES.RECREATION_SUCCESS);
-      } catch (error) {
-        logger.error(EDITOR_MESSAGES.RECREATION_FAILED, error);
-
-        // Fallback: create minimal working view
-        if (containerRef.current) {
-          const state = newEditorState('', theme, settings, onScroll, debounceScroll, onSave, [
-            languageCompartment.of([]),
-          ]);
-          const fallbackView = new EditorView({
-            parent: containerRef.current,
-            state,
-            dispatchTransactions: createDispatchTransactions(() => undefined, editorStatesRef, doc),
-          });
-          editorViewRef.current = fallbackView;
-        }
-      }
+      editorViewRef.current = newView;
     };
 
     // Initialize CodeMirror editor view (mount only)
     useEffect(() => {
-      const onUpdate = debounce((update: EditorUpdate) => {
-        onChange?.(update);
-      }, debounceChange);
-
       const view = new EditorView({
         parent: containerRef.current!,
-        dispatchTransactions: createDispatchTransactions(onUpdate, editorStatesRef, doc),
       });
 
       editorViewRef.current = view;
@@ -643,9 +582,7 @@ export const CodeMirrorEditor = memo(
 
       // Handle no document case
       if (!doc) {
-        const state = newEditorState('', theme, settings, onScroll, debounceScroll, onSave, [
-          languageCompartment.of([]),
-        ]);
+        const state = createEditorState();
         editorView.setState(state);
 
         // Clear document and reset scroll
@@ -670,7 +607,7 @@ export const CodeMirrorEditor = memo(
         return;
       }
 
-      if (docValueRef.current === doc.value || docFilePathRef.current === doc.filePath) {
+      if (docValueRef.current === doc.value && docFilePathRef.current === doc.filePath) {
         return;
       }
 
@@ -688,9 +625,7 @@ export const CodeMirrorEditor = memo(
       let state = editorStates.get(doc.filePath);
 
       if (!state) {
-        state = newEditorState(doc.value, theme, settings, onScroll, debounceScroll, onSave, [
-          languageCompartment.of([]),
-        ]);
+        state = createEditorState(doc.value, doc.filePath);
         editorStates.set(doc.filePath, state);
       }
 
