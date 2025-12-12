@@ -29,7 +29,7 @@ export const Slider = genericMemo(<T,>({ selected, options, setSelected }: Slide
     : [options.left, ...(options.middle ? [options.middle] : []), options.right];
 
   return (
-    <div className="flex items-center flex-wrap shrink-0 gap-1 bg-bolt-elements-background-depth-1 overflow-hidden rounded-full p-1">
+    <div className="flex items-center flex-wrap shrink-0 gap-1 overflow-hidden rounded-full p-1">
       {normalizedOptions.map((option, index) => (
         <SliderButton key={index} selected={selected === option.value} setSelected={() => setSelected?.(option.value)}>
           {option.text}
@@ -51,9 +51,7 @@ const SliderButton = memo(({ selected, children, setSelected }: SliderButtonProp
       onClick={setSelected}
       className={classNames(
         'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-        selected
-          ? 'text-bolt-elements-item-contentAccent'
-          : 'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive',
+        selected ? 'text-interactive-selected' : 'text-interactive-neutral hover:text-interactive-neutral-hovered',
       )}
     >
       <span className="relative z-10">{children}</span>
@@ -61,7 +59,7 @@ const SliderButton = memo(({ selected, children, setSelected }: SliderButtonProp
         <motion.span
           layoutId="pill-tab"
           transition={{ duration: 0.2, ease: cubicEasingFn }}
-          className="absolute inset-0 z-0 bg-bolt-elements-item-backgroundAccent rounded-full"
+          className="absolute inset-0 z-0"
         ></motion.span>
       )}
     </button>

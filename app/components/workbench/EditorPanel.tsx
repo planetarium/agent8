@@ -76,7 +76,7 @@ export const EditorPanel = memo(
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
             <Panel defaultSize={20} minSize={10} collapsible>
-              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full">
+              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full bg-bolt-elements-background-depth-2">
                 <PanelHeader>
                   <div className="i-ph:tree-structure-duotone shrink-0" />
                   Files

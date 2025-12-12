@@ -28,12 +28,15 @@ export function UserMessage({ content }: UserMessageProps) {
 
 export function stripMetadata(content: string) {
   const artifactRegex = /<boltArtifact\s+[^>]*>[\s\S]*?<\/boltArtifact>/gm;
+  const thinkRegex = /<think>[\s\S]*?<\/think>/gm;
+
   return content
     .replace(MODEL_REGEX, '')
     .replace(PROVIDER_REGEX, '')
     .replace(ATTACHMENTS_REGEX, '')
     .replace(DEV_TAG_REGEX, '')
-    .replace(artifactRegex, '');
+    .replace(artifactRegex, '')
+    .replace(thinkRegex, '');
 }
 
 function extractAttachments(content: string) {

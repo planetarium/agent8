@@ -11,7 +11,6 @@ import {
   type OnChangeCallback as OnEditorChange,
   type OnScrollCallback as OnEditorScroll,
 } from '~/components/editor/codemirror/CodeMirrorEditor';
-import { IconButton } from '~/components/ui/IconButton';
 import { Slider } from '~/components/ui/Slider';
 import { type WorkbenchViewType } from '~/lib/stores/workbench';
 import {
@@ -53,20 +52,20 @@ const viewTransition = { ease: cubicEasingFn };
 
 const sliderOptions = [
   {
-    value: 'code' as WorkbenchViewType,
-    text: 'Code',
+    value: 'preview' as WorkbenchViewType,
+    text: 'Preview',
   },
   {
     value: 'resource' as WorkbenchViewType,
     text: 'Resources',
   },
   {
-    value: 'diff' as WorkbenchViewType,
-    text: 'Diff',
+    value: 'code' as WorkbenchViewType,
+    text: 'Code',
   },
   {
-    value: 'preview' as WorkbenchViewType,
-    text: 'Preview',
+    value: 'diff' as WorkbenchViewType,
+    text: 'Diff',
   },
 ];
 
@@ -495,8 +494,9 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             </div>
           </div>
         )}
+
         {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
-          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
             <div className="absolute inset-0 px-2 lg:px-6">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
@@ -509,9 +509,10 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             </div>
           </div>
         )}
+
         <div
           className={classNames(
-            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+            'fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]',
             {
               'w-full !top-[calc(var(--header-height))] !bottom-58': isSmallViewport,
               'left-0': showWorkbench && isSmallViewport,
@@ -521,8 +522,8 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           )}
         >
           <div className="absolute inset-0 px-2 lg:px-6">
-            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-              <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
+            <div className="h-full flex flex-col bg-transperant-subtle border border-tertiary shadow-sm rounded-lg overflow-hidden">
+              <div className="flex items-center px-3 py-2 border-b border-tertiary">
                 <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
                 <button
                   onClick={() => {
@@ -541,30 +542,10 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   <span>Run Preview</span>
                 </button>
                 <div className="ml-auto" />
-                {/* {(selectedView === 'code' || selectedView === 'resource') && (
-                  <div className="flex overflow-y-auto">
-                    <PanelHeaderButton
-                      className="mr-1 text-sm"
-                      onClick={() => {
-                        workbench.downloadZip();
-                      }}
-                    >
-                      <div className="i-ph:download" />
-                      Download
-                    </PanelHeaderButton>
-                  </div>
-                )} */}
+
                 {selectedView === 'diff' && (
                   <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
                 )}
-                <IconButton
-                  icon="i-ph:x-circle"
-                  className="-mr-1"
-                  size="xl"
-                  onClick={() => {
-                    workbench.setShowWorkbench(false);
-                  }}
-                />
               </div>
               <div className="relative flex-1 overflow-hidden">
                 <View

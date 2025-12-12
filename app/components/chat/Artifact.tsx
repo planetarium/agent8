@@ -197,7 +197,7 @@ const ActionList = memo(({ actions }: ActionListProps) => {
               }}
             >
               <div className="flex items-center gap-2">
-                <div className={classNames('text-lg', getIconColor(action.status))}>
+                <div className={classNames('text-[20px]', getIconColor(action.status))}>
                   {status === 'running' ? (
                     <>
                       {type !== 'start' ? (
@@ -222,7 +222,10 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                     <div className="flex items-center gap-0.5">
                       <FileIcon />
                       <code
-                        className="text-body-sm text-accent-primary hover:underline cursor-pointer"
+                        className={classNames(
+                          'text-body-sm hover:underline cursor-pointer',
+                          status === 'running' ? 'animate-text-accent-wave' : 'text-accent-primary',
+                        )}
                         onClick={() => openArtifactInWorkbench(action.filePath)}
                       >
                         {action.filePath}
@@ -235,7 +238,10 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                     <div className="flex items-center gap-0.5">
                       <FileIcon />
                       <code
-                        className="text-body-sm text-accent-primary hover:underline cursor-pointer"
+                        className={classNames(
+                          'text-body-sm hover:underline cursor-pointer',
+                          status === 'running' ? 'animate-text-accent-wave' : 'text-accent-primary',
+                        )}
                         onClick={() => openArtifactInWorkbench(action.filePath)}
                       >
                         {action.filePath}
@@ -280,7 +286,7 @@ function getIconColor(status: ActionState['status']) {
       return 'text-bolt-elements-textTertiary';
     }
     case 'running': {
-      return 'text-bolt-elements-loader-progress';
+      return 'text-white';
     }
     case 'complete': {
       return 'text-bolt-elements-icon-success';

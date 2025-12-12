@@ -89,7 +89,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     return (
       <div
         id={id}
-        className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-center' : '')}
+        className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-end' : '')}
         ref={ref}
       >
         {hasMore && !isStreaming && (
@@ -187,24 +187,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         <div className="flex items-center gap-3">
                           {isLast && isGenerating ? (
                             <>
-                              <style>
-                                {`
-                                @keyframes textColorWave {
-                                  0% { color: var(--color-text-primary, #FFF); }
-                                  50% { color: #6b7280; }
-                                  100% { color: var(--color-text-primary, #FFF); }
-                                }
-                              `}
-                              </style>
                               <div style={{ width: '24px', height: '24px' }}>
                                 <Lottie animationData={loadingAnimationData} loop={true} />
                               </div>
-                              <span
-                                className="text-heading-xs"
-                                style={{ animation: 'textColorWave 2s ease-in-out infinite' }}
-                              >
-                                Generating Response...
-                              </span>
+                              <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
                             </>
                           ) : isLast ? (
                             <span

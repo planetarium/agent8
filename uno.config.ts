@@ -140,11 +140,13 @@ export default defineConfig({
     'max-w-chat-before-start': 'max-w-[var(--chat-max-width-before-start)]',
     'bg-primary': 'bg-[var(--color-bg-primary,#111315)]',
     'bg-tertiary': 'bg-[var(--color-bg-tertiary,#32363C)]',
+    'bg-transperant-subtle': 'bg-[rgba(255,255,255,0.05)]',
     'text-primary': 'text-bolt-color-textPrimary',
     'text-secondary': 'text-bolt-color-textSecondary',
     'text-tertiary': 'text-bolt-color-textTertiary',
     'text-subtle': 'text-[var(--color-text-subtle)]',
     'text-disabled': 'text-[var(--color-text-disabled)]',
+    'text-interactive-selected': 'text-[#3FD2E8]',
 
     // Typography Design System
     'text-heading-2xs': 'font-primary text-[12px] font-semibold leading-[133.4%] not-italic',
@@ -168,6 +170,7 @@ export default defineConfig({
     'text-body-lg-medium': 'font-primary text-[16px] font-medium leading-[150%] not-italic',
 
     'text-accent-primary': 'text-[var(--color-text-accent-primary)]',
+    'text-accent-primary-subtler': 'text-[var(--color-text-accent-primary-subtler)]',
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
     'text-interactive-primary': 'text-[var(--color-text-interactive-primary)]',
     'text-interactive-on-primary': 'text-[var(--color-text-interactive-on-primary)]',

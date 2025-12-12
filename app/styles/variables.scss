@@ -234,6 +234,7 @@
   --color-text-tertiary: #99a2b0;
   --color-text-subtle: #767d8c;
   --color-text-accent-primary: #11b9d2;
+  --color-text-accent-primary-subtler: #72e7f8;
   --color-text-interactive-neutral: #f3f5f8;
   --color-text-interactive-primary: #11b9d2;
   --color-text-interactive-on-primary: #f3f5f8;
@@ -305,4 +306,37 @@
 /* Typography Utilities */
 .font-feature-stylistic {
   font-feature-settings: var(--font-feature-stylistic);
+}
+
+/* Animations */
+@keyframes textColorWave {
+  0% {
+    color: var(--color-text-primary, #fff);
+  }
+  50% {
+    color: #6b7280;
+  }
+  100% {
+    color: var(--color-text-primary, #fff);
+  }
+}
+
+.animate-text-color-wave {
+  animation: textColorWave 2s ease-in-out infinite;
+}
+
+@keyframes textAccentWave {
+  0% {
+    color: var(--color-text-accent-primary, #11b9d2);
+  }
+  50% {
+    color: var(--color-text-accent-primary-subtler, #72e7f8);
+  }
+  100% {
+    color: var(--color-text-accent-primary, #11b9d2);
+  }
+}
+
+.animate-text-accent-wave {
+  animation: textAccentWave 2s ease-in-out infinite;
 }
