@@ -33,8 +33,8 @@ importers:
         specifier: ^2.0.17
         version: 2.0.19(zod@4.1.12)
       '@ai-sdk/openai':
-        specifier: ^2.0.71
-        version: 2.0.71(zod@4.1.12)
+        specifier: ^2.0.85
+        version: 2.0.85(zod@4.1.12)
       '@ai-sdk/provider':
         specifier: ^2.0.0
         version: 2.0.0
@@ -120,8 +120,8 @@ importers:
         specifier: ^13.6.2
         version: 13.10.0
       '@openrouter/ai-sdk-provider':
-        specifier: ^1.2.5
-        version: 1.2.5(ai@5.0.108(zod@4.1.12))(zod@4.1.12)
+        specifier: ^1.5.3
+        version: 1.5.3(ai@5.0.108(zod@4.1.12))(zod@4.1.12)
       '@phosphor-icons/react':
         specifier: ^2.1.7
         version: 2.1.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -579,8 +579,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@2.0.71':
-    resolution: {integrity: sha512-tg+gj+R0z/On9P4V7hy7/7o04cQPjKGayMCL3gzWD/aNGjAKkhEnaocuNDidSnghizt8g2zJn16cAuAolnW+qQ==}
+  '@ai-sdk/openai@2.0.85':
+    resolution: {integrity: sha512-3pzr7qVhsOXwjPAfmvFNZz3sRWCuyMOc3GgLHe7sWY0t8J4hA5mwQ4LISTKYI3iIr8IXzAQn9MUrC8Hiji9RpA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -608,6 +608,12 @@ packages:
 
   '@ai-sdk/provider-utils@3.0.18':
     resolution: {integrity: sha512-ypv1xXMsgGcNKUP+hglKqtdDuMg68nWHucPPAhIENrbFAI+xCHiqPVN8Zllxyv1TNZwGWUghPxJXU+Mqps0YRQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@3.0.19':
+    resolution: {integrity: sha512-W41Wc9/jbUVXVwCN/7bWa4IKe8MtxO3EyA0Hfhx6grnmiYlCvpI8neSYWFE0zScXJkgA/YK3BRybzgyiXuu6JA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2130,15 +2136,19 @@ packages:
   '@octokit/types@14.1.0':
     resolution: {integrity: sha512-1y6DgTy8Jomcpu33N+p5w58l6xyt55Ar2I91RPiIA0xCJBXyUAhXCcmZaDWSANiha7R9a6qJJ2CRomGPZ6f46g==}
 
-  '@openrouter/ai-sdk-provider@1.2.5':
-    resolution: {integrity: sha512-NrvJFPvdEUo6DYUQIVWPGfhafuZ2PAIX7+CUMKGknv8TcTNVo0TyP1y5SU7Bgjf/Wup9/74UFKUB07icOhVZjQ==}
+  '@openrouter/ai-sdk-provider@1.5.3':
+    resolution: {integrity: sha512-7SZmmLdp0x1wwuwZARn5R19ZSySHmTiUEM8IvN7O5r3ZH4drI1//BsLpfw56YFsBXu34VRtQzyvko1FLIcgtRg==}
     engines: {node: '>=18'}
     peerDependencies:
+      '@toon-format/toon': ^2.0.0
       ai: ^5.0.0
       zod: ^3.24.1 || ^v4
+    peerDependenciesMeta:
+      '@toon-format/toon':
+        optional: true
 
-  '@openrouter/sdk@0.1.23':
-    resolution: {integrity: sha512-W1xx3zLqBKgtH3FMmN8av7DUKKjUwFgUrdn1vZM8gDb10CtI/w7YU3bsmIismd9Ppr7mx6Y9iw3eyKuU8/UZIA==}
+  '@openrouter/sdk@0.1.27':
+    resolution: {integrity: sha512-RH//L10bSmc81q25zAZudiI4kNkLgxF2E+WU42vghp3N6TEvZ6F0jK7uT3tOxkEn91gzmMw9YVmDENy7SJsajQ==}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -10020,10 +10030,10 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.12(zod@4.1.12)
       zod: 4.1.12
 
-  '@ai-sdk/openai@2.0.71(zod@4.1.12)':
+  '@ai-sdk/openai@2.0.85(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.17(zod@4.1.12)
+      '@ai-sdk/provider-utils': 3.0.19(zod@4.1.12)
       zod: 4.1.12
 
   '@ai-sdk/provider-utils@1.0.20(zod@4.1.12)':
@@ -10050,6 +10060,13 @@ snapshots:
       zod: 4.1.12
 
   '@ai-sdk/provider-utils@3.0.18(zod@4.1.12)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 4.1.12
+
+  '@ai-sdk/provider-utils@3.0.19(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@standard-schema/spec': 1.0.0
@@ -11486,13 +11503,13 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 25.1.0
 
-  '@openrouter/ai-sdk-provider@1.2.5(ai@5.0.108(zod@4.1.12))(zod@4.1.12)':
+  '@openrouter/ai-sdk-provider@1.5.3(ai@5.0.108(zod@4.1.12))(zod@4.1.12)':
     dependencies:
-      '@openrouter/sdk': 0.1.23
+      '@openrouter/sdk': 0.1.27
       ai: 5.0.108(zod@4.1.12)
       zod: 4.1.12
 
-  '@openrouter/sdk@0.1.23':
+  '@openrouter/sdk@0.1.27':
     dependencies:
       zod: 4.1.12
 
