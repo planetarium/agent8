@@ -27,7 +27,7 @@ const IGNORED_ERROR_PATTERNS = {
 const MIN_ERROR_CONTENT_LENGTH = 16;
 
 /**
- * Executable file extensions that can appear in stack traces
+ * File extensions that can appear in stack traces
  */
 const STACK_TRACE_FILE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json']);
 
@@ -56,9 +56,9 @@ function getPatternsForType(type: ErrorType): RegExp[] {
 }
 
 /**
- * Gets the list of executable filenames from workbenchStore (including server.js which may be generated)
+ * Gets the list of filenames that can appear in stack traces from workbenchStore
  * Returns a Set of filenames (without path) for quick lookup
- * Filters out non-executable files (.md, .json, .css, .svg, images, etc.) as they won't appear in stack traces
+ * Filters out files that don't appear in stack traces (.md, .json, .css, .svg, images, etc.)
  */
 function getWorkbenchFileNames(): Set<string> {
   const files = workbenchStore.files.get();
@@ -71,9 +71,9 @@ function getWorkbenchFileNames(): Set<string> {
       const fileName = filePath.split('/').pop();
 
       if (fileName) {
-        const hasExecutableExt = STACK_TRACE_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.')));
+        const hasStackTraceExt = STACK_TRACE_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.')));
 
-        if (hasExecutableExt) {
+        if (hasStackTraceExt) {
           fileNames.add(fileName);
         }
       }
