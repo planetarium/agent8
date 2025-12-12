@@ -99,7 +99,7 @@ function hasWorkbenchFileInMessage(message: string): boolean {
   const matchResult = message.match(fileNamesPattern);
 
   if (matchResult) {
-    logger.debug('[ErrorFilter] 🎯 Matched workbench file:', matchResult[1]);
+    logger.debug('🎯 Matched workbench file:', matchResult[1]);
     return true;
   }
 
@@ -191,7 +191,7 @@ function hasAssetsUrlInMessage(message: string): boolean {
   const matchResult = message.match(assetsPattern);
 
   if (matchResult) {
-    logger.debug('[ErrorFilter] 🎯 Matched asset URL:', matchResult[1]);
+    logger.debug('🎯 Matched asset URL:', matchResult[1]);
     return true;
   }
 
@@ -216,7 +216,7 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
     return true;
   }
 
-  logger.debug('[ErrorFilter] Alert details:', {
+  logger.debug('Alert details:', {
     description,
     content,
   });
@@ -227,7 +227,7 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
     const isIgnoredPattern = patterns.some((pattern) => pattern.test(content) || pattern.test(description));
 
     if (isIgnoredPattern) {
-      logger.debug('[ErrorFilter] ✅ Matched IGNORED_ERROR_PATTERNS, ignoring error');
+      logger.debug('✅ Matched IGNORED_ERROR_PATTERNS, ignoring error');
       return true;
     }
   }
@@ -237,17 +237,17 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
     const stackTraceMessage = content.match(STACK_TRACE_SECTION_PATTERN)?.[0];
 
     if (!stackTraceMessage) {
-      logger.debug('[ErrorFilter] No stack trace message found, showing error');
+      logger.debug('No stack trace message found, showing error');
       return false;
     }
 
     if (hasWorkbenchFileInMessage(stackTraceMessage)) {
-      logger.debug('[ErrorFilter] ✅ Workbench file found in stack trace, showing error');
+      logger.debug('✅ Workbench file found in stack trace, showing error');
       return false;
     }
 
     if (hasAssetsUrlInMessage(stackTraceMessage)) {
-      logger.debug('[ErrorFilter] ✅ Asset URL found, showing error');
+      logger.debug('✅ Asset URL found in stack trace, showing error');
       return false;
     }
 
