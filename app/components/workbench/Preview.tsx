@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { useWorkbenchPreviews, useWorkbenchCurrentView } from '~/lib/hooks/useWorkbenchStore';
 import { PortDropdown } from './PortDropdown';
+import { shouldIgnoreError } from '~/utils/errorFilters';
+import type { ActionAlert } from '~/types/actions';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -314,13 +316,17 @@ export const Preview = memo(() => {
         }
 
         if (error.stack) {
-          workbenchStore.setAlert({
+          const alert = {
             type: 'preview',
             title,
             description,
             content: `Error occurred at ${error.pathname}${error.search || ''}${error.hash || ''}\nPort: ${error.port || ''}\n\nStack trace:\n${error.stack || ''}`,
             source: 'preview',
-          });
+          } satisfies ActionAlert;
+
+          if (!shouldIgnoreError(alert)) {
+            workbenchStore.alert.set(alert);
+          }
         }
       }
     };

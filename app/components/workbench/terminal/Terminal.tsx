@@ -7,6 +7,8 @@ import { createScopedLogger } from '~/utils/logger';
 import { getTerminalTheme } from './theme';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { debounce } from '~/utils/debounce';
+import { shouldIgnoreError } from '~/utils/errorFilters';
+import type { ActionAlert } from '~/types/actions';
 
 const logger = createScopedLogger('Terminal');
 
@@ -92,13 +94,17 @@ export const Terminal = memo(
           if (viteErrorPatterns.some((pattern) => pattern.test(recentText))) {
             logger.debug('Vite error detected');
 
-            workbenchStore.setAlert({
+            const alert = {
               type: 'vite',
               title: 'Vite Error',
               description: 'An error occurred while running Vite build or dev server',
               content: recentText,
               source: 'terminal',
-            });
+            } satisfies ActionAlert;
+
+            if (!shouldIgnoreError(alert)) {
+              workbenchStore.alert.set(alert);
+            }
           } else {
             logger.debug('No Vite error detected');
           }

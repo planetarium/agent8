@@ -207,13 +207,17 @@ export class WorkbenchStore {
 
       this.#containerRejecter(error);
 
-      this.setAlert({
+      const alert = {
         type: 'preview',
         title: 'Container Initialization Failed',
         description: error instanceof Error ? error.message : String(error),
         content: `Failed to initialize container\n\nError: ${error instanceof Error ? error.stack : error}`,
         source: 'preview',
-      });
+      } satisfies ActionAlert;
+
+      if (!shouldIgnoreError(alert)) {
+        this.actionAlert.set(alert);
+      }
 
       return null;
     }
@@ -342,13 +346,17 @@ export class WorkbenchStore {
       if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {
         const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
 
-        this.setAlert({
+        const alert = {
           type: 'preview',
           title: isPromise ? 'Unhandled Promise Rejection' : 'Uncaught Exception',
           description: message.message || 'An error occurred in the preview',
           content: `Error occurred at ${message.pathname}${message.search}${message.hash}\nPort: ${message.port}\n\nStack trace:\n${cleanStackTrace(message.stack || '')}`,
           source: 'preview',
-        });
+        } satisfies ActionAlert;
+
+        if (!shouldIgnoreError(alert)) {
+          this.actionAlert.set(alert);
+        }
       }
     });
   }
@@ -424,19 +432,6 @@ export class WorkbenchStore {
 
   get alert() {
     return this.actionAlert;
-  }
-
-  setAlert(alert: ActionAlert | undefined) {
-    if (!alert) {
-      this.actionAlert.set(undefined);
-      return;
-    }
-
-    if (shouldIgnoreError(alert)) {
-      return;
-    }
-
-    this.actionAlert.set(alert);
   }
 
   clearAlert() {
@@ -621,7 +616,9 @@ export class WorkbenchStore {
             return;
           }
 
-          this.setAlert(alert);
+          if (!shouldIgnoreError(alert)) {
+            this.actionAlert.set(alert);
+          }
         },
       ),
     });
@@ -1301,13 +1298,18 @@ export class WorkbenchStore {
 
   #handleBuildError(output: string) {
     logger.error('[Publish] Build Failed:', output);
-    this.setAlert({
+
+    const alert = {
       type: 'build',
       title: 'Build Error',
       description: 'Failed to build the project',
       content: output || 'Unknown build error',
       source: 'terminal',
-    });
+    } satisfies ActionAlert;
+
+    if (!shouldIgnoreError(alert)) {
+      this.actionAlert.set(alert);
+    }
   }
 
   #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {
