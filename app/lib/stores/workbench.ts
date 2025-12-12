@@ -6,6 +6,7 @@ import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
+import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
@@ -206,13 +207,17 @@ export class WorkbenchStore {
 
       this.#containerRejecter(error);
 
-      this.actionAlert.set({
+      const alert = {
         type: 'preview',
         title: 'Container Initialization Failed',
         description: error instanceof Error ? error.message : String(error),
         content: `Failed to initialize container\n\nError: ${error instanceof Error ? error.stack : error}`,
         source: 'preview',
-      });
+      } satisfies ActionAlert;
+
+      if (!shouldIgnoreError(alert)) {
+        this.actionAlert.set(alert);
+      }
 
       return null;
     }
@@ -341,13 +346,17 @@ export class WorkbenchStore {
       if (message.type === 'PREVIEW_UNCAUGHT_EXCEPTION' || message.type === 'PREVIEW_UNHANDLED_REJECTION') {
         const isPromise = message.type === 'PREVIEW_UNHANDLED_REJECTION';
 
-        this.actionAlert.set({
+        const alert = {
           type: 'preview',
           title: isPromise ? 'Unhandled Promise Rejection' : 'Uncaught Exception',
           description: message.message || 'An error occurred in the preview',
           content: `Error occurred at ${message.pathname}${message.search}${message.hash}\nPort: ${message.port}\n\nStack trace:\n${cleanStackTrace(message.stack || '')}`,
           source: 'preview',
-        });
+        } satisfies ActionAlert;
+
+        if (!shouldIgnoreError(alert)) {
+          this.actionAlert.set(alert);
+        }
       }
     });
   }
@@ -470,30 +479,30 @@ export class WorkbenchStore {
       return;
     }
 
+    this.setDocumentContentByPath(filePath, newContent);
+  }
+
+  setDocumentContentByPath(filePath: string, newContent: string) {
     const originalContent = this.#filesStore.getFile(filePath)?.content;
     const unsavedChanges = originalContent !== undefined && originalContent !== newContent;
 
     this.#editorStore.updateFile(filePath, newContent);
 
-    const currentDocument = this.currentDocument.get();
+    const previousUnsavedFiles = this.unsavedFiles.get();
 
-    if (currentDocument) {
-      const previousUnsavedFiles = this.unsavedFiles.get();
-
-      if (unsavedChanges && previousUnsavedFiles?.has(currentDocument.filePath)) {
-        return;
-      }
-
-      const newUnsavedFiles = new Set(previousUnsavedFiles);
-
-      if (unsavedChanges) {
-        newUnsavedFiles.add(currentDocument.filePath);
-      } else {
-        newUnsavedFiles.delete(currentDocument.filePath);
-      }
-
-      this.unsavedFiles.set(newUnsavedFiles);
+    if (unsavedChanges && previousUnsavedFiles?.has(filePath)) {
+      return;
     }
+
+    const newUnsavedFiles = new Set(previousUnsavedFiles);
+
+    if (unsavedChanges) {
+      newUnsavedFiles.add(filePath);
+    } else {
+      newUnsavedFiles.delete(filePath);
+    }
+
+    this.unsavedFiles.set(newUnsavedFiles);
   }
 
   setCurrentDocumentScrollPosition(position: ScrollPosition) {
@@ -607,7 +616,9 @@ export class WorkbenchStore {
             return;
           }
 
-          this.actionAlert.set(alert);
+          if (!shouldIgnoreError(alert)) {
+            this.actionAlert.set(alert);
+          }
         },
       ),
     });
@@ -1286,13 +1297,18 @@ export class WorkbenchStore {
 
   #handleBuildError(output: string) {
     logger.error('[Publish] Build Failed:', output);
-    this.actionAlert.set({
+
+    const alert = {
       type: 'build',
       title: 'Build Error',
       description: 'Failed to build the project',
       content: output || 'Unknown build error',
       source: 'terminal',
-    });
+    } satisfies ActionAlert;
+
+    if (!shouldIgnoreError(alert)) {
+      this.actionAlert.set(alert);
+    }
   }
 
   #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {

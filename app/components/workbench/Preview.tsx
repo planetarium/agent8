@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { useWorkbenchPreviews, useWorkbenchCurrentView } from '~/lib/hooks/useWorkbenchStore';
 import { PortDropdown } from './PortDropdown';
+import { shouldIgnoreError } from '~/utils/errorFilters';
+import type { ActionAlert } from '~/types/actions';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -11,13 +13,6 @@ interface WindowSize {
   height: number;
   icon: string;
 }
-
-const IGNORE_ERRORS = [
-  'HMRClient',
-  `Couldn't load texture blob`,
-  'null pointer passed to rust',
-  'Failed to load animation',
-];
 
 const WINDOW_SIZES: WindowSize[] = [
   { name: 'iPhone 14 Pro Max', width: 430, height: 932, icon: 'i-ph:device-mobile' },
@@ -321,17 +316,17 @@ export const Preview = memo(() => {
         }
 
         if (error.stack) {
-          if (IGNORE_ERRORS.some((text) => error.stack.includes(text))) {
-            return;
-          }
-
-          workbenchStore.actionAlert.set({
+          const alert = {
             type: 'preview',
             title,
             description,
             content: `Error occurred at ${error.pathname}${error.search || ''}${error.hash || ''}\nPort: ${error.port || ''}\n\nStack trace:\n${error.stack || ''}`,
             source: 'preview',
-          });
+          } satisfies ActionAlert;
+
+          if (!shouldIgnoreError(alert)) {
+            workbenchStore.alert.set(alert);
+          }
         }
       }
     };
