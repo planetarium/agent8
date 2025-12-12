@@ -15,23 +15,26 @@ export const IGNORED_ERROR_PATTERNS = {
 
     // Browser environment related (extensions, etc.)
     browser: [/Cannot redefine property: ethereum/, /chrome-extension:\/\//],
-
-    // Warning messages - don't break the app, actual errors will be caught later
-    warnings: [/^Warning:/],
   },
 
   // Add vite, build, terminal, etc. as needed
 } as const;
 
 /**
+ * Minimum length for error content to be considered valid
+ * Errors shorter than this are likely noise or incomplete messages
+ */
+const MIN_ERROR_CONTENT_LENGTH = 16;
+
+/**
+ * Executable file extensions that can appear in stack traces
+ */
+const EXECUTABLE_FILE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
+
+/**
  * Stack trace section extraction pattern
  */
 const STACK_TRACE_SECTION_PATTERN = /Stack trace:[\s\S]*/i;
-
-/**
- * Pattern to extract HTTP/HTTPS URLs from content
- */
-const HTTP_URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
 
 type ErrorType = keyof typeof IGNORED_ERROR_PATTERNS;
 
@@ -53,8 +56,9 @@ function getPatternsForType(type: ErrorType): RegExp[] {
 }
 
 /**
- * Gets the list of filenames from workbenchStore (including server.js which may be generated)
+ * Gets the list of executable filenames from workbenchStore (including server.js which may be generated)
  * Returns a Set of filenames (without path) for quick lookup
+ * Filters out non-executable files (.md, .json, .css, .svg, images, etc.) as they won't appear in stack traces
  */
 function getWorkbenchFileNames(): Set<string> {
   const files = workbenchStore.files.get();
@@ -64,65 +68,42 @@ function getWorkbenchFileNames(): Set<string> {
     const dirent = files[filePath];
 
     if (dirent?.type === 'file') {
-      // Extract just the filename from the path
       const fileName = filePath.split('/').pop();
 
       if (fileName) {
-        fileNames.add(fileName);
+        const hasExecutableExt = EXECUTABLE_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.')));
+
+        if (hasExecutableExt) {
+          fileNames.add(fileName);
+        }
       }
     }
   }
-
-  // Always include server.js as it may be dynamically generated
-  fileNames.add('server.js');
 
   return fileNames;
 }
 
 /**
  * Checks if stack trace contains any file from workbench
- * Returns true (should filter) if NO workbench files are found in stack trace
+ * Returns true if workbench files are found in stack trace, false otherwise
  */
-function hasUnknownFileInStackTrace(content: string): boolean {
-  const stackTrace = content.match(STACK_TRACE_SECTION_PATTERN)?.[0];
-
-  logger.warn('#### [ErrorFilter] hasUnknownFileInStackTrace called, stackTrace found:', !!stackTrace);
-
-  if (!stackTrace) {
-    return false;
-  }
-
+function hasWorkbenchFileInMessage(message: string): boolean {
   const workbenchFiles = getWorkbenchFileNames();
 
-  logger.warn('#### [ErrorFilter] Workbench files count:', workbenchFiles.size);
-  logger.warn('#### [ErrorFilter] Workbench files:\n', JSON.stringify(Array.from(workbenchFiles), null, 2));
-
   if (workbenchFiles.size === 0) {
-    logger.warn('#### [ErrorFilter] No workbench files found, returning false');
     return false;
   }
 
-  /**
-   * Build regex pattern from workbench filenames
-   * - Escape special regex characters and match filename in path context
-   * - Case-sensitive matching (no 'i' flag) to ensure exact filename match
-   * - Extension is included in filename for precise matching (e.g., EnemyManager.tsx)
-   */
   const escapedFileNames = Array.from(workbenchFiles).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const fileNamesPattern = new RegExp(`\\/(${escapedFileNames.join('|')})(?:[?:]|$)`);
+  const matchResult = message.match(fileNamesPattern);
 
-  const hasMatch = fileNamesPattern.test(stackTrace);
+  if (matchResult) {
+    logger.debug('[ErrorFilter] 🎯 Matched workbench file:', matchResult[1]);
+    return true;
+  }
 
-  logger.warn('#### [ErrorFilter] Stack trace file check:', {
-    pattern: fileNamesPattern.toString(),
-    hasMatchInStackTrace: hasMatch,
-    stackTracePreview: stackTrace.substring(0, 500),
-  });
-
-  logger.warn('#### [ErrorFilter] hasUnknownFileInStackTrace result:', !hasMatch);
-
-  // Return true if NO workbench files are found in stack trace
-  return !hasMatch;
+  return false;
 }
 
 /**
@@ -175,7 +156,7 @@ function extractUrlsFromObject(obj: unknown, urls: Set<string>): void {
     }
   } else {
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (typeof value === 'string' && (key === 'url' || key === 'src' || key === 'path')) {
+      if (key === 'url' && typeof value === 'string') {
         // Normalize URL for comparison (remove trailing slashes, etc.)
         urls.add(normalizeUrl(value));
       } else if (typeof value === 'object') {
@@ -189,132 +170,115 @@ function extractUrlsFromObject(obj: unknown, urls: Set<string>): void {
  * Normalizes a URL for comparison
  */
 function normalizeUrl(url: string): string {
-  try {
-    // Remove trailing slash and normalize
-    return url.replace(/\/+$/, '').toLowerCase();
-  } catch {
-    return url.toLowerCase();
-  }
+  return url.replace(/\/+$/, '').toLowerCase();
 }
 
 /**
- * Extracts HTTP/HTTPS URLs from content
+ * Checks if any HTTP URL in message matches assets.json URLs
+ * Returns true if matching URLs are found, false otherwise
  */
-function extractHttpUrls(content: string): string[] {
-  HTTP_URL_PATTERN.lastIndex = 0;
-
-  const urls: Set<string> = new Set();
-  let match;
-
-  while ((match = HTTP_URL_PATTERN.exec(content)) !== null) {
-    urls.add(normalizeUrl(match[0]));
-  }
-
-  return Array.from(urls);
-}
-
-/**
- * Checks if HTTP URLs in content don't match any assets.json URLs
- * Returns true if assets.json exists and ALL HTTP URLs are NOT in assets.json
- */
-function hasUnknownHttpUrl(content: string): boolean {
+function hasAssetsUrlInMessage(message: string): boolean {
   const assetsUrls = getAssetsJsonUrls();
 
-  logger.debug('#### [ErrorFilter] Assets.json URLs:', assetsUrls ? Array.from(assetsUrls) : 'No assets.json found');
-
-  // If no assets.json exists, don't filter based on URLs
   if (!assetsUrls) {
     return false;
   }
 
-  const httpUrls = extractHttpUrls(content);
+  // Create regex pattern from assets URLs (escape special chars)
+  const escapedUrls = Array.from(assetsUrls).map((url) => url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const assetsPattern = new RegExp(`(${escapedUrls.join('|')})`, 'i');
 
-  logger.debug('#### [ErrorFilter] HTTP URLs in error content:', httpUrls);
+  const matchResult = message.match(assetsPattern);
 
-  // If no HTTP URLs in content, don't filter
-  if (httpUrls.length === 0) {
-    return false;
+  if (matchResult) {
+    logger.debug('[ErrorFilter] 🎯 Matched asset URL:', matchResult[1]);
+    return true;
   }
 
-  /**
-   * Check if ALL URLs are unknown (not in assets.json)
-   * We use partial matching since assets.json may have base URLs
-   */
-  const allUnknown = httpUrls.every((url) => {
-    for (const assetUrl of assetsUrls) {
-      if (url.includes(assetUrl) || assetUrl.includes(url)) {
-        logger.debug('#### [ErrorFilter] URL match found:', { errorUrl: url, assetUrl });
-
-        return false; // Found a match
-      }
-    }
-
-    return true; // No match found
-  });
-
-  logger.debug('#### [ErrorFilter] HTTP URL check result:', { allUnknown, willFilter: allUnknown });
-
-  return allUnknown;
+  return false;
 }
 
 /**
  * Determines whether to ignore ActionAlert
+ * - Filters out very short content (less than MIN_ERROR_CONTENT_LENGTH characters)
  * - Only applies patterns matching alert.type
  * - Checks both content and description fields
  * - Undefined types are not filtered
- * - Filters errors with unknown files in stack trace (not in workbench)
- * - Filters errors with HTTP URLs not matching assets.json
+ * - For preview type: Shows errors with workbench files in stack trace
+ * - For preview type: Shows errors with assets.json URLs in stack trace
+ * - For preview type: Filters errors with unknown files/URLs (not in workbench or assets.json)
  */
-export function shouldIgnoreError(alert: ActionAlert | undefined): boolean {
-  if (!alert?.content) {
-    return true;
-  }
-
+export function shouldIgnoreError(alert: ActionAlert): boolean {
+  const description = alert.description;
   const content = alert.content;
-  const description = alert.description || '';
 
-  if (content.trim() === 'undefined' || content.trim().length < 16) {
+  if (content.trim().length < MIN_ERROR_CONTENT_LENGTH) {
     return true;
   }
 
-  logger.debug('#### [ErrorFilter] content:', content, 'description:', description);
+  logger.debug('[ErrorFilter] description:', description, 'content:', content);
 
-  /**
-   * Check if stack trace contains files from workbench (user code)
-   * - If workbench file found → user code error → DON'T filter (show to AI)
-   * - If NO workbench file found → external error → filter (ignore)
-   */
+  // check IGNORED_ERROR_PATTERNS for any type (preview, vite, build, etc.)
+  if (alert.type in IGNORED_ERROR_PATTERNS) {
+    const patterns = getPatternsForType(alert.type as ErrorType);
+    const isIgnoredPattern = patterns.some((pattern) => pattern.test(content) || pattern.test(description));
+
+    if (isIgnoredPattern) {
+      logger.debug('[ErrorFilter] ✅ Matched IGNORED_ERROR_PATTERNS, ignoring error');
+      return true;
+    }
+  }
+
+  // preview type, additionally check workbench files and assets URLs
   if (alert.type === 'preview') {
-    const isUnknownFile = hasUnknownFileInStackTrace(content);
+    const stackTraceMessage = content.match(STACK_TRACE_SECTION_PATTERN)?.[0];
 
-    if (!isUnknownFile) {
-      // Workbench file found in stack trace - this is user code error, show it
-      logger.debug('#### [ErrorFilter] ✅ Workbench file found in stack trace, showing error to AI');
+    if (!stackTraceMessage) {
+      logger.debug('[ErrorFilter] No stack trace message found, returning false');
       return false;
     }
 
-    // No workbench file found - check if it's related to assets.json URLs
-    const isUnknownUrl = hasUnknownHttpUrl(content);
-
-    if (isUnknownFile && !isUnknownUrl) {
-      // Unknown file but URL matches assets.json - could be asset loading error, show it
-      logger.debug('#### [ErrorFilter] ✅ Asset URL found, showing error to AI');
+    if (hasWorkbenchFileInMessage(stackTraceMessage)) {
+      logger.debug('[ErrorFilter] ✅ Workbench file found in stack trace, showing error to AI');
       return false;
     }
 
-    // Unknown file AND unknown URL - external error, filter it
-    logger.warn('#### 🔄 External error detected (no workbench file, no asset URL):', content);
+    if (hasAssetsUrlInMessage(stackTraceMessage)) {
+      logger.debug('[ErrorFilter] ✅ Asset URL found, showing error to AI');
+      return false;
+    }
 
     return true;
   }
 
-  // If no patterns for the type, do not filter
-  if (!(alert.type in IGNORED_ERROR_PATTERNS)) {
-    return false;
-  }
+  return false;
+}
 
-  const patterns = getPatternsForType(alert.type as ErrorType);
+/**
+ * Debug utilities - Only available in development mode
+ * Usage in browser console: __debugWorkbench.getFileNames()
+ */
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).__debugWorkbench = {
+    getFileNames: () => {
+      const files = getWorkbenchFileNames();
+      console.log('📁 Workbench Files Count:', files.size);
+      console.log('📁 Workbench Files:', Array.from(files));
 
-  // Check patterns against both content and description (Warning messages are in description)
-  return patterns.some((pattern) => pattern.test(content) || pattern.test(description));
+      return Array.from(files);
+    },
+    getFilesDetail: () => {
+      const files = workbenchStore.files.get();
+      console.log('📂 Workbench Files Detail:', files);
+
+      return files;
+    },
+    getAssetsUrls: () => {
+      const urls = getAssetsJsonUrls();
+      console.log('🔗 Assets.json URLs:', urls ? Array.from(urls) : 'No assets.json found');
+
+      return urls ? Array.from(urls) : null;
+    },
+  };
+  console.log('🛠️ Debug tools loaded: Use __debugWorkbench in console');
 }
