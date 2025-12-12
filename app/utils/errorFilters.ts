@@ -8,7 +8,7 @@ import { WORK_DIR } from '~/utils/constants';
  * - Only patterns matching each error type (preview, vite, build, etc.) are applied
  * - When adding a new type, add pattern array with corresponding key
  */
-export const IGNORED_ERROR_PATTERNS = {
+const IGNORED_ERROR_PATTERNS = {
   preview: {
     // Development environment related (HMR, resource loading, etc.)
     development: [/HMRClient/, /Couldn't load texture blob/, /null pointer passed to rust/, /Failed to load animation/],
@@ -29,7 +29,7 @@ const MIN_ERROR_CONTENT_LENGTH = 16;
 /**
  * Executable file extensions that can appear in stack traces
  */
-const EXECUTABLE_FILE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
+const STACK_TRACE_FILE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json']);
 
 /**
  * Stack trace section extraction pattern
@@ -71,7 +71,7 @@ function getWorkbenchFileNames(): Set<string> {
       const fileName = filePath.split('/').pop();
 
       if (fileName) {
-        const hasExecutableExt = EXECUTABLE_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.')));
+        const hasExecutableExt = STACK_TRACE_FILE_EXTENSIONS.has(fileName.slice(fileName.lastIndexOf('.')));
 
         if (hasExecutableExt) {
           fileNames.add(fileName);
