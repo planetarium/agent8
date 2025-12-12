@@ -253,32 +253,3 @@ export function shouldIgnoreError(alert: ActionAlert): boolean {
 
   return false;
 }
-
-/**
- * Debug utilities - Only available in development mode
- * Usage in browser console: __debugWorkbench.getFileNames()
- */
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  (window as any).__debugWorkbench = {
-    getFileNames: () => {
-      const files = getWorkbenchFileNames();
-      console.log('📁 Workbench Files Count:', files.size);
-      console.log('📁 Workbench Files:', Array.from(files));
-
-      return Array.from(files);
-    },
-    getFilesDetail: () => {
-      const files = workbenchStore.files.get();
-      console.log('📂 Workbench Files Detail:', files);
-
-      return files;
-    },
-    getAssetsUrls: () => {
-      const urls = getAssetsJsonUrls();
-      console.log('🔗 Assets.json URLs:', urls ? Array.from(urls) : 'No assets.json found');
-
-      return urls ? Array.from(urls) : null;
-    },
-  };
-  console.log('🛠️ Debug tools loaded: Use __debugWorkbench in console');
-}
