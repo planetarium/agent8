@@ -165,7 +165,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       'flex self-stretch',
                       isUserMessage
                         ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
-                        : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3',
+                        : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3 animate-text-fade',
                     )}
                   >
                     <div className="grid grid-col-1 w-full">

@@ -340,3 +340,31 @@
 .animate-text-accent-wave {
   animation: textAccentWave 2s ease-in-out infinite;
 }
+
+/* Fade-in animation for new messages */
+@keyframes textFade {
+  0% {
+    opacity: 0;
+    filter: blur(1.2px);
+  }
+  65% {
+    opacity: 1;
+    filter: blur(0.25px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.animate-text-fade {
+  animation: textFade 420ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-text-fade {
+    animation: none;
+    opacity: 1;
+    filter: none;
+  }
+}
