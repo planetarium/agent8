@@ -324,8 +324,8 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   logger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
-  const [terminalReady, setTerminalReady] = useState(false);
-  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState(false);
+  const [terminalReady, setTerminalReady] = useState<boolean>(false);
+  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState<boolean>(false);
 
   const connectionState = useWorkbenchConnectionState();
 
@@ -457,7 +457,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
       >
         {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
           <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
-            <div className="absolute inset-0 px-2 lg:px-6">
+            <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
@@ -495,7 +495,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
         {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
           <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
-            <div className="absolute inset-0 px-2 lg:px-6">
+            <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
@@ -519,7 +519,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             },
           )}
         >
-          <div className="absolute inset-0 px-2 lg:px-6">
+          <div className="absolute inset-0 pr-7">
             <div className="h-full flex flex-col bg-transperant-subtle border border-tertiary shadow-sm rounded-lg overflow-hidden">
               <div className="flex items-center px-3 py-2 border-b border-tertiary">
                 <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />

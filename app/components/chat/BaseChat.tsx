@@ -3,6 +3,8 @@ import React, { type RefCallback, useCallback, useEffect, useState } from 'react
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import { ResizeHandle } from '~/components/ui/ResizeHandle';
+import { useWorkbenchShowWorkbench } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -156,6 +158,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false);
 
     const isMobileView = useMobileView();
+    const showWorkbench = useWorkbenchShowWorkbench();
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
@@ -244,9 +247,18 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         return;
       }
 
+      let scrollTimeout: NodeJS.Timeout;
+
       const handleScroll = () => {
         const atBottom = isScrollAtBottom(scrollElement);
         setAutoScrollEnabled(atBottom);
+
+        // Show scrollbar while scrolling
+        scrollElement.classList.add('scrolling');
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          scrollElement.classList.remove('scrolling');
+        }, 500);
       };
 
       scrollElement.addEventListener('scroll', handleScroll);
@@ -254,6 +266,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       // eslint-disable-next-line consistent-return
       return () => {
         scrollElement.removeEventListener('scroll', handleScroll);
+        clearTimeout(scrollTimeout);
       };
     }, [scrollElement, isScrollAtBottom]);
 
@@ -589,14 +602,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 scrollRef(node);
               }
             }}
-            className={classNames(
-              styles.Chat,
-              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] h-full chat-container',
-              {
-                'overflow-y-auto': chatStarted,
-                [styles.chatStarted]: chatStarted,
-              },
-            )}
+            className={classNames(styles.Chat, 'flex flex-col flex-shrink-0 h-full chat-container', {
+              'lg:w-[var(--chat-width)]': chatStarted,
+              'w-full': !chatStarted,
+              'overflow-y-auto': chatStarted,
+              [styles.chatStarted]: chatStarted,
+            })}
           >
             {!chatStarted && (
               <MainBackground zIndex={1} isMobileView={isMobileView} opacity={0.8} chatStarted={chatStarted} />
@@ -806,7 +817,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
 
             <div
-              className={classNames('pt-0 tablet:pt-4 tablet:px-6 relative', {
+              className={classNames('pt-0 tablet:pt-4 tablet:pl-6 tablet:pr-0 relative', {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -815,7 +826,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   return chatStarted ? (
                     <Messages
                       ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
+                      className="flex flex-col w-full flex-1 max-w-chat pb-4 pr-4 mx-auto z-1"
                       messages={messages}
                       annotations={data}
                       isStreaming={isStreaming}
@@ -839,7 +850,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 className={classNames(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
                   {
-                    'sticky bottom-4': chatStarted,
+                    'sticky bottom-4 pr-4': chatStarted,
                     'tablet:max-w-chat': chatStarted,
                     'tablet:max-w-chat-before-start': !chatStarted,
                     'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
@@ -890,9 +901,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     !chatStarted
                       ? {
                           borderRadius: 'var(--border-radius-16, 16px)',
-                          boxShadow: isMobileView
-                            ? '0 1px 4px 1px rgba(26, 220, 217, 0.12), 0 2px 20px 4px rgba(148, 250, 239, 0.16)'
-                            : '0 2px 8px 2px rgba(26, 220, 217, 0.12), 0 8px 56px 8px rgba(148, 250, 239, 0.16)',
+                          boxShadow: '0 2px 4px 0 rgba(26, 220, 217, 0.08), 0 2px 24px 4px rgba(148, 250, 239, 0.12)',
                         }
                       : {}
                   }
@@ -1160,6 +1169,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </motion.div>
             )}
           </div>
+          {showWorkbench && !isMobileView && <ResizeHandle minChatWidth={380} minWorkbenchWidth={768} />}
           <ClientOnly>
             {() => (
               <Workbench
