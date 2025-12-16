@@ -363,7 +363,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const diffEnabled = useWorkbenchDiffEnabled();
   const workbench = useWorkbenchStore();
 
-  const isSmallViewport = useViewport(1024);
+  const isSmallViewport = useViewport(1003);
 
   const filteredSliderOptions = useMemo(() => {
     return sliderOptions.filter((option) => {
@@ -451,7 +451,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         variants={workbenchVariants}
         className="z-workbench"
       >
-        {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
+        {showWorkbench && !isSmallViewport && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
           <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
@@ -489,7 +489,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           </div>
         )}
 
-        {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
+        {showWorkbench && !isSmallViewport && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
           <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
             <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
@@ -508,20 +508,15 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           className={classNames(
             'fixed top-[calc(var(--header-height)+0.5rem)] bottom-4.5 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]',
             {
-              'w-full !top-[calc(var(--header-height))] !bottom-58': isSmallViewport,
-              'left-0': showWorkbench && isSmallViewport,
-              'left-[var(--workbench-left)]': showWorkbench,
-              'left-[100%]': !showWorkbench,
+              // On mobile (isSmallViewport), hide UI but keep running in background
+              'left-[100%] pointer-events-none': isSmallViewport,
+              'left-[var(--workbench-left)]': showWorkbench && !isSmallViewport,
+              'left-[100%]': !showWorkbench && !isSmallViewport,
             },
           )}
         >
           <div className="absolute inset-0 pr-7">
-            <div
-              className={classNames(
-                'h-full flex flex-col border border-tertiary shadow-sm rounded-lg overflow-hidden p-4',
-                isSmallViewport ? 'bg-primary' : 'bg-transperant-subtle',
-              )}
-            >
+            <div className="h-full flex flex-col border border-tertiary shadow-sm rounded-lg overflow-hidden p-4 bg-transperant-subtle">
               <div className="flex items-center">
                 <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
 

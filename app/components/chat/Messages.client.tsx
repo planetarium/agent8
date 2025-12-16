@@ -162,77 +162,88 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
               return (
                 <Fragment key={index}>
-                  <div
-                    className={classNames(
-                      'flex self-stretch',
-                      isUserMessage
-                        ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
-                        : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3 animate-text-fade',
-                    )}
-                  >
-                    <div className="grid grid-col-1 w-full">
-                      {isUserMessage ? (
-                        <UserMessage content={messageText} />
-                      ) : (
-                        <AssistantMessage
-                          content={messageText}
-                          annotations={annotations}
-                          metadata={messageMetadata}
-                          expanded={expandedMessages.has(index)}
-                        />
-                      )}
-                    </div>
-
-                    {/* Response status indicator for AI messages */}
-                    {!isUserMessage && (
-                      <div
-                        className={classNames(
-                          'flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
-                          { 'border-t border-tertiary': messageText.trim() !== '' },
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          {isLast && isGenerating ? (
-                            <>
-                              <div style={{ width: '24px', height: '24px' }}>
-                                <Lottie animationData={loadingAnimationData} loop={true} />
-                              </div>
-                              <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
-                            </>
-                          ) : isLast ? (
-                            <span
-                              className="text-heading-xs"
-                              style={{
-                                background:
-                                  'linear-gradient(90deg, var(--color-text-accent-subtle-gradient-start, #72E7F8) 0%, var(--color-text-accent-subtle-gradient-end, #FFD876) 100%)',
-                                backgroundClip: 'text',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                              }}
-                            >
-                              Response Generated
-                            </span>
-                          ) : (
-                            <span className="text-heading-xs text-subtle">Response Generated</span>
-                          )}
+                  {!isUserMessage && messageText.trim() === '' && isLast && isGenerating ? (
+                    <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+                      <div className="flex items-center gap-3">
+                        <div style={{ width: '24px', height: '24px' }}>
+                          <Lottie animationData={loadingAnimationData} loop={true} />
                         </div>
-                        {!(isLast && isGenerating) && (
-                          <button
-                            onClick={() => toggleExpanded(index)}
-                            className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
-                          >
-                            {expandedMessages.has(index) ? 'Hide' : 'Show All'}
-                            <ChevronRightIcon
-                              width={16}
-                              height={16}
-                              fill="currentColor"
-                              className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
-                            />
-                          </button>
+                        <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={classNames(
+                        'flex self-stretch',
+                        isUserMessage
+                          ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
+                          : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3 animate-text-fade',
+                      )}
+                    >
+                      <div className="grid grid-col-1 w-full">
+                        {isUserMessage ? (
+                          <UserMessage content={messageText} />
+                        ) : (
+                          <AssistantMessage
+                            content={messageText}
+                            annotations={annotations}
+                            metadata={messageMetadata}
+                            expanded={expandedMessages.has(index)}
+                          />
                         )}
                       </div>
-                    )}
-                  </div>
+
+                      {/* Response status indicator for AI messages */}
+                      {!isUserMessage && (
+                        <div
+                          className={classNames(
+                            'flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
+                            { 'border-t border-tertiary': messageText.trim() !== '' },
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isLast && isGenerating ? (
+                              <>
+                                <div style={{ width: '24px', height: '24px' }}>
+                                  <Lottie animationData={loadingAnimationData} loop={true} />
+                                </div>
+                                <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                              </>
+                            ) : isLast ? (
+                              <span
+                                className="text-heading-xs"
+                                style={{
+                                  background:
+                                    'linear-gradient(90deg, var(--color-text-accent-subtle-gradient-start, #72E7F8) 0%, var(--color-text-accent-subtle-gradient-end, #FFD876) 100%)',
+                                  backgroundClip: 'text',
+                                  WebkitBackgroundClip: 'text',
+                                  WebkitTextFillColor: 'transparent',
+                                }}
+                              >
+                                Response Generated
+                              </span>
+                            ) : (
+                              <span className="text-heading-xs text-subtle">Response Generated</span>
+                            )}
+                          </div>
+                          {!(isLast && isGenerating) && (
+                            <button
+                              onClick={() => toggleExpanded(index)}
+                              className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
+                            >
+                              {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                              <ChevronRightIcon
+                                width={16}
+                                height={16}
+                                fill="currentColor"
+                                className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                              />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">

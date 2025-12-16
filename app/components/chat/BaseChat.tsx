@@ -15,6 +15,7 @@ import { handleChatError } from '~/utils/errorNotification';
 import { motion } from 'framer-motion';
 
 import { useMobileView } from '~/lib/hooks/useMobileView';
+import useViewport from '~/lib/hooks';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
@@ -159,6 +160,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     const isMobileView = useMobileView();
     const showWorkbench = useWorkbenchShowWorkbench();
+    const isSmallViewport = useViewport(1003); // Same breakpoint as Workbench
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
@@ -603,8 +605,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               }
             }}
             className={classNames(styles.Chat, 'flex flex-col flex-shrink-0 h-full chat-container', {
-              'lg:w-[var(--chat-width)]': chatStarted,
-              'w-full': !chatStarted,
+              'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
+              'w-full': !chatStarted || isSmallViewport,
               'overflow-y-auto': chatStarted,
               [styles.chatStarted]: chatStarted,
             })}
@@ -1169,7 +1171,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </motion.div>
             )}
           </div>
-          {showWorkbench && !isMobileView && <ResizeHandle minChatWidth={426} minWorkbenchWidth={768} />}
+          {showWorkbench && !isSmallViewport && <ResizeHandle minChatWidth={426} minWorkbenchWidth={747} />}
           <ClientOnly>
             {() => (
               <Workbench
