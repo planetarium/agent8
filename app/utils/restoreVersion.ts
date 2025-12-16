@@ -73,7 +73,7 @@ export async function restoreVersion({
     triggerRestoreEvent(commitHash, commitTitle);
 
     toast.dismiss(toastId);
-    toast.success('Version restored successfully');
+    toast.success('Restored — now viewing this version.');
 
     onSuccess?.();
 

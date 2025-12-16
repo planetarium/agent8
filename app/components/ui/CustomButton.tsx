@@ -7,12 +7,12 @@ interface CustomButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
     | 'primary'
     | 'secondary'
     | 'primary-text'
-    | 'secondary-text'
     | 'primary-ghost'
-    | 'secondary-ghost'
     | 'primary-filled'
-    | 'secondary-outlined'
     | 'primary-gradient'
+    | 'secondary-text'
+    | 'secondary-outlined'
+    | 'secondary-ghost'
     | 'destructive-filled';
   size?: 'sm' | 'md' | 'lg';
   asChild?: boolean;
@@ -37,7 +37,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       'primary-filled':
         "rounded-[4px] border border-interactive-neutral bg-[var(--color-bg-interactive-primary,#1a92a4)] text-interactive-on-primary hover:bg-[var(--color-bg-interactive-primary-hovered,#1a7583)] hover:border-[var(--color-border-interactive-neutral-hovered,rgba(255,255,255,0.22))] active:bg-[var(--color-bg-interactive-primary-pressed,#1b5862)] active:border-[var(--color-border-interactive-neutral-pressed,rgba(255,255,255,0.35))] focus-visible:bg-[var(--color-bg-interactive-primary,#1a92a4)] focus-visible:border-interactive-neutral focus-visible:before:absolute focus-visible:before:-right-[3px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
       'secondary-outlined':
-        'text-interactive-neutral border border-interactive-neutral hover:border-interactive-neutral-hovered hover:text-interactive-neutral-hovered active:border-interactive-neutral-pressed active:text-interactive-neutral-pressed focus-visible:bg-transparent focus-visible:border-interactive',
+        "text-interactive-neutral border border-interactive-neutral hover:border-interactive-neutral-hovered hover:text-interactive-neutral-hovered active:border-interactive-neutral-pressed active:text-interactive-neutral-pressed focus-visible:bg-transparent focus-visible:border-interactive bg-transparent focus-visible:before:absolute focus-visible:before:-right-[3px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
       'primary-gradient':
         "text-interactive-on-primary rounded-[4px] border border-interactive-neutral bg-gradient-to-r from-[#111315] to-[#11B9D2] bg-clip-padding hover:border-interactive-neutral-hovered hover:from-[#010305] hover:to-[#01A9C2] active:border-interactive-neutral-pressed active:from-[#111315] active:to-[#11B9D2] hover:text-interactive-on-primary-hovered active:text-interactive-on-primary-pressed focus-visible:before:absolute focus-visible:before:-right-[3px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
       'secondary-text':

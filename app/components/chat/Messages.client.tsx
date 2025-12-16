@@ -183,7 +183,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
                     {/* Response status indicator for AI messages */}
                     {!isUserMessage && (
-                      <div className="flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary border-t border-tertiary rounded-b-[23px] rounded-bl-none">
+                      <div
+                        className={classNames(
+                          'flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
+                          { 'border-t border-tertiary': messageText.trim() !== '' },
+                        )}
+                      >
                         <div className="flex items-center gap-3">
                           {isLast && isGenerating ? (
                             <>

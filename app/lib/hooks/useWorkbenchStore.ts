@@ -76,6 +76,10 @@ export function useWorkbenchConnectionState() {
   return useStore(workbenchStore.connectionState);
 }
 
+export function useWorkbenchIsRunningPreview() {
+  return useStore(workbenchStore.isRunningPreview);
+}
+
 export function useWorkbenchContainer() {
   useStore(reinitCounterAtom);
   return useStore(workbenchStore.containerAtom);

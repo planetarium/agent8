@@ -321,7 +321,7 @@ export function HeaderCommitHistoryButton() {
       toast.dismiss(toastId);
 
       if (forkedProject && forkedProject.success) {
-        toast.success('Forked project successfully');
+        toast.success('Fork created — now in your copy.');
         window.location.href = '/chat/' + forkedProject.project.path;
       } else {
         handleChatError('Failed to fork project', {

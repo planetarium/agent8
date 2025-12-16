@@ -93,7 +93,7 @@ export class WorkbenchStore {
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
-  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
+  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('preview');
   unsavedFiles: WritableAtom<Set<string>> = atom(
     ensureUnsavedFilesSet(import.meta.hot?.data.unsavedFiles?.get?.() ?? import.meta.hot?.data.unsavedFiles),
   );
@@ -104,6 +104,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -844,10 +845,6 @@ export class WorkbenchStore {
         this.setSelectedFile(fullPath);
       }
 
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
-      }
-
       const doc = this.#editorStore.documents.get()[fullPath];
 
       if (!doc) {
@@ -867,10 +864,6 @@ export class WorkbenchStore {
 
       if (this.selectedFile.value !== fullPath) {
         this.setSelectedFile(fullPath);
-      }
-
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
       }
 
       await artifact.runner.runAction(data);
@@ -1185,7 +1178,7 @@ export class WorkbenchStore {
   }
 
   async runPreview() {
-    this.currentView.set('code');
+    this.isRunningPreview.set(true);
 
     const shell = this.boltTerminal;
     await shell.ready;

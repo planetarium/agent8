@@ -57,7 +57,7 @@ const sliderOptions = [
   },
   {
     value: 'resource' as WorkbenchViewType,
-    text: 'Resources',
+    text: 'Resource',
   },
   {
     value: 'code' as WorkbenchViewType,
@@ -415,10 +415,6 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     }
   }, [connectionState, terminalReady]);
 
-  const onRun = useCallback(async () => {
-    await workbench.runPreview();
-  }, [workbench]);
-
   const onEditorChange = useCallback<OnEditorChange>(
     (update) => {
       workbench.setDocumentContentByPath(update.filePath, update.content);
@@ -456,7 +452,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         className="z-workbench"
       >
         {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
-          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
@@ -510,7 +506,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
         <div
           className={classNames(
-            'fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]',
+            'fixed top-[calc(var(--header-height)+0.5rem)] bottom-4.5 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]',
             {
               'w-full !top-[calc(var(--header-height))] !bottom-58': isSmallViewport,
               'left-0': showWorkbench && isSmallViewport,
@@ -520,29 +516,14 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           )}
         >
           <div className="absolute inset-0 pr-7">
-            <div className="h-full flex flex-col bg-transperant-subtle border border-tertiary shadow-sm rounded-lg overflow-hidden">
-              <div className="flex items-center px-3 py-2 border-b border-tertiary">
+            <div className="h-full flex flex-col bg-transperant-subtle border border-tertiary shadow-sm rounded-lg overflow-hidden p-4">
+              <div className="flex items-center">
                 <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
-                <button
-                  onClick={() => {
-                    onRun();
-                  }}
-                  disabled={connectionState !== 'connected'}
-                  className={classNames(
-                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
-                    {
-                      'opacity-50 cursor-not-allowed': connectionState !== 'connected',
-                    },
-                  )}
-                >
-                  <div className="i-ph:play" />
-                  <span>Run Preview</span>
-                </button>
-                <div className="ml-auto" />
 
                 {selectedView === 'diff' && (
-                  <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+                  <div className="ml-auto">
+                    <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+                  </div>
                 )}
               </div>
               <div className="relative flex-1 overflow-hidden">
@@ -594,7 +575,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
                   animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
                 >
-                  <Preview />
+                  <Preview isStreaming={isStreaming} />
                 </View>
               </div>
             </div>

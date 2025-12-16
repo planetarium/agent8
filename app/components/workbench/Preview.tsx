@@ -1,9 +1,20 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import Lottie from 'lottie-react';
 import { IconButton } from '~/components/ui/IconButton';
-import { useWorkbenchPreviews, useWorkbenchCurrentView } from '~/lib/hooks/useWorkbenchStore';
+import {
+  useWorkbenchPreviews,
+  useWorkbenchCurrentView,
+  useWorkbenchConnectionState,
+  useWorkbenchIsRunningPreview,
+} from '~/lib/hooks/useWorkbenchStore';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { PortDropdown } from './PortDropdown';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import type { ActionAlert } from '~/types/actions';
+import CustomButton from '~/components/ui/CustomButton';
+import { PlayIcon, RightLineIcon } from '~/components/ui/Icons';
+import { loadingAnimationData } from '~/utils/animationData';
+import { sendMessageToParent } from '~/utils/postMessage';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -31,7 +42,11 @@ const WINDOW_SIZES: WindowSize[] = [
   { name: 'Nest Hub Max', width: 1280, height: 800, icon: 'i-ph:monitor' },
 ];
 
-export const Preview = memo(() => {
+interface PreviewProps {
+  isStreaming?: boolean;
+}
+
+export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +58,20 @@ export const Preview = memo(() => {
   const hasSelectedPreview = useRef(false);
   const previews = useWorkbenchPreviews();
   const selectedView = useWorkbenchCurrentView();
+  const connectionState = useWorkbenchConnectionState();
+  const isRunningPreview = useWorkbenchIsRunningPreview();
   const activePreview = previews[activePreviewIndex];
+
+  const onRun = useCallback(async () => {
+    await workbenchStore.runPreview();
+  }, []);
+
+  // Reset loading state when preview becomes available
+  useEffect(() => {
+    if (activePreview) {
+      workbenchStore.isRunningPreview.set(false);
+    }
+  }, [activePreview]);
 
   const [url, setUrl] = useState('');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
@@ -392,7 +420,7 @@ export const Preview = memo(() => {
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
-      <div className="p-2 flex items-center gap-2">
+      <div className="px-4 py-3 flex items-center gap-2">
         <div className="flex items-center gap-2">
           <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
         </div>
@@ -500,10 +528,21 @@ export const Preview = memo(() => {
             onClick={() => openInNewWindow(isDeviceModeOn ? selectedDeviceSize : WINDOW_SIZES[0])}
             title={`Open Preview in New Window`}
           />
+
+          <CustomButton
+            className="ml-2"
+            variant="secondary-outlined"
+            size="md"
+            onClick={onRun}
+            disabled={connectionState !== 'connected'}
+          >
+            <PlayIcon color="currentColor" size={20} />
+            Run Preview
+          </CustomButton>
         </div>
       </div>
 
-      <div className="flex-1 border-t border-bolt-elements-borderColor flex justify-center items-center overflow-auto preview-container">
+      <div className="flex-1 flex justify-center items-center overflow-hidden rounded-2xl preview-container">
         <div
           style={{
             width: isDeviceModeOn ? `${selectedDeviceSize.width}px` : '100%',
@@ -560,6 +599,30 @@ export const Preview = memo(() => {
                 sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin allow-pointer-lock allow-downloads"
               />
             </>
+          ) : isStreaming || isRunningPreview ? (
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex-1 flex flex-col justify-center items-center gap-4">
+                <div style={{ width: '80px', height: '80px' }}>
+                  <Lottie animationData={loadingAnimationData} loop={true} />
+                </div>
+                <span className="text-sm text-bolt-elements-textSecondary animate-pulse">Preparing preview...</span>
+              </div>
+              <div className="flex py-5 justify-center items-center gap-3">
+                <span className="text-body-md-regular text-subtle">
+                  We&apos;ll play a sound when it&apos;s done. Want to play some Verse8 games while you wait?
+                </span>
+                <CustomButton
+                  variant="secondary-outlined"
+                  size="md"
+                  onClick={() => {
+                    sendMessageToParent({ type: 'navigate', path: '/explore' });
+                  }}
+                >
+                  Play Games
+                  <RightLineIcon color="currentColor" size={20} />
+                </CustomButton>
+              </div>
+            </div>
           ) : (
             <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
               No preview available

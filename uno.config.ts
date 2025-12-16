@@ -198,6 +198,7 @@ export default defineConfig({
     'bg-interactive-primary': 'bg-[var(--color-bg-interactive-primary,#1a92a4)]',
     'hover:bg-interactive-primary-hovered': 'hover:bg-[var(--color-bg-interactive-primary-hovered,#1a7583)]',
     'active:bg-interactive-primary-pressed': 'active:bg-[var(--color-bg-interactive-primary-pressed,#1b5862)]',
+    'border-interactive-primary': 'border-[var(--color-border-interactive-primary,#1A92A4)]',
     'rounded-radius-4': 'rounded-[var(--border-radius-4)]',
     'rounded-radius-8': 'rounded-[var(--border-radius-8)]',
     'border-width-1': 'border-[var(--border-width-1)]',

@@ -1019,7 +1019,6 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
-      workbench.currentView.set('code');
 
       if (attachmentList.length > 0) {
         const imageAttachments = attachmentList.filter((item) =>
@@ -1540,7 +1539,7 @@ export const ChatImpl = memo(
         toast.dismiss(toastId);
 
         if (forkedProject && forkedProject.success) {
-          toast.success('Forked project successfully');
+          toast.success('Fork created — now in your copy.');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
           reportError('Failed to fork project', startTime, {

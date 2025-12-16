@@ -1169,7 +1169,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </motion.div>
             )}
           </div>
-          {showWorkbench && !isMobileView && <ResizeHandle minChatWidth={380} minWorkbenchWidth={768} />}
+          {showWorkbench && !isMobileView && <ResizeHandle minChatWidth={426} minWorkbenchWidth={768} />}
           <ClientOnly>
             {() => (
               <Workbench
