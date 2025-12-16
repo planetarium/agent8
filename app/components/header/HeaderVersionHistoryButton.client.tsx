@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 
 import { repoStore } from '~/lib/stores/repo';
 import { getVersionHistory, deleteVersion } from '~/lib/persistenceGitbase/api.client';
@@ -214,10 +215,26 @@ export function HeaderVersionHistoryButton() {
 
   return (
     <>
-      <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
-        <StarLineIcon size={20} />
-        Version History
-      </CustomButton>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
+            <StarLineIcon size={20} />
+            Version History
+          </CustomButton>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+            sideOffset={5}
+            side="bottom"
+            align="end"
+            alignOffset={0}
+          >
+            View versions to compare or restore
+            <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
 
       {isOpen &&
         createPortal(
