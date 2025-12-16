@@ -121,6 +121,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
+              const isFirstAssistantMessage =
+                !isUserMessage && messages.slice(0, index).filter((m) => m.role === 'assistant').length === 0;
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
@@ -235,26 +237,29 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        <Tooltip.Root delayDuration={100}>
-                          <Tooltip.Trigger asChild>
-                            <CustomIconButton
-                              variant="secondary-transparent"
-                              size="sm"
-                              icon={<DiffIcon size={20} />}
-                              onClick={() => onViewDiff?.(message)}
-                              disabled={isGenerating}
-                            />
-                          </Tooltip.Trigger>
-                          <Tooltip.Portal>
-                            <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-                              side="bottom"
-                            >
-                              View diff
-                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                            </Tooltip.Content>
-                          </Tooltip.Portal>
-                        </Tooltip.Root>
+                        {/* Hide View Diff button for the first AI response */}
+                        {!isFirstAssistantMessage && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<DiffIcon size={20} />}
+                                onClick={() => onViewDiff?.(message)}
+                                disabled={isGenerating}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                side="bottom"
+                              >
+                                View diff
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
                             <CustomIconButton
@@ -312,7 +317,11 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             const commitHash = messageId.split('-').pop() as string;
                             const savedTitle = savedVersions?.get(commitHash);
 
-                            return savedTitle ? (
+                            /*
+                             * If saved version exists and not the last message, show Restore button
+                             * If last message, it's the current version so no need to restore
+                             */
+                            return savedTitle && !isLast ? (
                               <CustomButton
                                 variant="primary-text"
                                 size="sm"
@@ -320,7 +329,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               >
                                 Restore
                               </CustomButton>
-                            ) : (
+                            ) : !savedTitle ? (
                               <CustomButton
                                 variant="secondary-text"
                                 size="sm"
@@ -330,7 +339,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 <StarLineIcon size={20} />
                                 Save
                               </CustomButton>
-                            );
+                            ) : null;
                           })()}
                         {isLast && (
                           <Tooltip.Root delayDuration={100}>
@@ -362,6 +371,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               );
             })
           : null}
+
+        {/* Show loading animation when streaming starts and no AI response yet */}
+        {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
+          <div className="flex flex-col w-full h-full justify-center items-center gap-4 py-16">
+            <div style={{ width: '80px', height: '80px' }}>
+              <Lottie animationData={loadingAnimationData} loop={true} />
+            </div>
+          </div>
+        )}
       </div>
     );
   },
