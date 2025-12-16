@@ -1,74 +1,89 @@
-import { useEditChatDescription } from '~/lib/hooks';
+import { useState } from 'react';
+import { toast } from 'react-toastify';
+import { useStore } from '@nanostores/react';
 import { repoStore } from '~/lib/stores/repo';
-import { EditIcon, CheckIcon } from '~/components/ui/Icons';
+import { EditIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { RenameChatModal } from '~/components/ui/RenameChatModal';
+import { updateProjectDescription } from '~/lib/persistenceGitbase/api.client';
 
 export function ChatDescription() {
-  const initialDescription = repoStore.get().title;
+  const repo = useStore(repoStore);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  const { editing, handleChange, handleSubmit, currentDescription, toggleEditMode } = useEditChatDescription({
-    initialDescription,
-  });
-
-  if (!initialDescription) {
+  if (!repo.title) {
     // doing this to prevent showing edit button until chat description is set
     return null;
   }
 
+  const handleRename = async (newName: string) => {
+    if (newName === repo.title) {
+      setIsModalOpen(false);
+      return;
+    }
+
+    // Validate name
+    const lengthValid = newName.length > 0 && newName.length <= 100;
+    const characterValid = /^[\p{L}\p{M}a-zA-Z0-9 \-_.!?'"():]+$/u.test(newName);
+
+    if (!lengthValid) {
+      toast.error('Name must be between 1 and 100 characters.');
+      return;
+    }
+
+    if (!characterValid) {
+      toast.error('Name can only contain letters, numbers, spaces, and basic punctuation.');
+      return;
+    }
+
+    try {
+      await updateProjectDescription(repo.path, newName);
+
+      repoStore.set({
+        ...repo,
+        title: newName,
+      });
+
+      toast.success('Title updated successfully');
+      setIsModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to update title: ' + (error as Error).message);
+    }
+  };
+
   return (
     <div className="flex items-center justify-center pt-3 pb-2">
-      {editing ? (
-        <form onSubmit={handleSubmit} className="flex items-center justify-center">
-          <input
-            type="text"
-            className="bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary rounded px-2 mr-2 w-fit"
-            autoFocus
-            value={currentDescription}
-            onChange={handleChange}
-            style={{ width: `${Math.min(Math.max(currentDescription.length * 8, 100), 200)}px` }}
-          />
-          <Tooltip.Root delayDuration={100}>
-            <Tooltip.Trigger asChild>
-              <CustomIconButton icon={<CheckIcon size={22} />} variant="secondary-outlined" size="md" type="submit" />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-                sideOffset={5}
-                side="bottom"
-              >
-                Save title
-                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </form>
-      ) : (
-        <div className="flex items-center gap-3">
-          <span className="max-w-[150px] truncate">{currentDescription}</span>
-          <Tooltip.Root delayDuration={100}>
-            <Tooltip.Trigger asChild>
-              <CustomIconButton
-                icon={<EditIcon size={22} />}
-                variant="secondary-outlined"
-                size="md"
-                onClick={toggleEditMode}
-              />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-                sideOffset={5}
-                side="bottom"
-              >
-                Rename chat
-                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        <span className="max-w-[150px] truncate">{repo.title}</span>
+        <Tooltip.Root delayDuration={100}>
+          <Tooltip.Trigger asChild>
+            <CustomIconButton
+              icon={<EditIcon size={22} />}
+              variant="secondary-outlined"
+              size="md"
+              onClick={() => setIsModalOpen(true)}
+            />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+              sideOffset={5}
+              side="bottom"
+            >
+              Edit Title
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </div>
+
+      <RenameChatModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleRename}
+        currentName={repo.title}
+      />
     </div>
   );
 }

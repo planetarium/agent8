@@ -516,7 +516,12 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
           )}
         >
           <div className="absolute inset-0 pr-7">
-            <div className="h-full flex flex-col bg-transperant-subtle border border-tertiary shadow-sm rounded-lg overflow-hidden p-4">
+            <div
+              className={classNames(
+                'h-full flex flex-col border border-tertiary shadow-sm rounded-lg overflow-hidden p-4',
+                isSmallViewport ? 'bg-primary' : 'bg-transperant-subtle',
+              )}
+            >
               <div className="flex items-center">
                 <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
 
