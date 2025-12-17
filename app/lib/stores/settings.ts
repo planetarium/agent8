@@ -31,6 +31,8 @@ export interface Shortcuts {
 }
 
 // MCP server settings interface
+export const MCP_TOOLS_VERSION = 3;
+
 export interface MCPServer {
   name: string;
   url: string;
@@ -185,7 +187,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'All-in-one',
         url: 'https://mcp.verse8.io/mcp',
         enabled: false,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: false,
         description: 'All-in-one server that integrates all MCP tools.',
       },
@@ -193,7 +195,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Image',
         url: 'https://mcp-image-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Create 2D game assets in various styles',
       },
@@ -201,7 +203,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Spritesheet',
         url: 'https://mcp-spritesheet-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Generate sprite sheets for game animations',
       },
@@ -209,7 +211,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Cinematic',
         url: 'https://mcp-cinematic-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Turn text into styled game cutscenes',
       },
@@ -217,7 +219,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Audio',
         url: 'https://mcp-audio-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Generate music and sound effects fast',
       },
@@ -225,7 +227,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Skybox',
         url: 'https://mcp-skybox-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Make 360° environments for games or VR',
       },
@@ -233,7 +235,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'UI',
         url: 'https://mcp-ui-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Design CSS styles for game interfaces',
       },
@@ -241,7 +243,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
         name: 'Crossramp',
         url: 'https://mcp-crossramp-svc.verse8.io/mcp',
         enabled: true,
-        version: 3,
+        version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
         description: 'Deploy game projects and ERC20 tokens on the testnet',
       },
@@ -266,7 +268,7 @@ const getInitialMCPServers = (): MCPServer[] => {
     const stored = localStorage.getItem(SETTINGS_KEYS.MCP_SERVERS);
     const defaultServers = getDefaultMCPServers();
 
-    if (!stored || stored === '[]' || stored === '""' || stored.indexOf('"version":3') === -1) {
+    if (!stored || stored === '[]' || stored === '""' || stored.indexOf(`"version":${MCP_TOOLS_VERSION}`) === -1) {
       /* No stored servers, use defaults. Exclude always-enabled servers from localStorage. */
       const serversToStore = defaultServers.filter((s) => !FORCED_SERVERS.includes(s.name));
       localStorage.setItem(SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(serversToStore));
