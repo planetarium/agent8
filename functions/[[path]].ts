@@ -1,4 +1,4 @@
-import type { ServerBuild } from '@remix-run/cloudflare';
+import type { AppLoadContext, ServerBuild } from '@remix-run/cloudflare';
 import { createPagesFunctionHandler } from '@remix-run/cloudflare-pages';
 import { logAccess } from '../app/utils/access-log';
 
@@ -6,10 +6,13 @@ import { logAccess } from '../app/utils/access-log';
 import * as serverBuild from '../build/server';
 
 /*
- * Create the base handler
+ * Create the base handler with proper environment context
  */
 const baseHandler = createPagesFunctionHandler({
   build: serverBuild as unknown as ServerBuild,
+  getLoadContext: ({ context }) => {
+    return context as unknown as AppLoadContext;
+  },
 });
 
 // Wrap with access logging (Optimized for API requests only)
