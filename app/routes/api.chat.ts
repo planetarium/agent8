@@ -208,11 +208,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             }
 
             if (providerMetadata?.anthropic) {
-              const { cacheCreationInputTokens, cacheReadInputTokens } = providerMetadata.anthropic;
+              const { cacheCreationInputTokens } = providerMetadata.anthropic;
 
               cumulativeUsage.cacheWrite += Number(cacheCreationInputTokens || 0);
-              cumulativeUsage.cacheRead += Number(cacheReadInputTokens || 0);
             }
+
+            cumulativeUsage.cacheRead += cachedInputTokens;
 
             if (finishReason !== 'length') {
               writer.write({
