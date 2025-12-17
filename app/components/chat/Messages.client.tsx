@@ -71,7 +71,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     // Random game creation tip
     const randomTip = useRandomTip();
 
-    // Track expanded state for each message
+    // Track expanded state for each message (AI messages only)
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
 
     // Auto-expand last message when it's being generated or just completed
@@ -193,7 +193,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     >
                       <div className="grid grid-col-1 w-full">
                         {isUserMessage ? (
-                          <UserMessage content={messageText} />
+                          <UserMessage content={messageText} isLast={isLast} />
                         ) : (
                           <AssistantMessage
                             content={messageText}
