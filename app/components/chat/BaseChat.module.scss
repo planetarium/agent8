@@ -86,6 +86,14 @@
     0 8px 56px 8px rgba(148, 250, 239, 0.16);
 }
 
+.promptInputActiveSmallViewport {
+  background: var(--color-bg-primary, #111315);
+  /* Elevation/Light/2 */
+  box-shadow:
+    0 2px 8px 2px rgba(26, 220, 217, 0.12),
+    0 8px 56px 8px rgba(148, 250, 239, 0.16);
+}
+
 /* 순환하는 placeholder 애니메이션 스타일 */
 .placeholderAnimationIn {
   animation: slideInUp 0.5s forwards;

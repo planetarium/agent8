@@ -3,6 +3,8 @@ import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import useViewport from '~/lib/hooks';
+import { useRandomTip } from '~/lib/hooks/useRandomTip';
 
 import type { JSONValue, UIMessage } from 'ai';
 import type { ProgressAnnotation } from '~/types/context';
@@ -59,6 +61,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Check if response is being generated (same condition as "Generating Response" UI)
     const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
+
+    // Check for mobile viewport (same breakpoint as Workbench)
+    const isSmallViewport = useViewport(1072);
+
+    // Random game creation tip
+    const randomTip = useRandomTip();
 
     // Track expanded state for each message
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
@@ -385,10 +393,16 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
         {/* Show loading animation when streaming starts and no AI response yet */}
         {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
-          <div className="flex flex-col w-full h-full justify-center items-center gap-4 py-16">
-            <div style={{ width: '80px', height: '80px' }}>
+          <div className="flex flex-col w-full h-full justify-center items-center gap-3">
+            <div style={{ width: isSmallViewport ? '48px' : '80px', height: isSmallViewport ? '48px' : '80px' }}>
               <Lottie animationData={loadingAnimationData} loop={true} />
             </div>
+            {isSmallViewport && (
+              <div className="flex flex-col justify-center items-center gap-2 self-stretch px-4">
+                <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
+                <span className="text-body-md-medium text-secondary text-center">{randomTip}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

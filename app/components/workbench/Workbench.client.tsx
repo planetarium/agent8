@@ -363,7 +363,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const diffEnabled = useWorkbenchDiffEnabled();
   const workbench = useWorkbenchStore();
 
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(1003); // Mobile breakpoint - same as BaseChat
 
   const filteredSliderOptions = useMemo(() => {
     return sliderOptions.filter((option) => {
@@ -443,14 +443,20 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     workbench.resetCurrentDocument();
   }, [workbench]);
 
+  // On mobile, use a hidden div instead of motion.div to prevent animation flicker
+  const WorkbenchWrapper = isSmallViewport ? 'div' : motion.div;
+  const wrapperProps = isSmallViewport
+    ? { className: 'z-workbench w-0 overflow-hidden' }
+    : {
+        initial: 'closed' as const,
+        animate: showWorkbench ? 'open' : 'closed',
+        variants: workbenchVariants,
+        className: 'z-workbench',
+      };
+
   return (
     chatStarted && (
-      <motion.div
-        initial="closed"
-        animate={showWorkbench ? 'open' : 'closed'}
-        variants={workbenchVariants}
-        className="z-workbench"
-      >
+      <WorkbenchWrapper {...wrapperProps}>
         {showWorkbench && !isSmallViewport && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
           <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 pr-7">
@@ -581,7 +587,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             </div>
           </div>
         </div>
-      </motion.div>
+      </WorkbenchWrapper>
     )
   );
 });

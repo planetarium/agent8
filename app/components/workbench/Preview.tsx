@@ -15,6 +15,7 @@ import CustomButton from '~/components/ui/CustomButton';
 import { PlayIcon, RightLineIcon } from '~/components/ui/Icons';
 import { loadingAnimationData } from '~/utils/animationData';
 import { sendMessageToParent } from '~/utils/postMessage';
+import { useRandomTip } from '~/lib/hooks/useRandomTip';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -52,6 +53,9 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+
+  // Random game creation tip
+  const randomTip = useRandomTip();
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPreviewOnly, setIsPreviewOnly] = useState(false);
@@ -601,11 +605,14 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
             </>
           ) : isStreaming || isRunningPreview ? (
             <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
-              <div className="flex-1 flex flex-col justify-center items-center gap-4">
+              <div className="flex-1 flex flex-col justify-center items-center gap-4 px-8">
                 <div style={{ width: '80px', height: '80px' }}>
                   <Lottie animationData={loadingAnimationData} loop={true} />
                 </div>
-                <span className="text-sm text-bolt-elements-textSecondary animate-pulse">Preparing preview...</span>
+                <div className="flex flex-col justify-center items-center gap-2 max-w-md">
+                  <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
+                  <span className="text-body-lg-regular text-secondary text-center self-stretch">{randomTip}</span>
+                </div>
               </div>
               <div className="flex py-5 justify-center items-center gap-3">
                 <span className="text-body-md-regular text-subtle">

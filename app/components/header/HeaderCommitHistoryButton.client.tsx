@@ -5,18 +5,21 @@ import { useStore } from '@nanostores/react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 import { repoStore } from '~/lib/stores/repo';
+import useViewport from '~/lib/hooks';
 import { forkProject, fetchProjectFiles, setRestorePoint } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { handleChatError } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
+import { classNames } from '~/utils/classNames';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { triggerRestoreEvent } from '~/lib/stores/restore';
 import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 
 import { Button } from '~/components/ui/Button';
+import CustomIconButton from '~/components/ui/CustomIconButton';
 import CustomButton from '~/components/ui/CustomButton';
-import { HistoryIcon, CloseIcon, OutLinkIcon, ForkIcon, RestoreIcon } from '~/components/ui/Icons';
+import { HistoryIcon, CloseIcon, OutLinkIcon, ForkIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
 
 interface Commit {
   id: string;
@@ -55,17 +58,29 @@ interface RestoreConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   commit: Commit | null;
+  isSmallViewport?: boolean;
 }
 
-function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConfirmModalProps) {
+function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit, isSmallViewport }: RestoreConfirmModalProps) {
   if (!isOpen || !commit) {
     return null;
   }
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className={classNames('fixed inset-0 z-50', {
+        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
+        'bg-[rgba(0,0,0,0.60)] flex items-end': !!isSmallViewport,
+      })}
+      onClick={onClose}
+    >
       <div
-        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
+        className={classNames('flex flex-col items-start bg-primary', {
+          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
+            !isSmallViewport,
+          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
+            !!isSmallViewport,
+        })}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -87,11 +102,26 @@ function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConf
 
         {/* Actions */}
         <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div className="flex justify-end items-center gap-3 self-stretch">
-            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
+          <div
+            className={classNames('flex items-center gap-3 self-stretch', {
+              'justify-end': !isSmallViewport,
+              'flex-col-reverse': !!isSmallViewport,
+            })}
+          >
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="secondary-ghost"
+              size="lg"
+              onClick={onClose}
+            >
               Cancel
             </CustomButton>
-            <CustomButton variant="primary-filled" size="lg" onClick={onConfirm}>
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="primary-filled"
+              size="lg"
+              onClick={onConfirm}
+            >
               <RestoreIcon size={24} color="#f3f5f8" />
               Restore
             </CustomButton>
@@ -109,17 +139,29 @@ interface ForkConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   commit: Commit | null;
+  isSmallViewport?: boolean;
 }
 
-function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmModalProps) {
+function ForkConfirmModal({ isOpen, onClose, onConfirm, commit, isSmallViewport }: ForkConfirmModalProps) {
   if (!isOpen || !commit) {
     return null;
   }
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className={classNames('fixed inset-0 z-50', {
+        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
+        'bg-[rgba(0,0,0,0.60)] flex items-end': !!isSmallViewport,
+      })}
+      onClick={onClose}
+    >
       <div
-        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
+        className={classNames('flex flex-col items-start bg-primary', {
+          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
+            !isSmallViewport,
+          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
+            !!isSmallViewport,
+        })}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -139,11 +181,26 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmMod
 
         {/* Actions */}
         <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div className="flex justify-end items-center gap-3 self-stretch">
-            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
+          <div
+            className={classNames('flex items-center gap-3 self-stretch', {
+              'justify-end': !isSmallViewport,
+              'flex-col-reverse': !!isSmallViewport,
+            })}
+          >
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="secondary-ghost"
+              size="lg"
+              onClick={onClose}
+            >
               Cancel
             </CustomButton>
-            <CustomButton variant="primary-filled" size="lg" onClick={onConfirm}>
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="primary-filled"
+              size="lg"
+              onClick={onConfirm}
+            >
               <ForkIcon size={24} fill="#f3f5f8" />
               Fork
             </CustomButton>
@@ -157,6 +214,7 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmMod
 
 export function HeaderCommitHistoryButton() {
   const repo = useStore(repoStore);
+  const isSmallViewport = useViewport(1003);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -461,26 +519,42 @@ export function HeaderCommitHistoryButton() {
       {isOpen &&
         createPortal(
           <div
-            className="fixed inset-0 bg-[rgba(0, 0, 0, 0.60)] backdrop-blur-[4px] flex items-center justify-center z-50"
+            className={`fixed inset-0 flex items-center justify-center z-50 ${isSmallViewport ? 'bg-primary' : 'bg-[rgba(0,0,0,0.60)] backdrop-blur-[4px]'}`}
             onClick={() => setIsOpen(false)}
           >
             <div
-              className="max-w-[800px] w-full overflow-hidden flex flex-col items-start bg-primary border border-secondary rounded-2xl elevation-light-3 gap-3 p-8"
+              className={`overflow-hidden flex flex-col items-start bg-primary gap-3 ${
+                isSmallViewport
+                  ? 'w-full h-full px-4'
+                  : 'max-w-[800px] w-full border border-secondary rounded-2xl elevation-light-3 p-8'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <header className="flex items-cennter gap-2 self-stretch">
-                <h1 className="text-heading-md text-primary flex-[1_0_0]">Commit History</h1>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
-                >
-                  <CloseIcon width={20} height={20} />
-                </button>
-              </header>
+              {!isSmallViewport ? (
+                <header className="flex items-cennter gap-2 self-stretch">
+                  <h1 className="text-heading-md text-primary flex-[1_0_0]">Commit History</h1>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
+                  >
+                    <CloseIcon width={20} height={20} />
+                  </button>
+                </header>
+              ) : (
+                <div className="flex items-center justify-center gap-[10px] pt-3 pb-1 self-stretch">
+                  <CustomIconButton
+                    variant="secondary-transparent"
+                    size="md"
+                    icon={<ChevronRightIcon className="rotate-180" width={20} height={20} />}
+                    onClick={() => setIsOpen(false)}
+                  />
+                  <h1 className="text-heading-xs text-primary flex-[1_0_0]">Commit History</h1>
+                </div>
+              )}
 
-              <div className="relative flex-[1_0_0] self-stretch">
+              <div className="relative flex-[1_0_0] self-stretch overflow-hidden min-h-0">
                 <div
-                  className="flex flex-col h-[600px] items-start gap-3 overflow-y-auto self-stretch"
+                  className={`flex flex-col items-start gap-3 overflow-y-auto self-stretch ${isSmallViewport ? 'h-full' : 'h-[600px]'}`}
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(255, 255, 255, 0.2) transparent',
@@ -513,32 +587,81 @@ export function HeaderCommitHistoryButton() {
                           key={`${commit.id}-${index}`}
                           className="flex flex-col items-center justify-center gap-3 p-3 self-stretch rounded-lg border border-interactive-neutral"
                         >
-                          <div className="flex items-center gap-2 self-stretch">
-                            <span className="text-heading-sm text-primary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
-                              {commit.title || commit.message.split('\n')[0]}
-                            </span>
+                          <div
+                            className={classNames('flex gap-2 self-stretch', {
+                              'items-center': !isSmallViewport,
+                              'items-start': isSmallViewport,
+                            })}
+                          >
+                            {isSmallViewport ? (
+                              <>
+                                <div className="flex flex-col items-start gap-2 flex-[1_0_0]">
+                                  <span className="text-heading-sm text-primary self-stretch">
+                                    {commit.title || commit.message.split('\n')[0]}
+                                  </span>
+                                  <span
+                                    className={classNames('text-tertiary', {
+                                      'text-body-sm': isSmallViewport,
+                                      'text-body-md-medium': !isSmallViewport,
+                                    })}
+                                  >
+                                    {formatDate(commit.committed_date)}
+                                  </span>
+                                </div>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<OutLinkIcon size={20} />}
+                                  onClick={() => window.open(getGitlabCommitUrl(commit.id), '_blank')}
+                                />
+                              </>
+                            ) : (
+                              <span className="text-heading-sm text-primary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
+                                {commit.title || commit.message.split('\n')[0]}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex justify-between items-center self-stretch">
-                            <span className="text-body-md-medium text-tertiary">
-                              {formatDate(commit.committed_date)}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <CustomButton variant="secondary-text" size="md" asChild>
-                                <a
-                                  href={getGitlabCommitUrl(commit.id)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="View in GitLab"
-                                >
-                                  <span>Gitlab</span>
-                                  <OutLinkIcon size={20} />
-                                </a>
-                              </CustomButton>
-                              <CustomButton variant="secondary-ghost" size="md" onClick={() => handleForkClick(commit)}>
+                          <div
+                            className={classNames('flex items-center self-stretch', {
+                              'justify-between': !isSmallViewport,
+                              'justify-center': isSmallViewport,
+                            })}
+                          >
+                            {!isSmallViewport && (
+                              <span className="text-body-md-medium text-tertiary">
+                                {formatDate(commit.committed_date)}
+                              </span>
+                            )}
+                            <div
+                              className={classNames('flex items-center gap-3', {
+                                'self-stretch': !isSmallViewport,
+                                'flex-[1_0_0]': isSmallViewport,
+                              })}
+                            >
+                              {!isSmallViewport && (
+                                <CustomButton variant="secondary-text" size="md" asChild>
+                                  <a
+                                    href={getGitlabCommitUrl(commit.id)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="View in GitLab"
+                                  >
+                                    <span>Gitlab</span>
+                                    <OutLinkIcon size={20} />
+                                  </a>
+                                </CustomButton>
+                              )}
+                              <CustomButton
+                                className={isSmallViewport ? 'flex-[1_0_0]' : ''}
+                                variant="secondary-ghost"
+                                size="md"
+                                onClick={() => handleForkClick(commit)}
+                              >
                                 <ForkIcon size={20} />
                                 <span>Fork</span>
                               </CustomButton>
                               <CustomButton
+                                className={isSmallViewport ? 'flex-[1_0_0]' : ''}
                                 variant="secondary-ghost"
                                 size="md"
                                 onClick={() => handleRestoreClick(commit)}
@@ -618,6 +741,7 @@ export function HeaderCommitHistoryButton() {
         onClose={() => setIsForkModalOpen(false)}
         onConfirm={handleForkConfirm}
         commit={selectedCommitForFork}
+        isSmallViewport={isSmallViewport}
       />
 
       {/* Restore Confirmation Modal */}
@@ -625,6 +749,7 @@ export function HeaderCommitHistoryButton() {
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onConfirm={handleRestoreConfirm}
+        isSmallViewport={isSmallViewport}
         commit={selectedCommit}
       />
     </>

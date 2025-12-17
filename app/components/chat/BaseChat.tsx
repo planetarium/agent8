@@ -160,7 +160,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     const isMobileView = useMobileView();
     const showWorkbench = useWorkbenchShowWorkbench();
-    const isSmallViewport = useViewport(1003); // Same breakpoint as Workbench
+    const isSmallViewportForWorkbench = useViewport(1003); // When workbench is visible
+    const isSmallViewportForChat = useViewport(1072); // When workbench is not mounted yet
+
+    // Use different breakpoint based on whether workbench is visible
+    const isSmallViewport = showWorkbench ? isSmallViewportForWorkbench : isSmallViewportForChat;
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
@@ -595,7 +599,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
 
-        <div className="flex flex-col lg:flex-row w-full h-full bg-primary">
+        <div className={classNames('flex w-full h-full bg-primary', isSmallViewport ? 'flex-col' : 'flex-row')}>
           <div
             ref={(node) => {
               setScrollElement(node);
@@ -606,9 +610,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             }}
             className={classNames(styles.Chat, 'flex flex-col flex-shrink-0 h-full chat-container', {
               'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
-              'w-full': !chatStarted || isSmallViewport,
+              '!w-full !mr-0': isSmallViewport,
+              'w-full': !chatStarted && !isSmallViewport,
               'overflow-y-auto': chatStarted,
-              [styles.chatStarted]: chatStarted,
+              [styles.chatStarted]: chatStarted && !isSmallViewport,
             })}
           >
             {!chatStarted && (
@@ -819,7 +824,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
 
             <div
-              className={classNames('pt-0 tablet:pt-4 tablet:pl-6 tablet:pr-0 relative', {
+              className={classNames(`pt-0 pt-4 relative`, {
                 'h-full flex flex-col': chatStarted,
               })}
             >
@@ -828,7 +833,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   return chatStarted ? (
                     <Messages
                       ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pb-4 pr-4 mx-auto z-1"
+                      className="flex flex-col w-full flex-1 max-w-chat pl-6 pb-4 pr-4 mx-auto z-1"
                       messages={messages}
                       annotations={data}
                       isStreaming={isStreaming}
@@ -852,7 +857,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 className={classNames(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
                   {
-                    'sticky bottom-4 pr-4': chatStarted,
+                    'sticky bottom-4 pr-4': chatStarted && !isSmallViewport,
+                    'pl-6': !isSmallViewport,
                     'tablet:max-w-chat': chatStarted,
                     'tablet:max-w-chat-before-start': !chatStarted,
                     'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
@@ -896,7 +902,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       'tablet:max-w-chat': chatStarted,
                       'tablet:max-w-chat-before-start': !chatStarted,
                       'bg-primary': !chatStarted,
-                      [styles.promptInputActive]: chatStarted,
+                      [styles.promptInputActive]: chatStarted && !isSmallViewport,
+                      [styles.promptInputActiveSmallViewport]: chatStarted && isSmallViewport,
                     },
                   )}
                   style={
