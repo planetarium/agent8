@@ -552,7 +552,7 @@ export function HeaderCommitHistoryButton() {
                 </div>
               )}
 
-              <div className="relative flex-[1_0_0] self-stretch overflow-hidden min-h-0">
+              <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
                 <div
                   className={`flex flex-col items-start gap-3 overflow-y-auto self-stretch ${isSmallViewport ? 'h-full' : 'h-[600px]'}`}
                   style={{

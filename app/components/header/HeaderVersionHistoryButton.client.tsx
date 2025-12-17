@@ -7,11 +7,13 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { repoStore } from '~/lib/stores/repo';
 import { getVersionHistory, deleteVersion } from '~/lib/persistenceGitbase/api.client';
 import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { CloseIcon, StarLineIcon, DeleteIcon, RestoreIcon } from '~/components/ui/Icons';
+import { CloseIcon, StarLineIcon, DeleteIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { RestoreConfirmModal } from '~/components/ui/Restore';
 import { restoreVersion } from '~/utils/restoreVersion';
+import useViewport from '~/lib/hooks';
+import { classNames } from '~/utils/classNames';
 
 // Delete Confirmation Modal Component
 interface DeleteConfirmModalProps {
@@ -19,21 +21,33 @@ interface DeleteConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   version: VersionEntry | null;
+  isSmallViewport?: boolean;
 }
 
-function DeleteConfirmModal({ isOpen, onClose, onConfirm, version }: DeleteConfirmModalProps) {
+function DeleteConfirmModal({ isOpen, onClose, onConfirm, version, isSmallViewport }: DeleteConfirmModalProps) {
   if (!isOpen || !version) {
     return null;
   }
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className={classNames('fixed inset-0 z-50', {
+        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
+        'bg-[rgba(0,0,0,0.60)] flex items-end': !!isSmallViewport,
+      })}
+      onClick={onClose}
+    >
       <div
-        className="flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-[32px] rounded-[16px]"
+        className={classNames('flex flex-col items-start bg-primary', {
+          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
+            !isSmallViewport,
+          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
+            !!isSmallViewport,
+        })}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-center items-start gap-2 self-stretch">
+        <div className="flex items-center gap-2 self-stretch">
           <span className="text-primary text-heading-md flex-[1_0_0]">
             Are you sure you want to delete this version?
           </span>
@@ -44,11 +58,26 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, version }: DeleteConfi
 
         {/* Actions */}
         <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div className="flex justify-end items-center gap-3 self-stretch">
-            <CustomButton variant="secondary-ghost" size="lg" onClick={onClose}>
+          <div
+            className={classNames('flex items-center gap-3 self-stretch', {
+              'justify-end': !isSmallViewport,
+              'flex-col-reverse': !!isSmallViewport,
+            })}
+          >
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="secondary-ghost"
+              size="lg"
+              onClick={onClose}
+            >
               Cancel
             </CustomButton>
-            <CustomButton variant="destructive-filled" size="lg" onClick={onConfirm}>
+            <CustomButton
+              className={isSmallViewport ? 'w-full' : ''}
+              variant="destructive-filled"
+              size="lg"
+              onClick={onConfirm}
+            >
               Delete
             </CustomButton>
           </div>
@@ -61,6 +90,7 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, version }: DeleteConfi
 
 export function HeaderVersionHistoryButton() {
   const repo = useStore(repoStore);
+  const isSmallViewport = useViewport(1003);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [allVersions, setAllVersions] = useState<VersionEntry[]>([]); // All versions fetched
   const [displayedVersions, setDisplayedVersions] = useState<VersionEntry[]>([]); // Currently displayed
@@ -239,28 +269,44 @@ export function HeaderVersionHistoryButton() {
       {isOpen &&
         createPortal(
           <div
-            className="fixed inset-0 bg-[rgba(0, 0, 0, 0.60)] backdrop-blur-[4px] flex items-center justify-center z-50"
+            className={`fixed inset-0 flex items-center justify-center z-50 ${isSmallViewport ? 'bg-primary' : 'bg-[rgba(0,0,0,0.60)] backdrop-blur-[4px]'}`}
             onClick={() => handleOpenChange(false)}
           >
             <div
-              className="max-w-[800px] w-full overflow-hidden flex flex-col items-start bg-primary border border-secondary rounded-2xl elevation-light-3 gap-3 p-8"
+              className={`overflow-hidden flex flex-col items-start bg-primary gap-3 ${
+                isSmallViewport
+                  ? 'w-full h-full px-4'
+                  : 'max-w-[800px] w-full border border-secondary rounded-2xl elevation-light-3 p-8'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <header className="flex items-center gap-2 self-stretch">
-                <h1 className="text-heading-md text-primary flex-[1_0_0]">Version History</h1>
-                <button
-                  onClick={() => handleOpenChange(false)}
-                  className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
-                >
-                  <CloseIcon width={20} height={20} />
-                </button>
-              </header>
+              {!isSmallViewport ? (
+                <header className="flex items-center gap-2 self-stretch">
+                  <h1 className="text-heading-md text-primary flex-[1_0_0]">Version History</h1>
+                  <button
+                    onClick={() => handleOpenChange(false)}
+                    className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
+                  >
+                    <CloseIcon width={20} height={20} />
+                  </button>
+                </header>
+              ) : (
+                <div className="flex items-center justify-center gap-[10px] pt-3 pb-1 self-stretch">
+                  <CustomIconButton
+                    variant="secondary-transparent"
+                    size="md"
+                    icon={<ChevronRightIcon className="rotate-180" width={20} height={20} />}
+                    onClick={() => handleOpenChange(false)}
+                  />
+                  <h1 className="text-heading-xs text-primary flex-[1_0_0]">Version History</h1>
+                </div>
+              )}
 
               {/* Content */}
-              <div className="relative flex-[1_0_0] self-stretch">
+              <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
                 <div
-                  className="flex flex-col h-[600px] items-start gap-3 overflow-y-auto self-stretch"
+                  className={`flex flex-col items-start gap-3 overflow-y-auto self-stretch ${isSmallViewport ? 'h-full' : 'h-[600px]'}`}
                   style={{
                     scrollbarWidth: 'thin',
                     scrollbarColor: 'rgba(255, 255, 255, 0.2) transparent',
@@ -269,7 +315,7 @@ export function HeaderVersionHistoryButton() {
                 >
                   {loading && displayedVersions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full w-full">
-                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-zinc-600 border-t-zinc-400 mb-4"></div>
+                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-zinc-600 border-t-zinc-400 mb-4" />
                       <div className="text-zinc-400 text-sm">Loading versions...</div>
                     </div>
                   ) : displayedVersions.length === 0 ? (
@@ -318,7 +364,9 @@ export function HeaderVersionHistoryButton() {
 
                           {/* Actions */}
                           <div className="flex justify-end items-start gap-2 self-stretch">
+                            {isSmallViewport && <div className="flex-[1_0_0]" />}
                             <CustomButton
+                              className={isSmallViewport ? 'flex-[1_0_0]' : ''}
                               variant="secondary-ghost"
                               size="md"
                               onClick={() => handleRestoreClick(version)}
@@ -392,6 +440,7 @@ export function HeaderVersionHistoryButton() {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
         version={selectedVersionForDelete}
+        isSmallViewport={isSmallViewport}
       />
     </>
   );
