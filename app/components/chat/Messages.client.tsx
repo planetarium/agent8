@@ -62,8 +62,11 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     // Check if response is being generated (same condition as "Generating Response" UI)
     const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
 
-    // Check for mobile viewport (same breakpoint as Workbench)
+    // Check for mobile viewport
     const isSmallViewport = useViewport(1072);
+
+    // For Run Preview button layout purposes
+    const isSmallViewportForLayout = useViewport(1003);
 
     // Random game creation tip
     const randomTip = useRandomTip();
@@ -369,7 +372,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 onClick={() => workbenchStore.runPreview()}
                               >
                                 <PlayIcon color="currentColor" size={20} />
-                                Preview
+                                {isSmallViewportForLayout ? 'Run' : 'Run Preview'}
                               </CustomButton>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>

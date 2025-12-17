@@ -7,9 +7,16 @@ import CustomIconButton from '~/components/ui/CustomIconButton';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { RenameChatModal } from '~/components/ui/RenameChatModal';
 import { updateProjectDescription } from '~/lib/persistenceGitbase/api.client';
+import useViewport from '~/lib/hooks';
 
-export function ChatDescription() {
+interface ChatDescriptionProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function ChatDescription({ asMenuItem = false, onClose }: ChatDescriptionProps) {
   const repo = useStore(repoStore);
+  const isSmallViewport = useViewport(1003);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   if (!repo.title) {
@@ -52,30 +59,58 @@ export function ChatDescription() {
     }
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    onClose?.();
+  };
+
+  if (asMenuItem) {
+    return (
+      <>
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <EditIcon size={20} />
+          <span>Edit Title</span>
+        </div>
+
+        <RenameChatModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onConfirm={handleRename}
+          currentName={repo.title}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center pt-3 pb-2">
       <div className="flex items-center gap-3">
         <span className="max-w-[150px] truncate">{repo.title}</span>
-        <Tooltip.Root delayDuration={100}>
-          <Tooltip.Trigger asChild>
-            <CustomIconButton
-              icon={<EditIcon size={22} />}
-              variant="secondary-outlined"
-              size="md"
-              onClick={() => setIsModalOpen(true)}
-            />
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Content
-              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-              sideOffset={5}
-              side="bottom"
-            >
-              Edit Title
-              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        </Tooltip.Root>
+        {!isSmallViewport && (
+          <Tooltip.Root delayDuration={100}>
+            <Tooltip.Trigger asChild>
+              <CustomIconButton
+                icon={<EditIcon size={22} />}
+                variant="secondary-outlined"
+                size="md"
+                onClick={() => setIsModalOpen(true)}
+              />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primarytext-body-lg-medium"
+                sideOffset={5}
+                side="bottom"
+              >
+                Edit Title
+                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        )}
       </div>
 
       <RenameChatModal

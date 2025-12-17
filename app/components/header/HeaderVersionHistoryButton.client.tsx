@@ -88,7 +88,12 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, version, isSmallViewpo
   );
 }
 
-export function HeaderVersionHistoryButton() {
+interface HeaderVersionHistoryButtonProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: HeaderVersionHistoryButtonProps) {
   const repo = useStore(repoStore);
   const isSmallViewport = useViewport(1003);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -110,6 +115,8 @@ export function HeaderVersionHistoryButton() {
 
     if (open) {
       setShowGradient(true); // Reset gradient visibility when opening
+    } else {
+      onClose?.();
     }
   };
 
@@ -245,26 +252,36 @@ export function HeaderVersionHistoryButton() {
 
   return (
     <>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
-            <StarLineIcon size={20} />
-            Version History
-          </CustomButton>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-            sideOffset={5}
-            side="bottom"
-            align="end"
-            alignOffset={0}
-          >
-            View versions to compare or restore
-            <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      {asMenuItem ? (
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => handleOpenChange(true)}
+        >
+          <StarLineIcon size={20} />
+          <span>Version History</span>
+        </div>
+      ) : (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
+              <StarLineIcon size={20} />
+              Version History
+            </CustomButton>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              sideOffset={5}
+              side="bottom"
+              align="end"
+              alignOffset={0}
+            >
+              View versions to compare or restore
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      )}
 
       {isOpen &&
         createPortal(

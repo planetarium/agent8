@@ -6,7 +6,7 @@ import { classNames } from '~/utils/classNames';
 import { repoStore } from '~/lib/stores/repo';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { CloseIcon } from '~/components/ui/Icons';
-import { useMobileView } from '~/lib/hooks/useMobileView';
+import useViewport from '~/lib/hooks';
 import {
   createProjectAccessToken,
   getProjectAccessTokenStatus,
@@ -49,12 +49,22 @@ function CopyIcon({ width = 16, height = 16 }: { width?: number; height?: number
   );
 }
 
-export function HeaderGitCloneButton() {
+interface HeaderGitCloneButtonProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function HeaderGitCloneButton({ asMenuItem = false, onClose }: HeaderGitCloneButtonProps) {
   const repo = useStore(repoStore);
-  const isMobileView = useMobileView();
+  const isSmallViewport = useViewport(1003);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    onClose?.();
+  };
   const [tokenData, setTokenData] = useState<{
     token?: string;
     cloneCommand?: string;
@@ -244,47 +254,59 @@ export function HeaderGitCloneButton() {
 
   return (
     <>
-      <Tooltip.Root delayDuration={100}>
-        <Tooltip.Trigger asChild>
-          <button
-            className="relative flex h-10 justify-center items-center gap-1.5 py-[10px] px-[14px] rounded-[4px] bg-transparent focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
-            onClick={() => setIsModalOpen(true)}
-          >
-            <div className="text-white">
-              <CodeIcon width={20} height={20} />
-            </div>
-            <span className="text-heading-xs text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
-              Git Access
-            </span>
-          </button>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-            sideOffset={5}
-            side="bottom"
-            align="end"
-            alignOffset={0}
-          >
-            Get git access to clone and develop this project locally
-            <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      {asMenuItem ? (
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <div className="text-white">
+            <CodeIcon width={20} height={20} />
+          </div>
+          <span>Git Access</span>
+        </div>
+      ) : (
+        <Tooltip.Root delayDuration={100}>
+          <Tooltip.Trigger asChild>
+            <button
+              className="relative flex h-10 justify-center items-center gap-1.5 py-[10px] px-[14px] rounded-[4px] bg-transparent focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
+              onClick={() => setIsModalOpen(true)}
+            >
+              <div className="text-white">
+                <CodeIcon width={20} height={20} />
+              </div>
+              <span className="text-heading-xs text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
+                Git Access
+              </span>
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              sideOffset={5}
+              side="bottom"
+              align="end"
+              alignOffset={0}
+            >
+              Get git access to clone and develop this project locally
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      )}
 
       {isModalOpen &&
         createPortal(
           <div
             className={classNames(
               'fixed inset-0 bg-black bg-opacity-50 flex z-50',
-              isMobileView ? 'items-end justify-center' : 'items-center justify-center',
+              isSmallViewport ? 'items-end justify-center' : 'items-center justify-center',
             )}
-            onClick={() => setIsModalOpen(false)}
+            onClick={handleCloseModal}
           >
             <div
               className={classNames(
                 'flex flex-col items-start gap-[16px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
-                isMobileView
+                isSmallViewport
                   ? 'w-full pt-[28px] pb-[28px] px-[20px] rounded-t-[16px]'
                   : 'w-[600px] p-[32px] rounded-[16px]',
               )}
@@ -296,7 +318,7 @@ export function HeaderGitCloneButton() {
                   <CodeIcon width={24} height={24} />
                 </div>
                 <span className="text-primary text-[20px] font-semibold leading-[140%] flex-[1_0_0]">Git Access</span>
-                <button onClick={() => setIsModalOpen(false)} className="bg-transparent text-white/80 hover:text-white">
+                <button onClick={handleCloseModal} className="bg-transparent text-white/80 hover:text-white">
                   <CloseIcon width={20} height={20} />
                 </button>
               </div>

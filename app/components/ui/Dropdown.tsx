@@ -1,67 +1,102 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useRef, useEffect } from 'react';
 import { classNames } from '~/utils/classNames';
 
 interface DropdownProps {
   trigger: ReactNode;
   children: ReactNode;
   align?: 'start' | 'center' | 'end';
-  sideOffset?: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface DropdownItemProps {
   children: ReactNode;
-  onSelect?: () => void;
+  onClick?: () => void;
   className?: string;
   disabled?: boolean;
 }
 
-export const DropdownItem = ({ children, onSelect, className, disabled }: DropdownItemProps) => (
-  <DropdownMenu.Item
+export const DropdownItem = ({ children, onClick, className, disabled }: DropdownItemProps) => (
+  <div
     className={classNames(
-      'relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
-      'text-bolt-elements-textPrimary',
-      (!disabled && 'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary cursor-pointer') ||
-        '',
-      (disabled && 'text-bolt-elements-textSecondary') || '',
-      'transition-colors ',
-      'outline-none',
+      'flex items-center gap-4 py-[14px] px-5 self-stretch',
+      'bg-interactive-neutral text-primary',
+      'transition-colors outline-none',
+      {
+        'hover:bg-interactive-neutral-hovered cursor-pointer': !disabled,
+        'text-tertiary': !!disabled,
+      },
       className,
     )}
-    onSelect={!disabled ? onSelect : undefined}
-    disabled={disabled}
+    onClick={!disabled ? onClick : undefined}
   >
     {children}
-  </DropdownMenu.Item>
+  </div>
 );
 
-export const DropdownSeparator = () => <DropdownMenu.Separator className="h-px bg-bolt-elements-borderColor my-1" />;
+export const DropdownSeparator = () => <div className="h-px bg-bolt-elements-borderColor my-1" />;
 
-export const Dropdown = ({ trigger, children, align = 'end', sideOffset = 5 }: DropdownProps) => {
+export const Dropdown = ({ trigger, children, align = 'end', open, onOpenChange }: DropdownProps) => {
+  const [internalOpen, setInternalOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Controlled or uncontrolled
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, setIsOpen]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, setIsOpen]);
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+    <div className="relative" ref={dropdownRef}>
+      <div onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
+      {isOpen && (
+        <div
           className={classNames(
-            'min-w-[220px] rounded-lg p-2',
-            'bg-bolt-elements-background-depth-2',
-            'border border-bolt-elements-borderColor',
-            'shadow-lg',
-            'animate-in fade-in-80 zoom-in-95',
-            'data-[side=bottom]:slide-in-from-top-2',
-            'data-[side=left]:slide-in-from-right-2',
-            'data-[side=right]:slide-in-from-left-2',
-            'data-[side=top]:slide-in-from-bottom-2',
-            'z-[1000]',
+            'absolute top-full mt-1 flex w-[260px] py-2 flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000]',
+            {
+              'right-0': align === 'end',
+              'left-0': align === 'start',
+              'left-1/2 -translate-x-1/2': align === 'center',
+            },
           )}
-          sideOffset={sideOffset}
-          align={align}
+          style={{
+            boxShadow: '0 8px 16px 0 rgba(0, 0, 0, 0.32), 0 0 8px 0 rgba(0, 0, 0, 0.28)',
+          }}
         >
           {children}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+        </div>
+      )}
+    </div>
   );
 };

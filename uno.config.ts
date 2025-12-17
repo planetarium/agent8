@@ -128,7 +128,7 @@ export default defineConfig({
     'border-tertiary',
     'animate-shine',
     'bg-interactive-primary',
-    'hover:bg-interactive-primary-hovered',
+    'bg-interactive-primary-hovered',
     'active:bg-interactive-primary-pressed',
     'text-elevation-shadow-3',
   ],
@@ -197,7 +197,7 @@ export default defineConfig({
     'active:bg-interactive-gradient-pressed':
       'active:bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end-pressed)_100%)]',
     'bg-interactive-primary': 'bg-[var(--color-bg-interactive-primary,#1a92a4)]',
-    'hover:bg-interactive-primary-hovered': 'hover:bg-[var(--color-bg-interactive-primary-hovered,#1a7583)]',
+    'bg-interactive-primary-hovered': 'bg-[var(--color-bg-interactive-primary-hovered,#1a7583)]',
     'active:bg-interactive-primary-pressed': 'active:bg-[var(--color-bg-interactive-primary-pressed,#1b5862)]',
     'border-interactive-primary': 'border-[var(--color-border-interactive-primary,#1A92A4)]',
     'rounded-radius-4': 'rounded-[var(--border-radius-4)]',

@@ -4,9 +4,13 @@ import { RocketIcon } from '~/components/ui/Icons';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useState } from 'react';
 import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
+import CustomIconButton from '~/components/ui/CustomIconButton';
+import useViewport from '~/lib/hooks';
 
 export function HeaderDeployButton() {
-  const [isDeploying, setIsDeploying] = useState(false);
+  const [isDeploying, setIsDeploying] = useState<boolean>(false);
+  const isSmallViewport = useViewport(1003);
+
   const handleDeploy = async () => {
     const chatId = repoStore.get().path;
     const title = repoStore.get().title || 'Game Project';
@@ -17,6 +21,18 @@ export function HeaderDeployButton() {
       setIsDeploying(false);
     }
   };
+
+  if (isSmallViewport) {
+    return (
+      <CustomIconButton
+        icon={isDeploying ? <LoadingSpinnerIcon /> : <RocketIcon fill="#11B9D2" width={20} height={20} />}
+        variant="primary-transparent"
+        size="md"
+        onClick={handleDeploy}
+        disabled={isDeploying}
+      />
+    );
+  }
 
   return (
     <Tooltip.Root delayDuration={100}>
@@ -35,7 +51,7 @@ export function HeaderDeployButton() {
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+          className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
           sideOffset={5}
           side="bottom"
           align="end"

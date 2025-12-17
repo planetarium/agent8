@@ -212,7 +212,12 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, commit, isSmallViewport 
   );
 }
 
-export function HeaderCommitHistoryButton() {
+interface HeaderCommitHistoryButtonProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: HeaderCommitHistoryButtonProps) {
   const repo = useStore(repoStore);
   const isSmallViewport = useViewport(1003);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -273,6 +278,8 @@ export function HeaderCommitHistoryButton() {
 
     if (open) {
       setShowGradient(true); // Reset gradient visibility when opening
+    } else {
+      onClose?.();
     }
   };
 
@@ -495,26 +502,36 @@ export function HeaderCommitHistoryButton() {
 
   return (
     <>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
-            <HistoryIcon width={20} height={20} />
-            Commit History
-          </CustomButton>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
-            sideOffset={5}
-            side="bottom"
-            align="end"
-            alignOffset={0}
-          >
-            View commits to fork or restore
-            <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      {asMenuItem ? (
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => handleOpenChange(true)}
+        >
+          <HistoryIcon width={20} height={20} />
+          <span>Commit History (Gitlab)</span>
+        </div>
+      ) : (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
+              <HistoryIcon width={20} height={20} />
+              Commit History
+            </CustomButton>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              sideOffset={5}
+              side="bottom"
+              align="end"
+              alignOffset={0}
+            >
+              View commits to fork or restore
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      )}
 
       {isOpen &&
         createPortal(

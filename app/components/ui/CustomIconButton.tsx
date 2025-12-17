@@ -28,7 +28,7 @@ const CustomIconButton = React.forwardRef<HTMLButtonElement, CustomIconButtonPro
       primary:
         'border-interactive-neutral bg-interactive text-interactive-on-primary hover:border-interactive-neutral-hover hover:bg-interactive-hover hover:text-interactive-on-primary-hover active:border-interactive-neutral-pressed active:bg-interactive-pressed active:text-interactive-on-primary-pressed',
       'primary-transparent':
-        'border-transparent text-interactive hover:text-interactive-hover active:text-interactive-pressed',
+        'border-transparent bg-transparent text-interactive-primary hover:text-interactive-primary-hovered active:text-interactive-primary-pressed',
       secondary:
         'border-interactive-neutral bg-interactive-neutral text-interactive-neutral-hover hover:text-interactive-neutral-hover hover:bg-interactive-neutral-hover hover:border-interactive-neutral-hover active:text-interactive-neutral-pressed active:bg-interactive-neutral-pressed active:border-interactive-neutral-pressed',
       'secondary-ghost':

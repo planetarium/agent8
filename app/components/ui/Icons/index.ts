@@ -1,5 +1,6 @@
 export { RocketIcon } from './RocketIcon';
 export { ShareFillIcon } from './ShareFillIcon';
+export { ShareLineIcon } from './ShareLineIcon';
 export { CloseIcon } from './CloseIcon';
 export { GlobalIcon } from './GlobalIcon';
 export { LinkIcon } from './LinkIcon';
@@ -28,3 +29,4 @@ export { CopyLineIcon } from './CopyLineIcon';
 export { FileIcon } from './FileIcon';
 export { CheckCircleLinedIcon } from './CheckCircleLinedIcon';
 export { RightLineIcon } from './RightLineIcon';
+export { MoreIcon } from './MoreIcon';
