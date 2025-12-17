@@ -6,6 +6,7 @@ import { ClientOnly } from 'remix-utils/client-only';
 
 import { chatStore } from '~/lib/stores/chat';
 import { repoStore } from '~/lib/stores/repo';
+import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
@@ -17,7 +18,7 @@ import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
 import WithTooltip from '~/components/ui/Tooltip';
-import { MoreIcon } from '~/components/ui/Icons';
+import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
 
@@ -30,94 +31,169 @@ export function Header() {
   const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
   const isSmallViewport = useViewport(1003);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const isPreviewMode = useStore(workbenchStore.mobilePreviewMode);
+
+  const togglePreviewMode = () => {
+    workbenchStore.mobilePreviewMode.set(!isPreviewMode);
+  };
 
   const closeDropdown = (): void => setIsDropdownOpen(false);
 
+  // Hide header completely on mobile preview mode, but keep toggle switch visible
+  const showHeader = !(isSmallViewport && isPreviewMode);
+
   return (
     <TooltipProvider>
-      <header
-        className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
-          'border-transparent': !chat.started,
-          'border-bolt-elements-borderColor': chat.started,
-          'mt-5 bg-primary': !chat.started && isEmbedMode,
-          'backdrop-blur-[6px] bg-[rgba(17, 19, 21, 0.30)] z-2': chat.started,
-        })}
-      >
-        {/* Logo and menu button - hidden in embed mode */}
-        <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
-          {!isSideMenuDisabled && (
-            <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMenu();
-                }}
-                className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
-              />
-            </WithTooltip>
-          )}
-        </div>
-
-        {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
-          <div className="flex justify-between items-center self-stretch w-full">
-            <span
-              className={classNames('text-interactive-neutral overflow-visible', {
-                'px-4': !isEmbedMode,
-              })}
-            >
-              <ClientOnly>{() => <ChatDescription />}</ClientOnly>
-            </span>
-
-            {/* Desktop: Show all buttons */}
-            {!isSmallViewport && (
-              <div className="flex items-center gap-3">
-                {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
-                {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
-                {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
-                {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}
-                <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
-              </div>
-            )}
-
-            {/* Mobile: Show More dropdown with all buttons */}
-            {isSmallViewport && (
-              <div className="flex items-center gap-2">
-                <Dropdown
-                  trigger={<CustomIconButton variant="secondary-transparent" size="md" icon={<MoreIcon size={20} />} />}
-                  align="end"
-                  open={isDropdownOpen}
-                  onOpenChange={setIsDropdownOpen}
-                >
-                  {repo.path && (
-                    <>
-                      <DropdownItem>
-                        <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
-                      </DropdownItem>
-                      <DropdownItem>
-                        <ClientOnly>{() => <HeaderVisibilityButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
-                      </DropdownItem>
-                      <DropdownItem>
-                        <ClientOnly>
-                          {() => <HeaderVersionHistoryButton asMenuItem onClose={closeDropdown} />}
-                        </ClientOnly>
-                      </DropdownItem>
-                      <DropdownItem>
-                        <ClientOnly>
-                          {() => <HeaderCommitHistoryButton asMenuItem onClose={closeDropdown} />}
-                        </ClientOnly>
-                      </DropdownItem>
-                      <DropdownItem>
-                        <ClientOnly>{() => <HeaderGitCloneButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
-                      </DropdownItem>
-                    </>
-                  )}
-                </Dropdown>
-                <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
-              </div>
+      {showHeader && (
+        <header
+          className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
+            'border-transparent': !chat.started,
+            'border-bolt-elements-borderColor': chat.started,
+            'mt-5 bg-primary': !chat.started && isEmbedMode,
+            'backdrop-blur-[6px] bg-[rgba(17, 19, 21, 0.30)] z-10': chat.started,
+          })}
+        >
+          {/* Logo and menu button - hidden in embed mode */}
+          <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
+            {!isSideMenuDisabled && (
+              <WithTooltip tooltip={isMenuOpen ? 'Close Sidebar' : 'Open Sidebar'} position="right">
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleMenu();
+                  }}
+                  className={`i-ph:sidebar-simple-duotone text-xl hover:text-accent transition-colors cursor-pointer ${isMenuOpen ? 'text-accent' : ''}`}
+                />
+              </WithTooltip>
             )}
           </div>
-        )}
-      </header>
+
+          {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
+            <div className="flex justify-between items-center self-stretch w-full">
+              <span
+                className={classNames('text-interactive-neutral overflow-visible', {
+                  'px-4': !isEmbedMode,
+                })}
+              >
+                <ClientOnly>{() => <ChatDescription />}</ClientOnly>
+              </span>
+
+              {/* Desktop: Show all buttons */}
+              {!isSmallViewport && (
+                <div className="flex items-center gap-3">
+                  {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}
+                  <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
+                </div>
+              )}
+
+              {/* Mobile: Show More dropdown with all buttons */}
+              {isSmallViewport && (
+                <div className="flex items-center gap-2">
+                  <Dropdown
+                    trigger={
+                      <CustomIconButton variant="secondary-transparent" size="md" icon={<MoreIcon size={20} />} />
+                    }
+                    align="end"
+                    open={isDropdownOpen}
+                    onOpenChange={setIsDropdownOpen}
+                  >
+                    {repo.path && (
+                      <>
+                        <DropdownItem>
+                          <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>{() => <HeaderVisibilityButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>
+                            {() => <HeaderVersionHistoryButton asMenuItem onClose={closeDropdown} />}
+                          </ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>
+                            {() => <HeaderCommitHistoryButton asMenuItem onClose={closeDropdown} />}
+                          </ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>{() => <HeaderGitCloneButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
+                        </DropdownItem>
+                      </>
+                    )}
+                  </Dropdown>
+                  <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
+                </div>
+              )}
+            </div>
+          )}
+        </header>
+      )}
+
+      {/* Floating pill UI - visible on small viewport after chat started */}
+      {chat.started && isSmallViewport && (
+        <div
+          className="fixed right-2 z-5 inline-flex items-center rounded-full border border-tertiary bg-interactive-neutral cursor-pointer"
+          style={{
+            top: 'calc(var(--header-height) + 8px)',
+            boxShadow: '0 4px 8px 0 rgba(0, 0, 0, 0.28), 0 0 4px 0 rgba(0, 0, 0, 0.24)',
+          }}
+          onClick={togglePreviewMode}
+        >
+          {/* Left side - Chat button, active when isPreviewMode is false */}
+          <div
+            className={classNames('flex h-[44px] items-center rounded-full', {
+              'w-[112px] px-4 py-3 gap-2 bg-interactive-neutral-subtle': !isPreviewMode,
+              'w-[44px] pt-3 pb-3 pl-4 pr-2 gap-[10px]': isPreviewMode,
+            })}
+            style={{
+              transition: 'all 350ms cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <ChatIcon size={20} className="flex-shrink-0" />
+            <span
+              className={classNames('text-primary text-body-md-medium whitespace-nowrap overflow-hidden', {
+                'max-w-[40px] opacity-100': !isPreviewMode,
+                'max-w-0 opacity-0': isPreviewMode,
+              })}
+              style={{
+                transition: !isPreviewMode
+                  ? 'max-width 350ms cubic-bezier(0.4, 0, 0.2, 1) 50ms, opacity 200ms ease-out 100ms'
+                  : 'max-width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 150ms ease-out',
+              }}
+            >
+              Chat
+            </span>
+          </div>
+          {/* Right side - Preview button */}
+          <div
+            className={classNames('flex h-[44px] items-center gap-2 rounded-full', {
+              'w-[112px] px-4 py-3 bg-interactive-neutral-subtle': isPreviewMode,
+              'w-[44px] pt-3 pb-3 pl-2 pr-4 bg-transparent': !isPreviewMode,
+            })}
+            style={{
+              transition: 'all 350ms cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <PreviewIcon size={20} className="flex-shrink-0" />
+            <span
+              className={classNames('text-primary text-body-md-medium whitespace-nowrap overflow-hidden', {
+                'max-w-[60px] opacity-100': isPreviewMode,
+                'max-w-0 opacity-0': !isPreviewMode,
+              })}
+              style={{
+                transition: isPreviewMode
+                  ? 'max-width 350ms cubic-bezier(0.4, 0, 0.2, 1) 50ms, opacity 200ms ease-out 100ms'
+                  : 'max-width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 150ms ease-out',
+              }}
+            >
+              Preview
+            </span>
+          </div>
+        </div>
+      )}
     </TooltipProvider>
   );
 }

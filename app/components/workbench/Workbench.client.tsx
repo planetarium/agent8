@@ -15,6 +15,7 @@ import { Slider } from '~/components/ui/Slider';
 import { type WorkbenchViewType } from '~/lib/stores/workbench';
 import {
   useWorkbenchShowWorkbench,
+  useWorkbenchMobilePreviewMode,
   useWorkbenchSelectedFile,
   useWorkbenchCurrentDocument,
   useWorkbenchUnsavedFiles,
@@ -355,6 +356,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const previews = useWorkbenchPreviews();
   const hasPreview = previews.length > 0;
   const showWorkbench = useWorkbenchShowWorkbench();
+  const mobilePreviewMode = useWorkbenchMobilePreviewMode();
   const selectedFile = useWorkbenchSelectedFile();
   const currentDocument = useWorkbenchCurrentDocument();
   const unsavedFiles = useWorkbenchUnsavedFiles();
@@ -511,75 +513,95 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         )}
 
         <div
-          className={classNames(
-            'fixed top-[calc(var(--header-height)+0.5rem)] bottom-4.5 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]',
-            {
-              // On mobile (isSmallViewport), hide UI but keep running in background
-              'left-[100%] pointer-events-none': isSmallViewport,
-              'left-[var(--workbench-left)]': showWorkbench && !isSmallViewport,
-              'left-[100%]': !showWorkbench && !isSmallViewport,
-            },
-          )}
+          className={classNames('fixed z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier', {
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
+              isSmallViewport && !mobilePreviewMode,
+            'top-0 bottom-0 left-0 right-0 w-full': isSmallViewport && mobilePreviewMode,
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
+              showWorkbench && !isSmallViewport,
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] w-[var(--workbench-inner-width)]':
+              !showWorkbench && !isSmallViewport,
+          })}
         >
-          <div className="absolute inset-0 pr-7">
-            <div className="h-full flex flex-col border border-tertiary shadow-sm rounded-lg overflow-hidden p-4 bg-transperant-subtle">
-              <div className="flex items-center">
-                <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
+          <div
+            className={classNames('absolute inset-0', {
+              'pr-7': !(isSmallViewport && mobilePreviewMode),
+            })}
+          >
+            <div
+              className={classNames('h-full flex flex-col overflow-hidden', {
+                'bg-primary': isSmallViewport && mobilePreviewMode,
+                'border border-tertiary shadow-sm rounded-lg p-4 bg-transperant-subtle': !(
+                  isSmallViewport && mobilePreviewMode
+                ),
+              })}
+            >
+              {/* Hide Slider and other tabs on mobile preview mode */}
+              {!(isSmallViewport && mobilePreviewMode) && (
+                <div className="flex items-center">
+                  <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
 
-                {selectedView === 'diff' && (
-                  <div className="ml-auto">
-                    <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
-                  </div>
-                )}
-              </div>
+                  {selectedView === 'diff' && (
+                    <div className="ml-auto">
+                      <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="relative flex-1 overflow-hidden">
+                {/* Hide other views on mobile preview mode, show only Preview */}
+                {!(isSmallViewport && mobilePreviewMode) && (
+                  <>
+                    <View
+                      initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                      animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                    >
+                      <EditorPanel
+                        editorDocument={currentDocument}
+                        isStreaming={isStreaming}
+                        selectedFile={selectedFile}
+                        files={files}
+                        unsavedFiles={unsavedFiles}
+                        onFileSelect={onFileSelect}
+                        onEditorScroll={onEditorScroll}
+                        onEditorChange={onEditorChange}
+                        onFileSave={onFileSave}
+                        onFileReset={onFileReset}
+                      />
+                    </View>
+                    <View
+                      initial={{ x: '100%' }}
+                      animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                    >
+                      <ResourcePanel
+                        editorDocument={currentDocument}
+                        isStreaming={isStreaming}
+                        selectedFile={selectedFile}
+                        files={files}
+                        unsavedFiles={unsavedFiles}
+                        onFileSelect={onFileSelect}
+                        onEditorScroll={onEditorScroll}
+                        onEditorChange={onEditorChange}
+                        onFileSave={onFileSave}
+                        onFileReset={onFileReset}
+                      />
+                    </View>
+                    <View
+                      initial={{ x: '100%' }}
+                      animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                    >
+                      <DiffViewWithCommitHash
+                        fileHistory={fileHistory}
+                        setFileHistory={setFileHistory}
+                        actionRunner={actionRunner}
+                      />
+                    </View>
+                  </>
+                )}
+                {/* Preview - always visible, full screen on mobile preview mode */}
                 <View
-                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                  animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                >
-                  <EditorPanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <ResourcePanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <DiffViewWithCommitHash
-                    fileHistory={fileHistory}
-                    setFileHistory={setFileHistory}
-                    actionRunner={actionRunner}
-                  />
-                </View>
-                <View
-                  initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                  animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
+                  initial={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
+                  animate={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
                 >
                   <Preview isStreaming={isStreaming} />
                 </View>

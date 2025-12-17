@@ -27,7 +27,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       primary:
         'bg-interactive text-interactive-on-primary border border-interactive-neutral hover:bg-interactive-hovered hover:border-interactive-neutral-hovered hover:text-interactive-on-primary-hovered active:bg-interactive-pressed active:border-interactive-neutral-pressed active:text-interactive-on-primary-pressed focus-visible:bg-interactive focus-visible:border-interactive-neutral disabled:bg-disabled disabled:border-disabled disabled:text-disabled',
       secondary:
-        'text-interactive-neutral hover:text-interactive-neutral-hovered active:text-interactive-neutral-pressed',
+        'text-interactive-neutral hover:text-interactive-neutral-hovered active:text-interactive-neutral-pressed bg-transparent ',
       'primary-text':
         "bg-transparent text-interactive-primary border-none hover:text-interactive-hovered active:text-interactive-pressed focus-visible:text-interactive rounded-[4px] focus-visible:before:absolute focus-visible:before:-right-[3.133px] focus-visible:before:-top-[3px] focus-visible:before:-bottom-[3px] focus-visible:before:-left-[3.133px] focus-visible:before:rounded-[4px] focus-visible:before:border focus-visible:before:border-interactive focus-visible:before:content-[''] focus-visible:before:pointer-events-none",
       'primary-ghost':

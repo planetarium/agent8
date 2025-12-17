@@ -4,7 +4,7 @@ import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
 import { ResizeHandle } from '~/components/ui/ResizeHandle';
-import { useWorkbenchShowWorkbench } from '~/lib/hooks/useWorkbenchStore';
+import { useWorkbenchShowWorkbench, useWorkbenchMobilePreviewMode } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -160,11 +160,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     const isMobileView = useMobileView();
     const showWorkbench = useWorkbenchShowWorkbench();
+    const mobilePreviewMode = useWorkbenchMobilePreviewMode();
     const isSmallViewportForWorkbench = useViewport(1003); // When workbench is visible
     const isSmallViewportForChat = useViewport(1072); // When workbench is not mounted yet
 
     // Use different breakpoint based on whether workbench is visible
     const isSmallViewport = showWorkbench ? isSmallViewportForWorkbench : isSmallViewportForChat;
+
+    // Hide chat when mobilePreviewMode is active on small viewport
+    const hideChatForMobilePreview = isSmallViewport && mobilePreviewMode;
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
@@ -610,7 +614,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             }}
             className={classNames(styles.Chat, 'flex flex-col flex-shrink-0 h-full chat-container', {
               'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
-              '!w-full !mr-0': isSmallViewport,
+              '!w-full !mr-0': isSmallViewport && !hideChatForMobilePreview,
+              hidden: hideChatForMobilePreview,
               'w-full': !chatStarted && !isSmallViewport,
               'overflow-y-auto': chatStarted,
               [styles.chatStarted]: chatStarted && !isSmallViewport,

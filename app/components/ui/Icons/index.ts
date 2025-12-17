@@ -30,3 +30,5 @@ export { FileIcon } from './FileIcon';
 export { CheckCircleLinedIcon } from './CheckCircleLinedIcon';
 export { RightLineIcon } from './RightLineIcon';
 export { MoreIcon } from './MoreIcon';
+export { PreviewIcon } from './PreviewIcon';
+export { ChatIcon } from './ChatIcon';
