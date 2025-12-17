@@ -191,7 +191,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Image',
-        url: 'https://mcp-image.verse8.io/mcp',
+        url: 'https://mcp-image-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -199,7 +199,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Spritesheet',
-        url: 'https://mcp-spritesheet.verse8.io/mcp',
+        url: 'https://mcp-spritesheet-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -207,7 +207,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Cinematic',
-        url: 'https://mcp-cinematic.verse8.io/mcp',
+        url: 'https://mcp-cinematic-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -215,7 +215,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Audio',
-        url: 'https://mcp-audio.verse8.io/mcp',
+        url: 'https://mcp-audio-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -223,7 +223,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Skybox',
-        url: 'https://mcp-skybox.verse8.io/mcp',
+        url: 'https://mcp-skybox-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -231,7 +231,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'UI',
-        url: 'https://mcp-ui.verse8.io/mcp',
+        url: 'https://mcp-ui-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
@@ -239,7 +239,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Crossramp',
-        url: 'https://mcp-crossramp.verse8.io/mcp',
+        url: 'https://mcp-crossramp-svc.verse8.io/mcp',
         enabled: true,
         version: 2,
         v8AuthIntegrated: true,
