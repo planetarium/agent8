@@ -46,7 +46,24 @@ export const Dropdown = ({ trigger, children, align = 'end', open, onOpenChange 
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+
+      /*
+       * Check if click is inside a modal overlay (fixed positioned with high z-index)
+       * Modals use createPortal and have fixed positioning with z-50
+       */
+      const closestFixed = target.closest('.fixed');
+
+      if (closestFixed) {
+        const zIndex = window.getComputedStyle(closestFixed).zIndex;
+
+        // Don't close dropdown if clicking inside a modal (z-index >= 50)
+        if (zIndex && parseInt(zIndex) >= 50) {
+          return;
+        }
+      }
+
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setIsOpen(false);
       }
     };

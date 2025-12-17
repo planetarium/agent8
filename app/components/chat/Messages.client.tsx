@@ -259,8 +259,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Hide View Diff button for the first AI response */}
-                        {!isFirstAssistantMessage && (
+                        {/* Hide View Diff button for the first AI response and non-last messages */}
+                        {!isFirstAssistantMessage && isLast && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
                               <CustomIconButton
@@ -305,7 +305,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         </Tooltip.Root>
-                        {index > 0 && messages[index - 1]?.role === 'user' && (
+                        {/* Show Retry button only for the last message */}
+                        {index > 0 && messages[index - 1]?.role === 'user' && isLast && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
                               <CustomIconButton
