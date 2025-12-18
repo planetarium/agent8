@@ -7,11 +7,8 @@ import { type UIMessage, DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
-import useViewport from '~/lib/hooks/useViewport';
-import { classNames } from '~/utils/classNames';
 import { chatStore } from '~/lib/stores/chat';
 import {
   useWorkbenchFiles,
@@ -56,8 +53,6 @@ import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
-import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { versionEventStore } from '~/lib/stores/versionEvent';
 import { extractTextContent } from '~/utils/message';
 import { changeChatUrl } from '~/utils/url';
 import { get2DStarterPrompt, get3DStarterPrompt } from '~/lib/common/prompts/agent8-prompts';
@@ -66,10 +61,7 @@ import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
-import CustomButton from '~/components/ui/CustomButton';
-import { CloseIcon } from '~/components/ui/Icons';
-import { RestoreConfirmModal } from '~/components/ui/Restore';
-import { restoreVersion } from '~/utils/restoreVersion';
+import { useVersionFeature } from '~/lib/hooks/useVersionFeature';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
@@ -169,156 +161,6 @@ async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: 
   });
 }
 
-// Save Version Confirmation Modal Component
-interface SaveVersionConfirmModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (title: string, description: string) => void;
-  commitTitle: string | null;
-}
-
-// Removing HTML tags from input
-const sanitizeInput = (input: string) => input.replace(/<[^>]*>/g, '');
-
-function SaveVersionConfirmModal({ isOpen, onClose, onConfirm, commitTitle }: SaveVersionConfirmModalProps) {
-  const [title, setTitle] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const isSmallViewport = useViewport(1003);
-
-  // Reset fields when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setTitle('');
-      setDescription('');
-    }
-  }, [isOpen]);
-
-  if (!isOpen || !commitTitle) {
-    return null;
-  }
-
-  const handleConfirm = () => {
-    // Title is required
-    if (!title.trim()) {
-      return;
-    }
-
-    onConfirm(title.trim(), description.trim());
-  };
-
-  // Check if form is valid (title is required)
-  const isFormValid = title.trim().length > 0;
-
-  return createPortal(
-    <div
-      className={classNames('fixed inset-0 z-50', {
-        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
-        'bg-[rgba(0,0,0,0.60)] flex items-end': isSmallViewport,
-      })}
-      onClick={onClose}
-    >
-      <div
-        className={classNames('flex flex-col items-start bg-primary', {
-          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
-            !isSmallViewport,
-          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
-            isSmallViewport,
-        })}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2 self-stretch">
-          <span className="text-primary text-heading-md flex-[1_0_0]">Save to Version History</span>
-          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div
-          className={classNames('flex flex-col items-start gap-4 self-stretch', {
-            'pb-4': isSmallViewport,
-          })}
-        >
-          <span className="text-body-md-medium text-tertiary self-stretch">
-            Save versions to easily compare and restore them
-          </span>
-
-          {/* Version Title Input */}
-          <div
-            className={classNames('flex flex-col items-start gap-2 self-stretch', {
-              'gap-3 pt-2': isSmallViewport,
-            })}
-          >
-            <div className="flex justify-between items-start self-stretch">
-              <label className="flex items-start gap-1 flex-[1_0_0] text-secondary text-body-md-medium">
-                Title
-                {!title.trim() && <span className="text-danger-bold text-body-md-regular">*</span>}
-              </label>
-              <div className="flex items-start gap-0.5">
-                <span className="text-body-md-medium text-subtle">{title.length}</span>
-                <span className="text-body-md-medium text-secondary">/50</span>
-              </div>
-            </div>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(sanitizeInput(e.target.value).slice(0, 50))}
-              maxLength={50}
-              className="w-full px-3 py-2 bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg text-primary text-body-md placeholder:text-tertiary focus:outline-none focus:border-[rgba(148,250,239,0.5)]"
-            />
-          </div>
-
-          {/* Description Input */}
-          <div
-            className={classNames('flex flex-col items-start gap-2 self-stretch', {
-              'gap-3': isSmallViewport,
-            })}
-          >
-            <label className="text-body-md-medium text-primary">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(sanitizeInput(e.target.value))}
-              placeholder="Describe what changed"
-              rows={1}
-              className="w-full px-3 py-2 bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg text-primary text-body-md placeholder:text-tertiary focus:outline-none focus:border-[rgba(148,250,239,0.5)] resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div
-            className={classNames('flex items-center gap-3 self-stretch', {
-              'justify-end': !isSmallViewport,
-              'flex-col-reverse': isSmallViewport,
-            })}
-          >
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="secondary-ghost"
-              size="lg"
-              onClick={onClose}
-            >
-              Cancel
-            </CustomButton>
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="primary-filled"
-              size="lg"
-              onClick={handleConfirm}
-              disabled={!isFormValid}
-            >
-              Save
-            </CustomButton>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
@@ -332,15 +174,9 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
-  const [isSaveVersionModalOpen, setIsSaveVersionModalOpen] = useState<boolean>(false);
-  const [selectedMessageForVersion, setSelectedMessageForVersion] = useState<UIMessage | null>(null);
-  const [savedVersions, setSavedVersions] = useState<Map<string, string>>(new Map());
-  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
-  const [selectedRestoreInfo, setSelectedRestoreInfo] = useState<{ commitHash: string; commitTitle: string } | null>(
-    null,
-  );
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
+  const version = useVersionFeature();
 
   useEffect(() => {
     if (repoStore.get().path) {
@@ -359,51 +195,6 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
       setReady(true);
     }
   }, [initialMessages, loaded]);
-
-  // Fetch saved version hashes when project loads
-  useEffect(() => {
-    const fetchSavedVersions = async () => {
-      if (repoStore.get().path && isEnabledGitbasePersistence) {
-        try {
-          const { getVersionHistory } = await import('~/lib/persistenceGitbase/api.client');
-          const versions = await getVersionHistory(repoStore.get().path);
-          const versionMap = new Map<string, string>(versions.map((v: VersionEntry) => [v.commitHash, v.commitTitle]));
-          setSavedVersions(versionMap);
-        } catch (error) {
-          console.error('Failed to fetch version history:', error);
-        }
-      }
-    };
-
-    fetchSavedVersions();
-  }, [repoStore.get().path, loaded]);
-
-  // Listen to version events (save/delete)
-  useEffect(() => {
-    const unsubscribe = versionEventStore.subscribe((event) => {
-      if (event) {
-        if (event.type === 'save' && event.commitTitle) {
-          // Add to savedVersions
-          setSavedVersions((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(event.commitHash, event.commitTitle!);
-
-            return newMap;
-          });
-        } else if (event.type === 'delete') {
-          // Remove from savedVersions
-          setSavedVersions((prev) => {
-            const newMap = new Map(prev);
-            newMap.delete(event.commitHash);
-
-            return newMap;
-          });
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   // Handle chats loading
   useEffect(() => {
@@ -491,17 +282,10 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           loadingBefore={loadingBefore}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
-          isSaveVersionModalOpen={isSaveVersionModalOpen}
-          setIsSaveVersionModalOpen={setIsSaveVersionModalOpen}
-          selectedMessageForVersion={selectedMessageForVersion}
-          setSelectedMessageForVersion={setSelectedMessageForVersion}
-          savedVersions={savedVersions}
-          isRestoreModalOpen={isRestoreModalOpen}
-          setIsRestoreModalOpen={setIsRestoreModalOpen}
-          selectedRestoreInfo={selectedRestoreInfo}
-          setSelectedRestoreInfo={setSelectedRestoreInfo}
+          version={version}
         />
       )}
+      {version.modals}
       <ToastContainer />
     </>
   );
@@ -530,15 +314,7 @@ interface ChatProps {
   loadingBefore: boolean;
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
-  isSaveVersionModalOpen: boolean;
-  setIsSaveVersionModalOpen: (open: boolean) => void;
-  selectedMessageForVersion: UIMessage | null;
-  setSelectedMessageForVersion: (message: UIMessage | null) => void;
-  savedVersions: Map<string, string>;
-  isRestoreModalOpen: boolean;
-  setIsRestoreModalOpen: (open: boolean) => void;
-  selectedRestoreInfo: { commitHash: string; commitTitle: string } | null;
-  setSelectedRestoreInfo: (info: { commitHash: string; commitTitle: string } | null) => void;
+  version: ReturnType<typeof useVersionFeature>;
 }
 
 export const ChatImpl = memo(
@@ -553,15 +329,7 @@ export const ChatImpl = memo(
     loadingBefore,
     isAuthenticated,
     onAuthRequired,
-    isSaveVersionModalOpen,
-    setIsSaveVersionModalOpen,
-    selectedMessageForVersion,
-    setSelectedMessageForVersion,
-    savedVersions,
-    isRestoreModalOpen,
-    setIsRestoreModalOpen,
-    selectedRestoreInfo,
-    setSelectedRestoreInfo,
+    version,
   }: ChatProps) => {
     useShortcuts();
 
@@ -1630,97 +1398,6 @@ export const ChatImpl = memo(
       await revertTo(commitHash);
     };
 
-    // Open save version confirmation modal
-    const handleSaveVersionClick = (message: UIMessage) => {
-      setSelectedMessageForVersion(message);
-      setIsSaveVersionModalOpen(true);
-    };
-
-    // Open restore version confirmation modal
-    const handleRestoreVersionClick = (commitHash: string, commitTitle: string) => {
-      setSelectedRestoreInfo({ commitHash, commitTitle });
-      setIsRestoreModalOpen(true);
-    };
-
-    // Actual restore version logic after confirmation
-    const handleRestoreVersionConfirm = async () => {
-      if (!selectedRestoreInfo) {
-        return;
-      }
-
-      await restoreVersion({
-        projectPath: repoStore.get().path,
-        commitHash: selectedRestoreInfo.commitHash,
-        commitTitle: selectedRestoreInfo.commitTitle,
-        onSuccess: () => {
-          setIsRestoreModalOpen(false);
-          setSelectedRestoreInfo(null);
-        },
-      });
-    };
-
-    // Actual save version logic after confirmation
-    const handleSaveVersionConfirm = async (title: string, description: string) => {
-      if (!selectedMessageForVersion) {
-        return;
-      }
-
-      const commitHash = selectedMessageForVersion.id.split('-').pop();
-
-      if (!commitHash || !isCommitHash(commitHash)) {
-        handleChatError('No commit hash found', {
-          context: 'handleSaveVersion - commit hash validation',
-        });
-        setIsSaveVersionModalOpen(false);
-
-        return;
-      }
-
-      // Close modal first
-      setIsSaveVersionModalOpen(false);
-
-      // Show loading toast
-      const toastId = toast.loading('Saving version...');
-
-      try {
-        // Get commit to extract user message (commit title)
-        const { data } = await getCommit(repoStore.get().path, commitHash);
-        const commitMessage = data.commit.message;
-
-        /*
-         * Extract user message from commit message
-         * First try to extract from <V8UserMessage> tag, otherwise use first line
-         * Apply stripMetadata to remove model/provider/attachments info
-         */
-        const userMessageMatch = commitMessage.match(/<V8UserMessage>([\s\S]*?)<\/V8UserMessage>/);
-        const rawUserMessage = userMessageMatch ? userMessageMatch[1].trim() : commitMessage.split('\n')[0];
-
-        // Apply stripMetadata first, then get first line
-        const cleanedMessage = stripMetadata(rawUserMessage).trim();
-        const commitTitle = cleanedMessage
-          ? cleanedMessage.split('\n')[0].slice(0, 100) || 'Saved version'
-          : 'Saved version';
-
-        const { saveVersion } = await import('~/lib/persistenceGitbase/api.client');
-        await saveVersion(repoStore.get().path, commitHash, commitTitle, title || undefined, description || undefined);
-
-        // Trigger version save event
-        const { triggerVersionSave } = await import('~/lib/stores/versionEvent');
-        triggerVersionSave(commitHash, commitTitle);
-
-        // Dismiss loading toast and show success
-        toast.dismiss(toastId);
-        toast.success('Version saved successfully');
-      } catch (error) {
-        // Dismiss loading toast and show error
-        toast.dismiss(toastId);
-        handleChatError('Failed to save version', {
-          error: error instanceof Error ? error : String(error),
-          context: 'handleSaveVersion',
-        });
-      }
-    };
-
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       const startTime = performance.now();
 
@@ -1834,9 +1511,9 @@ export const ChatImpl = memo(
           handleRetry={handleRetry}
           handleFork={handleFork}
           handleRevert={handleRevert}
-          handleSaveVersion={handleSaveVersionClick}
-          handleRestoreVersion={handleRestoreVersionClick}
-          savedVersions={savedVersions}
+          handleSaveVersion={version.openSave}
+          handleRestoreVersion={version.openRestore}
+          savedVersions={version.savedVersions}
           onViewDiff={handleViewDiff}
           description={description}
           messages={messages.map((message, i) => {
@@ -1885,28 +1562,6 @@ export const ChatImpl = memo(
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
           textareaExpanded={textareaExpanded}
-        />
-
-        {/* Save Version Confirmation Modal */}
-        <SaveVersionConfirmModal
-          isOpen={isSaveVersionModalOpen}
-          onClose={() => setIsSaveVersionModalOpen(false)}
-          onConfirm={handleSaveVersionConfirm}
-          commitTitle={
-            selectedMessageForVersion?.parts[0]?.type === 'text'
-              ? selectedMessageForVersion.parts[0].text.slice(0, 100)
-              : null
-          }
-        />
-
-        {/* Restore Version Confirmation Modal */}
-        <RestoreConfirmModal
-          isOpen={isRestoreModalOpen}
-          onClose={() => {
-            setIsRestoreModalOpen(false);
-            setSelectedRestoreInfo(null);
-          }}
-          onConfirm={handleRestoreVersionConfirm}
         />
       </>
     );
