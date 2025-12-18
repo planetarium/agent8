@@ -25,6 +25,29 @@ interface GitlabDiff {
   deleted_file: boolean;
 }
 
+export interface RestoreHistoryEntry {
+  commitHash: string;
+  commitTitle: string;
+  restoredAt: string;
+}
+
+export interface RestorePointData {
+  currentRestorePoint: string | null;
+  history: RestoreHistoryEntry[];
+}
+
+export interface VersionEntry {
+  commitHash: string;
+  commitTitle: string; // Original commit message
+  savedAt: string;
+  title?: string; // User-defined version title
+  description?: string; // User-defined description
+}
+
+export interface VersionHistoryData {
+  versions: VersionEntry[];
+}
+
 export class GitlabService {
   gitlab: InstanceType<typeof Gitlab>;
   gitlabUrl: string;
@@ -741,413 +764,6 @@ export class GitlabService {
     }
   }
 
-  async getTaskFirstCommit(projectPath: string, taskBranch: string): Promise<GitlabCommit> {
-    try {
-      const sinceTimestamp = taskBranch.split('-')[1];
-
-      const commitsResponse = await axios.get(
-        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-          params: {
-            ref_name: taskBranch,
-            per_page: 100,
-            order: 'topo',
-            since: new Date(parseInt(sinceTimestamp)).toISOString(),
-            until: new Date(parseInt(sinceTimestamp) + 1800_000).toISOString(),
-          },
-        },
-      );
-      const commits = commitsResponse.data as GitlabCommit[];
-
-      const filtered = commits.filter((commit) => commit.message.includes(taskBranch));
-
-      return filtered[filtered.length - 1];
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get task first commit: ${errorMessage}`);
-    }
-  }
-
-  async getTaskLastCommit(projectPath: string, taskBranch: string): Promise<GitlabCommit> {
-    try {
-      const sinceTimestamp = taskBranch.split('-')[1];
-
-      const commitsResponse = await axios.get(
-        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/repository/commits`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-          params: {
-            ref_name: taskBranch,
-            per_page: 1,
-            order: 'topo',
-            since: new Date(parseInt(sinceTimestamp)).toISOString(),
-          },
-        },
-      );
-      const commits = commitsResponse.data as GitlabCommit[];
-
-      const filtered = commits.filter((commit) => commit.message.includes(taskBranch));
-
-      return filtered[0];
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to get task first commit: ${errorMessage}`);
-    }
-  }
-
-  async getTaskBranches(projectPath: string): Promise<{
-    branches: {
-      name: string;
-      commit: {
-        id: string;
-        message: string;
-        created_at: string;
-        author_name: string;
-      } | null;
-      protected: boolean;
-      merged: boolean;
-      mergeRequestId?: number;
-      mergeStatus?: string;
-    }[];
-  }> {
-    try {
-      const projectId = encodeURIComponent(projectPath);
-
-      const response = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/repository/branches`, {
-        headers: {
-          'PRIVATE-TOKEN': this.gitlabToken,
-        },
-        params: {
-          search: '^task-',
-          per_page: 100,
-        },
-      });
-      const branches = response.data;
-
-      // Get merge requests for this project using gitlab-api
-      const openMergeRequestsResponse = await axios.get(
-        `${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests?state=opened`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-          params: {
-            per_page: 100,
-          },
-        },
-      );
-      const openMergeRequests = openMergeRequestsResponse.data;
-
-      // Check and refresh merge requests that need rechecking
-      for (const mr of openMergeRequests) {
-        if (mr.merge_status !== 'can_be_merged') {
-          try {
-            // Send refresh merge request status API call
-            await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mr.iid}/merge_ref`, {
-              headers: {
-                'PRIVATE-TOKEN': this.gitlabToken,
-              },
-            });
-          } catch (refreshError: any) {
-            const errorMessage = refreshError instanceof Error ? refreshError.message : 'Unknown error';
-            logger.warn(`Failed to refresh merge status for MR #${mr.iid}: ${errorMessage}`);
-          }
-
-          // Get updated status
-          const updatedMR = await axios.get(`${this.gitlabUrl}/api/v4/projects/${projectId}/merge_requests/${mr.iid}`, {
-            headers: {
-              'PRIVATE-TOKEN': this.gitlabToken,
-            },
-          });
-          mr.merge_status = updatedMR.data.merge_status;
-        }
-      }
-
-      // Create a map of source branch -> merge request for quick lookup
-      const mergeRequestByBranch = openMergeRequests.reduce((acc: Record<string, any>, mr: any) => {
-        acc[mr.source_branch] = {
-          id: mr.iid,
-          mergeStatus: mr.merge_status,
-        };
-        return acc;
-      }, {});
-
-      for (const branch of branches) {
-        const firstCommit = await this.getTaskFirstCommit(projectPath, branch.name);
-        const lastCommit = await this.getTaskLastCommit(projectPath, branch.name);
-
-        branch.firstCommit = firstCommit;
-        branch.lastCommit = lastCommit;
-
-        // Add merge request info if exists
-        if (mergeRequestByBranch[branch.name]) {
-          branch.mergeRequestId = mergeRequestByBranch[branch.name].id;
-          branch.mergeStatus = mergeRequestByBranch[branch.name].mergeStatus;
-        } else if (firstCommit && lastCommit) {
-          //check branch is exists
-          try {
-            await this.gitlab.Branches.show(projectPath, branch.name);
-
-            const newMR = await this.createMergeRequest(projectPath, branch.name, 'develop');
-
-            branch.mergeRequestId = newMR.mergeRequestId;
-          } catch (error) {
-            logger.error(error);
-          }
-        }
-      }
-
-      return {
-        branches: branches.filter((branch: any) => branch?.mergeRequestId),
-      };
-    } catch (error: any) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to fetch task branches: ${errorMessage}`);
-    }
-  }
-
-  async mergeTaskBranch(
-    projectPath: string,
-    fromBranch: string,
-    toBranch: string = 'develop',
-  ): Promise<{
-    message: string;
-    mergedBranch: string;
-  }> {
-    try {
-      try {
-        await this.gitlab.Branches.show(projectPath, fromBranch);
-        await this.gitlab.Branches.show(projectPath, toBranch);
-      } catch {
-        throw new Error(`Branch does not exist`);
-      }
-
-      const mrs = await this.gitlab.MergeRequests.all({
-        projectId: projectPath,
-        sourceBranch: fromBranch,
-        targetBranch: toBranch,
-        state: 'opened',
-      });
-
-      if (mrs.length === 0) {
-        throw new Error('No merge request found');
-      }
-
-      const mergeRequest = mrs[0];
-
-      if (!mergeRequest.merge_status || mergeRequest.merge_status === 'cannot_be_merged') {
-        throw new Error(`Branch cannot be merged automatically (status: ${mergeRequest.merge_status})`);
-      }
-
-      try {
-        await this.gitlab.MergeRequests.accept(projectPath, mergeRequest.iid, {
-          mergeWhenPipelineSucceeds: false,
-          shouldRemoveSourceBranch: false,
-        });
-
-        await this.gitlab.Branches.remove(projectPath, fromBranch);
-      } catch (error: any) {
-        if (error.message.includes('Unprocessable Entity')) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          await this.gitlab.MergeRequests.accept(projectPath, mergeRequest.iid, {
-            mergeWhenPipelineSucceeds: false,
-            shouldRemoveSourceBranch: false,
-          });
-
-          await this.gitlab.Branches.remove(projectPath, fromBranch);
-        } else {
-          throw new Error(`Failed to accept merge request: ${error.message}`);
-        }
-      }
-
-      return {
-        message: `Successfully merged ${fromBranch} into ${toBranch}`,
-        mergedBranch: fromBranch,
-      };
-    } catch (error) {
-      logger.error('Failed to merge branches:', error);
-
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to merge task branch: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Creates a new task branch with timestamp suffix and an initial merge request
-   */
-  async createTaskBranch(
-    projectPath: string,
-    baseRef: string = 'develop',
-  ): Promise<{
-    branchName: string;
-    mergeRequestId: number;
-  }> {
-    try {
-      const timestamp = Date.now();
-      const branchName = `task-${timestamp}`;
-
-      await this.gitlab.Branches.create(projectPath, branchName, baseRef);
-
-      // If baseRef is not 'develop', move 'develop' branch to match the baseRef position
-      if (baseRef !== 'develop') {
-        try {
-          // Check if develop branch exists
-          try {
-            await this.gitlab.Branches.show(projectPath, 'develop');
-
-            // If it exists, delete and recreate it at the baseRef position
-            await this.gitlab.Branches.remove(projectPath, 'develop');
-          } catch {
-            // If develop doesn't exist, that's fine - we'll create it
-            logger.info(`Develop branch not found, will create it at ${baseRef}`);
-          }
-
-          // Create develop branch at the baseRef position
-          await this.gitlab.Branches.create(projectPath, 'develop', baseRef);
-          logger.info(`Moved 'develop' branch to match baseRef: ${baseRef}`);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          logger.error(`Failed to move 'develop' branch to match baseRef: ${errorMessage}`);
-          throw error;
-        }
-      }
-
-      const mergeRequest = await this.createMergeRequest(projectPath, branchName, 'develop');
-
-      return {
-        branchName,
-        mergeRequestId: mergeRequest.mergeRequestId,
-      };
-    } catch (error: any) {
-      logger.error('Failed to create task branch:', error);
-
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to create task branch: ${errorMessage}`);
-    }
-  }
-
-  async createMergeRequest(
-    projectPath: string,
-    sourceBranch: string,
-    targetBranch: string,
-  ): Promise<{
-    branchName: string;
-    mergeRequestId: number;
-  }> {
-    try {
-      const mergeRequest = await this.gitlab.MergeRequests.create(
-        projectPath,
-        sourceBranch,
-        targetBranch,
-        `Merge ${sourceBranch} into ${targetBranch}`,
-        {
-          removeSourceBranch: false,
-          squash: false,
-        },
-      );
-      return {
-        branchName: sourceBranch,
-        mergeRequestId: mergeRequest.iid,
-      };
-    } catch (error: any) {
-      logger.warn(`Created branch but failed to create merge request: ${error.message}`);
-      return {
-        branchName: sourceBranch,
-        mergeRequestId: 0,
-      };
-    }
-  }
-
-  /**
-   * Renames a task branch by adding a 'removed-' prefix and closes associated merge requests
-   */
-  async removeTaskBranch(
-    projectPath: string,
-    branchName: string,
-  ): Promise<{
-    message: string;
-    oldBranchName: string;
-    newBranchName: string;
-    closedMergeRequests?: number[];
-  }> {
-    try {
-      // 1. Get project
-      const project = await this.gitlab.Projects.show(projectPath);
-
-      // 2. Check if branch exists
-      try {
-        await this.gitlab.Branches.show(project.id, branchName);
-      } catch (error: any) {
-        throw new Error(`Branch '${branchName}' does not exist: ${error.message}`);
-      }
-
-      // 3. Find and close any open merge requests associated with this branch
-      const openMergeRequestsResponse = await axios.get(
-        `${this.gitlabUrl}/api/v4/projects/${encodeURIComponent(projectPath)}/merge_requests?state=opened`,
-        {
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-        },
-      );
-      const mrs = openMergeRequestsResponse.data;
-
-      const closedMergeRequests: number[] = [];
-
-      if (mrs && mrs.length > 0) {
-        for (const mr of mrs) {
-          try {
-            // Close the merge request
-            await this.gitlab.MergeRequests.edit(project.id, mr.iid, {
-              stateEvent: 'close',
-            });
-            closedMergeRequests.push(mr.iid);
-            logger.info(`Closed merge request #${mr.iid}`);
-          } catch (mrError: any) {
-            logger.warn(`Failed to close merge request #${mr.iid}: ${mrError.message}`);
-          }
-        }
-      }
-
-      // 4. Generate new branch name with removed- prefix
-      const newBranchName = `removed-${branchName}`;
-
-      // 5. Create new branch from the old branch
-      await this.gitlab.Branches.create(project.id, newBranchName, branchName);
-
-      // 6. Delete the old branch
-      await this.gitlab.Branches.remove(project.id, branchName);
-
-      const result: {
-        message: string;
-        oldBranchName: string;
-        newBranchName: string;
-        closedMergeRequests?: number[];
-      } = {
-        message: `Successfully renamed branch '${branchName}' to '${newBranchName}'`,
-        oldBranchName: branchName,
-        newBranchName,
-      };
-
-      if (closedMergeRequests.length > 0) {
-        result.closedMergeRequests = closedMergeRequests;
-        result.message += ` and closed ${closedMergeRequests.length} merge request(s)`;
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Failed to remove task branch:', error);
-
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to remove task branch: ${errorMessage}`);
-    }
-  }
-
   /**
    * Reverts a specific branch to a given commit hash
    */
@@ -1589,6 +1205,212 @@ export class GitlabService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to get active project access tokens list: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Set restore point for a project using custom attributes
+   */
+  async setRestorePoint(projectPath: string, commitHash: string, commitTitle: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing restore point data
+      let restoreData: RestorePointData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+        restoreData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist or is invalid, create new one
+        restoreData = {
+          currentRestorePoint: null,
+          history: [],
+        };
+      }
+
+      // Add new entry to history
+      const newEntry: RestoreHistoryEntry = {
+        commitHash,
+        commitTitle,
+        restoredAt: new Date().toISOString(),
+      };
+
+      restoreData.currentRestorePoint = commitHash;
+      restoreData.history.unshift(newEntry); // Add to beginning
+
+      // Keep only last 200 entries
+      if (restoreData.history.length > 200) {
+        restoreData.history = restoreData.history.slice(0, 200);
+      }
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_restore_point', JSON.stringify(restoreData));
+      logger.info(`Set restore point for project ${projectPath} to ${commitHash} (${commitTitle})`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to set restore point: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get restore point for a project
+   */
+  async getRestorePoint(projectPath: string): Promise<string | null> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+      const value = attr.value as string;
+
+      // Try to parse as JSON first
+      try {
+        const restoreData: RestorePointData = JSON.parse(value);
+
+        return restoreData.currentRestorePoint;
+      } catch {
+        // If not JSON, assume it's legacy format (just commit hash)
+        return value;
+      }
+    } catch {
+      // If attribute doesn't exist, return null
+      return null;
+    }
+  }
+
+  /**
+   * Get restore history for a project
+   */
+  async getRestoreHistory(projectPath: string): Promise<RestoreHistoryEntry[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_restore_point');
+      const value = attr.value as string;
+
+      try {
+        const restoreData: RestorePointData = JSON.parse(value);
+
+        return restoreData.history || [];
+      } catch {
+        // If not JSON or parsing fails, return empty array
+        return [];
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Clear restore point for a project
+   */
+  async clearRestorePoint(projectPath: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      await this.gitlab.ProjectCustomAttributes.remove(project.id, 'agent8_restore_point');
+      logger.info(`Cleared restore point for project ${projectPath}`);
+    } catch (error) {
+      // Ignore error if attribute doesn't exist
+      logger.warn(`Failed to clear restore point: ${error}`);
+    }
+  }
+
+  /**
+   * Save a version to project history
+   */
+  async saveVersion(
+    projectPath: string,
+    commitHash: string,
+    commitTitle: string,
+    title?: string,
+    description?: string,
+  ): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing version history
+      let versionData: VersionHistoryData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+        versionData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist, create new one
+        versionData = { versions: [] };
+      }
+
+      // Add new version entry
+      const newVersion: VersionEntry = {
+        commitHash,
+        commitTitle,
+        savedAt: new Date().toISOString(),
+        ...(title && { title }),
+        ...(description && { description }),
+      };
+
+      versionData.versions.unshift(newVersion); // Add to beginning
+
+      // Keep only last 100 versions
+      if (versionData.versions.length > 100) {
+        versionData.versions = versionData.versions.slice(0, 100);
+      }
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_version_history', JSON.stringify(versionData));
+
+      logger.info(`Saved version for project ${projectPath}: ${commitHash} (${commitTitle})`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to save version: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get version history for a project
+   */
+  async getVersionHistory(projectPath: string): Promise<VersionEntry[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+      const value = attr.value as string;
+
+      try {
+        const versionData: VersionHistoryData = JSON.parse(value);
+
+        return versionData.versions || [];
+      } catch {
+        // If parsing fails, return empty array
+        return [];
+      }
+    } catch {
+      // If attribute doesn't exist, return empty array
+      return [];
+    }
+  }
+
+  /**
+   * Delete a specific version
+   */
+  async deleteVersion(projectPath: string, commitHash: string): Promise<void> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+
+      // Get existing version history
+      let versionData: VersionHistoryData;
+
+      try {
+        const attr = await this.gitlab.ProjectCustomAttributes.show(project.id, 'agent8_version_history');
+        versionData = JSON.parse(attr.value as string);
+      } catch {
+        // If attribute doesn't exist, nothing to delete
+        return;
+      }
+
+      // Remove the version with matching commitHash
+      versionData.versions = versionData.versions.filter((v) => v.commitHash !== commitHash);
+
+      await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_version_history', JSON.stringify(versionData));
+
+      logger.info(`Deleted version ${commitHash} for project ${projectPath}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to delete version: ${errorMessage}`);
     }
   }
 }

@@ -11,11 +11,11 @@ import {
   type OnChangeCallback as OnEditorChange,
   type OnScrollCallback as OnEditorScroll,
 } from '~/components/editor/codemirror/CodeMirrorEditor';
-import { IconButton } from '~/components/ui/IconButton';
 import { Slider } from '~/components/ui/Slider';
 import { type WorkbenchViewType } from '~/lib/stores/workbench';
 import {
   useWorkbenchShowWorkbench,
+  useWorkbenchMobilePreviewMode,
   useWorkbenchSelectedFile,
   useWorkbenchCurrentDocument,
   useWorkbenchUnsavedFiles,
@@ -33,6 +33,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { ResourcePanel } from './ResourcePanel';
 
 interface WorkspaceProps {
@@ -53,20 +54,20 @@ const viewTransition = { ease: cubicEasingFn };
 
 const sliderOptions = [
   {
+    value: 'preview' as WorkbenchViewType,
+    text: 'Preview',
+  },
+  {
+    value: 'resource' as WorkbenchViewType,
+    text: 'Resource',
+  },
+  {
     value: 'code' as WorkbenchViewType,
     text: 'Code',
   },
   {
-    value: 'resource' as WorkbenchViewType,
-    text: 'Resources',
-  },
-  {
     value: 'diff' as WorkbenchViewType,
     text: 'Diff',
-  },
-  {
-    value: 'preview' as WorkbenchViewType,
-    text: 'Preview',
   },
 ];
 
@@ -325,8 +326,8 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   logger.trace('Workbench');
 
   const [fileHistory, setFileHistory] = useState<Record<string, FileHistory>>({});
-  const [terminalReady, setTerminalReady] = useState(false);
-  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState(false);
+  const [terminalReady, setTerminalReady] = useState<boolean>(false);
+  const [isManuallyReconnecting, setIsManuallyReconnecting] = useState<boolean>(false);
 
   const connectionState = useWorkbenchConnectionState();
 
@@ -356,6 +357,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const previews = useWorkbenchPreviews();
   const hasPreview = previews.length > 0;
   const showWorkbench = useWorkbenchShowWorkbench();
+  const mobilePreviewMode = useWorkbenchMobilePreviewMode();
   const selectedFile = useWorkbenchSelectedFile();
   const currentDocument = useWorkbenchCurrentDocument();
   const unsavedFiles = useWorkbenchUnsavedFiles();
@@ -364,7 +366,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const diffEnabled = useWorkbenchDiffEnabled();
   const workbench = useWorkbenchStore();
 
-  const isSmallViewport = useViewport(1024);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT); // Mobile breakpoint - same as BaseChat
 
   const filteredSliderOptions = useMemo(() => {
     return sliderOptions.filter((option) => {
@@ -416,10 +418,6 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     }
   }, [connectionState, terminalReady]);
 
-  const onRun = useCallback(async () => {
-    await workbench.runPreview();
-  }, [workbench]);
-
   const onEditorChange = useCallback<OnEditorChange>(
     (update) => {
       workbench.setDocumentContentByPath(update.filePath, update.content);
@@ -448,17 +446,23 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     workbench.resetCurrentDocument();
   }, [workbench]);
 
+  // On mobile, use a hidden div instead of motion.div to prevent animation flicker
+  const WorkbenchWrapper = isSmallViewport ? 'div' : motion.div;
+  const wrapperProps = isSmallViewport
+    ? { className: 'z-workbench w-0 overflow-hidden' }
+    : {
+        initial: 'closed' as const,
+        animate: showWorkbench ? 'open' : 'closed',
+        variants: workbenchVariants,
+        className: 'z-workbench',
+      };
+
   return (
     chatStarted && (
-      <motion.div
-        initial="closed"
-        animate={showWorkbench ? 'open' : 'closed'}
-        variants={workbenchVariants}
-        className="z-workbench"
-      >
-        {showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
-          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
-            <div className="absolute inset-0 px-2 lg:px-6">
+      <WorkbenchWrapper {...wrapperProps}>
+        {showWorkbench && !isSmallViewport && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
+          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
+            <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
@@ -493,9 +497,10 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             </div>
           </div>
         )}
-        {showWorkbench && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
-          <div className="fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
-            <div className="absolute inset-0 px-2 lg:px-6">
+
+        {showWorkbench && !isSmallViewport && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
+          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
+            <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
                   <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
@@ -507,119 +512,105 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
             </div>
           </div>
         )}
+
         <div
-          className={classNames(
-            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
-            {
-              'w-full !top-[calc(var(--header-height))] !bottom-58': isSmallViewport,
-              'left-0': showWorkbench && isSmallViewport,
-              'left-[var(--workbench-left)]': showWorkbench,
-              'left-[100%]': !showWorkbench,
-            },
-          )}
+          className={classNames('fixed z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier', {
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
+              isSmallViewport && !mobilePreviewMode,
+            'top-0 bottom-0 left-0 right-0 w-full': isSmallViewport && mobilePreviewMode,
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
+              showWorkbench && !isSmallViewport,
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] w-[var(--workbench-inner-width)]':
+              !showWorkbench && !isSmallViewport,
+          })}
         >
-          <div className="absolute inset-0 px-2 lg:px-6">
-            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-              <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
-                <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
-                <button
-                  onClick={() => {
-                    onRun();
-                  }}
-                  disabled={connectionState !== 'connected'}
-                  className={classNames(
-                    'bg-transparent text-sm px-2.5 py-0.5 rounded-full relative',
-                    'text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive flex items-center space-x-1',
-                    {
-                      'opacity-50 cursor-not-allowed': connectionState !== 'connected',
-                    },
+          <div
+            className={classNames('absolute inset-0', {
+              'pr-7': !(isSmallViewport && mobilePreviewMode),
+            })}
+          >
+            <div
+              className={classNames('h-full flex flex-col overflow-hidden', {
+                'bg-primary': isSmallViewport && mobilePreviewMode,
+                'border border-tertiary shadow-sm rounded-lg p-4 bg-transperant-subtle': !(
+                  isSmallViewport && mobilePreviewMode
+                ),
+              })}
+            >
+              {/* Hide Slider and other tabs on mobile preview mode */}
+              {!(isSmallViewport && mobilePreviewMode) && (
+                <div className="flex items-center">
+                  <Slider selected={selectedView} options={filteredSliderOptions} setSelected={setSelectedView} />
+
+                  {selectedView === 'diff' && (
+                    <div className="ml-auto">
+                      <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
+                    </div>
                   )}
-                >
-                  <div className="i-ph:play" />
-                  <span>Run Preview</span>
-                </button>
-                <div className="ml-auto" />
-                {/* {(selectedView === 'code' || selectedView === 'resource') && (
-                  <div className="flex overflow-y-auto">
-                    <PanelHeaderButton
-                      className="mr-1 text-sm"
-                      onClick={() => {
-                        workbench.downloadZip();
-                      }}
-                    >
-                      <div className="i-ph:download" />
-                      Download
-                    </PanelHeaderButton>
-                  </div>
-                )} */}
-                {selectedView === 'diff' && (
-                  <FileModifiedDropdown fileHistory={fileHistory} onSelectFile={onFileSelect} />
-                )}
-                <IconButton
-                  icon="i-ph:x-circle"
-                  className="-mr-1"
-                  size="xl"
-                  onClick={() => {
-                    workbench.setShowWorkbench(false);
-                  }}
-                />
-              </div>
+                </div>
+              )}
               <div className="relative flex-1 overflow-hidden">
+                {/* Hide other views on mobile preview mode, show only Preview */}
+                {!(isSmallViewport && mobilePreviewMode) && (
+                  <>
+                    <View
+                      initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                      animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                    >
+                      <EditorPanel
+                        editorDocument={currentDocument}
+                        isStreaming={isStreaming}
+                        selectedFile={selectedFile}
+                        files={files}
+                        unsavedFiles={unsavedFiles}
+                        onFileSelect={onFileSelect}
+                        onEditorScroll={onEditorScroll}
+                        onEditorChange={onEditorChange}
+                        onFileSave={onFileSave}
+                        onFileReset={onFileReset}
+                      />
+                    </View>
+                    <View
+                      initial={{ x: '100%' }}
+                      animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                    >
+                      <ResourcePanel
+                        editorDocument={currentDocument}
+                        isStreaming={isStreaming}
+                        selectedFile={selectedFile}
+                        files={files}
+                        unsavedFiles={unsavedFiles}
+                        onFileSelect={onFileSelect}
+                        onEditorScroll={onEditorScroll}
+                        onEditorChange={onEditorChange}
+                        onFileSave={onFileSave}
+                        onFileReset={onFileReset}
+                      />
+                    </View>
+                    <View
+                      initial={{ x: '100%' }}
+                      animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                    >
+                      <DiffViewWithCommitHash
+                        fileHistory={fileHistory}
+                        setFileHistory={setFileHistory}
+                        actionRunner={actionRunner}
+                      />
+                    </View>
+                  </>
+                )}
+                {/* Preview - always visible, full screen on mobile preview mode */}
                 <View
-                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                  animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                  initial={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
+                  animate={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
                 >
-                  <EditorPanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <ResourcePanel
-                    editorDocument={currentDocument}
-                    isStreaming={isStreaming}
-                    selectedFile={selectedFile}
-                    files={files}
-                    unsavedFiles={unsavedFiles}
-                    onFileSelect={onFileSelect}
-                    onEditorScroll={onEditorScroll}
-                    onEditorChange={onEditorChange}
-                    onFileSave={onFileSave}
-                    onFileReset={onFileReset}
-                  />
-                </View>
-                <View
-                  initial={{ x: '100%' }}
-                  animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                >
-                  <DiffViewWithCommitHash
-                    fileHistory={fileHistory}
-                    setFileHistory={setFileHistory}
-                    actionRunner={actionRunner}
-                  />
-                </View>
-                <View
-                  initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                  animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                >
-                  <Preview />
+                  <Preview isStreaming={isStreaming} />
                 </View>
               </div>
             </div>
           </div>
         </div>
-      </motion.div>
+      </WorkbenchWrapper>
     )
   );
 });

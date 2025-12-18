@@ -47,12 +47,6 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
     const newData = Array.from(progressMap.values());
     newData.sort((a, b) => a.order - b.order);
     setProgressList(newData);
-
-    if (newData.find((x) => x.label === 'response' && x.status === 'complete')) {
-      setTimeout(() => {
-        setProgressList([]);
-      }, 1000);
-    }
   }, [data]);
 
   if (progressList.length === 0) {
@@ -96,16 +90,6 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
               )}
             </AnimatePresence>
           </div>
-          {/* <motion.button
-            initial={{ width: 0 }}
-            animate={{ width: 'auto' }}
-            exit={{ width: 0 }}
-            transition={{ duration: 0.15, ease: cubicEasingFn }}
-            className="rounded-lg hover:bg-bolt-elements-artifacts-backgroundHover"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            <div className={expanded ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-          </motion.button> */}
         </div>
       </div>
     </AnimatePresence>
@@ -141,7 +125,6 @@ const ProgressItem = ({ progress }: { progress: ProgressAnnotation }) => {
               <img src="/icons/CheckCircle.svg" alt="Complete" />
             ) : null}
           </div>
-          {/* {x.label} */}
         </div>
         {progress.status === 'in-progress' ? (
           <div
