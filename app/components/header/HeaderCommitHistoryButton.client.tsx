@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
 import { createPortal } from 'react-dom';
+import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
@@ -20,6 +20,7 @@ import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 import { Button } from '~/components/ui/Button';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import CustomButton from '~/components/ui/CustomButton';
+import { BaseModal } from '~/components/ui/BaseModal';
 import { HistoryIcon, CloseIcon, OutLinkIcon, ForkIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
 
 interface Commit {
@@ -59,78 +60,28 @@ interface RestoreConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   commit: Commit | null;
-  isSmallViewport?: boolean;
 }
 
-function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit, isSmallViewport }: RestoreConfirmModalProps) {
-  if (!isOpen || !commit) {
+function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConfirmModalProps) {
+  if (!commit) {
     return null;
   }
 
-  return createPortal(
-    <div
-      className={classNames('fixed inset-0 z-50', {
-        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
-        'bg-[rgba(0,0,0,0.60)] flex items-end': !!isSmallViewport,
-      })}
-      onClick={onClose}
-    >
-      <div
-        className={classNames('flex flex-col items-start bg-primary', {
-          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
-            !isSmallViewport,
-          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
-            !!isSmallViewport,
-        })}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex justify-center items-start gap-2 self-stretch">
-          <span className="text-primary text-heading-md flex-[1_0_0]">
-            Are you sure you want to restore this commit?
-          </span>
-          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
-          <span className="text-body-md-medium text-tertiary self-stretch">
-            Changes will be applied to this project. Publishing will update the existing project.
-          </span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div
-            className={classNames('flex items-center gap-3 self-stretch', {
-              'justify-end': !isSmallViewport,
-              'flex-col-reverse': !!isSmallViewport,
-            })}
-          >
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="secondary-ghost"
-              size="lg"
-              onClick={onClose}
-            >
-              Cancel
-            </CustomButton>
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="primary-filled"
-              size="lg"
-              onClick={onConfirm}
-            >
-              <RestoreIcon size={24} color="#f3f5f8" />
-              Restore
-            </CustomButton>
-          </div>
-        </div>
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Are you sure you want to restore this commit?">
+      <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
+        <span className="text-body-md-medium text-tertiary self-stretch">
+          Changes will be applied to this project. Publishing will update the existing project.
+        </span>
       </div>
-    </div>,
-    document.body,
+      <BaseModal.Actions>
+        <BaseModal.CancelButton onClick={onClose} />
+        <BaseModal.ConfirmButton onClick={onConfirm}>
+          <RestoreIcon size={24} color="#f3f5f8" />
+          Restore
+        </BaseModal.ConfirmButton>
+      </BaseModal.Actions>
+    </BaseModal>
   );
 }
 
@@ -140,76 +91,28 @@ interface ForkConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   commit: Commit | null;
-  isSmallViewport?: boolean;
 }
 
-function ForkConfirmModal({ isOpen, onClose, onConfirm, commit, isSmallViewport }: ForkConfirmModalProps) {
-  if (!isOpen || !commit) {
+function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmModalProps) {
+  if (!commit) {
     return null;
   }
 
-  return createPortal(
-    <div
-      className={classNames('fixed inset-0 z-50', {
-        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
-        'bg-[rgba(0,0,0,0.60)] flex items-end': !!isSmallViewport,
-      })}
-      onClick={onClose}
-    >
-      <div
-        className={classNames('flex flex-col items-start bg-primary', {
-          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
-            !isSmallViewport,
-          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
-            !!isSmallViewport,
-        })}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex justify-center items-start gap-2 self-stretch">
-          <span className="text-primary text-heading-md flex-[1_0_0]">Are you sure you want to fork this commit?</span>
-          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
-          <span className="text-body-md-medium text-tertiary self-stretch">
-            A new project will be created. Publishing will produce a separate project from the original.
-          </span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col items-start gap-[10px] self-stretch">
-          <div
-            className={classNames('flex items-center gap-3 self-stretch', {
-              'justify-end': !isSmallViewport,
-              'flex-col-reverse': !!isSmallViewport,
-            })}
-          >
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="secondary-ghost"
-              size="lg"
-              onClick={onClose}
-            >
-              Cancel
-            </CustomButton>
-            <CustomButton
-              className={isSmallViewport ? 'w-full' : ''}
-              variant="primary-filled"
-              size="lg"
-              onClick={onConfirm}
-            >
-              <ForkIcon size={24} fill="#f3f5f8" />
-              Fork
-            </CustomButton>
-          </div>
-        </div>
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Are you sure you want to fork this commit?">
+      <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
+        <span className="text-body-md-medium text-tertiary self-stretch">
+          A new project will be created. Publishing will produce a separate project from the original.
+        </span>
       </div>
-    </div>,
-    document.body,
+      <BaseModal.Actions>
+        <BaseModal.CancelButton onClick={onClose} />
+        <BaseModal.ConfirmButton onClick={onConfirm}>
+          <ForkIcon size={24} fill="#f3f5f8" />
+          Fork
+        </BaseModal.ConfirmButton>
+      </BaseModal.Actions>
+    </BaseModal>
   );
 }
 
@@ -762,7 +665,6 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
         onClose={() => setIsForkModalOpen(false)}
         onConfirm={handleForkConfirm}
         commit={selectedCommitForFork}
-        isSmallViewport={isSmallViewport}
       />
 
       {/* Restore Confirmation Modal */}
@@ -770,7 +672,6 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onConfirm={handleRestoreConfirm}
-        isSmallViewport={isSmallViewport}
         commit={selectedCommit}
       />
     </>
