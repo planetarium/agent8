@@ -17,7 +17,8 @@ export class BoltShell {
   #devServerRunning: boolean = false;
 
   executionState = atom<
-    { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void } | undefined
+    | { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void; noInterrupt?: boolean }
+    | undefined
   >();
 
   constructor() {
@@ -116,14 +117,24 @@ export class BoltShell {
     logger.debug('BoltShell: ✅ New session created and initialized successfully');
   }
 
-  async executeCommand(sessionId: string, command: string, abort?: () => void): Promise<ExecutionResult | undefined> {
+  async executeCommand(
+    sessionId: string,
+    command: string,
+    abort?: () => void,
+    options?: { noInterrupt?: boolean },
+  ): Promise<ExecutionResult | undefined> {
     if (!this.process || !this.terminal) {
       return undefined;
     }
 
     const state = this.executionState.get();
 
-    if (state?.active && state.abort) {
+    // previous command has noInterrupt flag set, wait until it completes
+    if (state?.active && state.noInterrupt && state.executionPrms) {
+      logger.debug('BoltShell: Waiting for noInterrupt command to complete...');
+      await state.executionPrms;
+    } else if (state?.active && state.abort) {
+      // only abort if noInterrupt flag is not set
       state.abort();
     }
 
@@ -137,7 +148,13 @@ export class BoltShell {
 
         // Use the pre-implemented executeCommand function
         const executionPromise = this.#shellSession.executeCommand(command);
-        this.executionState.set({ sessionId, active: true, executionPrms: executionPromise, abort });
+        this.executionState.set({
+          sessionId,
+          active: true,
+          executionPrms: executionPromise,
+          abort,
+          noInterrupt: options?.noInterrupt,
+        });
 
         if (command.includes(SHELL_COMMANDS.START_DEV_SERVER)) {
           this.#devServerRunning = true;
