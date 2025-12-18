@@ -147,13 +147,14 @@ export function useVersionFeature() {
       return;
     }
 
+    // Close modal immediately to prevent duplicate clicks
+    const restoreInfo = state.restore.info;
+    dispatch({ type: 'CLOSE_RESTORE' });
+
     await restoreVersion({
       projectPath,
-      commitHash: state.restore.info.commitHash,
-      commitTitle: state.restore.info.commitTitle,
-      onSuccess: () => {
-        dispatch({ type: 'CLOSE_RESTORE' });
-      },
+      commitHash: restoreInfo.commitHash,
+      commitTitle: restoreInfo.commitTitle,
     });
   }, [state.restore.info, projectPath]);
 

@@ -11,6 +11,7 @@ import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 import { toggleMenu, menuStore } from '~/lib/stores/menu';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 
 import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
@@ -29,7 +30,7 @@ export function Header() {
   const isEmbedMode = searchParams.get('mode') === 'embed';
   const isMenuOpen = useStore(menuStore);
   const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const isPreviewMode = useStore(workbenchStore.mobilePreviewMode);
 

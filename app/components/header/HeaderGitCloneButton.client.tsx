@@ -7,6 +7,7 @@ import { repoStore } from '~/lib/stores/repo';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { CloseIcon } from '~/components/ui/Icons';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import {
   createProjectAccessToken,
   getProjectAccessTokenStatus,
@@ -56,7 +57,7 @@ interface HeaderGitCloneButtonProps {
 
 export function HeaderGitCloneButton({ asMenuItem = false, onClose }: HeaderGitCloneButtonProps) {
   const repo = useStore(repoStore);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

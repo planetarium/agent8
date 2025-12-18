@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import useViewport from '~/lib/hooks/useViewport';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { classNames } from '~/utils/classNames';
 import CustomButton from '~/components/ui/CustomButton';
 import { CloseIcon } from '~/components/ui/Icons';
@@ -18,7 +19,7 @@ const sanitizeInput = (input: string) => input.replace(/<[^>]*>/g, '');
 export function SaveVersionConfirmModal({ isOpen, onClose, onConfirm, commitTitle }: SaveVersionConfirmModalProps) {
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   // Reset fields when modal opens
   useEffect(() => {

@@ -9,6 +9,7 @@ import {
   useWorkbenchMobilePreviewMode,
 } from '~/lib/hooks/useWorkbenchStore';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { PortDropdown } from './PortDropdown';
@@ -68,7 +69,7 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
   const connectionState = useWorkbenchConnectionState();
   const isRunningPreview = useWorkbenchIsRunningPreview();
   const mobilePreviewMode = useWorkbenchMobilePreviewMode();
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const activePreview = previews[activePreviewIndex];
 
   const onRun = useCallback(async () => {

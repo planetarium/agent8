@@ -8,6 +8,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { RenameChatModal } from '~/components/ui/RenameChatModal';
 import { updateProjectDescription } from '~/lib/persistenceGitbase/api.client';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 
 interface ChatDescriptionProps {
   asMenuItem?: boolean;
@@ -16,7 +17,7 @@ interface ChatDescriptionProps {
 
 export function ChatDescription({ asMenuItem = false, onClose }: ChatDescriptionProps) {
   const repo = useStore(repoStore);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   if (!repo.title) {

@@ -6,6 +6,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 
 import { repoStore } from '~/lib/stores/repo';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { forkProject, fetchProjectFiles, setRestorePoint } from '~/lib/persistenceGitbase/api.client';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { handleChatError } from '~/utils/errorNotification';
@@ -219,7 +220,7 @@ interface HeaderCommitHistoryButtonProps {
 
 export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: HeaderCommitHistoryButtonProps) {
   const repo = useStore(repoStore);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -421,9 +422,14 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       return;
     }
 
+    // Close modals immediately to prevent duplicate clicks
+    const commitToRestore = selectedCommit;
+    setIsRestoreModalOpen(false);
+    setIsOpen(false);
+
     const startTime = performance.now();
-    const commitHash = selectedCommit.id;
-    const commitInfo = selectedCommit.title || selectedCommit.message.split('\n')[0];
+    const commitHash = commitToRestore.id;
+    const commitInfo = commitToRestore.title || commitToRestore.message.split('\n')[0];
 
     if (!commitHash || !isCommitHash(commitHash)) {
       handleChatError('No commit hash found', {
@@ -468,7 +474,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
 
       // Save restore point to GitLab
       try {
-        await setRestorePoint(repo.path, commitHash, selectedCommit.title);
+        await setRestorePoint(repo.path, commitHash, commitToRestore.title);
       } catch (err) {
         console.warn('Failed to save restore point to GitLab:', err);
 
@@ -479,12 +485,10 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       window.history.replaceState(null, '', `/chat/${repo.path}?revertTo=${commitHash}`);
 
       // Trigger restore event to add message to chat
-      triggerRestoreEvent(commitHash, selectedCommit.title);
+      triggerRestoreEvent(commitHash, commitToRestore.title);
 
       toast.dismiss(toastId);
       toast.success('Project restored successfully');
-      setIsRestoreModalOpen(false);
-      setIsOpen(false);
     } catch (error) {
       toast.dismiss(toastId);
       handleChatError('Failed to restore project', {

@@ -33,6 +33,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { ResourcePanel } from './ResourcePanel';
 
 interface WorkspaceProps {
@@ -365,7 +366,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   const diffEnabled = useWorkbenchDiffEnabled();
   const workbench = useWorkbenchStore();
 
-  const isSmallViewport = useViewport(1003); // Mobile breakpoint - same as BaseChat
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT); // Mobile breakpoint - same as BaseChat
 
   const filteredSliderOptions = useMemo(() => {
     return sliderOptions.filter((option) => {

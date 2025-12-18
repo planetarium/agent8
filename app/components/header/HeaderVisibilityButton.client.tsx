@@ -8,6 +8,7 @@ import axios from 'axios';
 import { Switch } from '~/components/ui/Switch';
 import { ShareFillIcon, ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 type VisibilityType = 'public' | 'private';
@@ -19,7 +20,7 @@ interface HeaderVisibilityButtonProps {
 
 export function HeaderVisibilityButton({ asMenuItem = false, onClose }: HeaderVisibilityButtonProps) {
   const repo = useStore(repoStore);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   const [visibility, setVisibility] = useState<VisibilityType>('private');
   const [isLoading, setIsLoading] = useState<boolean>(false);

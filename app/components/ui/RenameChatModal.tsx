@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CloseIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { classNames } from '~/utils/classNames';
 
 // Removing HTML tags from input
@@ -17,7 +18,7 @@ export interface RenameChatModalProps {
 
 export const RenameChatModal = ({ isOpen, onClose, onConfirm, currentName }: RenameChatModalProps) => {
   const [name, setName] = useState<string>(currentName);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   // Reset name when modal opens
   useEffect(() => {

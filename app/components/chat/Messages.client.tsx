@@ -4,6 +4,7 @@ import Lottie from 'lottie-react';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { useRandomTip } from '~/lib/hooks/useRandomTip';
 
 import type { JSONValue, UIMessage } from 'ai';
@@ -63,10 +64,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
 
     // Check for mobile viewport
-    const isSmallViewport = useViewport(1072);
+    const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
 
     // For Run Preview button layout purposes
-    const isSmallViewportForLayout = useViewport(1003);
+    const isSmallViewportForLayout = useViewport(MOBILE_BREAKPOINT);
 
     // Random game creation tip
     const randomTip = useRandomTip();

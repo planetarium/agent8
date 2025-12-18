@@ -6,10 +6,11 @@ import { useState } from 'react';
 import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 
 export function HeaderDeployButton() {
   const [isDeploying, setIsDeploying] = useState<boolean>(false);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   const handleDeploy = async () => {
     const chatId = repoStore.get().path;

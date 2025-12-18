@@ -13,6 +13,7 @@ import CustomIconButton from '~/components/ui/CustomIconButton';
 import { RestoreConfirmModal } from '~/components/ui/Restore';
 import { restoreVersion } from '~/utils/restoreVersion';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { classNames } from '~/utils/classNames';
 
 // Delete Confirmation Modal Component
@@ -95,7 +96,7 @@ interface HeaderVersionHistoryButtonProps {
 
 export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: HeaderVersionHistoryButtonProps) {
   const repo = useStore(repoStore);
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [allVersions, setAllVersions] = useState<VersionEntry[]>([]); // All versions fetched
   const [displayedVersions, setDisplayedVersions] = useState<VersionEntry[]>([]); // Currently displayed
@@ -180,14 +181,15 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
       return;
     }
 
+    // Close modals immediately to prevent duplicate clicks
+    const versionToRestore = selectedVersionForRestore;
+    setIsRestoreModalOpen(false);
+    setIsOpen(false);
+
     await restoreVersion({
       projectPath: repo.path,
-      commitHash: selectedVersionForRestore.commitHash,
-      commitTitle: selectedVersionForRestore.commitTitle,
-      onSuccess: () => {
-        setIsRestoreModalOpen(false);
-        setIsOpen(false);
-      },
+      commitHash: versionToRestore.commitHash,
+      commitTitle: versionToRestore.commitTitle,
     });
   };
 

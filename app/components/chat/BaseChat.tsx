@@ -16,6 +16,7 @@ import { motion } from 'framer-motion';
 
 import { useMobileView } from '~/lib/hooks/useMobileView';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
@@ -161,8 +162,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const isMobileView = useMobileView();
     const showWorkbench = useWorkbenchShowWorkbench();
     const mobilePreviewMode = useWorkbenchMobilePreviewMode();
-    const isSmallViewportForWorkbench = useViewport(1003); // When workbench is visible
-    const isSmallViewportForChat = useViewport(1072); // When workbench is not mounted yet
+    const isSmallViewportForWorkbench = useViewport(MOBILE_BREAKPOINT); // When workbench is visible
+    const isSmallViewportForChat = useViewport(CHAT_MOBILE_BREAKPOINT); // When workbench is not mounted yet
 
     // Use different breakpoint based on whether workbench is visible
     const isSmallViewport = showWorkbench ? isSmallViewportForWorkbench : isSmallViewportForChat;

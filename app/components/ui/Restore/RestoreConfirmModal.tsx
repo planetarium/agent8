@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { CloseIcon, RestoreIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { classNames } from '~/utils/classNames';
 
 export interface RestoreConfirmModalProps {
@@ -11,7 +12,7 @@ export interface RestoreConfirmModalProps {
 }
 
 export function RestoreConfirmModal({ isOpen, onClose, onConfirm }: RestoreConfirmModalProps) {
-  const isSmallViewport = useViewport(1003);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   if (!isOpen) {
     return null;
