@@ -179,12 +179,14 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   const version = useVersionFeature();
 
   useEffect(() => {
-    if (repoStore.get().path) {
+    const projectPath = repoStore.get().path;
+
+    if (projectPath) {
       sendEventToParent('EVENT', { name: 'START_EDITING' });
     }
 
     const timeoutId = setTimeout(() => {
-      changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+      changeChatUrl(projectPath, { replace: true, searchParams: {}, ignoreChangeEvent: true });
     }, 100);
 
     return () => clearTimeout(timeoutId);
@@ -1094,11 +1096,12 @@ export const ChatImpl = memo(
       }
 
       const sendMessageFinalStartTime = performance.now();
+      const projectPath = repoStore.get().path;
 
       try {
         // Record prompt activity for subsequent requests
-        if (repoStore.get().path) {
-          sendActivityPrompt(repoStore.get().path).catch((error) => {
+        if (projectPath) {
+          sendActivityPrompt(projectPath).catch((error) => {
             logger.warn('Failed to record prompt activity:', error);
           });
         }
@@ -1109,7 +1112,7 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
-        if (repoStore.get().path) {
+        if (projectPath) {
           const commit = await workbench.commitModifiedFiles();
 
           if (commit) {
@@ -1326,6 +1329,7 @@ export const ChatImpl = memo(
 
     const handleFork = async (message: UIMessage) => {
       const startTime = performance.now();
+      const repo = repoStore.get();
 
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
@@ -1340,7 +1344,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      const nameWords = repoStore.get().name.split('-');
+      const nameWords = repo.name.split('-');
 
       let newRepoName = '';
 
@@ -1354,7 +1358,7 @@ export const ChatImpl = memo(
       const toastId = toast.loading('Forking project...');
 
       try {
-        const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+        const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title);
 
         // Dismiss the loading toast
         toast.dismiss(toastId);
@@ -1400,6 +1404,7 @@ export const ChatImpl = memo(
 
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       const startTime = performance.now();
+      const projectPath = repoStore.get().path;
 
       workbench.currentView.set('code');
 
@@ -1417,7 +1422,7 @@ export const ChatImpl = memo(
 
           if (nextCommitHash && isCommitHash(nextCommitHash)) {
             try {
-              const { data } = await getCommit(repoStore.get().path, nextCommitHash);
+              const { data } = await getCommit(projectPath, nextCommitHash);
 
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
