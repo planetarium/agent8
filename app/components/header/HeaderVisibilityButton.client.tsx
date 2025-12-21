@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '@nanostores/react';
 import { createPortal } from 'react-dom';
+import { useStore } from '@nanostores/react';
 import { toast } from 'react-toastify';
+import axios from 'axios';
+import * as Tooltip from '@radix-ui/react-tooltip';
+
 import { classNames } from '~/utils/classNames';
 import { repoStore } from '~/lib/stores/repo';
-import axios from 'axios';
-import { Switch } from '~/components/ui/Switch';
-import { ShareFillIcon, ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
 import useViewport from '~/lib/hooks';
 import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
-import * as Tooltip from '@radix-ui/react-tooltip';
+
+import CustomButton from '~/components/ui/CustomButton';
+import { Switch } from '~/components/ui/Switch';
+import { ShareFillIcon, ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
 
 type VisibilityType = 'public' | 'private';
 
@@ -114,25 +117,24 @@ export function HeaderVisibilityButton({ asMenuItem = false, onClose }: HeaderVi
       ) : (
         <Tooltip.Root delayDuration={100}>
           <Tooltip.Trigger asChild>
-            <button
-              className="relative flex h-10 justify-center items-center bg-transparent gap-1.5 py-[10px] px-[14px] rounded-[4px] focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
-              disabled={isLoading || isInitialLoading}
+            <CustomButton
+              variant="secondary-outlined"
+              size="md"
               onClick={() => setIsModalOpen(true)}
+              disabled={isLoading || isInitialLoading}
             >
               {isLoading || isInitialLoading ? (
                 <>
                   <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />
-                  <span className="text-heading-xs text-interactive-on-primary">Loading...</span>
+                  Loading...
                 </>
               ) : (
                 <>
                   <ShareFillIcon width={20} height={20} />
-                  <span className="text-heading-xs text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
-                    Share Code
-                  </span>
+                  Share
                 </>
               )}
-            </button>
+            </CustomButton>
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content

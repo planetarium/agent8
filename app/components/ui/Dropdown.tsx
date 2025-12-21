@@ -5,6 +5,7 @@ interface DropdownProps {
   trigger: ReactNode;
   children: ReactNode;
   align?: 'start' | 'center' | 'end';
+  size?: 'default' | 'compact';
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -36,7 +37,7 @@ export const DropdownItem = ({ children, onClick, className, disabled }: Dropdow
 
 export const DropdownSeparator = () => <div className="h-px bg-bolt-elements-borderColor my-1" />;
 
-export const Dropdown = ({ trigger, children, align = 'end', open, onOpenChange }: DropdownProps) => {
+export const Dropdown = ({ trigger, children, align = 'end', size = 'default', open, onOpenChange }: DropdownProps) => {
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -100,8 +101,10 @@ export const Dropdown = ({ trigger, children, align = 'end', open, onOpenChange 
       {isOpen && (
         <div
           className={classNames(
-            'absolute top-full mt-1 flex w-[260px] py-2 flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000]',
+            'absolute top-full mt-1 flex w-[260px] flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000] overflow-hidden',
             {
+              'py-2': size === 'default',
+              'py-0.5': size === 'compact',
               'right-0': align === 'end',
               'left-0': align === 'start',
               'left-1/2 -translate-x-1/2': align === 'center',

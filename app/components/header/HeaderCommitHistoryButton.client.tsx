@@ -420,9 +420,9 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       ) : (
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
-            <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
+            <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
               <HistoryIcon width={20} height={20} />
-              Commit History
+              Commits
             </CustomButton>
           </Tooltip.Trigger>
           <Tooltip.Portal>
