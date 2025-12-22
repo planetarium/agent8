@@ -53,6 +53,12 @@ export const MODEL_WHITELIST: WhitelistItem[] = [
     userSelectable: true,
   },
   {
+    label: 'Gemini 3 Flash',
+    providerName: PROVIDER_NAMES.GOOGLE_VERTEX_AI,
+    modelName: 'gemini-3-flash-preview',
+    userSelectable: true,
+  },
+  {
     label: 'Gemini 2.5 Pro',
     providerName: PROVIDER_NAMES.OPEN_ROUTER,
     modelName: 'google/gemini-2.5-pro',
