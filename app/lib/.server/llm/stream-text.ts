@@ -289,49 +289,5 @@ export async function streamText(props: {
     ...options,
   });
 
-  (async () => {
-    try {
-      // Track tool calls per step to detect parallel vs sequential calls
-      let currentStep = 0;
-      let toolCallsInStep: string[] = [];
-
-      for await (const part of result.fullStream) {
-        if (part.type === 'error') {
-          const error: any = part.error;
-          logger.error(`${error}`);
-
-          return;
-        }
-
-        // Log step transitions to see parallel tool calls
-        if (part.type === 'start-step') {
-          currentStep++;
-          toolCallsInStep = [];
-        }
-
-        if (part.type === 'tool-call') {
-          toolCallsInStep.push(part.toolName);
-        }
-
-        if (part.type === 'finish-step') {
-          if (toolCallsInStep.length > 1) {
-            logger.info(
-              `[Step ${currentStep}] PARALLEL: ${toolCallsInStep.length} tools called together: [${toolCallsInStep.join(', ')}]`,
-            );
-          } else if (toolCallsInStep.length === 1) {
-            logger.info(`[Step ${currentStep}] Sequential: ${toolCallsInStep[0]}`);
-          }
-        }
-      }
-    } catch (e: any) {
-      if (e.name === 'AbortError') {
-        logger.info('Request aborted.');
-        return;
-      }
-
-      throw e;
-    }
-  })();
-
   return result;
 }
