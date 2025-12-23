@@ -20,27 +20,27 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NA
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
 };
