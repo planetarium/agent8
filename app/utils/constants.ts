@@ -28,15 +28,15 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
