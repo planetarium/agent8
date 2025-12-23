@@ -93,31 +93,47 @@ export async function streamText(props: {
     }
   }
 
-  const processedMessages = messages.map((message) => {
-    if (message.role === 'user') {
-      const { model, provider, parts } = extractPropertiesFromMessage(message);
-      currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
-      currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
+  const processedMessages = messages
+    .map((message) => {
+      if (message.role === 'user') {
+        const { model, provider, parts } = extractPropertiesFromMessage(message);
+        currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
+        currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
 
-      return { ...message, parts };
-    } else if (message.role == 'assistant') {
-      const parts = [...(message.parts || [])];
+        return { ...message, parts };
+      } else if (message.role == 'assistant') {
+        const parts = [...(message.parts || [])];
+        const newParts = [];
 
-      for (const part of parts) {
-        if (part.type === 'text') {
-          part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
-          part.text = part.text.replace(/<think>.*?<\/think>/s, '');
-          part.text = part.text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '');
-          part.text = part.text.replace(/(<toolCall[^>]*>)([\s\S]*?)(<\/toolCall>)/gs, '');
-          part.text = part.text.replace(/(<toolResult[^>]*>)([\s\S]*?)(<\/toolResult>)/gs, '');
+        for (const part of parts) {
+          if (part.type === 'text') {
+            let text = part.text;
+            text = text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
+            text = text.replace(/<think>.*?<\/think>/s, '');
+            text = text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '');
+            text = text.replace(/(<toolCall[^>]*>)([\s\S]*?)(<\/toolCall>)/gs, '');
+            text = text.replace(/(<toolResult[^>]*>)([\s\S]*?)(<\/toolResult>)/gs, '');
+
+            if (text.trim().length > 0) {
+              newParts.push({ ...part, text });
+            }
+          } else {
+            newParts.push(part);
+          }
         }
+
+        return { ...message, parts: newParts };
       }
 
-      return { ...message, parts };
-    }
+      return message;
+    })
+    .filter((message) => {
+      if (message.parts && Array.isArray(message.parts) && message.parts.length === 0) {
+        return false;
+      }
 
-    return message;
-  });
+      return true;
+    });
 
   const provider = PROVIDER_LIST.find((p) => p.name === currentProvider) || DEFAULT_PROVIDER;
   const staticModels = LLMManager.getInstance().getStaticModelListFromProvider(provider);
