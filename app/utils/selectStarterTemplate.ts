@@ -10,10 +10,10 @@ import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
 
 // Zod schema for template selection response
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
-  templateName: z.string(),
-  title: z.string().default('Untitled Project'),
-  projectRepo: z.string().default(''),
-  nextActionSuggestion: z.string().default(''),
+  templateName: z.string().describe('The selected template name'),
+  title: z.string().describe('A proper title for the project').default('Untitled Project'),
+  projectRepo: z.string().describe('The name of the new project repository'),
+  nextActionSuggestion: z.string().describe('Suggestions for the next action').optional(),
 });
 
 type TemplateSelection = z.infer<typeof TEMPLATE_SELECTION_SCHEMA>;

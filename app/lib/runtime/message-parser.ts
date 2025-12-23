@@ -3,11 +3,16 @@ import type { BoltArtifactData } from '~/types/artifact';
 import { createScopedLogger } from '~/utils/logger';
 import { cleanEscapedTags, extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
+import { AUTO_SYNTAX_FIX_TAG_NAME } from '~/utils/constants';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
 const ARTIFACT_ACTION_TAG_OPEN = '<boltAction';
 const ARTIFACT_ACTION_TAG_CLOSE = '</boltAction>';
+
+// Auto syntax fix tag - content inside this tag is parsed but not displayed
+const AUTO_SYNTAX_FIX_TAG_OPEN = `<${AUTO_SYNTAX_FIX_TAG_NAME}`;
+const AUTO_SYNTAX_FIX_TAG_CLOSE = `</${AUTO_SYNTAX_FIX_TAG_NAME}>`;
 
 const logger = createScopedLogger('MessageParser');
 
@@ -48,6 +53,7 @@ interface MessageState {
   position: number;
   insideArtifact: boolean;
   insideAction: boolean;
+  insideAutoSyntaxFix: boolean;
   currentArtifact?: BoltArtifactData;
   currentAction: BoltActionData;
   actionId: number;
@@ -70,6 +76,7 @@ export class StreamingMessageParser {
         position: 0,
         insideAction: false,
         insideArtifact: false,
+        insideAutoSyntaxFix: false,
         currentAction: { content: '' },
         actionId: 0,
       };
@@ -246,7 +253,42 @@ export class StreamingMessageParser {
             break;
           }
         }
-      } else if (input[i] === '<' && input[i + 1] !== '/') {
+      } else if (input[i] === '<') {
+        // Check for autoSyntaxFix closing tag
+        if (input.slice(i).startsWith(AUTO_SYNTAX_FIX_TAG_CLOSE)) {
+          state.insideAutoSyntaxFix = false;
+          i += AUTO_SYNTAX_FIX_TAG_CLOSE.length;
+          continue;
+        }
+
+        // Check for autoSyntaxFix opening tag
+        if (input.slice(i).startsWith(AUTO_SYNTAX_FIX_TAG_OPEN)) {
+          const nextChar = input[i + AUTO_SYNTAX_FIX_TAG_OPEN.length];
+
+          if (!nextChar || nextChar === '>' || nextChar === ' ') {
+            const openTagEnd = input.indexOf('>', i);
+
+            if (openTagEnd !== -1) {
+              state.insideAutoSyntaxFix = true;
+              i = openTagEnd + 1;
+              continue;
+            } else {
+              // Tag not complete yet, wait for more input
+              break;
+            }
+          }
+        }
+
+        // Skip other closing tags
+        if (input[i + 1] === '/') {
+          if (!state.insideAutoSyntaxFix) {
+            output += input[i];
+          }
+
+          i++;
+          continue;
+        }
+
         let j = i;
         let potentialTag = '';
 
@@ -257,7 +299,10 @@ export class StreamingMessageParser {
             const nextChar = input[j + 1];
 
             if (nextChar && nextChar !== '>' && nextChar !== ' ') {
-              output += input.slice(i, j + 1);
+              if (!state.insideAutoSyntaxFix) {
+                output += input.slice(i, j + 1);
+              }
+
               i = j + 1;
               break;
             }
@@ -295,9 +340,11 @@ export class StreamingMessageParser {
 
               this._options.callbacks?.onArtifactOpen?.({ messageId, ...currentArtifact });
 
-              const artifactFactory = this._options.artifactElement ?? createArtifactElement;
-
-              output += artifactFactory({ messageId }, artifactId);
+              // Only add artifact element to output if not inside autoSyntaxFix
+              if (!state.insideAutoSyntaxFix) {
+                const artifactFactory = this._options.artifactElement ?? createArtifactElement;
+                output += artifactFactory({ messageId }, artifactId);
+              }
 
               i = openTagEnd + 1;
             } else {
@@ -306,7 +353,10 @@ export class StreamingMessageParser {
 
             break;
           } else if (!ARTIFACT_TAG_OPEN.startsWith(potentialTag)) {
-            output += input.slice(i, j + 1);
+            if (!state.insideAutoSyntaxFix) {
+              output += input.slice(i, j + 1);
+            }
+
             i = j + 1;
             break;
           }
@@ -318,7 +368,10 @@ export class StreamingMessageParser {
           break;
         }
       } else {
-        output += input[i];
+        if (!state.insideAutoSyntaxFix) {
+          output += input[i];
+        }
+
         i++;
       }
 
