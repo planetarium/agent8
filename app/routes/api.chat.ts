@@ -307,7 +307,33 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
-            writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+            try {
+              const uiStream = result.toUIMessageStream({ sendReasoning: false });
+              const reader = uiStream.getReader();
+
+              while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                  break;
+                }
+
+                writer.write(value);
+              }
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
+
+              const errorPayload: DataErrorPayload = {
+                type: 'data-error',
+                data: {
+                  type: 'error',
+                  reason: 'stream-processing',
+                  message: errorMsg,
+                },
+              };
+
+              writer.write(errorPayload);
+            }
 
             return;
           },
@@ -334,7 +360,33 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           abortSignal: request.signal,
         });
 
-        writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+        try {
+          const uiStream = result.toUIMessageStream({ sendReasoning: false });
+          const reader = uiStream.getReader();
+
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+              break;
+            }
+
+            writer.write(value);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
+
+          const errorPayload: DataErrorPayload = {
+            type: 'data-error',
+            data: {
+              type: 'error',
+              reason: 'stream-processing',
+              message: errorMsg,
+            },
+          };
+
+          writer.write(errorPayload);
+        }
       },
       onError: (error: unknown) => {
         const message = (error as Error).message;
