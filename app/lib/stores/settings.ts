@@ -241,7 +241,7 @@ const getDefaultMCPServers = (): MCPServer[] => {
       },
       {
         name: 'Crossramp',
-        url: 'https://mcp-crossramp-svc.verse8.io/mcp',
+        url: 'https://agent8-crossramp-mcp-server-stg-739427039826.asia-east1.run.app/mcp',
         enabled: true,
         version: MCP_TOOLS_VERSION,
         v8AuthIntegrated: true,
