@@ -307,10 +307,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
-            const uiStream = result.toUIMessageStream({ sendReasoning: false });
-            const reader = uiStream.getReader();
-
             try {
+              const uiStream = result.toUIMessageStream({ sendReasoning: false });
+              const reader = uiStream.getReader();
+
               while (true) {
                 const { done, value } = await reader.read();
 
@@ -360,10 +360,10 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           abortSignal: request.signal,
         });
 
-        const uiStream = result.toUIMessageStream({ sendReasoning: false });
-        const reader = uiStream.getReader();
-
         try {
+          const uiStream = result.toUIMessageStream({ sendReasoning: false });
+          const reader = uiStream.getReader();
+
           while (true) {
             const { done, value } = await reader.read();
 
