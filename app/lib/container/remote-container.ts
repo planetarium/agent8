@@ -1090,7 +1090,19 @@ export class RemoteContainer implements Container {
         `📦 Large mount detected (${(content.length / 1024 / 1024).toFixed(2)}MB), using file-by-file upload`,
       );
 
-      const skippedFiles = await this._mountByFiles(data);
+      // Skip top-level project folder (same behavior as original mount)
+      let targetTree = data;
+      const rootEntries = Object.entries(data);
+
+      if (rootEntries.length === 1) {
+        const [, rootNode] = rootEntries[0];
+
+        if ('directory' in rootNode) {
+          targetTree = rootNode.directory;
+        }
+      }
+
+      const skippedFiles = await this._mountByFiles(targetTree);
 
       if (skippedFiles.length > 0) {
         logger.warn(`⚠️ ${skippedFiles.length} file(s) skipped due to size limit:`, skippedFiles);
