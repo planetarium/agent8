@@ -29,6 +29,7 @@ import { v4 } from 'uuid';
 import { createScopedLogger } from '~/utils/logger';
 import { debounce } from '~/utils/debounce';
 import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
+import { toast } from 'react-toastify';
 
 // Constants for OSC parsing
 const OSC_PATTERNS = {
@@ -48,6 +49,7 @@ const BUFFER_CONFIG = {
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
+const MAX_TRANSFER_SIZE = 10 * 1024 * 1024; // 10MB - WebSocket transfer size limit
 const logger = createScopedLogger('remote-container');
 
 // Connection state enum
@@ -1037,15 +1039,76 @@ export class RemoteContainer implements Container {
     }
   }
 
+  private async _mountByFiles(
+    tree: FileSystemTree,
+    basePath: string = '',
+    skippedFiles: string[] = [],
+  ): Promise<string[]> {
+    const entries = Object.entries(tree);
+
+    for (const [name, node] of entries) {
+      const fullPath = basePath ? `${basePath}/${name}` : name;
+
+      if ('file' in node) {
+        const contents = node.file.contents;
+        const fileSize = Array.isArray(contents) ? contents.length : new TextEncoder().encode(contents).length;
+
+        if (fileSize > MAX_TRANSFER_SIZE) {
+          logger.warn(`⚠️ Skipping large file: ${fullPath} (${(fileSize / 1024 / 1024).toFixed(2)}MB > 10MB limit)`);
+          skippedFiles.push(fullPath);
+          continue;
+        }
+
+        if (node.file.isBinary || Array.isArray(contents)) {
+          await this.fs.writeFile(fullPath, new Uint8Array(contents as number[]));
+        } else {
+          await this.fs.writeFile(fullPath, contents);
+        }
+      } else if ('directory' in node) {
+        await this.fs.mkdir(fullPath, { recursive: true });
+        await this._mountByFiles(node.directory, fullPath, skippedFiles);
+      }
+    }
+
+    return skippedFiles;
+  }
+
   async mount(data: FileSystemTree): Promise<void> {
-    await this._connection.sendRequest({
-      id: `mount-${v4()}`,
-      operation: {
-        type: 'mount',
-        path: '/',
-        content: JSON.stringify(data),
-      },
-    });
+    const content = JSON.stringify(data);
+
+    if (content.length <= MAX_TRANSFER_SIZE) {
+      await this._connection.sendRequest({
+        id: `mount-${v4()}`,
+        operation: {
+          type: 'mount',
+          path: '/',
+          content,
+        },
+      });
+    } else {
+      logger.info(
+        `📦 Large mount detected (${(content.length / 1024 / 1024).toFixed(2)}MB), using file-by-file upload`,
+      );
+
+      // Skip top-level project folder (same behavior as original mount)
+      let targetTree = data;
+      const rootEntries = Object.entries(data);
+
+      if (rootEntries.length === 1) {
+        const [, rootNode] = rootEntries[0];
+
+        if ('directory' in rootNode) {
+          targetTree = rootNode.directory;
+        }
+      }
+
+      const skippedFiles = await this._mountByFiles(targetTree);
+
+      if (skippedFiles.length > 0) {
+        logger.warn(`⚠️ ${skippedFiles.length} file(s) skipped due to size limit:`, skippedFiles);
+        toast.warning(`${skippedFiles.length} file(s) skipped due to size limit (>10MB)`);
+      }
+    }
   }
 
   async spawn(command: string, args: string[] = [], options?: SpawnOptions): Promise<ContainerProcess> {
