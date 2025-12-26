@@ -1042,8 +1042,8 @@ export class RemoteContainer implements Container {
   private async _mountByFiles(
     tree: FileSystemTree,
     basePath: string = '',
-    skippedFiles: { path: string; reason: 'binary' | 'size' }[] = [],
-  ): Promise<{ path: string; reason: 'binary' | 'size' }[]> {
+    skippedFiles: string[] = [],
+  ): Promise<string[]> {
     const entries = Object.entries(tree);
 
     for (const [name, node] of entries) {
@@ -1051,25 +1051,19 @@ export class RemoteContainer implements Container {
 
       if ('file' in node) {
         const contents = node.file.contents;
-        const isBinary = node.file.isBinary || Array.isArray(contents);
-
-        // Skip binary files (server does not support binary files)
-        if (isBinary) {
-          logger.warn(`⚠️ Skipping binary file: ${fullPath}`);
-          skippedFiles.push({ path: fullPath, reason: 'binary' });
-          continue;
-        }
-
-        // Check text file size
-        const fileSize = new TextEncoder().encode(contents).length;
+        const fileSize = Array.isArray(contents) ? contents.length : new TextEncoder().encode(contents).length;
 
         if (fileSize > MAX_TRANSFER_SIZE) {
           logger.warn(`⚠️ Skipping large file: ${fullPath} (${(fileSize / 1024 / 1024).toFixed(2)}MB > 10MB limit)`);
-          skippedFiles.push({ path: fullPath, reason: 'size' });
+          skippedFiles.push(fullPath);
           continue;
         }
 
-        await this.fs.writeFile(fullPath, contents);
+        if (node.file.isBinary || Array.isArray(contents)) {
+          await this.fs.writeFile(fullPath, new Uint8Array(contents as number[]));
+        } else {
+          await this.fs.writeFile(fullPath, contents);
+        }
       } else if ('directory' in node) {
         await this.fs.mkdir(fullPath, { recursive: true });
         await this._mountByFiles(node.directory, fullPath, skippedFiles);
@@ -1079,55 +1073,8 @@ export class RemoteContainer implements Container {
     return skippedFiles;
   }
 
-  /**
-   * Remove binary files from FileSystemTree and return list of skipped files
-   */
-  private _filterBinaryFiles(
-    tree: FileSystemTree,
-    basePath: string = '',
-    skippedFiles: string[] = [],
-  ): { filteredTree: FileSystemTree; skippedFiles: string[] } {
-    const filteredTree: FileSystemTree = {};
-
-    for (const [name, node] of Object.entries(tree)) {
-      const fullPath = basePath ? `${basePath}/${name}` : name;
-
-      if ('file' in node) {
-        const contents = node.file.contents;
-        const isBinary = node.file.isBinary || Array.isArray(contents);
-
-        if (isBinary) {
-          logger.warn(`⚠️ Skipping binary file: ${fullPath}`);
-          skippedFiles.push(fullPath);
-        } else {
-          filteredTree[name] = node;
-        }
-      } else if ('directory' in node) {
-        const result = this._filterBinaryFiles(node.directory, fullPath, skippedFiles);
-        filteredTree[name] = { directory: result.filteredTree };
-      }
-    }
-
-    return { filteredTree, skippedFiles };
-  }
-
   async mount(data: FileSystemTree): Promise<void> {
-    // Filter out binary files (server does not support binary files)
-    const { filteredTree: originalFilteredTree, skippedFiles: binarySkipped } = this._filterBinaryFiles(data);
-
-    // Skip top-level project folder (common for both branches)
-    let filteredTree = originalFilteredTree;
-    const rootEntries = Object.entries(originalFilteredTree);
-
-    if (rootEntries.length === 1) {
-      const [, rootNode] = rootEntries[0];
-
-      if ('directory' in rootNode) {
-        filteredTree = rootNode.directory;
-      }
-    }
-
-    const content = JSON.stringify(filteredTree);
+    const content = JSON.stringify(data);
 
     if (content.length <= MAX_TRANSFER_SIZE) {
       await this._connection.sendRequest({
@@ -1138,39 +1085,28 @@ export class RemoteContainer implements Container {
           content,
         },
       });
-
-      // Binary file skip notification
-      if (binarySkipped.length > 0) {
-        const message = `Skipped: ${binarySkipped.length} binary file(s)`;
-        logger.warn(`⚠️ ${message}`, binarySkipped);
-        toast.warning(message);
-      }
     } else {
       logger.info(
         `📦 Large mount detected (${(content.length / 1024 / 1024).toFixed(2)}MB), using file-by-file upload`,
       );
 
-      const sizeSkipped = await this._mountByFiles(filteredTree);
+      // Skip top-level project folder (same behavior as original mount)
+      let targetTree = data;
+      const rootEntries = Object.entries(data);
 
-      // Binary + large file skip notification
-      const totalBinary = binarySkipped.length;
-      const totalSize = sizeSkipped.filter((f) => f.reason === 'size').length;
+      if (rootEntries.length === 1) {
+        const [, rootNode] = rootEntries[0];
 
-      if (totalBinary > 0 || totalSize > 0) {
-        const parts = [];
-
-        if (totalBinary > 0) {
-          parts.push(`${totalBinary} binary file(s)`);
+        if ('directory' in rootNode) {
+          targetTree = rootNode.directory;
         }
+      }
 
-        if (totalSize > 0) {
-          parts.push(`${totalSize} large file(s)`);
-        }
+      const skippedFiles = await this._mountByFiles(targetTree);
 
-        const message = `Skipped: ${parts.join(', ')}`;
-
-        logger.warn(`⚠️ ${message}`, [...binarySkipped, ...sizeSkipped.map((f) => f.path)]);
-        toast.warning(message);
+      if (skippedFiles.length > 0) {
+        logger.warn(`⚠️ ${skippedFiles.length} file(s) skipped due to size limit:`, skippedFiles);
+        toast.warning(`${skippedFiles.length} file(s) skipped due to size limit (>10MB)`);
       }
     }
   }
