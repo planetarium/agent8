@@ -234,12 +234,14 @@
   --color-text-tertiary: #99a2b0;
   --color-text-subtle: #767d8c;
   --color-text-interactive-neutral: #f3f5f8;
+  --color-text-interactive-selected: #3fd2e8;
   --color-text-interactive-on-primary: #f3f5f8;
   --color-text-disabled: rgba(255, 255, 255, 0.18);
   --color-bg-primary: #111315;
   --color-bg-interactive-neutral: #222428;
   --color-bg-interactive-neutral-hovered: #32363c;
   --color-bg-interactive-neutral-pressed: #464c54;
+  --color-bg-transparent-subtle: rgba(255, 255, 255, 0.05);
   --color-border-interactive-neutral: rgba(255, 255, 255, 0.18);
   --color-border-interactive-neutral-hovered: rgba(255, 255, 255, 0.22);
   --color-border-interactive-neutral-pressed: rgba(255, 255, 255, 0.35);
@@ -254,6 +256,7 @@
   --color-bg-interactive-primary: #1a92a4;
   --color-bg-interactive-primary-hovered: #1a7583;
   --color-bg-interactive-primary-pressed: #1b5862;
+  --color-border-interactive-primary: #1a92a4;
 
   /* Border Radius Variables */
   --border-radius-8: 8px;
