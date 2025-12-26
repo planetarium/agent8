@@ -1059,11 +1059,7 @@ export class RemoteContainer implements Container {
           continue;
         }
 
-        if (node.file.isBinary || Array.isArray(contents)) {
-          await this.fs.writeFile(fullPath, contents);
-        } else {
-          await this.fs.writeFile(fullPath, contents);
-        }
+        await this.fs.writeFile(fullPath, contents);
       } else if ('directory' in node) {
         await this.fs.mkdir(fullPath, { recursive: true });
         await this._mountByFiles(node.directory, fullPath, skippedFiles);
