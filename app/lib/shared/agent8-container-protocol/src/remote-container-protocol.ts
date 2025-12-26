@@ -80,7 +80,7 @@ export interface ContainerEventMessage<T = unknown> {
 export interface FileSystemOperation {
   type: 'readFile' | 'writeFile' | 'mkdir' | 'readdir' | 'rm' | 'mount' | 'stat';
   path?: string;
-  content?: string | Uint8Array;
+  content?: string | number[];
   options?: {
     encoding?: BufferEncoding;
     withFileTypes?: boolean;
