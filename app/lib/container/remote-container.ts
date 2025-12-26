@@ -808,7 +808,7 @@ export class RemoteContainerFileSystem implements FileSystem {
     return response.data.content;
   }
 
-  async writeFile(path: string, content: string | Uint8Array, options?: { encoding?: BufferEncoding }): Promise<void> {
+  async writeFile(path: string, content: string | number[], options?: { encoding?: BufferEncoding }): Promise<void> {
     const requestId = `writeFile-${v4()}`;
 
     const response = await this._connection.sendRequest({
@@ -1060,7 +1060,7 @@ export class RemoteContainer implements Container {
         }
 
         if (node.file.isBinary || Array.isArray(contents)) {
-          await this.fs.writeFile(fullPath, new Uint8Array(contents as number[]));
+          await this.fs.writeFile(fullPath, contents);
         } else {
           await this.fs.writeFile(fullPath, contents);
         }
@@ -1074,7 +1074,19 @@ export class RemoteContainer implements Container {
   }
 
   async mount(data: FileSystemTree): Promise<void> {
-    const content = JSON.stringify(data);
+    // Skip top-level project folder (common for all cases)
+    let targetTree = data;
+    const rootEntries = Object.entries(data);
+
+    if (rootEntries.length === 1) {
+      const [, rootNode] = rootEntries[0];
+
+      if ('directory' in rootNode) {
+        targetTree = rootNode.directory;
+      }
+    }
+
+    const content = JSON.stringify(targetTree);
 
     if (content.length <= MAX_TRANSFER_SIZE) {
       await this._connection.sendRequest({
@@ -1089,18 +1101,6 @@ export class RemoteContainer implements Container {
       logger.info(
         `📦 Large mount detected (${(content.length / 1024 / 1024).toFixed(2)}MB), using file-by-file upload`,
       );
-
-      // Skip top-level project folder (same behavior as original mount)
-      let targetTree = data;
-      const rootEntries = Object.entries(data);
-
-      if (rootEntries.length === 1) {
-        const [, rootNode] = rootEntries[0];
-
-        if ('directory' in rootNode) {
-          targetTree = rootNode.directory;
-        }
-      }
 
       const skippedFiles = await this._mountByFiles(targetTree);
 
