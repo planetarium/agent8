@@ -55,11 +55,12 @@ Your main goal is to build the game project from user's request.
 
   if (options.cot !== false) {
     systemPrompt += `
-
+      
 # Reasoning Style
 - **CRITICAL**: ALL tool calls MUST be in your normal response text, NEVER in reasoning blocks
 - **FORBIDDEN**: Calling tools inside <think> tags or extended thinking mode
 - **FORBIDDEN**: Writing tool calls as text or code (e.g., "print(tool_name(...))", "tool_code") - USE the actual tool calling mechanism
+- **FORBIDDEN**: Using pseudo-tags or text representations like "[Call tool_name]", "<tool_code>", or "I will call..."
 - You MUST call action submission tools to complete tasks
 - **Remember the response order**: Explain → Read files → Submit actions → Present results
 - Keep explanation brief (1-3 sentences MAX) then IMMEDIATELY call tools - do NOT write long paragraphs
@@ -363,6 +364,7 @@ There are tools available to resolve coding tasks. Please follow these guideline
    **CRITICAL - Direct Tool Usage**:
    - NEVER describe tool parameters in text (e.g., "I will create a file with path...", "Let's modify it")
    - NEVER explain what you will put in the tool input
+   - NEVER output tool call plans as text (e.g., "[Call tool_name]", "<tool_code>")
    - IMMEDIATELY call the tool with complete input after initial brief explanation
    - Your response should be: brief explanation → tool calls → verify submission results
 </tool_calling>
@@ -1093,6 +1095,7 @@ function getResponseFormatPrompt() {
 ❌ Calling action tools without reading files first
 ❌ Silent tool execution without explanation
 ❌ Writing tool calls as text or code (e.g., "print(tool_name(...))", "tool_code") - USE actual tool calls
+❌ Outputting tool plans as text (e.g., "[Call read_files_contents]", "<tool_code>...") or pseudo-tags
 ❌ Calling tools ONE BY ONE when they are INDEPENDENT - use PARALLEL calls instead
 ❌ Modifying more than 5 code files without documenting remaining work in Status.md
 

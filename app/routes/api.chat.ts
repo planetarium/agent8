@@ -29,7 +29,12 @@ function createBoltArtifactXML(id?: string, title?: string, body?: string): stri
   return `<boltArtifact id="${artifactId}" title="${artifactTitle}">${artifactBody}</boltArtifact>`;
 }
 
-function toBoltSubmitActionsXML(artifactCounter: number, toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number], input: any) {
+function toBoltSubmitActionsXML(
+  artifactCounter: number,
+  toolName: (typeof SUBMIT_ACTIONS_TOOLS)[number],
+  input: any,
+  isSyntaxFix: boolean = false,
+) {
   let xmlContent = '';
 
   if (toolName === TOOL_NAMES.SUBMIT_FILE_ACTION) {
@@ -51,7 +56,9 @@ function toBoltSubmitActionsXML(artifactCounter: number, toolName: (typeof SUBMI
     xmlContent = `  <boltAction type="shell">${command}</boltAction>`;
   }
 
-  return createBoltArtifactXML(`artifact-${artifactCounter}`, undefined, xmlContent);
+  const artifactId = isSyntaxFix ? `syntax-fix-artifact-${artifactCounter}` : `artifact-${artifactCounter}`;
+
+  return createBoltArtifactXML(artifactId, undefined, xmlContent);
 }
 
 export const action = withV8AuthUser(chatAction, { checkCredit: true });
@@ -66,11 +73,12 @@ const logger = createScopedLogger('api.chat');
 
 async function chatAction({ context, request }: ActionFunctionArgs) {
   const env = { ...context.cloudflare.env, ...process.env } as Env;
-  const { messages, files } = await request.json<{
+  const { messages, files, isSyntaxFix } = await request.json<{
     messages: Messages;
     files: any;
     promptId?: string;
     contextOptimization: boolean;
+    isSyntaxFix?: boolean;
   }>();
 
   const cookieHeader = request.headers.get('Cookie');
@@ -299,7 +307,33 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               abortSignal: request.signal,
             });
 
-            writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+            try {
+              const uiStream = result.toUIMessageStream({ sendReasoning: false });
+              const reader = uiStream.getReader();
+
+              while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                  break;
+                }
+
+                writer.write(value);
+              }
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
+
+              const errorPayload: DataErrorPayload = {
+                type: 'data-error',
+                data: {
+                  type: 'error',
+                  reason: 'stream-processing',
+                  message: errorMsg,
+                },
+              };
+
+              writer.write(errorPayload);
+            }
 
             return;
           },
@@ -326,7 +360,33 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           abortSignal: request.signal,
         });
 
-        writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+        try {
+          const uiStream = result.toUIMessageStream({ sendReasoning: false });
+          const reader = uiStream.getReader();
+
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+              break;
+            }
+
+            writer.write(value);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
+
+          const errorPayload: DataErrorPayload = {
+            type: 'data-error',
+            data: {
+              type: 'error',
+              reason: 'stream-processing',
+              message: errorMsg,
+            },
+          };
+
+          writer.write(errorPayload);
+        }
       },
       onError: (error: unknown) => {
         const message = (error as Error).message;
@@ -440,7 +500,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                     break;
                   }
 
-                  const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input);
+                  const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input, isSyntaxFix);
                   controller.enqueue({
                     type: 'text-start',
                     id: chunk.toolCallId,

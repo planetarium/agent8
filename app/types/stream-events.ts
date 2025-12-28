@@ -3,7 +3,7 @@
  */
 export interface ServerErrorData {
   type: 'error';
-  reason: 'credit-consume';
+  reason: 'credit-consume' | 'stream-processing';
   message: string;
 }
 

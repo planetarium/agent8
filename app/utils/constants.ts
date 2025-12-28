@@ -5,6 +5,7 @@ import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 export const WORK_DIR_NAME = 'project';
 export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
+export const AUTO_SYNTAX_FIX_TAG_NAME = 'autoSyntaxFix';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
@@ -19,11 +20,11 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NA
 
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
@@ -39,7 +40,7 @@ export const FIXED_MODELS = {
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
 };

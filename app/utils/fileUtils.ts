@@ -142,7 +142,7 @@ const BINARY_EXTENSIONS = new Set([
  * Check if a file path indicates a binary file based on its extension
  * Replacement for is-binary-path package to avoid path module dependency
  */
-function isBinaryPathByExtension(filePath: string): boolean {
+export function isBinaryPathByExtension(filePath: string): boolean {
   const extension = filePath.toLowerCase().split('.').pop();
   return extension ? BINARY_EXTENSIONS.has(extension) : false;
 }

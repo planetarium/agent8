@@ -23,11 +23,18 @@ const textColorAnimation = `
 
 export default function ProgressCompilation({ data }: { data?: ProgressAnnotation[] }) {
   const [progressList, setProgressList] = React.useState<ProgressAnnotation[]>([]);
+  const clearTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // const [expanded, setExpanded] = useState(false);
   const EXPANDED = false;
 
   React.useEffect(() => {
+    // new data comes in, clear existing timeout
+    if (clearTimeoutRef.current) {
+      clearTimeout(clearTimeoutRef.current);
+      clearTimeoutRef.current = null;
+    }
+
     if (!data || data.length == 0) {
       setProgressList([]);
       return;
@@ -47,6 +54,16 @@ export default function ProgressCompilation({ data }: { data?: ProgressAnnotatio
     const newData = Array.from(progressMap.values());
     newData.sort((a, b) => a.order - b.order);
     setProgressList(newData);
+
+    // Only clear progress list when the last item (highest order) is complete
+    const lastItem = newData[newData.length - 1];
+
+    if (lastItem && lastItem.status === 'complete') {
+      clearTimeoutRef.current = setTimeout(() => {
+        setProgressList([]);
+        clearTimeoutRef.current = null;
+      }, 1000);
+    }
   }, [data]);
 
   if (progressList.length === 0) {
