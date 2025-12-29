@@ -212,6 +212,7 @@ export default defineConfig({
     'py-spacing-20': 'py-[var(--spacing-20,20px)]',
     'px-spacing-8': 'px-[var(--spacing-8,8px)]',
     'gap-spacing-8': 'gap-[var(--spacing-8,8px)]',
+    'elevation-light-2': 'shadow-[0_4px_8px_0px_rgba(0,0,0,0.28),0_0_4px_0_rgba(0,0,0,0.24)]',
     'elevation-light-3': 'shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
 
     // Gradient text with shadow effect

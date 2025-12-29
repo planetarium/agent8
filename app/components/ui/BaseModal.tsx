@@ -8,8 +8,10 @@ import CustomButton from '~/components/ui/CustomButton';
 
 export interface BaseModalProps {
   isOpen: boolean;
+  isHiddenTitleSection?: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
+  modalClassName?: string;
   children?: React.ReactNode;
 }
 
@@ -101,7 +103,7 @@ function DestructiveButton({ children, onClick, disabled, type = 'button' }: Con
 }
 
 // Main BaseModal component
-export function BaseModal({ isOpen, onClose, title, children }: BaseModalProps) {
+export function BaseModal({ isOpen, isHiddenTitleSection, modalClassName, onClose, title, children }: BaseModalProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   if (!isOpen) {
@@ -117,21 +119,27 @@ export function BaseModal({ isOpen, onClose, title, children }: BaseModalProps) 
       onClick={onClose}
     >
       <div
-        className={classNames('flex flex-col items-start bg-primary', {
-          'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
-            !isSmallViewport,
-          'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
-            isSmallViewport,
-        })}
+        className={classNames(
+          'flex flex-col items-start bg-primary',
+          {
+            'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
+              !isSmallViewport,
+            'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
+              isSmallViewport,
+          },
+          modalClassName,
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 self-stretch">
-          <span className="text-primary text-heading-md flex-[1_0_0]">{title}</span>
-          <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
+        {!isHiddenTitleSection && (
+          <div className="flex items-center gap-2 self-stretch">
+            <span className="text-primary text-heading-md flex-[1_0_0]">{title}</span>
+            <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
+              <CloseIcon width={20} height={20} />
+            </button>
+          </div>
+        )}
 
         {/* Content & Actions */}
         {children}
