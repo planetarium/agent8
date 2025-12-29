@@ -848,6 +848,8 @@ export const ChatImpl = memo(
           await handleCommit(message);
         });
 
+        setFakeLoading(false);
+
         logger.debug('Finished streaming');
       },
     });
