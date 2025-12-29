@@ -13,3 +13,8 @@ export { StoryIcon } from './StoryIcon';
 export { PuzzleIcon } from './PuzzleIcon';
 export { PauseCircleIcon } from './PauseCircleIcon';
 export { PlayCircleIcon } from './PlayCircleIcon';
+export { StartGuideMobileIcon } from './StartGuideMobileIcon';
+export { StartGuideDesktopIcon } from './StartGuideDesktopIcon';
+export { SurvivorsLikeIcon } from './SurvivorsLikeIcon';
+export { ShootEmUpIcon } from './ShootEmUpIcon';
+export { VoxelIcon } from './VoxelIcon';
