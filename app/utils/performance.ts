@@ -1,12 +1,12 @@
 /**
  * Calculate elapsed time in seconds from a start time
  * @param startTime - performance.now() timestamp
- * @returns Elapsed time in seconds with unit (e.g., "1.23 sec"), "-1 sec" if startTime is undefined
+ * @returns Elapsed time in seconds, 0 if startTime is undefined
  */
-export function getElapsedTime(startTime: number | undefined): string {
+export function getElapsedTime(startTime: number | undefined): number {
   if (!startTime) {
-    return 'N/A';
+    return 0;
   }
 
-  return `${((performance.now() - startTime) / 1000).toFixed(2)} sec`;
+  return (performance.now() - startTime) / 1000;
 }

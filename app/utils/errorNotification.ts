@@ -10,7 +10,7 @@ interface ErrorNotificationOptions {
   context?: string;
   userId?: string;
   prompt?: string;
-  elapsedTime?: string;
+  elapsedTime?: number;
 }
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
@@ -19,9 +19,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
     let errorMessage = undefined;
     let errorStack = undefined;
     let customErrorProperties = {};
-    const lastUserPrompt = options.prompt
-      ? `${options.prompt.substring(0, 200)}\n${options.prompt.length > 200 ? '... (truncated)' : ''}`
-      : undefined;
+    let lastUserPrompt = options.prompt;
     const errorElapsedTime = options.elapsedTime;
 
     if (options.error instanceof Error) {
@@ -38,6 +36,10 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       }, {} as any);
     } else if (typeof options.error === 'string') {
       errorMessage = options.error;
+    }
+
+    if (lastUserPrompt && lastUserPrompt.length > 200) {
+      lastUserPrompt = `${lastUserPrompt.substring(0, 200)}... (truncated)`;
     }
 
     // Create a plain object with all Error properties for better serialization
@@ -86,7 +88,7 @@ export async function sendChatErrorWithToastMessage(
   error?: Error | string,
   functionContext?: string,
   prompt?: string,
-  elapsedTime?: string,
+  elapsedTime?: number,
 ): Promise<void> {
   const context = `Chat - ${functionContext || 'Unknown function'}`;
 
@@ -103,7 +105,7 @@ export interface HandleChatErrorOptions {
   error?: Error | string;
   context?: string;
   prompt?: string;
-  elapsedTime?: string;
+  elapsedTime?: number;
   toastType?: 'error' | 'warning';
   sendChatError?: boolean;
 }
