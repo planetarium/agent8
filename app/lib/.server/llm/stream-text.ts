@@ -231,7 +231,7 @@ export async function streamText(props: {
   const dynamicPrompts = [getProjectMdPrompt(files)];
 
   // Compose system messages in order of change frequency (low → high)
-  const coreMessages: ModelMessage[] = [
+  let coreMessages: ModelMessage[] = [
     ...[...staticPrompts, ...projectTypePrompts, ...projectContextPrompts, ...dynamicPrompts].filter(Boolean).map(
       (content) =>
         ({
@@ -251,6 +251,17 @@ export async function streamText(props: {
 
   // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
   coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
+
+  // Filter out empty messages
+  coreMessages = coreMessages.filter((message) => {
+    if (Array.isArray(message.content)) {
+      return message.content.length > 0;
+    } else if (typeof message.content === 'string') {
+      return message.content.trim().length > 0;
+    }
+
+    return true;
+  });
 
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {
