@@ -83,8 +83,8 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 // const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
 
 // 49 debug logs
-function addDebugLog(lineNumber: number): void {
-  logManager.add('Chat-' + lineNumber);
+function addDebugLog(value: number): void {
+  logManager.add('Chat-' + value);
 }
 
 function isServerError(data: unknown): data is ServerErrorData {
@@ -871,7 +871,6 @@ export const ChatImpl = memo(
 
         setFakeLoading(false);
 
-        console.log('#### logManager.logs', logManager.logs.join(','));
         logger.debug('Finished streaming');
       },
     });
