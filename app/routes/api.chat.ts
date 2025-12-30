@@ -20,8 +20,6 @@ import {
   SUBMIT_SHELL_ACTION_FIELDS,
 } from '~/lib/constants/tool-fields';
 import type { DataErrorPayload } from '~/types/stream-events';
-import { getElapsedTime } from '~/utils/performance';
-import { useRef } from 'react';
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -82,8 +80,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     contextOptimization: boolean;
     isSyntaxFix?: boolean;
   }>();
-
-  const chatRequestStartTimeRef = useRef<number>(performance.now());
 
   const cookieHeader = request.headers.get('Cookie');
 
@@ -274,8 +270,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                     type: 'error',
                     reason: 'credit-consume',
                     message: error instanceof Error ? error.message : 'Failed to consume user credit',
-                    prompt: lastUserMessage ? extractTextContent(lastUserMessage) : 'N/A',
-                    elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
                   },
                 };
                 writer.write(errorPayload);
@@ -335,8 +329,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                   type: 'error',
                   reason: 'stream-processing',
                   message: errorMsg,
-                  prompt: extractTextContent(lastUserMessage),
-                  elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
                 },
               };
 
@@ -390,8 +382,6 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               type: 'error',
               reason: 'stream-processing',
               message: errorMsg,
-              prompt: lastUserMessage ? extractTextContent(lastUserMessage) : 'N/A',
-              elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
             },
           };
 

@@ -15,35 +15,41 @@ interface ErrorNotificationOptions {
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
   try {
-    // Serialize error object completely to capture all properties
-    let errorDetails: string;
+    let errorName = undefined;
+    let errorMessage = undefined;
+    let errorStack = undefined;
+    let customErrorProperties = {};
+    const lastUserPrompt = options.prompt
+      ? `${options.prompt.substring(0, 200)}\n${options.prompt.length > 200 ? '... (truncated)' : ''}`
+      : undefined;
+    const errorElapsedTime = options.elapsedTime;
 
     if (options.error instanceof Error) {
-      // Create a plain object with all Error properties for better serialization
-      const errorObj = {
-        name: options.error.name,
-        message: options.error.message,
-        stack: options.error.stack,
-        prompt: options.prompt
-          ? `${options.prompt.substring(0, 200)}${options.prompt.length > 200 ? '... (truncated)' : ''}`
-          : undefined,
-        elapsedTime: options.elapsedTime,
+      errorName = options.error.name;
+      errorMessage = options.error.message;
+      errorStack = options.error.stack;
 
-        // Include any custom properties that might exist on the error
-        ...Object.getOwnPropertyNames(options.error).reduce((acc, key) => {
-          if (!['name', 'message', 'stack', 'prompt', 'elapsedTime'].includes(key)) {
-            acc[key] = (options.error as any)[key];
-          }
+      customErrorProperties = Object.getOwnPropertyNames(options.error).reduce((acc, key) => {
+        if (!['name', 'message', 'stack', 'prompt', 'elapsedTime'].includes(key)) {
+          acc[key] = (options.error as any)[key];
+        }
 
-          return acc;
-        }, {} as any),
-      };
-      errorDetails = JSON.stringify(errorObj, null, 2);
-    } else if (options.error) {
-      errorDetails = JSON.stringify(options.error, null, 2);
-    } else {
-      errorDetails = '';
+        return acc;
+      }, {} as any);
+    } else if (typeof options.error === 'string') {
+      errorMessage = options.error;
     }
+
+    // Create a plain object with all Error properties for better serialization
+    const errorObj = {
+      name: errorName,
+      message: errorMessage,
+      stack: errorStack,
+      prompt: lastUserPrompt,
+      elapsedTime: errorElapsedTime,
+      ...customErrorProperties,
+    };
+    const errorDetails = JSON.stringify(errorObj, null, 2);
 
     const payload = {
       message: options.message,
