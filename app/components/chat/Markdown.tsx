@@ -153,10 +153,10 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
  * // Returns: "\n<div class='__boltArtifact__'></div>\n"
  *
  * @remarks
- * - Only removes code fences that directly wrap an artifact (marked with __boltArtifact__ class)
- * - Handles code fences with optional language specifications (e.g. ```xml, ```typescript)
- * - Preserves original content if no artifact is found
- * - Safely handles edge cases like empty input or artifacts at start/end of content
+ * - Only removes code fences when artifact is ACTUALLY wrapped (opening fence above AND closing fence below)
+ * - Opening fence must have language specifier (e.g. ```xml, ```typescript)
+ * - Closing fence must be plain ``` without language specifier
+ * - Preserves original content if no artifact is found or if not properly wrapped
  */
 export const stripCodeFenceFromArtifact = (content: string) => {
   if (!content || !content.includes('__boltArtifact__')) {
@@ -171,20 +171,28 @@ export const stripCodeFenceFromArtifact = (content: string) => {
     return content;
   }
 
-  // Check previous line for code fence
-  if (artifactLineIndex > 0 && lines[artifactLineIndex - 1]?.trim().match(/^```\w*$/)) {
-    lines[artifactLineIndex - 1] = '';
-  }
+  const prevLine = artifactLineIndex > 0 ? lines[artifactLineIndex - 1]?.trim() : '';
+  const nextLine = artifactLineIndex < lines.length - 1 ? lines[artifactLineIndex + 1]?.trim() : '';
 
-  if (artifactLineIndex < lines.length - 1 && lines[artifactLineIndex + 1]?.trim().match(/^```$/)) {
+  /*
+   * Only remove code fences if artifact is actually wrapped in a code block:
+   * - Previous line is an opening fence with language specifier (```xml, ```typescript, etc.)
+   * - Next line is a closing fence (```)
+   */
+  const isOpeningFence = prevLine.match(/^```\w+$/); // Must have language specifier
+  const isClosingFence = nextLine.match(/^```$/);
+
+  if (isOpeningFence && isClosingFence) {
+    lines[artifactLineIndex - 1] = '';
     lines[artifactLineIndex + 1] = '';
   }
 
-  if (artifactLineIndex > 0 && lines[artifactLineIndex - 1]?.trim().match(/^<!\[CDATA\[/)) {
-    lines[artifactLineIndex - 1] = '';
-  }
+  // Handle CDATA wrapping (same logic - must have both opening and closing)
+  const isCdataOpen = prevLine.match(/^<!\[CDATA\[$/);
+  const isCdataClose = nextLine.match(/^\]\]>$/);
 
-  if (artifactLineIndex < lines.length - 1 && lines[artifactLineIndex + 1]?.trim().match(/^\]\]>$/)) {
+  if (isCdataOpen && isCdataClose) {
+    lines[artifactLineIndex - 1] = '';
     lines[artifactLineIndex + 1] = '';
   }
 

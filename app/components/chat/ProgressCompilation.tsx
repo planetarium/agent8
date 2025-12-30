@@ -23,11 +23,18 @@ const textColorAnimation = `
 
 export default function ProgressCompilation({ data }: { data?: ProgressAnnotation[] }) {
   const [progressList, setProgressList] = React.useState<ProgressAnnotation[]>([]);
+  const clearTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // const [expanded, setExpanded] = useState(false);
   const EXPANDED = false;
 
   React.useEffect(() => {
+    // new data comes in, clear existing timeout
+    if (clearTimeoutRef.current) {
+      clearTimeout(clearTimeoutRef.current);
+      clearTimeoutRef.current = null;
+    }
+
     if (!data || data.length == 0) {
       setProgressList([]);
       return;
