@@ -651,6 +651,7 @@ export const ChatImpl = memo(
      * }, []);
      */
 
+    const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -892,6 +893,8 @@ export const ChatImpl = memo(
     const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
     const { parsedMessages, parseMessages } = useMessageParser();
 
+    const TEXTAREA_MAX_HEIGHT = 200;
+
     useEffect(() => {
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
@@ -1014,6 +1017,23 @@ export const ChatImpl = memo(
         provider: provider.name,
       });
     };
+
+    useEffect(() => {
+      const textarea = textareaRef.current;
+
+      if (textarea) {
+        textarea.style.height = 'auto';
+
+        const scrollHeight = textarea.scrollHeight;
+
+        textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
+        textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+
+        // Check if textarea is expanded beyond minimum height
+        const isExpanded = scrollHeight > 40; // TEXTAREA_MIN_HEIGHT = 40
+        setTextareaExpanded(isExpanded);
+      }
+    }, [input, textareaRef]);
 
     const runAnimation = async () => {
       if (chatStarted) {
@@ -1866,6 +1886,7 @@ export const ChatImpl = memo(
         customProgressAnnotations={customProgressAnnotations}
         isAuthenticated={isAuthenticated}
         onAuthRequired={onAuthRequired}
+        textareaExpanded={textareaExpanded}
       />
     );
   },
