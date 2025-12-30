@@ -30,7 +30,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
         stack: options.error.stack,
         ...Object.getOwnPropertyNames(options.error).reduce(
           (acc, key) => {
-            if (!['name', 'message', 'stack', 'prompt', 'elapsedTime'].includes(key)) {
+            if (!['name', 'message', 'stack'].includes(key)) {
               acc[key] = (options.error as any)[key];
             }
 
