@@ -12,6 +12,7 @@ interface ErrorNotificationOptions {
   userId?: string;
   prompt?: string;
   elapsedTime?: number;
+  process?: string;
 }
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
@@ -50,6 +51,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       ...errorObj,
       prompt: lastUserPrompt,
       elapsedTime: options.elapsedTime,
+      process: options.process,
     };
 
     const errorDetails = JSON.stringify(errorObj, null, 2);
@@ -90,6 +92,7 @@ export async function sendChatErrorWithToastMessage(
   functionContext?: string,
   prompt?: string,
   elapsedTime?: number,
+  process?: string,
 ): Promise<void> {
   const context = `Chat - ${functionContext || 'Unknown function'}`;
 
@@ -99,6 +102,7 @@ export async function sendChatErrorWithToastMessage(
     context,
     prompt,
     elapsedTime,
+    process,
   });
 }
 
@@ -109,11 +113,12 @@ export interface HandleChatErrorOptions {
   elapsedTime?: number;
   toastType?: 'error' | 'warning';
   sendChatError?: boolean;
+  process?: string;
 }
 
 // Comprehensive error handler that handles both toast and Slack notification
 export function handleChatError(message: string, options?: HandleChatErrorOptions): void {
-  const { error, context, prompt, elapsedTime, toastType = 'error', sendChatError = true } = options ?? {};
+  const { error, context, prompt, elapsedTime, toastType = 'error', sendChatError = true, process } = options ?? {};
 
   // Check if error matches any filter
   const filter = getErrorFilter(error);
@@ -130,7 +135,7 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
   if (!filter && sendChatError) {
-    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime).catch((notificationError) => {
+    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime, process).catch((notificationError) => {
       logger.error('Failed to send error notification for:', message, notificationError);
     });
   }
