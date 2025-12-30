@@ -165,21 +165,16 @@ export default defineConfig({
     'text-body-lg-medium': 'font-primary text-[16px] font-medium leading-[150%] not-italic',
 
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
-    'text-interactive-selected': 'text-[var(--color-text-interactive-selected)]',
     'text-interactive-on-primary': 'text-[var(--color-text-interactive-on-primary)]',
     'bg-interactive-neutral': 'bg-[var(--color-bg-interactive-neutral)]',
     'bg-interactive-neutral-hovered': 'bg-[var(--color-bg-interactive-neutral-hovered)]',
     'bg-interactive-neutral-pressed': 'bg-[var(--color-bg-interactive-neutral-pressed)]',
-    'bg-transparent-subtle': 'bg-[var(--color-bg-transparent-subtle)]',
-    'bg-events-gradient':
-      'bg-[linear-gradient(90deg,var(--color-bg-accent-subtle-gradient-start,#72E7F8)_0%,var(--color-bg-accent-subtle-gradient-end,#FFD876)_100%)]',
     'border-interactive-neutral': 'border-[var(--color-border-interactive-neutral)]',
     'hover:border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
     'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
     'border-disabled': 'disabled:border-[var(--color-border-disabled)]',
     'border-primary': 'border-[var(--color-border-primary)]',
     'border-tertiary': 'border-[var(--color-border-tertiary)]',
-    'border-interactive-primary': 'border-[var(--color-border-interactive-primary)]',
     'bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
     'bg-interactive-gradient':
       'bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end)_100%)]',
