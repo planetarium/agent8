@@ -4,6 +4,7 @@ import { getErrorFilter } from '~/constants/errorFilters';
 
 const logger = createScopedLogger('ErrorNotificationUtil');
 
+const MAX_PROMPT_LENGTH = 200;
 interface ErrorNotificationOptions {
   message: string;
   error?: Error | string;
@@ -38,8 +39,8 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       errorMessage = options.error;
     }
 
-    if (lastUserPrompt && lastUserPrompt.length > 200) {
-      lastUserPrompt = `${lastUserPrompt.substring(0, 200)}... (truncated)`;
+    if (lastUserPrompt && lastUserPrompt.length > MAX_PROMPT_LENGTH) {
+      lastUserPrompt = `${lastUserPrompt.substring(0, MAX_PROMPT_LENGTH)}... (truncated)`;
     }
 
     // Create a plain object with all Error properties for better serialization
