@@ -11,19 +11,18 @@ class LogManager {
   }
 
   /**
+   * Get all logs (readonly)
+   */
+  get logs(): readonly string[] {
+    return this._logs;
+  }
+
+  /**
    * Add a log to the log manager
    * @param location - The location of the log
    */
   add(location: string): void {
     this._logs.push(location);
-  }
-
-  /**
-   * Get all logs
-   * @returns All logs
-   */
-  get(): string[] {
-    return [...this._logs];
   }
 
   /**

@@ -7,7 +7,6 @@ import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import type { BoltShell } from '~/utils/shell';
 import { extractFromCDATA, normalizeContent } from '~/utils/stringUtils';
-import { logManager } from '~/lib/debug/LogManager';
 
 const logger = createScopedLogger('ActionRunner');
 
@@ -135,8 +134,6 @@ export class ActionRunner {
   }
 
   async runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    logManager.add('ActionRunner-138');
-
     const { actionId } = data;
     const action = this.actions.get()[actionId];
 
@@ -175,8 +172,6 @@ export class ActionRunner {
   }
 
   async #executeAction(actionId: string, isStreaming: boolean = false) {
-    logManager.add('ActionRunner-178');
-
     const action = this.actions.get()[actionId];
 
     this.#updateAction(actionId, { status: 'running' });
@@ -184,17 +179,14 @@ export class ActionRunner {
     try {
       switch (action.type) {
         case 'shell': {
-          logManager.add('ActionRunner-187');
           await this.#runShellAction(action);
           break;
         }
         case 'file': {
-          logManager.add('ActionRunner-192');
           await this.#runFileAction(action);
           break;
         }
         case 'modify': {
-          logManager.add('ActionRunner-197');
           await this.#runModifyAction(action);
           break;
         }

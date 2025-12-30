@@ -6,7 +6,6 @@ import { WORK_DIR } from '~/utils/constants';
 import { computeFileModifications } from '~/utils/diff';
 import { createScopedLogger } from '~/utils/logger';
 import { detectBinaryFile } from '~/utils/fileUtils';
-import { logManager } from '~/lib/debug/LogManager';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -127,8 +126,6 @@ export class FilesStore {
   }
 
   async saveFile(filePath: string, content: string) {
-    logManager.add('FilesStore-130');
-
     const container = await this.#container;
 
     try {

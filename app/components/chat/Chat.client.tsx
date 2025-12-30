@@ -82,6 +82,11 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 // const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
 
+// 49 debug logs
+function addDebugLog(lineNumber: number): void {
+  logManager.add('Chat-' + lineNumber);
+}
+
 function isServerError(data: unknown): data is ServerErrorData {
   return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
 }
@@ -581,7 +586,6 @@ export const ChatImpl = memo(
     };
 
     const runAndPreview = async (message: UIMessage) => {
-      logManager.add('ChatImpl-584');
       workbench.clearAlert();
 
       const content = extractTextContent(message);
@@ -717,7 +721,7 @@ export const ChatImpl = memo(
         body: () => bodyRef.current,
       }),
       onData: (data) => {
-        logManager.add('ChatImpl-720');
+        addDebugLog(1);
 
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -729,7 +733,6 @@ export const ChatImpl = memo(
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          logManager.add('ChatImpl-732');
           handleChatError(extractedData.reason, {
             error: extractedData.message,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
@@ -746,12 +749,12 @@ export const ChatImpl = memo(
           const extractedType = hasType(extractedData) ? extractedData.type : null;
           const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
 
+          addDebugLog(2);
+
           return [...filtered, extractedData];
         });
       },
       onError: (e) => {
-        logManager.add('ChatImpl-753');
-
         if (isPageUnloadingRef.current) {
           logger.debug('Skipping error notification, page is unloading');
           return;
@@ -767,7 +770,7 @@ export const ChatImpl = memo(
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
 
         // Collect process logs for network errors
-        const processlog = e.message === 'network error' ? logManager.get().join(',') : undefined;
+        const processlog = e.message === 'network error' ? logManager.logs.join(',') : undefined;
 
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -783,7 +786,7 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
-        logManager.add('ChatImpl-781');
+        addDebugLog(3);
 
         const usage =
           message.metadata &&
@@ -857,13 +860,18 @@ export const ChatImpl = memo(
            *
            * // proceed with the original process (success/failure doesn't matter)
            */
+          addDebugLog(4);
           await runAndPreview(message);
+          addDebugLog(5);
           await new Promise((resolve) => setTimeout(resolve, 1000));
+          addDebugLog(6);
           await handleCommit(message);
+          addDebugLog(7);
         });
 
         setFakeLoading(false);
 
+        console.log('#### logManager.logs', logManager.logs.join(','));
         logger.debug('Finished streaming');
       },
     });
@@ -965,8 +973,6 @@ export const ChatImpl = memo(
     }, [files, installNpm]);
 
     const handleCommit = async (message: UIMessage) => {
-      logManager.add('ChatImpl-961');
-
       if (!isEnabledGitbasePersistence) {
         return;
       }
@@ -1069,7 +1075,7 @@ export const ChatImpl = memo(
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
       // Clear logs from previous request
       logManager.clear();
-      logManager.add('ChatImpl-1053');
+      addDebugLog(8);
 
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
@@ -1096,7 +1102,7 @@ export const ChatImpl = memo(
       lastUserPromptRef.current = messageContent;
 
       if (chatStarted && Object.keys(files).length === 0) {
-        logManager.add('ChatImpl-1080');
+        addDebugLog(9);
 
         const fileRecoveryStartTime = performance.now();
         let recoverySuccessful = false;
@@ -1111,8 +1117,21 @@ export const ChatImpl = memo(
           {
             name: 'Gitbase',
             getFiles: async () => {
+              addDebugLog(10);
+
               const projectPath = repoStore.get().path;
-              return projectPath ? await fetchProjectFiles(projectPath) : {};
+
+              if (projectPath) {
+                addDebugLog(11);
+
+                const files = await fetchProjectFiles(projectPath);
+                addDebugLog(12);
+
+                return files;
+              } else {
+                addDebugLog(13);
+                return {};
+              }
             },
             logSuccess: () => console.log('files recovery from gitbase successful'),
           },
@@ -1123,20 +1142,19 @@ export const ChatImpl = memo(
             const files = await strategy.getFiles();
 
             if (Object.keys(files).length > 0) {
-              logManager.add('ChatImpl-1107');
+              addDebugLog(14);
               await containerInstance.mount(convertFileMapToFileSystemTree(files));
               strategy.logSuccess();
               recoverySuccessful = true;
               break;
             }
           } catch (error) {
-            logManager.add('ChatImpl-1115');
             console.error(`${strategy.name} recovery failed:`, error);
           }
         }
 
         if (!recoverySuccessful) {
-          logManager.add('ChatImpl-1121');
+          addDebugLog(15);
           reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
             context: 'sendMessage - files check',
           });
@@ -1194,7 +1212,7 @@ export const ChatImpl = memo(
       }
 
       if (!chatStarted) {
-        logManager.add('ChatImpl-1179');
+        addDebugLog(16);
 
         const templateSelectionStartTime = performance.now();
 
@@ -1210,11 +1228,11 @@ export const ChatImpl = memo(
             },
           ]);
 
-          logManager.add('ChatImpl-1195');
-
           const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
+
+          addDebugLog(20);
 
           if (!template) {
             throw new Error('Not Found Template');
@@ -1238,7 +1256,7 @@ export const ChatImpl = memo(
             },
           ]);
 
-          logManager.add('ChatImpl-1223');
+          addDebugLog(17);
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
             if (e.message.includes('rate limit')) {
@@ -1247,6 +1265,8 @@ export const ChatImpl = memo(
               toast.warning('Failed to import starter template\nRetry again after a few minutes.');
             }
           });
+
+          addDebugLog(21);
 
           const projectPath = temResp?.project?.path;
           const projectName = temResp?.project?.name;
@@ -1262,7 +1282,11 @@ export const ChatImpl = memo(
 
           if (accessToken) {
             try {
+              addDebugLog(22);
+
               const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
+
+              addDebugLog(23);
 
               if (user.isActivated && user.walletAddress) {
                 temResp.fileMap['.env'] = {
@@ -1285,7 +1309,10 @@ export const ChatImpl = memo(
           );
           workbench.files.set(processedFileMap);
 
+          addDebugLog(24);
+
           const containerInstance = await workbench.container;
+          addDebugLog(25);
           await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
 
           if (isEnabledGitbasePersistence) {
@@ -1296,7 +1323,10 @@ export const ChatImpl = memo(
             let branchName = 'develop';
 
             if (enabledTaskMode) {
+              addDebugLog(26);
+
               const { success, message, data } = await createTaskBranch(projectPath);
+              addDebugLog(27);
 
               if (!success) {
                 reportError(message, templateSelectionStartTime, {
@@ -1315,11 +1345,14 @@ export const ChatImpl = memo(
               taskBranch: branchName,
             });
 
+            addDebugLog(28);
+
             // Record prompt activity for first request
             sendActivityPrompt(projectPath).catch((error) => {
               logger.warn('Failed to record prompt activity:', error);
             });
 
+            addDebugLog(29);
             changeChatUrl(projectPath, { replace: true });
           } else {
             repoStore.set({
@@ -1330,11 +1363,14 @@ export const ChatImpl = memo(
             });
 
             // Record prompt activity for first request
+            addDebugLog(30);
             sendActivityPrompt(projectRepo).catch((error) => {
               logger.warn('Failed to record prompt activity:', error);
             });
 
+            addDebugLog(31);
             changeChatUrl(projectRepo, { replace: true });
+            addDebugLog(32);
           }
 
           const firstChatModel =
@@ -1372,6 +1408,7 @@ export const ChatImpl = memo(
             setCustomProgressAnnotations([]);
           }, 1000);
 
+          addDebugLog(33);
           setMessages([
             {
               id: `1-${new Date().getTime()}`,
@@ -1386,21 +1423,29 @@ export const ChatImpl = memo(
               ],
             },
           ]);
+          addDebugLog(34);
           regenerate();
-
+          addDebugLog(35);
           setInput('');
           Cookies.remove(PROMPT_COOKIE_KEY);
 
+          addDebugLog(36);
           sendEventToParent('EVENT', { name: 'START_EDITING' });
 
+          addDebugLog(37);
           setAttachmentList([]);
+          addDebugLog(38);
 
+          addDebugLog(39);
           resetEnhancer();
+          addDebugLog(40);
 
           textareaRef.current?.blur();
 
           return;
         } catch (error) {
+          addDebugLog(18);
+
           // Clear progress annotations on error
           setCustomProgressAnnotations([]);
 
@@ -1434,9 +1479,11 @@ export const ChatImpl = memo(
       try {
         // Record prompt activity for subsequent requests
         if (repoStore.get().path) {
+          addDebugLog(41);
           sendActivityPrompt(repoStore.get().path).catch((error) => {
             logger.warn('Failed to record prompt activity:', error);
           });
+          addDebugLog(42);
         }
 
         if (error != null) {
@@ -1446,9 +1493,13 @@ export const ChatImpl = memo(
         chatStore.setKey('aborted', false);
 
         if (repoStore.get().path) {
+          addDebugLog(43);
+
           const commit = await workbench.commitModifiedFiles();
+          addDebugLog(44);
 
           if (commit) {
+            addDebugLog(45);
             setMessages((prev: UIMessage[]) => [
               ...prev,
               {
@@ -1462,11 +1513,15 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
+            addDebugLog(46);
           }
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const createTaskBranchStartTime = performance.now();
+            addDebugLog(47);
+
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
+            addDebugLog(48);
 
             if (!success) {
               reportError(message, createTaskBranchStartTime, {
@@ -1485,7 +1540,7 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
-        logManager.add('ChatImpl-1464');
+        addDebugLog(19);
         sendChatMessage({
           role: 'user',
           parts: [
@@ -1497,7 +1552,7 @@ export const ChatImpl = memo(
             },
           ],
         });
-
+        addDebugLog(49);
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 

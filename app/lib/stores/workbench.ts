@@ -34,7 +34,6 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
-import { logManager } from '~/lib/debug/LogManager';
 
 const { saveAs } = fileSaver;
 
@@ -587,8 +586,6 @@ export class WorkbenchStore {
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
-    logManager.add('WorkbenchStore-590');
-
     const artifact = this.#getArtifact(id);
 
     if (artifact) {
@@ -762,8 +759,6 @@ export class WorkbenchStore {
   }
 
   async closeArtifact(data: ArtifactCallbackData) {
-    logManager.add('WorkbenchStore-765');
-
     const artifact = this.#getArtifact(data.id);
 
     if (isCommitedMessage(data.messageId)) {
@@ -799,7 +794,6 @@ export class WorkbenchStore {
   }
 
   addAction(data: ActionCallbackData) {
-    logManager.add('WorkbenchStore-802');
     this._addAction(data);
   }
 
@@ -816,8 +810,6 @@ export class WorkbenchStore {
   }
 
   runAction(data: ActionCallbackData, isStreaming: boolean = false) {
-    logManager.add('WorkbenchStore-819');
-
     if (isStreaming) {
       this.actionStreamSampler(data, isStreaming);
     } else {
@@ -826,8 +818,6 @@ export class WorkbenchStore {
   }
 
   async #executeQueuedAction(data: ActionCallbackData, artifact: ArtifactState, isStreaming: boolean = false) {
-    logManager.add('WorkbenchStore-829');
-
     const { messageId } = data;
 
     const action = artifact.runner.actions.get()[data.actionId];
