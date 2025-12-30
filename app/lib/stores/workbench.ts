@@ -93,7 +93,8 @@ export class WorkbenchStore {
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
-  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
+  mobilePreviewMode: WritableAtom<boolean> = import.meta.hot?.data.mobilePreviewMode ?? atom(false);
+  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('preview');
   unsavedFiles: WritableAtom<Set<string>> = atom(
     ensureUnsavedFilesSet(import.meta.hot?.data.unsavedFiles?.get?.() ?? import.meta.hot?.data.unsavedFiles),
   );
@@ -104,6 +105,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -131,6 +133,7 @@ export class WorkbenchStore {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
       import.meta.hot.data.showWorkbench = this.showWorkbench;
+      import.meta.hot.data.mobilePreviewMode = this.mobilePreviewMode;
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.actionAlert = this.actionAlert;
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
@@ -844,10 +847,6 @@ export class WorkbenchStore {
         this.setSelectedFile(fullPath);
       }
 
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
-      }
-
       const doc = this.#editorStore.documents.get()[fullPath];
 
       if (!doc) {
@@ -867,10 +866,6 @@ export class WorkbenchStore {
 
       if (this.selectedFile.value !== fullPath) {
         this.setSelectedFile(fullPath);
-      }
-
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
       }
 
       await artifact.runner.runAction(data);
@@ -1185,7 +1180,7 @@ export class WorkbenchStore {
   }
 
   async runPreview() {
-    this.currentView.set('code');
+    this.isRunningPreview.set(true);
 
     const shell = this.boltTerminal;
     await shell.ready;
@@ -1265,8 +1260,7 @@ export class WorkbenchStore {
         throw new Error('Failed to publish');
       }
 
-      const taskBranch = repoStore.get().taskBranch;
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      const lastCommitHash = await getLastCommitHash(repoStore.get().path, 'develop');
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;

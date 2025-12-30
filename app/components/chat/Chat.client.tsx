@@ -45,13 +45,12 @@ import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
 import {
   commitChanges,
-  createTaskBranch,
   fetchProjectFiles,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
@@ -64,6 +63,7 @@ import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
+import { useVersionFeature } from '~/lib/hooks/useVersionFeature';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
@@ -324,35 +324,24 @@ interface ChatComponentProps {
 export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
-  const {
-    loaded,
-    loading,
-    chats,
-    files,
-    project,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
-    revertTo,
-    hasMore,
-    loadBefore,
-    loadingBefore,
-    error,
-  } = useGitbaseChatHistory();
+  const { loaded, loading, chats, files, project, revertTo, hasMore, loadBefore, loadingBefore, error } =
+    useGitbaseChatHistory();
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
+  const version = useVersionFeature();
 
   useEffect(() => {
-    if (repoStore.get().path) {
+    const projectPath = repoStore.get().path;
+
+    if (projectPath) {
       sendEventToParent('EVENT', { name: 'START_EDITING' });
     }
 
     const timeoutId = setTimeout(() => {
-      changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+      changeChatUrl(projectPath, { replace: true, searchParams: {}, ignoreChangeEvent: true });
     }, 100);
 
     return () => clearTimeout(timeoutId);
@@ -364,12 +353,18 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     }
   }, [initialMessages, loaded]);
 
+  // Handle chats loading
+  useEffect(() => {
+    if (loaded && chats.length > 0) {
+      setInitialMessages(chats);
+    } else if (!loaded) {
+      setInitialMessages([]);
+    }
+  }, [loaded, chats]);
+
+  // Handle files mounting
   useEffect(() => {
     if (loaded) {
-      if (chats.length > 0) {
-        setInitialMessages(chats);
-      }
-
       if (Object.keys(files).length > 0) {
         workbench.container.then(async (containerInstance) => {
           try {
@@ -415,10 +410,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           title: project.description.split('\n')[0],
         });
       }
-    } else {
-      setInitialMessages([]);
     }
-  }, [loaded, files, chats, project, workbench]);
+  }, [loaded, files, project, workbench]);
 
   const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
 
@@ -440,18 +433,16 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           description={title}
           initialMessages={initialMessages}
           setInitialMessages={setInitialMessages}
-          enabledTaskMode={enabledTaskMode}
-          setEnabledTaskMode={setEnabledTaskMode}
-          taskBranches={taskBranches}
-          reloadTaskBranches={reloadTaskBranches}
           revertTo={revertTo}
           hasMore={hasMore}
           loadBefore={loadBefore}
           loadingBefore={loadingBefore}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
+          version={version}
         />
       )}
+      {version.modals}
       <ToastContainer />
     </>
   );
@@ -474,16 +465,13 @@ interface ChatProps {
   initialMessages: UIMessage[];
   setInitialMessages: (messages: UIMessage[]) => void;
   description?: string;
-  taskBranches: any[];
-  enabledTaskMode: boolean;
-  setEnabledTaskMode: (enabled: boolean) => void;
-  reloadTaskBranches: (projectPath: string) => Promise<void>;
-  revertTo: (hash: string) => void;
+  revertTo: (hash: string) => Promise<void>;
   hasMore: boolean;
   loadBefore: () => Promise<void>;
   loadingBefore: boolean;
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  version: ReturnType<typeof useVersionFeature>;
 }
 
 export const ChatImpl = memo(
@@ -492,16 +480,13 @@ export const ChatImpl = memo(
     description,
     initialMessages,
     setInitialMessages,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
     revertTo,
     hasMore,
     loadBefore,
     loadingBefore,
     isAuthenticated,
     onAuthRequired,
+    version,
   }: ChatProps) => {
     useShortcuts();
 
@@ -911,7 +896,14 @@ export const ChatImpl = memo(
 
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
-            reloadTaskBranches(repoStore.get().path);
+
+            // Clear revertTo parameter after successful commit to prevent reverting to old state
+            const url = new URL(window.location.href);
+
+            if (url.searchParams.has('revertTo')) {
+              url.searchParams.delete('revertTo');
+              window.history.replaceState(null, '', url.pathname + url.search);
+            }
           });
 
           logger.info('✅ Commit succeeded');
@@ -1059,7 +1051,6 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
-      workbench.currentView.set('code');
 
       if (attachmentList.length > 0) {
         const imageAttachments = attachmentList.filter((item) =>
@@ -1194,26 +1185,10 @@ export const ChatImpl = memo(
               throw new Error('Cannot create project');
             }
 
-            let branchName = 'develop';
-
-            if (enabledTaskMode) {
-              const { success, message, data } = await createTaskBranch(projectPath);
-
-              if (!success) {
-                reportError(message, templateSelectionStartTime, {
-                  context: 'createTaskBranch - starter template',
-                });
-                return;
-              }
-
-              branchName = data.branchName;
-            }
-
             repoStore.set({
               name: projectName,
               path: projectPath,
               title,
-              taskBranch: branchName,
             });
 
             // Record prompt activity for first request
@@ -1227,7 +1202,6 @@ export const ChatImpl = memo(
               name: projectRepo,
               path: projectRepo,
               title,
-              taskBranch: 'develop',
             });
 
             // Record prompt activity for first request
@@ -1331,11 +1305,12 @@ export const ChatImpl = memo(
       }
 
       const sendMessageFinalStartTime = performance.now();
+      const projectPath = repoStore.get().path;
 
       try {
         // Record prompt activity for subsequent requests
-        if (repoStore.get().path) {
-          sendActivityPrompt(repoStore.get().path).catch((error) => {
+        if (projectPath) {
+          sendActivityPrompt(projectPath).catch((error) => {
             logger.warn('Failed to record prompt activity:', error);
           });
         }
@@ -1346,7 +1321,7 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
-        if (repoStore.get().path) {
+        if (projectPath) {
           const commit = await workbench.commitModifiedFiles();
 
           if (commit) {
@@ -1363,25 +1338,6 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
-          }
-
-          if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
-            const createTaskBranchStartTime = performance.now();
-            const { success, message, data } = await createTaskBranch(repoStore.get().path);
-
-            if (!success) {
-              reportError(message, createTaskBranchStartTime, {
-                context: 'createTaskBranch - subsequent message',
-              });
-              return;
-            }
-
-            repoStore.set({
-              ...repoStore.get(),
-              taskBranch: data.branchName,
-            });
-
-            setMessages(() => []);
           }
         }
 
@@ -1523,7 +1479,6 @@ export const ChatImpl = memo(
             name: source.title,
             path: '',
             title: source.title,
-            taskBranch: DEFAULT_TASK_BRANCH,
           });
 
           // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
@@ -1583,6 +1538,7 @@ export const ChatImpl = memo(
 
     const handleFork = async (message: UIMessage) => {
       const startTime = performance.now();
+      const repo = repoStore.get();
 
       workbench.currentView.set('code');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
@@ -1597,7 +1553,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      const nameWords = repoStore.get().name.split('-');
+      const nameWords = repo.name.split('-');
 
       let newRepoName = '';
 
@@ -1611,13 +1567,13 @@ export const ChatImpl = memo(
       const toastId = toast.loading('Forking project...');
 
       try {
-        const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+        const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title);
 
         // Dismiss the loading toast
         toast.dismiss(toastId);
 
         if (forkedProject && forkedProject.success) {
-          toast.success('Forked project successfully');
+          toast.success('Fork created — now in your copy.');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
           reportError('Failed to fork project', startTime, {
@@ -1652,11 +1608,12 @@ export const ChatImpl = memo(
         return;
       }
 
-      revertTo(commitHash);
+      await revertTo(commitHash);
     };
 
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       const startTime = performance.now();
+      const projectPath = repoStore.get().path;
 
       workbench.currentView.set('code');
 
@@ -1674,7 +1631,7 @@ export const ChatImpl = memo(
 
           if (nextCommitHash && isCommitHash(nextCommitHash)) {
             try {
-              const { data } = await getCommit(repoStore.get().path, nextCommitHash);
+              const { data } = await getCommit(projectPath, nextCommitHash);
 
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
@@ -1705,7 +1662,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      revertTo(commitHash);
+      await revertTo(commitHash);
       setInput(stripMetadata(extractTextContent(message)));
     };
 
@@ -1739,86 +1696,87 @@ export const ChatImpl = memo(
     const isStreaming = isLoading || fakeLoading || loading;
 
     return (
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isStreaming}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        enabledTaskMode={enabledTaskMode}
-        setEnabledTaskMode={setEnabledTaskMode}
-        taskBranches={taskBranches}
-        reloadTaskBranches={reloadTaskBranches}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
-        messageRef={messageRef}
-        scrollRef={scrollRef}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        handleRetry={handleRetry}
-        handleFork={handleFork}
-        handleRevert={handleRevert}
-        onViewDiff={handleViewDiff}
-        description={description}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
+      <>
+        <BaseChat
+          ref={animationScope}
+          textareaRef={textareaRef}
+          input={input}
+          showChat={showChat}
+          chatStarted={chatStarted}
+          isStreaming={isStreaming}
+          onStreamingChange={(streaming) => {
+            streamingState.set(streaming);
+          }}
+          enhancingPrompt={enhancingPrompt}
+          promptEnhanced={promptEnhanced}
+          sendMessage={sendMessage}
+          model={model}
+          setModel={handleModelChange}
+          provider={provider}
+          setProvider={handleProviderChange}
+          providerList={activeProviders}
+          messageRef={messageRef}
+          scrollRef={scrollRef}
+          handleInputChange={(e) => {
+            onTextareaChange(e);
+            debouncedCachePrompt(e);
+          }}
+          handleStop={abort}
+          handleRetry={handleRetry}
+          handleFork={handleFork}
+          handleRevert={handleRevert}
+          handleSaveVersion={version.openSave}
+          handleRestoreVersion={version.openRestore}
+          savedVersions={version.savedVersions}
+          onViewDiff={handleViewDiff}
+          description={description}
+          messages={messages.map((message, i) => {
+            if (message.role === 'user') {
+              return message;
+            }
+
+            const parsedContent = parsedMessages[i];
+
+            if (parsedContent) {
+              return {
+                ...message,
+                parts: [
+                  {
+                    type: 'text' as const,
+                    text: parsedContent,
+                  },
+                ],
+              } satisfies UIMessage;
+            }
+
             return message;
-          }
-
-          const parsedContent = parsedMessages[i];
-
-          if (parsedContent) {
-            return {
-              ...message,
-              parts: [
-                {
-                  type: 'text' as const,
-                  text: parsedContent,
-                },
-              ],
-            } satisfies UIMessage;
-          }
-
-          return message;
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
-        attachmentList={attachmentList}
-        setAttachmentList={setAttachmentList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbench.clearAlert()}
-        data={chatData}
-        onProjectZipImport={handleProjectZipImport}
-        hasMore={hasMore}
-        loadBefore={loadBefore}
-        loadingBefore={loadingBefore}
-        customProgressAnnotations={customProgressAnnotations}
-        isAuthenticated={isAuthenticated}
-        onAuthRequired={onAuthRequired}
-      />
+          })}
+          enhancePrompt={() => {
+            enhancePrompt(
+              input,
+              (input) => {
+                setInput(input);
+                scrollTextArea();
+              },
+              model,
+              provider,
+              apiKeys,
+            );
+          }}
+          attachmentList={attachmentList}
+          setAttachmentList={setAttachmentList}
+          actionAlert={actionAlert}
+          clearAlert={() => workbench.clearAlert()}
+          data={chatData}
+          onProjectZipImport={handleProjectZipImport}
+          hasMore={hasMore}
+          loadBefore={loadBefore}
+          loadingBefore={loadingBefore}
+          customProgressAnnotations={customProgressAnnotations}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={onAuthRequired}
+        />
+      </>
     );
   },
 );

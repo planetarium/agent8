@@ -3,6 +3,8 @@ import React, { type RefCallback, useCallback, useEffect, useRef, useState } fro
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import { ResizeHandle } from '~/components/ui/ResizeHandle';
+import { useWorkbenchShowWorkbench, useWorkbenchMobilePreviewMode } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { ATTACHMENT_EXTS, PROVIDER_LIST } from '~/utils/constants';
 import { Messages } from './Messages.client';
@@ -13,6 +15,8 @@ import { handleChatError } from '~/utils/errorNotification';
 import { motion } from 'framer-motion';
 
 import { useMobileView } from '~/lib/hooks/useMobileView';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import styles from './BaseChat.module.scss';
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import { ExamplePrompts } from '~/components/chat/ExamplePrompts';
@@ -23,14 +27,9 @@ import { ModelSelector } from '~/components/chat/ModelSelector';
 import type { ProviderInfo } from '~/types/model';
 import type { ActionAlert } from '~/types/actions';
 import ChatAlert from './ChatAlert';
-import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
 import type { ActionRunner } from '~/lib/runtime/action-runner';
 import McpServerManager from '~/components/chat/McpServerManager';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
-import { useStore } from '@nanostores/react';
-import { TaskMessages } from './TaskMessages.client';
-import { TaskBranches } from './TaskBranches.client';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { AttachmentSelector } from './AttachmentSelector';
 
@@ -133,12 +132,6 @@ interface BaseChatProps {
   provider?: ProviderInfo;
   setProvider?: (provider: ProviderInfo) => void;
   providerList?: ProviderInfo[];
-  enabledTaskMode?: boolean;
-  setEnabledTaskMode?: (enabled: boolean) => void;
-  taskBranches?: any[];
-  reloadTaskBranches?: (projectPath: string) => void;
-  currentTaskBranch?: any;
-  setCurrentTaskBranch?: (branch: any) => void;
   handleStop?: () => void;
   sendMessage?: (event: React.UIEvent, messageInput?: string) => void;
   handleInputChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -153,6 +146,9 @@ interface BaseChatProps {
   handleRetry?: (message: UIMessage) => void;
   handleFork?: (message: UIMessage) => void;
   handleRevert?: (message: UIMessage) => void;
+  handleSaveVersion?: (message: UIMessage) => void;
+  handleRestoreVersion?: (commitHash: string, commitTitle: string) => void;
+  savedVersions?: Map<string, string>;
   onViewDiff?: (message: UIMessage) => void;
   hasMore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -178,16 +174,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       setProvider,
       providerList,
       input = '',
-
-      /*
-       * enabledTaskMode,
-       * setEnabledTaskMode,
-       */
-
-      taskBranches,
-      reloadTaskBranches,
       handleInputChange,
-
       sendMessage,
       handleStop,
       attachmentList = [],
@@ -201,6 +188,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handleRetry,
       handleFork,
       handleRevert,
+      handleSaveVersion,
+      handleRestoreVersion,
+      savedVersions,
       onViewDiff,
       hasMore,
       loadBefore,
@@ -216,7 +206,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [transcript, setTranscript] = useState('');
     const [progressAnnotations, setProgressAnnotations] = useState<ProgressAnnotation[]>([]);
     const [autoFixChance, setAutoFixChance] = useState(3);
-    const repo = useStore(repoStore);
     const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<boolean>(false);
     const [attachmentHovered, setAttachmentHovered] = useState<boolean>(false);
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
@@ -232,6 +221,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const desktopVideoRef = useRef<HTMLVideoElement>(null);
 
     const isMobileView = useMobileView();
+    const showWorkbench = useWorkbenchShowWorkbench();
+    const mobilePreviewMode = useWorkbenchMobilePreviewMode();
+    const isSmallViewportForWorkbench = useViewport(MOBILE_BREAKPOINT); // When workbench is visible
+    const isSmallViewportForChat = useViewport(CHAT_MOBILE_BREAKPOINT); // When workbench is not mounted yet
+
+    // Use different breakpoint based on whether workbench is visible
+    const isSmallViewport = showWorkbench ? isSmallViewportForWorkbench : isSmallViewportForChat;
+
+    // Hide chat when mobilePreviewMode is active on small viewport
+    const hideChatForMobilePreview = isSmallViewport && mobilePreviewMode;
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
@@ -312,9 +311,18 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         return;
       }
 
+      let scrollTimeout: NodeJS.Timeout;
+
       const handleScroll = () => {
         const atBottom = isScrollAtBottom(scrollElement);
         setAutoScrollEnabled(atBottom);
+
+        // Show scrollbar while scrolling
+        scrollElement.classList.add('scrolling');
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          scrollElement.classList.remove('scrolling');
+        }, 500);
       };
 
       scrollElement.addEventListener('scroll', handleScroll);
@@ -322,6 +330,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       // eslint-disable-next-line consistent-return
       return () => {
         scrollElement.removeEventListener('scroll', handleScroll);
+        clearTimeout(scrollTimeout);
       };
     }, [scrollElement, isScrollAtBottom]);
 
@@ -715,9 +724,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         <ClientOnly>{() => <Menu />}</ClientOnly>
 
         <div
-          className={classNames('flex flex-col lg:flex-row w-full xl:h-full bg-primary', {
-            'h-full': chatStarted,
-            'xl:h-full': !chatStarted,
+          className={classNames('flex w-full h-full bg-primary', isSmallViewport ? 'flex-col' : 'flex-row', {
+            'xl:h-full flex-col': !chatStarted,
           })}
         >
           <div
@@ -728,19 +736,20 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 scrollRef(node);
               }
             }}
-            className={classNames(
-              styles.Chat,
-              'flex flex-col flex-grow lg:min-w-[var(--chat-min-width)] chat-container',
-              {
-                'overflow-y-auto h-full': chatStarted,
-                [styles.chatStarted]: chatStarted,
-                '!px-4 md:!px-5 xl:justify-center xl:pb-[50px] xl:h-full': !chatStarted,
-              },
-            )}
+            className={classNames(styles.Chat, 'flex flex-col h-full chat-container', {
+              'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
+              '!w-full !mr-0': isSmallViewport && !hideChatForMobilePreview,
+              hidden: hideChatForMobilePreview,
+              '!px-4 md:!px-5 xl:justify-center xl:pb-[100px] xl:h-full': !chatStarted,
+              'overflow-y-auto': chatStarted,
+              [styles.chatStarted]: chatStarted && !isSmallViewport,
+            })}
           >
             {!chatStarted && (
+              <MainBackground zIndex={1} isMobileView={isMobileView} opacity={0.8} chatStarted={chatStarted} />
+            )}
+            {!chatStarted && (
               <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:min-h-0 xl:max-w-[1400px]">
-                <MainBackground zIndex={1} isMobileView={isMobileView} />
                 {/* Background Image */}
                 <div
                   className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
@@ -870,57 +879,31 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
 
             <div
-              className={classNames('pt-0 tablet:pt-4 tablet:px-6 relative z-2', {
+              className={classNames(`pt-0 pt-4 relative`, {
                 'h-full flex flex-col': chatStarted,
-                'xl:pb-[50px]': !chatStarted,
               })}
             >
               <ClientOnly>
                 {() => {
-                  const currentTaskBranch = repo.taskBranch;
-
                   return chatStarted ? (
-                    <>
-                      {currentTaskBranch !== DEFAULT_TASK_BRANCH ? (
-                        <TaskMessages
-                          ref={messageRef}
-                          taskBranches={taskBranches}
-                          currentTaskBranch={currentTaskBranch}
-                          reloadTaskBranches={reloadTaskBranches}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
-                          messages={messages}
-                          annotations={data}
-                          isStreaming={isStreaming}
-                          onRetry={handleRetry}
-                          onFork={handleFork}
-                          onRevert={handleRevert}
-                          onViewDiff={onViewDiff}
-                          hasMore={hasMore}
-                          loadBefore={loadBefore}
-                          loadingBefore={loadingBefore}
-                        />
-                      ) : (
-                        <Messages
-                          ref={messageRef}
-                          className="flex flex-col w-full flex-1 max-w-chat pb-4 mx-auto z-1"
-                          messages={messages}
-                          annotations={data}
-                          isStreaming={isStreaming}
-                          onRetry={handleRetry}
-                          onFork={handleFork}
-                          onRevert={handleRevert}
-                          onViewDiff={onViewDiff}
-                          hasMore={hasMore}
-                          loadBefore={loadBefore}
-                          loadingBefore={loadingBefore}
-                        />
-                      )}
-                      {!isStreaming && currentTaskBranch === DEFAULT_TASK_BRANCH && (
-                        <div className="mb-5">
-                          <TaskBranches taskBranches={taskBranches} reloadTaskBranches={reloadTaskBranches} />
-                        </div>
-                      )}
-                    </>
+                    <Messages
+                      ref={messageRef}
+                      className="flex flex-col w-full flex-1 max-w-chat pl-6 pb-4 pr-4 mx-auto z-1"
+                      messages={messages}
+                      annotations={data}
+                      isStreaming={isStreaming}
+                      progressAnnotations={progressAnnotations}
+                      onRetry={handleRetry}
+                      onFork={handleFork}
+                      onRevert={handleRevert}
+                      onSaveVersion={handleSaveVersion}
+                      onRestoreVersion={handleRestoreVersion}
+                      savedVersions={savedVersions}
+                      onViewDiff={onViewDiff}
+                      hasMore={hasMore}
+                      loadBefore={loadBefore}
+                      loadingBefore={loadingBefore}
+                    />
                   ) : null;
                 }}
               </ClientOnly>
@@ -929,10 +912,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 className={classNames(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
                   {
-                    'sticky bottom-4': chatStarted,
+                    'sticky bottom-4 pr-4': chatStarted && !isSmallViewport,
+                    'pl-6': !isSmallViewport,
                     'tablet:max-w-chat': chatStarted,
-                    'tablet:max-w-chat-before-start': !chatStarted,
-                    'xl:absolute xl:left-1/2 xl:translate-x-[-50%] max-w-[632px] md:-translate-y-[calc(50%+16px)]':
+                    'md:relative md:-translate-y-[calc(50%+16px)] xl:absolute xl:left-1/2 xl:translate-x-[-50%] max-w-[632px] !pl-0':
                       !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
                   },
                 )}
@@ -962,9 +945,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     />
                   )}
                 </div>
-
-                {progressAnnotations && <ProgressCompilation data={progressAnnotations} />}
-                {/* chat input area */}
                 <div
                   className={classNames(
                     'flex flex-col self-stretch px-4 pt-[6px] pb-4 relative w-full mx-auto z-prompt',
@@ -972,16 +952,15 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       'tablet:max-w-chat': chatStarted,
                       'tablet:max-w-chat-before-start': !chatStarted,
                       'bg-primary': !chatStarted,
-                      [styles.promptInputActive]: chatStarted,
+                      [styles.promptInputActive]: chatStarted && !isSmallViewport,
+                      [styles.promptInputActiveSmallViewport]: chatStarted && isSmallViewport,
                     },
                   )}
                   style={
                     !chatStarted
                       ? {
                           borderRadius: 'var(--border-radius-16, 16px)',
-                          boxShadow: isMobileView
-                            ? '0 1px 4px 1px rgba(26, 220, 217, 0.12), 0 2px 20px 4px rgba(148, 250, 239, 0.16)'
-                            : '0 2px 8px 2px rgba(26, 220, 217, 0.12), 0 8px 56px 8px rgba(148, 250, 239, 0.16)',
+                          boxShadow: '0 2px 4px 0 rgba(26, 220, 217, 0.08), 0 2px 24px 4px rgba(148, 250, 239, 0.12)',
                         }
                       : {}
                   }
@@ -1249,6 +1228,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               </motion.div>
             )}
           </div>
+          {showWorkbench && !isSmallViewport && <ResizeHandle minChatWidth={426} minWorkbenchWidth={747} />}
           <ClientOnly>
             {() => (
               <Workbench

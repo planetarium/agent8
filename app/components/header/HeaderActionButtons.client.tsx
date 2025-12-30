@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { toast } from 'react-toastify';
 import useViewport from '~/lib/hooks';
+import { HEADER_ACTIONS_BREAKPOINT } from '~/lib/constants/viewport';
 import { chatStore } from '~/lib/stores/chat';
 import { netlifyConnection } from '~/lib/stores/netlify';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -23,7 +24,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
   const previews = useWorkbenchPreviews();
   const activePreview = previews[activePreviewIndex];
   const [isDeploying, setIsDeploying] = useState(false);
-  const isSmallViewport = useViewport(1024);
+  const isSmallViewport = useViewport(HEADER_ACTIONS_BREAKPOINT);
   const canHideChat = showWorkbench || !showChat;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

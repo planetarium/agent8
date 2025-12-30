@@ -8,10 +8,11 @@ import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
 
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
+import { sendMessageToParent } from '~/utils/postMessage';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -48,20 +49,6 @@ function AccessControlledChat() {
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
   const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
-
-  // Helper function to send postMessage to allowed parent origins
-  const sendMessageToParent = (message: any) => {
-    if (window.parent && window.parent !== window) {
-      const allowedOriginsEnv = import.meta.env.VITE_ALLOWED_PARENT_ORIGINS;
-      const allowedOrigins = allowedOriginsEnv
-        ? allowedOriginsEnv.split(',').map((origin: string) => origin.trim())
-        : ['https://verse8.io']; // fallback
-      const parentOrigin = document.referrer ? new URL(document.referrer).origin : null;
-      const targetOrigin = parentOrigin && allowedOrigins.includes(parentOrigin) ? parentOrigin : allowedOrigins[0];
-
-      window.parent.postMessage(message, targetOrigin);
-    }
-  };
 
   useEffect(() => {
     if (accessToken) {
@@ -254,7 +241,6 @@ export default function Index() {
         name: repoName,
         path: repoPath,
         title: repoName,
-        taskBranch: DEFAULT_TASK_BRANCH,
       });
     }
   }, [repoPath, repoName]);

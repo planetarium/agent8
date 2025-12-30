@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { Markdown } from './Markdown';
 import type { JSONValue } from 'ai';
 import Popover from '~/components/ui/Popover';
@@ -10,7 +10,7 @@ interface AssistantMessageProps {
   content: string;
   annotations?: JSONValue[];
   metadata?: unknown;
-  forceExpanded?: boolean;
+  expanded?: boolean;
 }
 
 function openArtifactInWorkbench(filePath: string) {
@@ -37,13 +37,7 @@ function normalizedFilePath(path: string) {
   return normalizedPath;
 }
 
-export const AssistantMessage = memo(({ content, annotations, metadata, forceExpanded }: AssistantMessageProps) => {
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    setExpanded(forceExpanded || false);
-  }, [forceExpanded]);
-
+export const AssistantMessage = memo(({ content, annotations, metadata, expanded = false }: AssistantMessageProps) => {
   const filteredAnnotations = (annotations?.filter(
     (data: JSONValue) => data && typeof data === 'object' && Object.keys(data).includes('type'),
   ) || []) as { type: string; value: any } & { [key: string]: any }[];
@@ -62,12 +56,8 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
     totalTokens: number;
   } = (usageMetadata as any)?.value;
 
-  const toggleExpanded = () => {
-    setExpanded(!expanded);
-  };
-
   return (
-    <div className="overflow-hidden w-full">
+    <div className="overflow-hidden w-full pb-[14px]">
       <>
         <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary mb-2">
           {(codeContext || chatSummary) && (
@@ -116,7 +106,7 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
           )}
         </div>
       </>
-      <div className="markdown-container">
+      <div className="markdown-container text-body-md-regular-relaxed">
         <div
           className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
           style={
@@ -134,25 +124,6 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
         >
           <Markdown html>{content}</Markdown>
         </div>
-        {!forceExpanded && (
-          <>
-            {!expanded ? (
-              <button
-                onClick={toggleExpanded}
-                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
-              >
-                Read more
-              </button>
-            ) : (
-              <button
-                onClick={toggleExpanded}
-                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
-              >
-                Collapse
-              </button>
-            )}
-          </>
-        )}
       </div>
     </div>
   );

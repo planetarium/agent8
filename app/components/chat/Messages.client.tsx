@@ -1,18 +1,27 @@
+import { Fragment, forwardRef, useState, useEffect } from 'react';
+import type { ForwardedRef } from 'react';
+import Lottie from 'lottie-react';
+import { toast } from 'react-toastify';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+import { useRandomTip } from '~/lib/hooks/useRandomTip';
+
 import type { JSONValue, UIMessage } from 'ai';
-import { Fragment } from 'react';
+import type { ProgressAnnotation } from '~/types/context';
+
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
 import { classNames } from '~/utils/classNames';
+import { extractAllTextContent } from '~/utils/message';
+import { loadingAnimationData } from '~/utils/animationData';
+
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { useStore } from '@nanostores/react';
-import { profileStore } from '~/lib/stores/profile';
-import { forwardRef } from 'react';
-import type { ForwardedRef } from 'react';
-import { isCommitHash } from '~/lib/persistenceGitbase/utils';
-import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
-import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client';
-import Lottie from 'lottie-react';
-import { loadingAnimationData } from '~/utils/animationData';
-import { extractAllTextContent } from '~/utils/message';
+import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon, PlayIcon, ChevronRightIcon } from '~/components/ui/Icons';
+import CustomButton from '~/components/ui/CustomButton';
+import CustomIconButton from '~/components/ui/CustomIconButton';
 
 interface MessagesProps {
   id?: string;
@@ -20,10 +29,14 @@ interface MessagesProps {
   isStreaming?: boolean;
   messages?: UIMessage[];
   annotations?: JSONValue[];
+  progressAnnotations?: ProgressAnnotation[];
   onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
   onRevert?: (message: UIMessage) => void;
   onViewDiff?: (message: UIMessage) => void;
+  onSaveVersion?: (message: UIMessage) => void;
+  onRestoreVersion?: (commitHash: string, commitTitle: string) => void;
+  savedVersions?: Map<string, string>;
   hasMore?: boolean;
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;
@@ -36,20 +49,59 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       isStreaming = false,
       messages = [],
       annotations = [],
+      progressAnnotations = [],
       onRetry,
-      onFork,
-      onRevert,
       onViewDiff,
+      onSaveVersion,
+      onRestoreVersion,
+      savedVersions,
       hasMore,
       loadingBefore,
       loadBefore,
     } = props;
-    const profile = useStore(profileStore);
+
+    // Check if response is being generated (same condition as "Generating Response" UI)
+    const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
+
+    // Check for mobile viewport
+    const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
+
+    // For Run Preview button layout purposes
+    const isSmallViewportForLayout = useViewport(MOBILE_BREAKPOINT);
+
+    // Random game creation tip
+    const randomTip = useRandomTip();
+
+    // Track expanded state for each message (AI messages only)
+    const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
+
+    // Auto-expand last message when it's being generated or just completed
+    const lastAssistantIndex = messages.reduce((lastIdx, msg, idx) => (msg.role === 'assistant' ? idx : lastIdx), -1);
+
+    useEffect(() => {
+      if (lastAssistantIndex >= 0) {
+        setExpandedMessages((prev) => new Set(prev).add(lastAssistantIndex));
+      }
+    }, [lastAssistantIndex]);
+
+    const toggleExpanded = (index: number) => {
+      setExpandedMessages((prev) => {
+        const newSet = new Set(prev);
+
+        if (newSet.has(index)) {
+          newSet.delete(index);
+        } else {
+          newSet.add(index);
+        }
+
+        return newSet;
+      });
+    };
 
     return (
       <div
         id={id}
-        className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-center' : '')}
+        className={classNames(props.className, 'pr-1', isStreaming ? 'flex flex-col justify-end' : '')}
         ref={ref}
       >
         {hasMore && !isStreaming && (
@@ -76,112 +128,286 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const messageText = extractAllTextContent(message);
               const messageMetadata = message.metadata as any;
               const isHidden = messageMetadata?.annotations?.includes('hidden');
+              const isRestoreMessage = messageMetadata?.annotations?.includes('restore-message');
+              const isForkMessage = messageText.startsWith('Fork from');
               const isUserMessage = role === 'user';
-              const isFirstMessage = index === 0;
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
+              const isFirstAssistantMessage =
+                !isUserMessage && messages.slice(0, index).filter((m) => m.role === 'assistant').length === 0;
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
               }
 
+              // Special rendering for restore messages
+              if (isRestoreMessage) {
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
+                  >
+                    <div className="flex items-center gap-2 self-stretch">
+                      <span className="text-body-md-medium text-secondary">Restored</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{messageText}</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Special rendering for fork messages
+              if (isForkMessage) {
+                const forkSource = messageText.replace('Fork from ', '');
+
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
+                  >
+                    <div className="flex items-center gap-2 self-stretch">
+                      <span className="text-body-md-medium text-secondary">Forked from</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{forkSource}</span>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <div
-                  key={index}
-                  className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                    'border border-gray-700 bg-bolt-elements-messages-background mt-4 py-4': isUserMessage,
-                    'bg-gray-800 bg-opacity-70 mt-4': !isStreaming && !isUserMessage,
-                    'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                      isStreaming && isLast,
-                  })}
-                >
-                  {isUserMessage && (
-                    <div className="flex items-center justify-center w-[40px] h-[40px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0 self-start -mt-0.5">
-                      {profile?.avatar ? (
-                        <img
-                          src={profile.avatar}
-                          alt={profile?.username || 'User'}
-                          className="w-full h-full object-cover"
-                          loading="eager"
-                          decoding="sync"
-                        />
-                      ) : (
-                        <div className="i-ph:user-fill text-2xl" />
+                <Fragment key={index}>
+                  {!isUserMessage && messageText.trim() === '' && isLast && isGenerating ? (
+                    <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+                      <div className="flex items-center gap-3">
+                        <div style={{ width: '24px', height: '24px' }}>
+                          <Lottie animationData={loadingAnimationData} loop={true} />
+                        </div>
+                        <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={classNames(
+                        'flex self-stretch',
+                        isUserMessage
+                          ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
+                          : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3 animate-text-fade',
+                      )}
+                    >
+                      <div className="grid grid-col-1 w-full">
+                        {isUserMessage ? (
+                          <UserMessage content={messageText} isLast={isLast} />
+                        ) : (
+                          <AssistantMessage
+                            content={messageText}
+                            annotations={annotations}
+                            metadata={messageMetadata}
+                            expanded={expandedMessages.has(index)}
+                          />
+                        )}
+                      </div>
+
+                      {/* Response status indicator for AI messages */}
+                      {!isUserMessage && (
+                        <div
+                          className={classNames(
+                            'flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
+                            { 'border-t border-tertiary': messageText.trim() !== '' },
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isLast && isGenerating ? (
+                              <>
+                                <div style={{ width: '24px', height: '24px' }}>
+                                  <Lottie animationData={loadingAnimationData} loop={true} />
+                                </div>
+                                <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                              </>
+                            ) : isLast ? (
+                              <span
+                                className="text-heading-xs"
+                                style={{
+                                  background:
+                                    'linear-gradient(90deg, var(--color-text-accent-subtle-gradient-start, #72E7F8) 0%, var(--color-text-accent-subtle-gradient-end, #FFD876) 100%)',
+                                  backgroundClip: 'text',
+                                  WebkitBackgroundClip: 'text',
+                                  WebkitTextFillColor: 'transparent',
+                                }}
+                              >
+                                Response Generated
+                              </span>
+                            ) : (
+                              <span className="text-heading-xs text-subtle">Response Generated</span>
+                            )}
+                          </div>
+                          {!(isLast && isGenerating) && (
+                            <button
+                              onClick={() => toggleExpanded(index)}
+                              className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
+                            >
+                              {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                              <ChevronRightIcon
+                                width={16}
+                                height={16}
+                                fill="currentColor"
+                                className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                              />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
-                  <div className="grid grid-col-1 w-full">
-                    {isUserMessage ? (
-                      <UserMessage content={messageText} />
-                    ) : (
-                      <AssistantMessage
-                        content={messageText}
-                        annotations={annotations}
-                        metadata={messageMetadata}
-                        forceExpanded={isLast}
-                      />
-                    )}
-                  </div>
-                  {isEnabledGitbasePersistence && (
-                    <>
-                      {!isUserMessage ? (
-                        <div className="flex items-start mt-2.5">
-                          <Dropdown
-                            trigger={
-                              <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                            }
-                          >
-                            {messageId && isCommitHash(messageId.split('-').pop() as string) && (
-                              <>
-                                <DropdownItem onSelect={() => onRevert?.(message)} disabled={isLast}>
-                                  <span className="i-ph:arrow-u-up-left text-xl" />
-                                  Revert to this message
-                                </DropdownItem>
 
-                                <DropdownItem onSelect={() => onViewDiff?.(message)}>
-                                  <span className="i-ph:git-diff text-xl" />
-                                  View diff for this message
-                                </DropdownItem>
-                              </>
-                            )}
-                            <DropdownItem onSelect={() => onFork?.(message)}>
-                              <span className="i-ph:git-fork text-xl" />
-                              Fork chat from this message
-                            </DropdownItem>
-                          </Dropdown>
-                        </div>
-                      ) : (
-                        !isFirstMessage && (
-                          <div className="flex items-start mt-2.5">
-                            <Dropdown
-                              trigger={
-                                <button className="i-ph:dots-three-vertical text-xl text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors" />
-                              }
-                            >
-                              <DropdownItem
-                                onSelect={() => {
-                                  const prevMessage = index > 0 ? messages[index - 1] : undefined;
-                                  onRetry?.(message, prevMessage);
-                                }}
+                  {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
+                    <div className="flex justify-between items-center px-2 mt-0.5">
+                      <div className="flex items-start gap-3">
+                        {/* Hide View Diff button for the first AI response and non-last messages */}
+                        {!isFirstAssistantMessage && isLast && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<DiffIcon size={20} />}
+                                onClick={() => onViewDiff?.(message)}
+                                disabled={isGenerating}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                side="bottom"
                               >
-                                <span className="i-ph:arrow-clockwise text-xl" />
-                                Retry chat
-                              </DropdownItem>
-                            </Dropdown>
-                          </div>
-                        )
-                      )}
-                    </>
+                                View diff
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
+                        <Tooltip.Root delayDuration={100}>
+                          <Tooltip.Trigger asChild>
+                            <CustomIconButton
+                              variant="secondary-transparent"
+                              size="sm"
+                              icon={<CopyLineIcon size={20} />}
+                              onClick={() => {
+                                navigator.clipboard.writeText(messageText);
+                                toast.success('Copied to clipboard');
+                              }}
+                              disabled={isGenerating}
+                            />
+                          </Tooltip.Trigger>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                              side="bottom"
+                            >
+                              Copy
+                              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        </Tooltip.Root>
+                        {/* Show Retry button only for the last message */}
+                        {index > 0 && messages[index - 1]?.role === 'user' && isLast && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<RefreshIcon size={20} />}
+                                onClick={() => {
+                                  const prevUserMessage = messages[index - 1];
+                                  const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
+                                  onRetry?.(prevUserMessage, prevPrevMessage);
+                                }}
+                                disabled={isGenerating}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                side="bottom"
+                              >
+                                Retry
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
+                      </div>
+                      <div className="flex items-center">
+                        {messageId &&
+                          isCommitHash(messageId.split('-').pop() as string) &&
+                          (() => {
+                            const commitHash = messageId.split('-').pop() as string;
+                            const savedTitle = savedVersions?.get(commitHash);
+
+                            /*
+                             * If saved version exists and not the last message, show Restore button
+                             * If last message, it's the current version so no need to restore
+                             */
+                            return savedTitle && !isLast ? (
+                              <CustomButton
+                                variant="primary-text"
+                                size="sm"
+                                onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
+                              >
+                                Restore
+                              </CustomButton>
+                            ) : !savedTitle ? (
+                              <CustomButton
+                                variant="secondary-text"
+                                size="sm"
+                                onClick={() => onSaveVersion?.(message)}
+                                title="Save as version"
+                              >
+                                <StarLineIcon size={20} />
+                                Save
+                              </CustomButton>
+                            ) : null;
+                          })()}
+                        {isLast && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomButton
+                                variant="primary-text"
+                                size="sm"
+                                onClick={() => workbenchStore.runPreview()}
+                              >
+                                <PlayIcon color="currentColor" size={20} />
+                                {isSmallViewportForLayout ? 'Run' : 'Run Preview'}
+                              </CustomButton>
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                side="bottom"
+                              >
+                                Run Preview
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
+                </Fragment>
               );
             })
           : null}
-        {isStreaming && (
-          <div className="flex items-center justify-center flex-grow mt-10 mb-12">
-            <div style={{ width: '60px', height: '60px', aspectRatio: '1/1' }}>
+
+        {/* Show loading animation when streaming starts and no AI response yet */}
+        {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
+          <div className="flex flex-col w-full h-full justify-center items-center gap-3">
+            <div style={{ width: isSmallViewport ? '48px' : '80px', height: isSmallViewport ? '48px' : '80px' }}>
               <Lottie animationData={loadingAnimationData} loop={true} />
             </div>
+            {isSmallViewport && (
+              <div className="flex flex-col justify-center items-center gap-2 self-stretch px-4">
+                <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
+                <span className="text-body-md-medium text-secondary text-center">{randomTip}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

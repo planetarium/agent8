@@ -217,12 +217,13 @@
  */
 :root {
   --header-height: 54px;
-  --chat-max-width: 37rem;
+  --chat-max-width: 100%;
   --chat-max-width-before-start: 37.5rem;
-  --chat-min-width: 640px;
-  --workbench-width: min(calc(100% - var(--chat-min-width)), 2536px);
+  --chat-min-width: 380px;
+  --chat-width: 50%;
+  --workbench-width: calc(100% - var(--chat-width));
   --workbench-inner-width: var(--workbench-width);
-  --workbench-left: calc(100% - var(--workbench-width));
+  --workbench-left: var(--chat-width);
 
   /* Font Families */
   --font-primary: 'Instrument Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -233,20 +234,30 @@
   --color-text-secondary: #dbe0e9;
   --color-text-tertiary: #99a2b0;
   --color-text-subtle: #767d8c;
+  --color-text-accent-primary: #11b9d2;
+  --color-text-accent-primary-subtler: #72e7f8;
   --color-text-interactive-neutral: #f3f5f8;
   --color-text-interactive-selected: #3fd2e8;
+  --color-text-interactive-primary: #11b9d2;
   --color-text-interactive-on-primary: #f3f5f8;
+  --color-text-interactive-on-primary-hovered: #fcfcfd;
+  --color-text-interactive-on-primary-pressed: #ffffff;
+  --color-text-interactive-hovered: #1a92a4;
+  --color-text-interactive-pressed: #1a7583;
   --color-text-disabled: rgba(255, 255, 255, 0.18);
   --color-bg-primary: #111315;
+  --color-bg-tertiary: #32363c;
   --color-bg-interactive-neutral: #222428;
   --color-bg-interactive-neutral-hovered: #32363c;
   --color-bg-interactive-neutral-pressed: #464c54;
   --color-bg-transparent-subtle: rgba(255, 255, 255, 0.05);
   --color-border-interactive-neutral: rgba(255, 255, 255, 0.18);
+  --color-border-interactive-neutral: rgba(255, 255, 255, 0.12);
   --color-border-interactive-neutral-hovered: rgba(255, 255, 255, 0.22);
   --color-border-interactive-neutral-pressed: rgba(255, 255, 255, 0.35);
   --color-border-disabled: rgba(255, 255, 255, 0.08);
   --color-border-primary: rgba(255, 255, 255, 0.35);
+  --color-border-secondary: rgba(255, 255, 255, 0.22);
   --color-border-tertiary: rgba(255, 255, 255, 0.12);
   --color-bg-disabled: rgba(255, 255, 255, 0.05);
   --color-bg-interactive-gradient-start: #111315;
@@ -300,4 +311,70 @@
 /* Typography Utilities */
 .font-feature-stylistic {
   font-feature-settings: var(--font-feature-stylistic);
+}
+
+/* Animations */
+@keyframes textColorWave {
+  0% {
+    color: var(--color-text-primary, #fff);
+  }
+  50% {
+    color: #6b7280;
+  }
+  100% {
+    color: var(--color-text-primary, #fff);
+  }
+}
+
+.animate-text-color-wave {
+  animation: textColorWave 2s ease-in-out infinite;
+}
+
+@keyframes textAccentWave {
+  0% {
+    color: var(--color-text-accent-primary, #11b9d2);
+  }
+  50% {
+    color: var(--color-text-accent-primary-subtler, #72e7f8);
+  }
+  100% {
+    color: var(--color-text-accent-primary, #11b9d2);
+  }
+}
+
+.animate-text-accent-wave {
+  animation: textAccentWave 2s ease-in-out infinite;
+}
+
+/* Fade-in animation for new messages */
+@keyframes textFade {
+  0% {
+    opacity: 0;
+    filter: blur(1.2px);
+  }
+  65% {
+    opacity: 1;
+    filter: blur(0.25px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.animate-text-fade {
+  animation: textFade 420ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-text-fade {
+    animation: none;
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* Disable transitions during resize */
+body.resizing * {
+  transition-duration: 0s !important;
 }
