@@ -4,6 +4,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { cleanEscapedTags, extractFromCDATA } from '~/utils/stringUtils';
 import { unreachable } from '~/utils/unreachable';
 import { AUTO_SYNTAX_FIX_TAG_NAME } from '~/utils/constants';
+import { logManager } from '~/lib/debug/LogManager';
 
 const ARTIFACT_TAG_OPEN = '<boltArtifact';
 const ARTIFACT_TAG_CLOSE = '</boltArtifact>';
@@ -69,6 +70,8 @@ export class StreamingMessageParser {
   constructor(private _options: StreamingMessageParserOptions = {}) {}
 
   parse(messageId: string, input: string) {
+    logManager.add('StreamingMessageParser-73');
+
     let state = this.#messages.get(messageId);
 
     if (!state) {
@@ -230,6 +233,7 @@ export class StreamingMessageParser {
 
               const openActionId = String(state.actionId);
 
+              logManager.add('StreamingMessageParser-236');
               this._options.callbacks?.onActionOpen?.({
                 artifactId: currentArtifact.id,
                 messageId,
@@ -338,6 +342,7 @@ export class StreamingMessageParser {
 
               state.currentArtifact = currentArtifact;
 
+              logManager.add('StreamingMessageParser-345');
               this._options.callbacks?.onArtifactOpen?.({ messageId, ...currentArtifact });
 
               // Only add artifact element to output if not inside autoSyntaxFix

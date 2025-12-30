@@ -71,6 +71,7 @@ import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { logManager } from '~/lib/debug/LogManager';
 
 const logger = createScopedLogger('Chat');
 
@@ -580,6 +581,7 @@ export const ChatImpl = memo(
     };
 
     const runAndPreview = async (message: UIMessage) => {
+      logManager.add('ChatImpl-584');
       workbench.clearAlert();
 
       const content = extractTextContent(message);
@@ -715,6 +717,8 @@ export const ChatImpl = memo(
         body: () => bodyRef.current,
       }),
       onData: (data) => {
+        logManager.add('ChatImpl-720');
+
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
           return;
@@ -725,6 +729,7 @@ export const ChatImpl = memo(
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
+          logManager.add('ChatImpl-732');
           handleChatError(extractedData.reason, {
             error: extractedData.message,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
@@ -745,6 +750,8 @@ export const ChatImpl = memo(
         });
       },
       onError: (e) => {
+        logManager.add('ChatImpl-753');
+
         if (isPageUnloadingRef.current) {
           logger.debug('Skipping error notification, page is unloading');
           return;
@@ -758,6 +765,10 @@ export const ChatImpl = memo(
         });
 
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
+
+        // Collect process logs for network errors
+        const processlog = e.message === 'network error' ? logManager.get().join(',') : undefined;
+
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           {
@@ -765,12 +776,15 @@ export const ChatImpl = memo(
             context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
             prompt: lastUserPromptRef.current,
             elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+            process: processlog,
           },
         );
         setFakeLoading(false);
       },
 
       onFinish: async ({ message }) => {
+        logManager.add('ChatImpl-781');
+
         const usage =
           message.metadata &&
           typeof message.metadata === 'object' &&
@@ -951,6 +965,8 @@ export const ChatImpl = memo(
     }, [files, installNpm]);
 
     const handleCommit = async (message: UIMessage) => {
+      logManager.add('ChatImpl-961');
+
       if (!isEnabledGitbasePersistence) {
         return;
       }
@@ -1051,6 +1067,10 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // Clear logs from previous request
+      logManager.clear();
+      logManager.add('ChatImpl-1053');
+
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
@@ -1076,6 +1096,8 @@ export const ChatImpl = memo(
       lastUserPromptRef.current = messageContent;
 
       if (chatStarted && Object.keys(files).length === 0) {
+        logManager.add('ChatImpl-1080');
+
         const fileRecoveryStartTime = performance.now();
         let recoverySuccessful = false;
         const containerInstance = await workbench.container;
@@ -1101,17 +1123,20 @@ export const ChatImpl = memo(
             const files = await strategy.getFiles();
 
             if (Object.keys(files).length > 0) {
+              logManager.add('ChatImpl-1107');
               await containerInstance.mount(convertFileMapToFileSystemTree(files));
               strategy.logSuccess();
               recoverySuccessful = true;
               break;
             }
           } catch (error) {
+            logManager.add('ChatImpl-1115');
             console.error(`${strategy.name} recovery failed:`, error);
           }
         }
 
         if (!recoverySuccessful) {
+          logManager.add('ChatImpl-1121');
           reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
             context: 'sendMessage - files check',
           });
@@ -1169,6 +1194,8 @@ export const ChatImpl = memo(
       }
 
       if (!chatStarted) {
+        logManager.add('ChatImpl-1179');
+
         const templateSelectionStartTime = performance.now();
 
         try {
@@ -1182,6 +1209,8 @@ export const ChatImpl = memo(
               message: 'Analyzing your request...',
             },
           ]);
+
+          logManager.add('ChatImpl-1195');
 
           const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
@@ -1208,6 +1237,8 @@ export const ChatImpl = memo(
               message: 'Setting up base project...',
             },
           ]);
+
+          logManager.add('ChatImpl-1223');
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
             if (e.message.includes('rate limit')) {
@@ -1454,6 +1485,7 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
+        logManager.add('ChatImpl-1464');
         sendChatMessage({
           role: 'user',
           parts: [
