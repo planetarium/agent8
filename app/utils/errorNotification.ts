@@ -40,7 +40,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
     }
 
     if (lastUserPrompt && lastUserPrompt.length > MAX_PROMPT_LENGTH) {
-      lastUserPrompt = `${lastUserPrompt.substring(0, MAX_PROMPT_LENGTH)}... (truncated)`;
+      lastUserPrompt = `${lastUserPrompt.substring(0, MAX_PROMPT_LENGTH)}\n\n... (truncated)`;
     }
 
     // Create a plain object with all Error properties for better serialization
