@@ -64,7 +64,6 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : undefined,
       url: typeof window !== 'undefined' ? window.location.href : undefined,
       userId: options.userId,
-      process: options.process,
     };
 
     const response = await fetch('/api/error-notification', {
