@@ -5,6 +5,8 @@ export interface ServerErrorData {
   type: 'error';
   reason: 'credit-consume' | 'stream-processing';
   message: string;
+  prompt: string;
+  elapsedTime: string;
 }
 
 /**

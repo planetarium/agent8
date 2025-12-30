@@ -10,7 +10,7 @@ interface ErrorNotificationOptions {
   context?: string;
   userId?: string;
   prompt?: string;
-  elapsedTime?: number;
+  elapsedTime?: string;
 }
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
@@ -24,7 +24,9 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
         name: options.error.name,
         message: options.error.message,
         stack: options.error.stack,
-        prompt: options.prompt,
+        prompt: options.prompt
+          ? `${options.prompt.substring(0, 200)}${options.prompt.length > 200 ? '... (truncated)' : ''}`
+          : undefined,
         elapsedTime: options.elapsedTime,
 
         // Include any custom properties that might exist on the error
@@ -78,7 +80,7 @@ export async function sendChatErrorWithToastMessage(
   error?: Error | string,
   functionContext?: string,
   prompt?: string,
-  elapsedTime?: number,
+  elapsedTime?: string,
 ): Promise<void> {
   const context = `Chat - ${functionContext || 'Unknown function'}`;
 
@@ -95,7 +97,7 @@ export interface HandleChatErrorOptions {
   error?: Error | string;
   context?: string;
   prompt?: string;
-  elapsedTime?: number;
+  elapsedTime?: string;
   toastType?: 'error' | 'warning';
   sendChatError?: boolean;
 }
