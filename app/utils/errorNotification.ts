@@ -4,6 +4,7 @@ import { getErrorFilter } from '~/constants/errorFilters';
 
 const logger = createScopedLogger('ErrorNotificationUtil');
 
+const MAX_PROMPT_LENGTH = 200;
 interface ErrorNotificationOptions {
   message: string;
   error?: Error | string;
@@ -15,33 +16,43 @@ interface ErrorNotificationOptions {
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
   try {
-    // Serialize error object completely to capture all properties
-    let errorDetails: string;
+    let errorObj = {};
+    let lastUserPrompt = options.prompt;
+
+    if (lastUserPrompt && lastUserPrompt.length > MAX_PROMPT_LENGTH) {
+      lastUserPrompt = `${lastUserPrompt.substring(0, MAX_PROMPT_LENGTH)}\n\n... (truncated)`;
+    }
 
     if (options.error instanceof Error) {
-      // Create a plain object with all Error properties for better serialization
-      const errorObj = {
+      errorObj = {
         name: options.error.name,
         message: options.error.message,
         stack: options.error.stack,
-        prompt: options.prompt,
-        elapsedTime: options.elapsedTime,
+        ...Object.getOwnPropertyNames(options.error).reduce(
+          (acc, key) => {
+            if (!['name', 'message', 'stack'].includes(key)) {
+              acc[key] = (options.error as any)[key];
+            }
 
-        // Include any custom properties that might exist on the error
-        ...Object.getOwnPropertyNames(options.error).reduce((acc, key) => {
-          if (!['name', 'message', 'stack', 'prompt', 'elapsedTime'].includes(key)) {
-            acc[key] = (options.error as any)[key];
-          }
-
-          return acc;
-        }, {} as any),
+            return acc;
+          },
+          {} as Record<string, any>,
+        ),
       };
-      errorDetails = JSON.stringify(errorObj, null, 2);
-    } else if (options.error) {
-      errorDetails = JSON.stringify(options.error, null, 2);
-    } else {
-      errorDetails = '';
+    } else if (typeof options.error === 'string') {
+      errorObj = {
+        message: options.error,
+      };
     }
+
+    // Create a plain object with all Error properties for better serialization
+    errorObj = {
+      ...errorObj,
+      prompt: lastUserPrompt,
+      elapsedTime: options.elapsedTime,
+    };
+
+    const errorDetails = JSON.stringify(errorObj, null, 2);
 
     const payload = {
       message: options.message,
