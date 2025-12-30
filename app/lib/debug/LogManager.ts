@@ -35,8 +35,3 @@ class LogManager {
 }
 
 export const logManager = LogManager.getInstance();
-
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  (window as any).__logManager = logManager;
-  console.log('LogManager available at window.__logManager');
-}
