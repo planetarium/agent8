@@ -50,7 +50,7 @@ import V8AppBanner from '~/components/chat/V8AppBanner';
 
 const TEXTAREA_MIN_HEIGHT = 40;
 const MAX_ATTACHMENTS = 10;
-const VIDEO_GUIDE_TABS = {
+export const VIDEO_GUIDE_TABS = {
   mobile: {
     icon: StartGuideMobileIcon,
     list: {
@@ -654,7 +654,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           return;
         }
 
-        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom || 0);
+        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom + 30 || 0);
 
         // 30px 이상 변경되었을 때만 전송
         if (Math.abs(height - lastHeight) < 30) {
@@ -740,7 +740,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
           >
             {!chatStarted && (
-              <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:max-w-[1400px]">
+              <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:min-h-0 xl:max-w-[1400px]">
                 <MainBackground zIndex={1} isMobileView={isMobileView} />
                 {/* Background Image */}
                 <div
@@ -773,7 +773,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm text-secondary self-stretch z-2 mt-2">
                   Start here — or make your own.{isMobileView && <br />} What do you want to create?
                 </span>
-                <div className="relative z-2 mt-5 md:mt-4 md:relative self-stretch rounded-[8px] xl:rounded-[24px] overflow-hidden">
+                <div className="relative z-2 mt-5 md:mt-4 md:relative rounded-[8px] xl:rounded-[24px] xl:aspect-[16/9] xl:w-full xl:max-w-[min(1400px,calc(61svh*16/9))] xl:min-h-[500px] overflow-hidden">
                   <div
                     className="md:absolute md:left-[1px] md:right-[1px] md:top-[1px] md:z-1 flex flex-col md:items-center md:justify-center gap-2 md:flex-row md:gap-4 xl:gap-7 rounded-[8px] xl:rounded-t-[24px] overflow-hidden"
                     style={
@@ -788,21 +788,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     {Object.entries(VIDEO_GUIDE_TABS).map(([key, value]) => (
                       <div
                         key={key}
-                        className="grid grid-cols-3 gap-2 md:flex md:items-center md:gap-2 md:pt-3 xl:gap-3"
+                        className="grid grid-cols-6 gap-2 md:flex md:items-center md:gap-2 md:pt-3 xl:gap-3"
                       >
                         <value.icon size={28} color="#99A2B0" className="hidden xl:block xl:flex-shrink-0" />
-                        {Object.entries(value.list).map(([listKey, listValue]) => (
+                        {Object.entries(value.list).map(([listKey, listValue], listIndex) => (
                           <button
                             key={listKey}
                             className={classNames(
-                              'flex flex-col gap-[2px] items-center md:flex-row md:gap-2 rounded-[8px] text-heading-2xs md:py-0 md:px-3 md:h-8 xl:px-4 xl:h-9 xl:text-heading-xs',
+                              'col-span-2 flex flex-col gap-[2px] items-center justify-between md:justify-start md:flex-row md:gap-2 rounded-[8px] text-heading-2xs md:py-0 md:px-3 md:h-8 xl:px-4 xl:h-9 xl:text-heading-xs',
                               selectedVideoTab.item.label === listValue.label
                                 ? 'p-[6px] text-interactive-selected border border-interactive-primary bg-gradient-to-t from-[rgba(17,185,210,0.20)] to-[rgba(17,185,210,0.20)] bg-interactive-neutral'
                                 : 'p-2 text-interactive-neutral bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed',
+                              Object.entries(value.list).length === 2 && listIndex === 0 ? 'col-start-2' : '',
                             )}
                             onClick={() => handleColorTabClick({ item: listValue, type: key as 'mobile' | 'desktop' })}
                           >
                             <listValue.icon
+                              size={20}
                               color={selectedVideoTab.item.label === listValue.label ? '#3fd2e8' : '#F3F5F8'}
                             />
                             {listValue.label}
@@ -813,7 +815,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </div>
                   <div
                     className={classNames(
-                      'flex flex-col items-start w-full relative cursor-pointer aspect-[16/9] border border-primary rounded-[8px] xl:rounded-[24px] overflow-hidden mt-3 md:mt-0',
+                      'flex flex-col items-start relative cursor-pointer md:aspect-[16/9] border border-primary rounded-[8px] xl:rounded-[24px] xl:max-h-full overflow-hidden mt-3 md:mt-0',
+                      selectedVideoTab.type === 'mobile' ? 'aspect-[10/9]' : 'aspect-[16/9]',
                     )}
                     onMouseEnter={() => setIsVideoHovered(true)}
                     onMouseLeave={() => setIsVideoHovered(false)}
@@ -831,23 +834,23 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       Your browser does not support the video tag.
                     </video>
                     {selectedVideoTab.type === 'mobile' && (
-                      <div className="absolute inset-[1px] bg-gradient-to-t from-black/80 to-black/80 backdrop-blur-[10px] pointer-events-none rounded-[8px] xl:rounded-[24px] overflow-hidden" />
-                    )}
-                    {selectedVideoTab.type === 'mobile' && (
-                      <div className="absolute top-[-1px] bottom-[-1px] left-1/2 md:top-[52px] md:bottom-[121px] xl:top-[10.7%] xl:bottom-[15%] -translate-x-1/2 border-[2px] xl:border-[3px] border-primary elevation-light-3 aspect-[266/473] rounded-[8px] overflow-hidden">
-                        <video
-                          ref={mobileVideoRef}
-                          autoPlay
-                          muted
-                          loop
-                          playsInline
-                          className={classNames('w-full h-full object-cover')}
-                          src={selectedVideoTab.item.video}
-                          onClick={handleVideoClick}
-                        >
-                          Your browser does not support the video tag.
-                        </video>
-                      </div>
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/80 backdrop-blur-[10px] pointer-events-none rounded-[8px] xl:rounded-[24px] overflow-hidden" />
+                        <div className="absolute top-[-1px] bottom-[-1px] left-1/2 md:top-[52px] md:bottom-[121px] xl:top-[10.7%] xl:bottom-[15%] -translate-x-1/2 elevation-light-3 aspect-[266/473] rounded-[8px] overflow-hidden">
+                          <video
+                            ref={mobileVideoRef}
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            className={classNames('w-full h-full object-cover')}
+                            src={selectedVideoTab.item.video}
+                            onClick={handleVideoClick}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      </>
                     )}
 
                     {/* Video icon overlay */}
@@ -870,6 +873,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             <div
               className={classNames('pt-0 tablet:pt-4 tablet:px-6 relative z-2', {
                 'h-full flex flex-col': chatStarted,
+                'xl:pb-[50px]': !chatStarted,
               })}
             >
               <ClientOnly>
@@ -929,7 +933,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     'sticky bottom-4': chatStarted,
                     'tablet:max-w-chat': chatStarted,
                     'tablet:max-w-chat-before-start': !chatStarted,
-                    'max-w-[632px] md:-translate-y-[120px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
+                    'xl:absolute xl:left-1/2 xl:translate-x-[-50%] max-w-[632px] md:-translate-y-[calc(50%+16px)]':
+                      !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
                   },
                 )}
               >
