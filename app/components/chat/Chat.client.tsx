@@ -738,6 +738,7 @@ export const ChatImpl = memo(
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
             elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+            metadata: extractedData.metadata,
           });
 
           return;

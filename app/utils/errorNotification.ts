@@ -13,6 +13,7 @@ interface ErrorNotificationOptions {
   prompt?: string;
   elapsedTime?: number;
   process?: string;
+  metadata?: Record<string, any>;
 }
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
@@ -52,6 +53,7 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       prompt: lastUserPrompt,
       elapsedTime: options.elapsedTime,
       process: options.process,
+      metadata: options.metadata,
     };
 
     const errorDetails = JSON.stringify(errorObj, null, 2);
@@ -93,6 +95,7 @@ export async function sendChatErrorWithToastMessage(
   prompt?: string,
   elapsedTime?: number,
   process?: string,
+  metadata?: Record<string, any>,
 ): Promise<void> {
   const context = `Chat - ${functionContext || 'Unknown function'}`;
 
@@ -103,6 +106,7 @@ export async function sendChatErrorWithToastMessage(
     prompt,
     elapsedTime,
     process,
+    metadata,
   });
 }
 
@@ -114,11 +118,21 @@ export interface HandleChatErrorOptions {
   toastType?: 'error' | 'warning';
   sendChatError?: boolean;
   process?: string;
+  metadata?: Record<string, any>;
 }
 
 // Comprehensive error handler that handles both toast and Slack notification
 export function handleChatError(message: string, options?: HandleChatErrorOptions): void {
-  const { error, context, prompt, elapsedTime, toastType = 'error', sendChatError = true, process } = options ?? {};
+  const {
+    error,
+    context,
+    prompt,
+    elapsedTime,
+    toastType = 'error',
+    sendChatError = true,
+    process,
+    metadata,
+  } = options ?? {};
 
   // Check if error matches any filter
   const filter = getErrorFilter(error);
@@ -135,8 +149,10 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
   if (!filter && sendChatError) {
-    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime, process).catch((notificationError) => {
-      logger.error('Failed to send error notification for:', message, notificationError);
-    });
+    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime, process, metadata).catch(
+      (notificationError) => {
+        logger.error('Failed to send error notification for:', message, notificationError);
+      },
+    );
   }
 }
