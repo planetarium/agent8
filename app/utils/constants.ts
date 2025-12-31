@@ -18,29 +18,31 @@ const llmManager = LLMManager.getInstance(import.meta.env);
 export const PROVIDER_LIST = llmManager.getAllProviders();
 export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!;
 
+const DEFAULT_MODEL_NAME = 'gemini-3-pro-preview';
+
 export const FIXED_MODELS = {
   SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   PROMPT_ENHANCER_TEMPLATE: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_2D_CHAT: {
-    model: 'gemini-3-pro-preview',
+    model: DEFAULT_MODEL_NAME,
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   FIRST_3D_CHAT: {
-    model: 'gemini-3-pro-preview',
+    model: DEFAULT_MODEL_NAME,
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   DEFAULT_MODEL: {
-    model: 'gemini-3-pro-preview',
+    model: DEFAULT_MODEL_NAME,
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
   IMAGE_DESCRIPTION: {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
   },
 };
