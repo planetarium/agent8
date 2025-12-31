@@ -83,7 +83,7 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 // const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
 
 // 49 debug logs
-function addDebugLog(value: number): void {
+function addDebugLog(value: number | string): void {
   logManager.add('Chat-' + value);
 }
 
@@ -721,7 +721,8 @@ export const ChatImpl = memo(
         body: () => bodyRef.current,
       }),
       onData: (data) => {
-        addDebugLog(1);
+        const dataType = data?.type || 'unknown';
+        addDebugLog(`1:${dataType}`);
 
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -750,7 +751,7 @@ export const ChatImpl = memo(
           const extractedType = hasType(extractedData) ? extractedData.type : null;
           const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
 
-          addDebugLog(2);
+          addDebugLog(`2:${dataType}`);
 
           return [...filtered, extractedData];
         });
