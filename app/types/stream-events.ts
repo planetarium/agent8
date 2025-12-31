@@ -3,7 +3,7 @@
  */
 export interface ServerErrorData {
   type: 'error';
-  reason: 'credit-consume' | 'stream-processing' | 'transform-stream';
+  reason: 'credit-consume' | 'stream-processing' | 'transform-stream' | 'llm-generation';
   message: string;
   metadata?: Record<string, any>;
 }
