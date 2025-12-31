@@ -351,14 +351,33 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           } as ProgressAnnotation,
         });
 
-        const result = await streamText({
-          messages,
-          env,
-          options,
-          files,
-          tools: mcpTools,
-          abortSignal: request.signal,
-        });
+        let result;
+
+        try {
+          result = await streamText({
+            messages,
+            env,
+            options,
+            files,
+            tools: mcpTools,
+            abortSignal: request.signal,
+          });
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'LLM generation failed';
+
+          const errorPayload: DataErrorPayload = {
+            type: 'data-error',
+            data: {
+              type: 'error',
+              reason: 'llm-generation',
+              message: errorMsg,
+            },
+          };
+
+          writer.write(errorPayload);
+
+          return;
+        }
 
         try {
           const uiStream = result.toUIMessageStream({ sendReasoning: false });
