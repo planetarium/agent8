@@ -3,8 +3,9 @@
  */
 export interface ServerErrorData {
   type: 'error';
-  reason: 'credit-consume' | 'stream-processing';
+  reason: 'credit-consume' | 'stream-processing' | 'transform-stream';
   message: string;
+  metadata?: Record<string, any>;
 }
 
 /**

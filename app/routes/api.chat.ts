@@ -407,182 +407,209 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           >();
 
           return (chunk, controller) => {
-            const messageType = chunk.type;
+            try {
+              const messageType = chunk.type;
 
-            // reasoning message
-            switch (messageType) {
-              case 'reasoning-start': {
-                controller.enqueue({
-                  type: 'text-start',
-                  id: chunk.id,
-                });
-
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: chunk.id,
-                  delta: '<div class="__boltThought__">',
-                });
-                break;
-              }
-
-              case 'reasoning-delta': {
-                const sanitizedDelta = chunk.delta.replace(/\[REDACTED\]/g, '');
-
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: chunk.id,
-                  delta: sanitizedDelta,
-                });
-
-                break;
-              }
-
-              case 'reasoning-end': {
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: chunk.id,
-                  delta: '</div>\n',
-                });
-
-                controller.enqueue({
-                  type: 'text-end',
-                  id: chunk.id,
-                });
-
-                break;
-              }
-
-              // tool call message
-              case 'tool-input-available': {
-                if (SUBMIT_ACTIONS_TOOLS.includes(chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number])) {
-                  submitActionsInputs.set(chunk.toolCallId, {
-                    toolName: chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number],
-                    input: chunk.input,
-                  });
-
-                  break;
-                }
-
-                const toolCall = {
-                  toolCallId: chunk.toolCallId,
-                  toolName: chunk.toolName,
-                  input: chunk.input,
-                };
-
-                const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
-
-                controller.enqueue({
-                  type: 'text-start',
-                  id: toolCall.toolCallId,
-                });
-
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: toolCall.toolCallId,
-                  delta: divString,
-                });
-
-                controller.enqueue({
-                  type: 'text-end',
-                  id: toolCall.toolCallId,
-                });
-
-                break;
-              }
-
-              // tool result message
-              case 'tool-output-available': {
-                if (submitActionsInputs.has(chunk.toolCallId)) {
-                  const { toolName, input } = submitActionsInputs.get(chunk.toolCallId)!;
-                  submitActionsInputs.delete(chunk.toolCallId);
-
-                  if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
-                    break;
-                  }
-
-                  const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input, isSyntaxFix);
+              // reasoning message
+              switch (messageType) {
+                case 'reasoning-start': {
                   controller.enqueue({
                     type: 'text-start',
-                    id: chunk.toolCallId,
+                    id: chunk.id,
                   });
 
                   controller.enqueue({
                     type: 'text-delta',
-                    id: chunk.toolCallId,
-                    delta: '\n' + xmlContent + '\n',
+                    id: chunk.id,
+                    delta: '<div class="__boltThought__">',
+                  });
+                  break;
+                }
+
+                case 'reasoning-delta': {
+                  const sanitizedDelta = chunk.delta.replace(/\[REDACTED\]/g, '');
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.id,
+                    delta: sanitizedDelta,
+                  });
+
+                  break;
+                }
+
+                case 'reasoning-end': {
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: chunk.id,
+                    delta: '</div>\n',
                   });
 
                   controller.enqueue({
                     type: 'text-end',
-                    id: chunk.toolCallId,
+                    id: chunk.id,
                   });
 
                   break;
                 }
 
-                const toolResult = {
-                  toolCallId: chunk.toolCallId,
-                  result: chunk.output,
-                };
+                // tool call message
+                case 'tool-input-available': {
+                  if (SUBMIT_ACTIONS_TOOLS.includes(chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number])) {
+                    submitActionsInputs.set(chunk.toolCallId, {
+                      toolName: chunk.toolName as (typeof SUBMIT_ACTIONS_TOOLS)[number],
+                      input: chunk.input,
+                    });
 
-                const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+                    break;
+                  }
 
-                controller.enqueue({
-                  type: 'text-start',
-                  id: toolResult.toolCallId,
-                });
+                  const toolCall = {
+                    toolCallId: chunk.toolCallId,
+                    toolName: chunk.toolName,
+                    input: chunk.input,
+                  };
 
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: toolResult.toolCallId,
-                  delta: divString,
-                });
+                  const divString = `\n<toolCall><div class="__toolCall__" id="${chunk.toolCallId}">\`${JSON.stringify(toolCall).replaceAll('`', '&grave;')}\`</div></toolCall>\n`;
 
-                controller.enqueue({
-                  type: 'text-end',
-                  id: toolResult.toolCallId,
-                });
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: toolCall.toolCallId,
+                  });
 
-                break;
-              }
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: toolCall.toolCallId,
+                    delta: divString,
+                  });
 
-              case 'tool-output-error': {
-                // Skip submit actions.
-                if (submitActionsInputs.has(chunk.toolCallId)) {
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: toolCall.toolCallId,
+                  });
+
                   break;
                 }
 
-                const toolResult = {
-                  toolCallId: chunk.toolCallId,
-                  result: chunk.errorText,
-                };
+                // tool result message
+                case 'tool-output-available': {
+                  if (submitActionsInputs.has(chunk.toolCallId)) {
+                    const { toolName, input } = submitActionsInputs.get(chunk.toolCallId)!;
+                    submitActionsInputs.delete(chunk.toolCallId);
 
-                const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+                    if (!(chunk.output as any)?.[COMPLETE_FIELD]) {
+                      break;
+                    }
 
-                controller.enqueue({
-                  type: 'text-start',
-                  id: toolResult.toolCallId,
-                });
+                    const xmlContent = toBoltSubmitActionsXML(++artifactCounter, toolName, input, isSyntaxFix);
+                    controller.enqueue({
+                      type: 'text-start',
+                      id: chunk.toolCallId,
+                    });
 
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: toolResult.toolCallId,
-                  delta: divString,
-                });
+                    controller.enqueue({
+                      type: 'text-delta',
+                      id: chunk.toolCallId,
+                      delta: '\n' + xmlContent + '\n',
+                    });
 
-                controller.enqueue({
-                  type: 'text-end',
-                  id: toolResult.toolCallId,
-                });
-                break;
-              }
+                    controller.enqueue({
+                      type: 'text-end',
+                      id: chunk.toolCallId,
+                    });
 
-              default: {
-                if (!IGNORE_TOOL_TYPES.includes(messageType)) {
-                  controller.enqueue(chunk);
+                    break;
+                  }
+
+                  const toolResult = {
+                    toolCallId: chunk.toolCallId,
+                    result: chunk.output,
+                  };
+
+                  const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: toolResult.toolCallId,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: toolResult.toolCallId,
+                    delta: divString,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: toolResult.toolCallId,
+                  });
+
+                  break;
                 }
 
-                break;
+                case 'tool-output-error': {
+                  // Skip submit actions.
+                  if (submitActionsInputs.has(chunk.toolCallId)) {
+                    break;
+                  }
+
+                  const toolResult = {
+                    toolCallId: chunk.toolCallId,
+                    result: chunk.errorText,
+                  };
+
+                  const divString = `\n<toolResult><div class="__toolResult__" id="${chunk.toolCallId}">\`${JSON.stringify(toolResult).replaceAll('`', '&grave;')}\`</div></toolResult>\n`;
+
+                  controller.enqueue({
+                    type: 'text-start',
+                    id: toolResult.toolCallId,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-delta',
+                    id: toolResult.toolCallId,
+                    delta: divString,
+                  });
+
+                  controller.enqueue({
+                    type: 'text-end',
+                    id: toolResult.toolCallId,
+                  });
+                  break;
+                }
+
+                default: {
+                  if (!IGNORE_TOOL_TYPES.includes(messageType)) {
+                    controller.enqueue(chunk);
+                  }
+
+                  break;
+                }
+              }
+            } catch (err) {
+              const chunkAny = chunk as any;
+              const chunkMeta = {
+                type: chunkAny?.type,
+                id: chunkAny?.id,
+                toolName: chunkAny?.toolName,
+                toolCallId: chunkAny?.toolCallId,
+              };
+              const message = err instanceof Error ? err.message : String(err);
+
+              logger.error('[ui-stream transform error]', chunkMeta, err);
+
+              try {
+                controller.enqueue({
+                  type: 'data-error',
+                  data: {
+                    type: 'error',
+                    reason: 'transform-stream',
+                    message,
+                    metadata: chunkMeta,
+                  },
+                } as any);
+              } catch (enqueueError) {
+                logger.error('[ui-stream transform] failed to enqueue data-error', enqueueError);
               }
             }
           };
