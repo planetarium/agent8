@@ -82,7 +82,7 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 // const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
 
-// 49 debug logs
+// 50 debug logs
 function addDebugLog(value: number | string): void {
   logManager.add('Chat-' + value);
 }
@@ -731,6 +731,15 @@ export const ChatImpl = memo(
 
         // Extract the inner 'data' property if it exists
         const extractedData = data.data || data;
+
+        // Handle data-log (server-side logs)
+        if (data.type === 'data-log') {
+          if (extractedData && typeof extractedData === 'object' && 'message' in extractedData) {
+            addDebugLog(`50:${(extractedData as { message: string }).message}`);
+          }
+
+          return;
+        }
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
