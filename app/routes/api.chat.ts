@@ -8,7 +8,6 @@ import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
-import type { ProgressAnnotation } from '~/types/context';
 import { extractTextContent } from '~/utils/message';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import { TOOL_NAMES } from '~/utils/constants';
@@ -19,7 +18,52 @@ import {
   SUBMIT_MODIFY_ACTION_FIELDS,
   SUBMIT_SHELL_ACTION_FIELDS,
 } from '~/lib/constants/tool-fields';
-import type { DataErrorPayload } from '~/types/stream-events';
+import type { DataErrorPayload, DataLogPayload, DataProgressPayload } from '~/types/stream-events';
+
+function createDataError(
+  reason: DataErrorPayload['data']['reason'],
+  message: string,
+  metadata?: Record<string, unknown>,
+): DataErrorPayload {
+  return {
+    type: 'data-error',
+    transient: true,
+    data: {
+      type: 'error',
+      reason,
+      message,
+      ...(metadata && { metadata }),
+    },
+  };
+}
+
+function createDataLog(message: string): DataLogPayload {
+  return {
+    type: 'data-log',
+    transient: true,
+    data: { message },
+  };
+}
+
+function createDataProgress(
+  status: DataProgressPayload['data']['status'],
+  order: number,
+  message: string,
+  options?: { label?: string; percentage?: number },
+): DataProgressPayload {
+  return {
+    type: 'data-progress',
+    transient: true,
+    data: {
+      type: 'progress',
+      status,
+      order,
+      message,
+      ...(options?.label && { label: options.label }),
+      ...(options?.percentage !== undefined && { percentage: options.percentage }),
+    },
+  };
+}
 
 function createBoltArtifactXML(id?: string, title?: string, body?: string): string {
   const artifactId = id || 'unknown';
@@ -146,42 +190,30 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 const { type, data, toolName } = event;
 
                 if (type === 'start') {
-                  writer.write({
-                    type: 'data-progress',
-                    transient: true,
-                    data: {
-                      type: 'progress',
-                      status: 'in-progress',
-                      order: progressCounter++,
-                      message: `Tool '${toolName}' execution started`,
-                    } as any,
-                  });
+                  writer.write(
+                    createDataProgress('in-progress', progressCounter++, `Tool '${toolName}' execution started`),
+                  );
                 } else if (type === 'progress') {
-                  writer.write({
-                    type: 'data-progress',
-                    transient: true,
-                    data: {
-                      type: 'progress',
-                      status: 'in-progress',
-                      order: progressCounter++,
-                      message: `Tool '${toolName}' executing: ${data.status || ''}`,
-                      percentage: data.percentage ? Number(data.percentage) : undefined,
-                    } as any,
-                  });
+                  writer.write(
+                    createDataProgress(
+                      'in-progress',
+                      progressCounter++,
+                      `Tool '${toolName}' executing: ${data.status || ''}`,
+                      {
+                        percentage: data.percentage ? Number(data.percentage) : undefined,
+                      },
+                    ),
+                  );
                 } else if (type === 'complete') {
-                  writer.write({
-                    type: 'data-progress',
-                    transient: true,
-                    data: {
-                      type: 'progress',
-                      status: data.status === 'failed' ? 'failed' : 'complete',
-                      order: progressCounter++,
-                      message:
-                        data.status === 'failed'
-                          ? `Tool '${toolName}' execution failed`
-                          : `Tool '${toolName}' execution completed`,
-                    },
-                  } as any);
+                  writer.write(
+                    createDataProgress(
+                      data.status === 'failed' ? 'failed' : 'complete',
+                      progressCounter++,
+                      data.status === 'failed'
+                        ? `Tool '${toolName}' execution failed`
+                        : `Tool '${toolName}' execution completed`,
+                    ),
+                  );
 
                   // Automatically unsubscribe after complete
                   unsubscribe();
@@ -238,17 +270,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 },
               });
 
-              writer.write({
-                type: 'data-progress',
-                transient: true,
-                data: {
-                  type: 'progress',
-                  label: 'response',
-                  status: 'complete',
-                  order: progressCounter++,
-                  message: 'Response Generated',
-                } as ProgressAnnotation,
-              });
+              writer.write(
+                createDataProgress('complete', progressCounter++, 'Response Generated', { label: 'response' }),
+              );
               await new Promise((resolve) => setTimeout(resolve, 0));
 
               try {
@@ -263,16 +287,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 });
               } catch (error) {
                 logger.error('Failed to consume user credit:', error);
-
-                const errorPayload: DataErrorPayload = {
-                  type: 'data-error',
-                  data: {
-                    type: 'error',
-                    reason: 'credit-consume',
-                    message: error instanceof Error ? error.message : 'Failed to consume user credit',
-                  },
-                };
-                writer.write(errorPayload);
+                writer.write(
+                  createDataError(
+                    'credit-consume',
+                    error instanceof Error ? error.message : 'Failed to consume user credit',
+                  ),
+                );
               }
 
               // stream.close();
@@ -321,35 +341,23 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 writer.write(value);
               }
             } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
-
-              const errorPayload: DataErrorPayload = {
-                type: 'data-error',
-                data: {
-                  type: 'error',
-                  reason: 'stream-processing',
-                  message: errorMsg,
-                },
-              };
-
-              writer.write(errorPayload);
+              writer.write(
+                createDataError(
+                  'stream-processing',
+                  error instanceof Error ? error.message : 'Stream processing failed',
+                ),
+              );
             }
 
             return;
           },
         };
 
-        writer.write({
-          type: 'data-progress',
-          transient: true,
-          data: {
-            type: 'progress',
-            label: 'response',
-            status: 'in-progress',
-            order: progressCounter++,
-            message: 'Generating Response',
-          } as ProgressAnnotation,
-        });
+        writer.write(
+          createDataProgress('in-progress', progressCounter++, 'Generating Response', { label: 'response' }),
+        );
+
+        writer.write(createDataLog('StartLLM'));
 
         let result;
 
@@ -361,21 +369,16 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             files,
             tools: mcpTools,
             abortSignal: request.signal,
-          });
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'LLM generation failed';
-
-          const errorPayload: DataErrorPayload = {
-            type: 'data-error',
-            data: {
-              type: 'error',
-              reason: 'llm-generation',
-              message: errorMsg,
+            onDebugLog: (message) => {
+              writer.write(createDataLog(message));
             },
-          };
+          });
 
-          writer.write(errorPayload);
-
+          writer.write(createDataLog('EndLLM'));
+        } catch (error) {
+          writer.write(
+            createDataError('llm-generation', error instanceof Error ? error.message : 'LLM generation failed'),
+          );
           return;
         }
 
@@ -393,18 +396,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             writer.write(value);
           }
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'Stream processing failed';
-
-          const errorPayload: DataErrorPayload = {
-            type: 'data-error',
-            data: {
-              type: 'error',
-              reason: 'stream-processing',
-              message: errorMsg,
-            },
-          };
-
-          writer.write(errorPayload);
+          writer.write(
+            createDataError('stream-processing', error instanceof Error ? error.message : 'Stream processing failed'),
+          );
         }
       },
       onError: (error: unknown) => {
@@ -618,15 +612,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               logger.error('[ui-stream transform error]', chunkMeta, err);
 
               try {
-                controller.enqueue({
-                  type: 'data-error',
-                  data: {
-                    type: 'error',
-                    reason: 'transform-stream',
-                    message,
-                    metadata: chunkMeta,
-                  },
-                } as any);
+                controller.enqueue(createDataError('transform-stream', message, chunkMeta));
               } catch (enqueueError) {
                 logger.error('[ui-stream transform] failed to enqueue data-error', enqueueError);
               }
