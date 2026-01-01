@@ -383,14 +383,29 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         }
 
         try {
+          writer.write(createDataLog('ToUIMessageStream'));
+
           const uiStream = result.toUIMessageStream({ sendReasoning: false });
+
+          writer.write(createDataLog('GetReader'));
+
           const reader = uiStream.getReader();
+
+          writer.write(createDataLog('StartLoop'));
+
+          let isFirstChunk = true;
 
           while (true) {
             const { done, value } = await reader.read();
 
             if (done) {
+              writer.write(createDataLog('LoopDone'));
               break;
+            }
+
+            if (isFirstChunk) {
+              writer.write(createDataLog('FirstChunkReceived'));
+              isFirstChunk = false;
             }
 
             writer.write(value);
