@@ -274,7 +274,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
                                 side="bottom"
                               >
                                 View diff
@@ -298,7 +298,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
                               side="bottom"
                             >
                               Copy
@@ -324,7 +324,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
                                 side="bottom"
                               >
                                 Retry
@@ -354,15 +354,29 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 Restore
                               </CustomButton>
                             ) : !savedTitle ? (
-                              <CustomButton
-                                variant="secondary-text"
-                                size="sm"
-                                onClick={() => onSaveVersion?.(message)}
-                                title="Save as version"
-                              >
-                                <StarLineIcon size={20} />
-                                Save
-                              </CustomButton>
+                              <Tooltip.Root delayDuration={100}>
+                                <Tooltip.Trigger asChild>
+                                  <CustomButton
+                                    variant="secondary-text"
+                                    size="sm"
+                                    onClick={() => onSaveVersion?.(message)}
+                                  >
+                                    <StarLineIcon size={20} />
+                                    Save
+                                  </CustomButton>
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                  <Tooltip.Content
+                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                    side="bottom"
+                                  >
+                                    Save to Version History
+                                    <br />
+                                    and restore when needed
+                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                  </Tooltip.Content>
+                                </Tooltip.Portal>
+                              </Tooltip.Root>
                             ) : null;
                           })()}
                         {isLast && (
@@ -379,7 +393,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
                                 side="bottom"
                               >
                                 Run Preview

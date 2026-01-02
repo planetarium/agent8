@@ -189,8 +189,8 @@ export default defineConfig({
     'bg-events-gradient':
       'bg-[linear-gradient(90deg,var(--color-bg-accent-subtle-gradient-start,#72E7F8)_0%,var(--color-bg-accent-subtle-gradient-end,#FFD876)_100%)]',
     'border-interactive-neutral': 'border-[var(--color-border-interactive-neutral)]',
-    'hover:border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
-    'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
+    'border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
+    'border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
     'border-disabled': 'disabled:border-[var(--color-border-disabled)]',
     'border-primary': 'border-[var(--color-border-primary)]',
     'border-secondary': 'border-[var(--color-border-secondary,rgba(255,255,255,0.22))]',

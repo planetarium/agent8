@@ -427,14 +427,14 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
               sideOffset={5}
               side="bottom"
               align="end"
               alignOffset={0}
             >
               View commits to fork or restore
-              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-40px]" />
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>

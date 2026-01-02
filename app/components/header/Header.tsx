@@ -84,7 +84,7 @@ export function Header() {
 
               {/* Desktop: Show all buttons */}
               {!isSmallViewport && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   {repo.path && (
                     <Dropdown
                       trigger={

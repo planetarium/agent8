@@ -1103,7 +1103,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                               sideOffset={5}
                               side="top"
                             >
@@ -1124,7 +1124,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                                 sideOffset={5}
                                 side="top"
                               >
@@ -1154,7 +1154,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                                   sideOffset={5}
                                   side={'bottom'}
                                 >
