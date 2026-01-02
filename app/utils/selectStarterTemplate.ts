@@ -7,6 +7,7 @@ import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
 import { TEMPLATE_BASIC, TEMPLATE_MAP } from '~/constants/template';
 import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
+import { HTTPError } from './errors';
 
 // Zod schema for template selection response
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
@@ -127,7 +128,7 @@ export const selectStarterTemplate = async (options: { message: string }) => {
       }
     }
 
-    throw new Error(errorMessage);
+    throw new HTTPError(errorMessage, response.status, 'selectStarterTemplate');
   }
 
   // generateObject returns the structured object directly
