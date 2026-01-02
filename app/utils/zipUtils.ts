@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { FileMap } from '~/lib/stores/files';
+import { isBinaryPathByExtension } from './fileUtils';
 
 // ZIP 파일을 받아서 FileMap 형식으로 변환
 export async function extractZipTemplate(zipBuffer: ArrayBuffer): Promise<FileMap> {
@@ -35,18 +36,28 @@ export async function extractZipTemplate(zipBuffer: ArrayBuffer): Promise<FileMa
       }
 
       try {
-        // 파일 내용을 텍스트로 읽기
-        const content = await zipEntry.async('string');
-
-        // 파일 경로 생성
+        // Create file path
         const filePath = `${filename}`;
 
-        // FileMap에 파일 추가
-        fileMap[filePath] = {
-          type: 'file',
-          content,
-          isBinary: false,
-        };
+        // Check if the file is a binary file
+        if (isBinaryPathByExtension(filename)) {
+          // Read the file as a binary file
+          const buffer = await zipEntry.async('uint8array');
+          fileMap[filePath] = {
+            type: 'file',
+            content: '',
+            isBinary: true,
+            buffer,
+          };
+        } else {
+          // Read the file as a text file
+          const content = await zipEntry.async('string');
+          fileMap[filePath] = {
+            type: 'file',
+            content,
+            isBinary: false,
+          };
+        }
       } catch (error) {
         console.error(`Error extracting file ${filename}:`, error);
       }

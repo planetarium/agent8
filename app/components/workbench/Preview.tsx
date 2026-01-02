@@ -434,7 +434,7 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
       <div
         className={classNames('flex items-center', {
           'px-4 py-1 justify-between self-stretch': isSmallViewport && mobilePreviewMode,
-          'px-4 py-3 gap-2': !(isSmallViewport && mobilePreviewMode),
+          'py-3 gap-3': !(isSmallViewport && mobilePreviewMode),
         })}
       >
         {/* Mobile Preview Mode: Group reload, device, and utility buttons together */}
@@ -721,7 +721,7 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
                     variant="secondary-outlined"
                     size="md"
                     onClick={() => {
-                      sendMessageToParent({ type: 'navigate', path: '/explore' });
+                      sendMessageToParent({ type: 'NAVIGATE', path: '/explore' });
                     }}
                   >
                     Play Games

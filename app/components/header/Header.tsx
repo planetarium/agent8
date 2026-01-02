@@ -18,6 +18,7 @@ import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
+import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
 import WithTooltip from '~/components/ui/Tooltip';
 import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -32,6 +33,7 @@ export function Header() {
   const isSideMenuDisabled = import.meta.env.VITE_DISABLE_SIDEMENU === 'true';
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isDesktopDropdownOpen, setIsDesktopDropdownOpen] = useState<boolean>(false);
   const isPreviewMode = useStore(workbenchStore.mobilePreviewMode);
 
   const togglePreviewMode = () => {
@@ -39,6 +41,7 @@ export function Header() {
   };
 
   const closeDropdown = (): void => setIsDropdownOpen(false);
+  const closeDesktopDropdown = (): void => setIsDesktopDropdownOpen(false);
 
   // Hide header completely on mobile preview mode, but keep toggle switch visible
   const showHeader = !(isSmallViewport && isPreviewMode);
@@ -82,10 +85,31 @@ export function Header() {
               {/* Desktop: Show all buttons */}
               {!isSmallViewport && (
                 <div className="flex items-center gap-3">
-                  {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
+                  {repo.path && (
+                    <Dropdown
+                      trigger={
+                        <CustomIconButton variant="secondary-outlined" size="md" icon={<MoreIcon size={20} />} />
+                      }
+                      align="end"
+                      size="compact"
+                      open={isDesktopDropdownOpen}
+                      onOpenChange={setIsDesktopDropdownOpen}
+                    >
+                      <DropdownItem size="compact">
+                        <ClientOnly>
+                          {() => <HeaderGitCloneButton asMenuItem onClose={closeDesktopDropdown} />}
+                        </ClientOnly>
+                      </DropdownItem>
+                      <DropdownItem size="compact">
+                        <ClientOnly>
+                          {() => <HeaderLegacyUiToggle asMenuItem onClose={closeDesktopDropdown} />}
+                        </ClientOnly>
+                      </DropdownItem>
+                    </Dropdown>
+                  )}
                   {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
                   {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
-                  {repo.path && <ClientOnly>{() => <HeaderGitCloneButton />}</ClientOnly>}
                   <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
                 </div>
               )}

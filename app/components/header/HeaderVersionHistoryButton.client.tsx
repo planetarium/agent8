@@ -215,9 +215,9 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
       ) : (
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
-            <CustomButton variant="secondary-text" size="md" onClick={() => handleOpenChange(true)}>
+            <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
               <StarLineIcon size={20} />
-              Version History
+              Versions
             </CustomButton>
           </Tooltip.Trigger>
           <Tooltip.Portal>
