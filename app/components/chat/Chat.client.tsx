@@ -315,19 +315,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
       let errorMessage = await response.text();
 
       if (!errorMessage.trim()) {
-        switch (response.status) {
-          case 401:
-            errorMessage = 'Authentication failed. Please check your API key.';
-            break;
-          case 429:
-            errorMessage = 'Rate limit exceeded. Please try again later.';
-            break;
-          case 500:
-            errorMessage = 'Server error occurred. Please try again.';
-            break;
-          default:
-            errorMessage = `Request failed with status ${response.status}`;
-        }
+        errorMessage = 'Failed to import starter template';
       }
 
       throw new HTTPError(errorMessage, response.status, 'fetchTemplateFromAPI');
@@ -1267,19 +1255,7 @@ export const ChatImpl = memo(
               let errorMessage = await descriptionResponse.text();
 
               if (!errorMessage.trim()) {
-                switch (descriptionResponse.status) {
-                  case 401:
-                    errorMessage = 'Authentication failed. Please check your API key.';
-                    break;
-                  case 429:
-                    errorMessage = 'Rate limit exceeded. Please try again later.';
-                    break;
-                  case 500:
-                    errorMessage = 'Server error occurred. Please try again.';
-                    break;
-                  default:
-                    errorMessage = `Request failed with status ${descriptionResponse.status}`;
-                }
+                errorMessage = 'Failed to generate image description';
               }
 
               throw new HTTPError(errorMessage, descriptionResponse.status, 'image-description API');
