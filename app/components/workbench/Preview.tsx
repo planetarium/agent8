@@ -20,6 +20,7 @@ import { PlayIcon, RightLineIcon } from '~/components/ui/Icons';
 import { loadingAnimationData } from '~/utils/animationData';
 import { sendMessageToParent } from '~/utils/postMessage';
 import { useRandomTip } from '~/lib/hooks/useRandomTip';
+import PreviewQrCode from '~/components/workbench/PreviewQrCode';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -637,8 +638,11 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
       </div>
 
       <div
-        className={`flex-1 flex justify-center items-center overflow-hidden preview-container ${!(isSmallViewport && mobilePreviewMode) ? 'rounded-2xl' : ''}`}
+        className={`relative flex-1 flex justify-center items-center overflow-hidden preview-container ${!(isSmallViewport && mobilePreviewMode) ? 'rounded-2xl' : ''}`}
       >
+        <div className="hidden xl:block absolute top-3 right-3 z-1">
+          <PreviewQrCode value={url} />
+        </div>
         <div
           style={{
             width: isDeviceModeOn ? `${selectedDeviceSize.width}px` : '100%',

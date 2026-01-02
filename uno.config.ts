@@ -146,7 +146,6 @@ export default defineConfig({
     'text-tertiary': 'text-bolt-color-textTertiary',
     'text-subtle': 'text-[var(--color-text-subtle)]',
     'text-disabled': 'text-[var(--color-text-disabled)]',
-    'text-interactive-selected': 'text-[#3FD2E8]',
 
     // Typography Design System
     'text-heading-2xs': 'font-primary text-[12px] font-semibold leading-[133.4%] not-italic',
@@ -172,6 +171,7 @@ export default defineConfig({
     'text-accent-primary': 'text-[var(--color-text-accent-primary)]',
     'text-accent-primary-subtler': 'text-[var(--color-text-accent-primary-subtler)]',
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
+    'text-interactive-selected': 'text-[var(--color-text-interactive-selected)]',
     'text-interactive-neutral-hovered': 'text-[#EBEEF4]',
     'text-interactive-neutral-pressed': 'text-[#DBE0E9]',
     'text-interactive-primary': 'text-[var(--color-text-interactive-primary)]',
@@ -185,6 +185,9 @@ export default defineConfig({
     'bg-interactive-neutral-subtle': 'bg-[var(--color-bg-interactive-neutral-subtle,#111315)]',
     'bg-interactive-neutral-hovered': 'bg-[var(--color-bg-interactive-neutral-hovered)]',
     'bg-interactive-neutral-pressed': 'bg-[var(--color-bg-interactive-neutral-pressed)]',
+    'bg-transparent-subtle': 'bg-[var(--color-bg-transparent-subtle)]',
+    'bg-events-gradient':
+      'bg-[linear-gradient(90deg,var(--color-bg-accent-subtle-gradient-start,#72E7F8)_0%,var(--color-bg-accent-subtle-gradient-end,#FFD876)_100%)]',
     'border-interactive-neutral': 'border-[var(--color-border-interactive-neutral)]',
     'hover:border-interactive-neutral-hovered': 'hover:border-[var(--color-border-interactive-neutral-hovered)]',
     'active:border-interactive-neutral-pressed': 'active:border-[var(--color-border-interactive-neutral-pressed)]',
@@ -192,6 +195,7 @@ export default defineConfig({
     'border-primary': 'border-[var(--color-border-primary)]',
     'border-secondary': 'border-[var(--color-border-secondary,rgba(255,255,255,0.22))]',
     'border-tertiary': 'border-[var(--color-border-tertiary)]',
+    'border-interactive-primary': 'border-[var(--color-border-interactive-primary)]',
     'bg-disabled': 'disabled:bg-[var(--color-bg-disabled)]',
     'bg-interactive-gradient':
       'bg-[linear-gradient(90deg,var(--color-bg-interactive-gradient-start)_0%,var(--color-bg-interactive-gradient-end)_100%)]',
@@ -202,7 +206,6 @@ export default defineConfig({
     'bg-interactive-primary': 'bg-[var(--color-bg-interactive-primary,#1a92a4)]',
     'bg-interactive-primary-hovered': 'bg-[var(--color-bg-interactive-primary-hovered,#1a7583)]',
     'active:bg-interactive-primary-pressed': 'active:bg-[var(--color-bg-interactive-primary-pressed,#1b5862)]',
-    'border-interactive-primary': 'border-[var(--color-border-interactive-primary,#1A92A4)]',
     'rounded-radius-4': 'rounded-[var(--border-radius-4)]',
     'rounded-radius-8': 'rounded-[var(--border-radius-8)]',
     'border-width-1': 'border-[var(--border-width-1)]',
@@ -212,6 +215,7 @@ export default defineConfig({
     'py-spacing-20': 'py-[var(--spacing-20,20px)]',
     'px-spacing-8': 'px-[var(--spacing-8,8px)]',
     'gap-spacing-8': 'gap-[var(--spacing-8,8px)]',
+    'elevation-light-2': 'shadow-[0_4px_8px_0px_rgba(0,0,0,0.28),0_0_4px_0_rgba(0,0,0,0.24)]',
     'elevation-light-3': 'shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
 
     // Gradient text with shadow effect

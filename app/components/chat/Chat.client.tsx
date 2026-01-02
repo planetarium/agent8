@@ -28,7 +28,7 @@ import {
 } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
-import { BaseChat, type ChatAttachment } from './BaseChat';
+import { BaseChat, VIDEO_GUIDE_TABS, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
 import Cookies from 'js-cookie';
@@ -580,7 +580,6 @@ export const ChatImpl = memo(
       ]);
     }, []);
 
-    const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
@@ -616,9 +615,7 @@ export const ChatImpl = memo(
       }
 
       const result =
-        initialMessages.length > 0
-          ? Cookies.get(PROMPT_COOKIE_KEY) || ''
-          : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+        initialMessages.length > 0 ? Cookies.get(PROMPT_COOKIE_KEY) || '' : VIDEO_GUIDE_TABS.mobile.list.story.prompt;
 
       return result;
     });
@@ -788,8 +785,7 @@ export const ChatImpl = memo(
 
       // Process if prompt exists in URL
       if (prompt && !promptProcessed.current) {
-        const defaultPrompt =
-          'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+        const defaultPrompt = VIDEO_GUIDE_TABS.mobile.list.story.prompt;
 
         // Apply URL prompt only if input is empty or matches default prompt
         if (!input || input === defaultPrompt) {
@@ -960,10 +956,6 @@ export const ChatImpl = memo(
 
         textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
         textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-
-        // Check if textarea is expanded beyond minimum height
-        const isExpanded = scrollHeight > 40; // TEXTAREA_MIN_HEIGHT = 40
-        setTextareaExpanded(isExpanded);
       }
     }, [input, textareaRef]);
 
@@ -1446,7 +1438,7 @@ export const ChatImpl = memo(
     useEffect(() => {
       if (!chatStarted && initialMessages.length === 0) {
         Cookies.remove(PROMPT_COOKIE_KEY);
-        setInput('Create a top-down action game with a character controlled by WASD keys and mouse clicks.');
+        setInput(VIDEO_GUIDE_TABS.mobile.list.story.prompt);
       }
     }, [chatStarted, initialMessages.length, setInput]);
 
@@ -1783,7 +1775,6 @@ export const ChatImpl = memo(
           customProgressAnnotations={customProgressAnnotations}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
-          textareaExpanded={textareaExpanded}
         />
       </>
     );

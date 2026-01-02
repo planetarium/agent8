@@ -1,5 +1,5 @@
 import type { JSONValue, UIMessage } from 'ai';
-import React, { type RefCallback, useCallback, useEffect, useState } from 'react';
+import React, { type RefCallback, useCallback, useEffect, useRef, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
@@ -33,19 +33,77 @@ import McpServerManager from '~/components/chat/McpServerManager';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import { AttachmentSelector } from './AttachmentSelector';
 
-import { ColorTab } from '~/components/ui/ColorTab';
 import {
   TopDownIcon,
   TpsIcon,
   StoryIcon,
-  PuzzleIcon,
   ChevronDoubleDownIcon,
   PauseCircleIcon,
   PlayCircleIcon,
+  SurvivorsLikeIcon,
+  ShootEmUpIcon,
+  StartGuideMobileIcon,
+  StartGuideDesktopIcon,
 } from '~/components/ui/Icons';
+import V8AppBanner from '~/components/chat/V8AppBanner';
 
 const TEXTAREA_MIN_HEIGHT = 40;
 const MAX_ATTACHMENTS = 10;
+export const VIDEO_GUIDE_TABS = {
+  mobile: {
+    icon: StartGuideMobileIcon,
+    list: {
+      story: {
+        label: 'Story',
+        prompt:
+          'I want to create a Japanese visual novel about a blonde heroine in a sunset. Keep it in portrait view so that I can play it on a smartphone.',
+        icon: StoryIcon,
+        video: '/videos/Story_New.mp4',
+      },
+      survivorslike: {
+        label: 'Survivorslike',
+        prompt:
+          'Create a Vampire Survivors like 2D action game that a magician shoots spells to eliminate enemies, utilizing sprite sheets. Make it playable on a mobile device in a portrait view screen.',
+        icon: SurvivorsLikeIcon,
+        video: '/videos/Survivorslike.mp4',
+      },
+      'shoot-em-up': {
+        label: "Shoot 'em up",
+        prompt:
+          "Let's make a vertical scroller shooting game in a dark fantasy dungeon crawler concept. Use sprite sheets. Make it in mobile screen resolution for portrait mode.",
+        icon: ShootEmUpIcon,
+        video: '/videos/Scroller.mp4',
+      },
+    },
+  },
+  desktop: {
+    icon: StartGuideDesktopIcon,
+    list: {
+      'top-down': {
+        label: 'Top-Down',
+        prompt: 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
+        icon: TopDownIcon,
+        video: '/videos/top-down-game.mp4',
+      },
+      tps: {
+        label: 'TPS',
+        prompt:
+          'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
+        icon: TpsIcon,
+        video: '/videos/tps-game.mp4',
+      },
+    },
+  },
+} as const;
+
+type VideoGuideTabItemType =
+  | (typeof VIDEO_GUIDE_TABS)['mobile']['list'][keyof (typeof VIDEO_GUIDE_TABS)['mobile']['list']]
+  | (typeof VIDEO_GUIDE_TABS)['desktop']['list'][keyof (typeof VIDEO_GUIDE_TABS)['desktop']['list']];
+
+type VideoGuideTabType = {
+  item: VideoGuideTabItemType;
+  type: 'mobile' | 'desktop';
+};
 
 export interface ChatAttachment {
   filename: string;
@@ -98,7 +156,6 @@ interface BaseChatProps {
   customProgressAnnotations?: ProgressAnnotation[];
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
-  textareaExpanded?: boolean;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
@@ -141,7 +198,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       customProgressAnnotations = [],
       isAuthenticated = true,
       onAuthRequired,
-      textareaExpanded = false,
     },
     ref,
   ) => {
@@ -155,9 +211,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const [importProjectModalOpen, setImportProjectModalOpen] = useState<boolean>(false);
     const [modelSelectorDropdownOpen, setModelSelectorDropdownOpen] = useState<boolean>(false);
 
-    const [selectedVideoTab, setSelectedVideoTab] = useState<'top-down' | 'tps' | 'story' | 'puzzle'>('top-down');
+    const [selectedVideoTab, setSelectedVideoTab] = useState<VideoGuideTabType>({
+      item: VIDEO_GUIDE_TABS.mobile.list.story,
+      type: 'mobile',
+    });
     const [isVideoHovered, setIsVideoHovered] = useState<boolean>(false);
     const [isVideoPaused, setIsVideoPaused] = useState<boolean>(false);
+    const mobileVideoRef = useRef<HTMLVideoElement>(null);
+    const desktopVideoRef = useRef<HTMLVideoElement>(null);
 
     const isMobileView = useMobileView();
     const showWorkbench = useWorkbenchShowWorkbench();
@@ -173,9 +234,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     // Optimized color tab handlers
     const handleColorTabClick = useCallback(
-      (tab: 'top-down' | 'tps' | 'story' | 'puzzle', prompt: string) => {
+      (tab: VideoGuideTabType) => {
         // Prevent unnecessary re-renders if same tab is clicked AND input already matches
-        if (selectedVideoTab === tab && input === prompt) {
+        if (selectedVideoTab.item.label === tab.item.label && input === tab.item.prompt) {
           return;
         }
 
@@ -185,7 +246,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
           if (handleInputChange) {
             const syntheticEvent = {
-              target: { value: prompt },
+              target: { value: tab.item.prompt },
             } as React.ChangeEvent<HTMLTextAreaElement>;
             handleInputChange(syntheticEvent);
           }
@@ -194,25 +255,17 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       [handleInputChange, selectedVideoTab],
     );
 
-    // Define video sources for each tab
-    const videoSources = {
-      'top-down': '/videos/top-down-game.mp4',
-      tps: '/videos/tps-game.mp4',
-      story: '/videos/story-game.mp4',
-      puzzle: '/videos/puzzle-game.mp4',
-    };
-
     // Toggle video play/pause function
     const handleVideoClick = (event: React.MouseEvent<HTMLVideoElement>) => {
       event.preventDefault();
 
-      const video = event.currentTarget;
-
       if (isVideoPaused) {
-        video.play();
+        mobileVideoRef.current?.play();
+        desktopVideoRef.current?.play();
         setIsVideoPaused(false);
       } else {
-        video.pause();
+        mobileVideoRef.current?.pause();
+        desktopVideoRef.current?.pause();
         setIsVideoPaused(true);
       }
     };
@@ -593,18 +646,88 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       return attachmentHovered && !attachmentDropdownOpen && !importProjectModalOpen;
     };
 
+    useEffect(() => {
+      let lastHeight = 0;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined; // 또는 number | undefined
+      let rafId: number | null = null;
+
+      if (chatStarted) {
+        window.parent.postMessage({ type: 'IFRAME_HEIGHT', payload: { chatStarted: true, height: 0 } }, '*');
+
+        return;
+      }
+
+      const sendHeight = () => {
+        if (!ref || typeof ref === 'function' || !('current' in ref) || !ref.current) {
+          return;
+        }
+
+        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom + 30 || 0);
+
+        // 30px 이상 변경되었을 때만 전송
+        if (Math.abs(height - lastHeight) < 30) {
+          return;
+        }
+
+        lastHeight = height;
+
+        if (window.parent) {
+          window.parent.postMessage({ type: 'IFRAME_HEIGHT', payload: { chatStarted: false, height } }, '*');
+        }
+      };
+      const scheduleUpdate = () => {
+        if (rafId !== null) {
+          return;
+        }
+
+        rafId = requestAnimationFrame(() => {
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
+
+          timeoutId = setTimeout(sendHeight, 500);
+          rafId = null;
+        });
+      };
+
+      // 초기 전송
+      sendHeight();
+
+      const resizeObserver = new ResizeObserver(scheduleUpdate);
+      resizeObserver.observe(
+        ref && typeof ref === 'object' && 'current' in ref && ref.current ? ref.current : document.body,
+      );
+
+      // eslint-disable-next-line consistent-return
+      return () => {
+        resizeObserver.disconnect();
+
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      };
+    }, [chatStarted]);
+
     const baseChat = (
       <div
         ref={ref}
-        className={classNames(
-          styles.BaseChat,
-          'relative flex flex-col items-center gap-12 w-full h-full overflow-hidden',
-        )}
+        className={classNames(styles.BaseChat, 'relative flex flex-col items-center gap-12 w-full', {
+          'h-full overflow-hidden': chatStarted,
+          'xl:h-full xl:overflow-hidden': !chatStarted,
+        })}
         data-chat-visible={showChat}
       >
         <ClientOnly>{() => <Menu />}</ClientOnly>
 
-        <div className={classNames('flex w-full h-full bg-primary', isSmallViewport ? 'flex-col' : 'flex-row')}>
+        <div
+          className={classNames('flex w-full h-full bg-primary', isSmallViewport ? 'flex-col' : 'flex-row', {
+            'xl:h-full flex-col': !chatStarted,
+          })}
+        >
           <div
             ref={(node) => {
               setScrollElement(node);
@@ -613,11 +736,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 scrollRef(node);
               }
             }}
-            className={classNames(styles.Chat, 'flex flex-col flex-shrink-0 h-full chat-container', {
+            className={classNames(styles.Chat, 'flex flex-col h-full chat-container', {
               'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
               '!w-full !mr-0': isSmallViewport && !hideChatForMobilePreview,
               hidden: hideChatForMobilePreview,
-              'w-full': !chatStarted && !isSmallViewport,
+              '!px-4 md:!px-5 xl:justify-center xl:pb-[100px] xl:h-full': !chatStarted,
               'overflow-y-auto': chatStarted,
               [styles.chatStarted]: chatStarted && !isSmallViewport,
             })}
@@ -626,7 +749,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <MainBackground zIndex={1} isMobileView={isMobileView} opacity={0.8} chatStarted={chatStarted} />
             )}
             {!chatStarted && (
-              <div className="flex flex-col items-center max-w-[632px] w-full gap-4 flex-shrink-0 tablet:h-[85vh] tablet:px-0 relative tablet:max-w-none mx-auto">
+              <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:min-h-0 xl:max-w-[1400px]">
                 {/* Background Image */}
                 <div
                   className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
@@ -637,7 +760,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       : 'slideDownBackgroundDesktop 1s ease-in-out',
                   }}
                 />
-                <div id="intro" className="max-w-chat-before-start mx-auto px-2 tablet:px-0 text-center z-2">
+                <div className="xl:hidden w-full relative z-2 mt-3">
+                  <V8AppBanner />
+                </div>
+                <div id="intro" className="max-w-chat-before-start mx-auto text-center z-2 mt-2">
                   <div className="flex justify-center">
                     <span
                       className="text-heading-lg tablet:text-heading-4xl"
@@ -652,93 +778,88 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     </span>
                   </div>
                 </div>
-                <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm px-2 tablet:px-0 text-secondary self-stretch z-2">
+                <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm text-secondary self-stretch z-2 mt-2">
                   Start here — or make your own.{isMobileView && <br />} What do you want to create?
                 </span>
-
-                {/* Mobile: ColorTabs above video */}
-                <div className="flex max-w-[632px] px-4 w-full tablet:hidden items-start justify-center tablet:px-0 gap-2 self-stretch z-1">
-                  <ColorTab
-                    color="cyan"
-                    size="sm"
-                    selected={selectedVideoTab === 'top-down'}
-                    onClick={() =>
-                      handleColorTabClick(
-                        'top-down',
-                        'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
-                      )
-                    }
-                  >
-                    <TopDownIcon size={24} className="flex-shrink-0" />
-                    <span>Top-Down</span>
-                  </ColorTab>
-                  <ColorTab
-                    color="brown"
-                    size="sm"
-                    selected={selectedVideoTab === 'tps'}
-                    onClick={() =>
-                      handleColorTabClick(
-                        'tps',
-                        'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
-                      )
-                    }
-                  >
-                    <TpsIcon size={24} />
-                    <span className="uppercase">tps</span>
-                  </ColorTab>
-                  <ColorTab
-                    color="magenta"
-                    size="sm"
-                    selected={selectedVideoTab === 'story'}
-                    onClick={() =>
-                      handleColorTabClick(
-                        'story',
-                        'A simple Japanese-style visual novel about everyday life in a high school.',
-                      )
-                    }
-                  >
-                    <StoryIcon size={24} />
-                    <span>Story</span>
-                  </ColorTab>
-                  <ColorTab
-                    color="green"
-                    size="sm"
-                    selected={selectedVideoTab === 'puzzle'}
-                    onClick={() =>
-                      handleColorTabClick(
-                        'puzzle',
-                        'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
-                      )
-                    }
-                  >
-                    <PuzzleIcon size={24} />
-                    <span>Puzzle</span>
-                  </ColorTab>
-                </div>
-
-                <div className="w-full max-w-[632px] px-4 tablet:w-auto tablet:max-w-[1151px]">
+                <div className="relative z-2 mt-5 md:mt-4 md:relative rounded-[8px] xl:rounded-[24px] xl:aspect-[16/9] xl:w-full xl:max-w-[min(1400px,calc(61svh*16/9))] xl:min-h-[500px] overflow-hidden">
                   <div
-                    className={classNames('flex flex-col items-start flex-shrink-0 relative cursor-pointer z-1', {
-                      'aspect-[16/9] max-h-[58vh] border border-primary rounded-[24px]': !isMobileView,
-                      'aspect-[16/9] rounded-[8px]': isMobileView,
-                    })}
+                    className="md:absolute md:left-[1px] md:right-[1px] md:top-[1px] md:z-1 flex flex-col md:items-center md:justify-center gap-2 md:flex-row md:gap-4 xl:gap-7 rounded-[8px] xl:rounded-t-[24px] overflow-hidden"
+                    style={
+                      !isMobileView
+                        ? {
+                            background:
+                              'linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.98) 4.7%, rgba(0, 0, 0, 0.96) 8.9%, rgba(0, 0, 0, 0.93) 12.8%, rgba(0, 0, 0, 0.90) 16.56%, rgba(0, 0, 0, 0.86) 20.37%, rgba(0, 0, 0, 0.82) 24.4%, rgba(0, 0, 0, 0.77) 28.83%, rgba(0, 0, 0, 0.71) 33.84%, rgba(0, 0, 0, 0.65) 39.6%, rgba(0, 0, 0, 0.57) 46.3%, rgba(0, 0, 0, 0.48) 54.1%, rgba(0, 0, 0, 0.38) 63.2%, rgba(0, 0, 0, 0.27) 73.76%, rgba(0, 0, 0, 0.14) 85.97%, rgba(0, 0, 0, 0.00) 100%)',
+                          }
+                        : undefined
+                    }
+                  >
+                    {Object.entries(VIDEO_GUIDE_TABS).map(([key, value]) => (
+                      <div
+                        key={key}
+                        className="grid grid-cols-6 gap-2 md:flex md:items-center md:gap-2 md:pt-3 xl:gap-3"
+                      >
+                        <value.icon size={28} color="#99A2B0" className="hidden xl:block xl:flex-shrink-0" />
+                        {Object.entries(value.list).map(([listKey, listValue], listIndex) => (
+                          <button
+                            key={listKey}
+                            className={classNames(
+                              'col-span-2 flex flex-col gap-[2px] items-center justify-between md:justify-start md:flex-row md:gap-2 rounded-[8px] text-heading-2xs md:py-0 md:px-3 md:h-8 xl:px-4 xl:h-9 xl:text-heading-xs',
+                              selectedVideoTab.item.label === listValue.label
+                                ? 'p-[6px] text-interactive-selected border border-interactive-primary bg-gradient-to-t from-[rgba(17,185,210,0.20)] to-[rgba(17,185,210,0.20)] bg-interactive-neutral'
+                                : 'p-2 text-interactive-neutral bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed',
+                              Object.entries(value.list).length === 2 && listIndex === 0 ? 'col-start-2' : '',
+                            )}
+                            onClick={() => handleColorTabClick({ item: listValue, type: key as 'mobile' | 'desktop' })}
+                          >
+                            <listValue.icon
+                              size={20}
+                              color={selectedVideoTab.item.label === listValue.label ? '#3fd2e8' : '#F3F5F8'}
+                            />
+                            {listValue.label}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className={classNames(
+                      'flex flex-col items-start relative cursor-pointer md:aspect-[16/9] border border-primary rounded-[8px] xl:rounded-[24px] xl:max-h-full overflow-hidden mt-3 md:mt-0',
+                      selectedVideoTab.type === 'mobile' ? 'aspect-[10/9]' : 'aspect-[16/9]',
+                    )}
                     onMouseEnter={() => setIsVideoHovered(true)}
                     onMouseLeave={() => setIsVideoHovered(false)}
                   >
                     <video
+                      ref={desktopVideoRef}
                       autoPlay
                       muted
                       loop
                       playsInline
-                      className={classNames('w-full h-full object-cover', {
-                        'rounded-[24px]': !isMobileView,
-                        'rounded-[8px]': isMobileView,
-                      })}
-                      src={videoSources[selectedVideoTab]}
+                      className={classNames('w-full h-full object-cover')}
+                      src={selectedVideoTab.item.video}
                       onClick={handleVideoClick}
                     >
                       Your browser does not support the video tag.
                     </video>
+                    {selectedVideoTab.type === 'mobile' && (
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/80 backdrop-blur-[10px] pointer-events-none rounded-[8px] xl:rounded-[24px] overflow-hidden" />
+                        <div className="absolute top-[-1px] bottom-[-1px] left-1/2 md:top-[52px] md:bottom-[121px] xl:top-[10.7%] xl:bottom-[15%] -translate-x-1/2 elevation-light-3 aspect-[266/473] rounded-[8px] overflow-hidden">
+                          <video
+                            ref={mobileVideoRef}
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            className={classNames('w-full h-full object-cover')}
+                            src={selectedVideoTab.item.video}
+                            onClick={handleVideoClick}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      </>
+                    )}
 
                     {/* Video icon overlay */}
                     {(isVideoHovered || isVideoPaused) && (
@@ -752,78 +873,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         </div>
                       </div>
                     )}
-
-                    {/* Tablet+: ColorTabs on video overlay */}
-                    <div className="hidden tablet:block">
-                      <div
-                        className={classNames('absolute top-0 left-0 w-full h-[100px] flex-shrink-0 opacity-80', {
-                          'rounded-t-[24px]': !isMobileView,
-                          'rounded-t-[8px]': isMobileView,
-                        })}
-                        style={{
-                          background:
-                            'linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.98) 4.7%, rgba(0, 0, 0, 0.96) 8.9%, rgba(0, 0, 0, 0.93) 12.8%, rgba(0, 0, 0, 0.90) 16.56%, rgba(0, 0, 0, 0.86) 20.37%, rgba(0, 0, 0, 0.82) 24.4%, rgba(0, 0, 0, 0.77) 28.83%, rgba(0, 0, 0, 0.71) 33.84%, rgba(0, 0, 0, 0.65) 39.6%, rgba(0, 0, 0, 0.57) 46.3%, rgba(0, 0, 0, 0.48) 54.1%, rgba(0, 0, 0, 0.38) 63.2%, rgba(0, 0, 0, 0.27) 73.76%, rgba(0, 0, 0, 0.14) 85.97%, rgba(0, 0, 0, 0.00) 100%)',
-                        }}
-                      />
-                      <div className="absolute flex items-center justify-center gap-3 top-4 left-1/2 -translate-x-1/2">
-                        <ColorTab
-                          color="cyan"
-                          size="md"
-                          selected={selectedVideoTab === 'top-down'}
-                          onClick={() =>
-                            handleColorTabClick(
-                              'top-down',
-                              'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
-                            )
-                          }
-                        >
-                          <TopDownIcon size={24} className="flex-shrink-0" />
-                          <span>Top-Down</span>
-                        </ColorTab>
-                        <ColorTab
-                          color="brown"
-                          size="md"
-                          selected={selectedVideoTab === 'tps'}
-                          onClick={() =>
-                            handleColorTabClick(
-                              'tps',
-                              'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
-                            )
-                          }
-                        >
-                          <TpsIcon size={24} />
-                          <span className="uppercase">tps</span>
-                        </ColorTab>
-                        <ColorTab
-                          color="magenta"
-                          size="md"
-                          selected={selectedVideoTab === 'story'}
-                          onClick={() =>
-                            handleColorTabClick(
-                              'story',
-                              'A simple Japanese-style visual novel about everyday life in a high school.',
-                            )
-                          }
-                        >
-                          <StoryIcon size={24} />
-                          <span>Story</span>
-                        </ColorTab>
-                        <ColorTab
-                          color="green"
-                          size="md"
-                          selected={selectedVideoTab === 'puzzle'}
-                          onClick={() =>
-                            handleColorTabClick(
-                              'puzzle',
-                              'Create a simple match-3 puzzle game like Candy Crush, where players swap tiles on a colorful 2D grid with smooth animations.',
-                            )
-                          }
-                        >
-                          <PuzzleIcon size={24} />
-                          <span>Puzzle</span>
-                        </ColorTab>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -866,12 +915,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     'sticky bottom-4 pr-4': chatStarted && !isSmallViewport,
                     'pl-6': !isSmallViewport,
                     'tablet:max-w-chat': chatStarted,
-                    'tablet:max-w-chat-before-start': !chatStarted,
-                    'px-4 max-w-[632px]': !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
-                    'tablet:absolute tablet:bottom-[200%] tablet:left-1/2 tablet:transform tablet:-translate-x-1/2':
-                      !chatStarted,
-                    'fixed bottom-[5%] z-[9999] translate-x-[-50%] left-1/2':
-                      !chatStarted && (attachmentList.length > 0 || textareaExpanded) && isMobileView,
+                    'md:relative md:-translate-y-[calc(50%+16px)] xl:absolute xl:left-1/2 xl:translate-x-[-50%] max-w-[632px] !pl-0':
+                      !chatStarted, // Before starting the chat, there is a 600px limit on mobile devices.
                   },
                 )}
               >
@@ -900,7 +945,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     />
                   )}
                 </div>
-
                 <div
                   className={classNames(
                     'flex flex-col self-stretch px-4 pt-[6px] pb-4 relative w-full mx-auto z-prompt',
