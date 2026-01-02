@@ -15,15 +15,18 @@ interface DropdownItemProps {
   onClick?: () => void;
   className?: string;
   disabled?: boolean;
+  size?: 'default' | 'compact';
 }
 
-export const DropdownItem = ({ children, onClick, className, disabled }: DropdownItemProps) => (
+export const DropdownItem = ({ children, onClick, className, disabled, size = 'default' }: DropdownItemProps) => (
   <div
     className={classNames(
-      'flex items-center gap-4 py-[14px] px-5 self-stretch',
+      'flex items-center gap-4 self-stretch',
       'bg-interactive-neutral text-primary',
       'transition-colors outline-none',
       {
+        'py-[14px] px-5': size === 'default',
+        'py-3 px-4': size === 'compact',
         'hover:bg-interactive-neutral-hovered cursor-pointer': !disabled,
         'text-tertiary': !!disabled,
       },
@@ -101,10 +104,10 @@ export const Dropdown = ({ trigger, children, align = 'end', size = 'default', o
       {isOpen && (
         <div
           className={classNames(
-            'absolute top-full mt-1 flex w-[260px] flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000] overflow-hidden',
+            'absolute top-full mt-1 flex flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000] overflow-hidden',
             {
-              'py-2': size === 'default',
-              'py-0.5': size === 'compact',
+              'py-2  w-[260px]': size === 'default',
+              'py-0.5 w-[300px]': size === 'compact',
               'right-0': align === 'end',
               'left-0': align === 'start',
               'left-1/2 -translate-x-1/2': align === 'center',

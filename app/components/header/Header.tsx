@@ -18,6 +18,7 @@ import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
+import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
 import WithTooltip from '~/components/ui/Tooltip';
 import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -94,9 +95,14 @@ export function Header() {
                       open={isDesktopDropdownOpen}
                       onOpenChange={setIsDesktopDropdownOpen}
                     >
-                      <DropdownItem>
+                      <DropdownItem size="compact">
                         <ClientOnly>
                           {() => <HeaderGitCloneButton asMenuItem onClose={closeDesktopDropdown} />}
+                        </ClientOnly>
+                      </DropdownItem>
+                      <DropdownItem size="compact">
+                        <ClientOnly>
+                          {() => <HeaderLegacyUiToggle asMenuItem onClose={closeDesktopDropdown} />}
                         </ClientOnly>
                       </DropdownItem>
                     </Dropdown>

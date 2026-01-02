@@ -721,7 +721,7 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
                     variant="secondary-outlined"
                     size="md"
                     onClick={() => {
-                      sendMessageToParent({ type: 'navigate', path: '/explore' });
+                      sendMessageToParent({ type: 'NAVIGATE', path: '/explore' });
                     }}
                   >
                     Play Games
