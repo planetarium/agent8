@@ -312,8 +312,8 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
     const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
-      const serverMessage = (await response.text()).trim();
-      throw new FetchError(serverMessage || response.statusText, response.status, 'import_starter_template');
+      const serverMessage = await response.text();
+      throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'import_starter_template');
     }
 
     const result = (await response.json()) as {
@@ -767,8 +767,8 @@ export const ChatImpl = memo(
 
           // If response is not ok, throw error with status code
           if (!response.ok) {
-            const text = await response.text();
-            throw new FetchError(text || response.statusText, response.status);
+            const serverMessage = await response.text();
+            throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status);
           }
 
           return response;
@@ -1274,9 +1274,9 @@ export const ChatImpl = memo(
             });
 
             if (!descriptionResponse.ok) {
-              const serverMessage = (await descriptionResponse.text()).trim();
+              const serverMessage = await descriptionResponse.text();
               throw new FetchError(
-                serverMessage || descriptionResponse.statusText,
+                (serverMessage ?? 'unknown error').trim(),
                 descriptionResponse.status,
                 'generate_image_description',
               );
