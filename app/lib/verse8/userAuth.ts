@@ -1,4 +1,5 @@
 import Cookies from 'js-cookie';
+import { HTTPError, isHTTPError } from '~/utils/errors';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('userAuth');
@@ -32,7 +33,7 @@ export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: st
     });
 
     if (!response.ok) {
-      throw new Error('Failed to verify V8 access token');
+      throw new HTTPError('Failed to verify V8 access token', response.status, 'verifyV8AccessToken');
     }
 
     const data = (await response.json()) as Record<string, any>;
@@ -48,7 +49,13 @@ export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: st
       role: data?.role || '',
     };
   } catch (error) {
+    if (isHTTPError(error) && error.status === 401) {
+      logger.error('Access token rejected - authentication required:', error);
+      throw error;
+    }
+
     logger.error('Failed to verify V8 access token', error);
+
     return {
       userUid: '',
       isActivated: false,
