@@ -109,8 +109,8 @@ export const selectStarterTemplate = async (options: { message: string }) => {
   });
 
   if (!response.ok) {
-    const serverMessage = (await response.text()).trim();
-    throw new FetchError(serverMessage || response.statusText, response.status, 'select_starter_template');
+    const serverMessage = await response.text();
+    throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'select_starter_template');
   }
 
   // generateObject returns the structured object directly

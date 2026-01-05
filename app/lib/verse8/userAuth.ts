@@ -29,8 +29,8 @@ export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: st
   });
 
   if (!response.ok) {
-    const serverMessage = (await response.text()).trim();
-    throw new FetchError(serverMessage || response.statusText, response.status, 'verify_access_token');
+    const serverMessage = await response.text();
+    throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'verify_access_token');
   }
 
   const data = (await response.json()) as Record<string, any>;
