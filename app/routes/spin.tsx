@@ -203,7 +203,7 @@ export default function Spin() {
 
       // Generate new repository name with better uniqueness
       const nameWords = verseData.title.split(/[^a-zA-Z0-9]+/).filter((word) => word.length > 0);
-      let newRepoName = nameWords.join('-').toLowerCase();
+      let newRepoName = (nameWords.length > 0 ? nameWords.join('-') : 'project').toLowerCase();
 
       // Add timestamp and random suffix for better uniqueness
       const timestamp = Date.now().toString(36).slice(-6);
