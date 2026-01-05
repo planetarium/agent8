@@ -743,10 +743,15 @@ export const ChatImpl = memo(
     const [chatData, setChatData] = useState<any[]>([]);
 
     const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
+    const chatStateRef = useRef({ model, provider });
 
     useEffect(() => {
       bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
     }, [apiKeys, files, promptId, contextOptimizationEnabled]);
+
+    useEffect(() => {
+      chatStateRef.current = { model, provider };
+    }, [model, provider]);
 
     const {
       messages,
@@ -818,7 +823,9 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
-        const reportProvider = model === 'auto' ? 'auto' : provider.name;
+        const currentModel = chatStateRef.current.model;
+        const currentProvider = chatStateRef.current.provider;
+        const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
         const processlog = e.message === 'network error' ? logManager.logs.join(',') : undefined;
 
         if (
@@ -827,7 +834,7 @@ export const ChatImpl = memo(
             chatRequestStartTimeRef.current ?? 0,
             {
               error: e,
-              context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
+              context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
               prompt: lastUserPromptRef.current,
               process: processlog,
             },
