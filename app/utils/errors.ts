@@ -1,34 +1,25 @@
-/**
- * Custom error class for fetch/HTTP errors with status code
- */
-export class FetchError extends Error {
+export class HTTPError extends Error {
   constructor(
     message: string,
     public status: number,
     public context?: string,
   ) {
     super(message);
-    this.name = 'FetchError';
+    this.name = 'HTTPError';
   }
 }
 
-/**
- * Helper function to extract HTTP status code from various error types
- * Supports: FetchError, Response, and any object with a status property
- */
+export function isHTTPError(error: unknown): error is HTTPError {
+  return error instanceof HTTPError;
+}
+
 export function getErrorStatus(error: unknown): number | null {
-  // Check for Response instance
-  if (error instanceof Response) {
+  if (isHTTPError(error)) {
     return error.status;
   }
 
-  // Check for any object with a status property (includes FetchError, ChatTransportError, etc.)
   if (error && typeof error === 'object' && 'status' in error) {
-    const status = (error as any).status;
-
-    if (typeof status === 'number') {
-      return status;
-    }
+    return (error as any).status;
   }
 
   return null;

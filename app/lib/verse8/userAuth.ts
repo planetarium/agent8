@@ -1,5 +1,8 @@
 import Cookies from 'js-cookie';
-import { FetchError } from '~/utils/errors';
+import { HTTPError, isHTTPError } from '~/utils/errors';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('userAuth');
 
 export const V8_ACCESS_TOKEN_KEY = 'v8AccessToken';
 
@@ -22,27 +25,46 @@ export const updateV8AccessToken = (v8AccessToken: string) => {
 };
 
 export const verifyV8AccessToken = async (v8ApiEndpoint: string, accessToken: string): Promise<V8User> => {
-  const response = await fetch(v8ApiEndpoint + '/v1/auth/verify', {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  try {
+    const response = await fetch(v8ApiEndpoint + '/v1/auth/verify', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
-  if (!response.ok) {
-    const serverMessage = (await response.text()).trim();
-    throw new FetchError(serverMessage || response.statusText, response.status, 'verify_access_token');
+    if (!response.ok) {
+      throw new HTTPError('Failed to verify V8 access token', response.status, 'verifyV8AccessToken');
+    }
+
+    const data = (await response.json()) as Record<string, any>;
+
+    return {
+      userUid: data?.userUid || data?.userAddress || '',
+      isActivated: data?.isActivated || true,
+      email: data?.email || '',
+      walletAddress: data?.walletAddress || '',
+      name: data?.name || '',
+      profilePicture: data?.profilePicture || null,
+      userAddress: data?.userAddress || '',
+      role: data?.role || '',
+    };
+  } catch (error) {
+    if (isHTTPError(error) && error.status === 401) {
+      logger.error('Access token rejected - authentication required:', error);
+      throw error;
+    }
+
+    logger.error('Failed to verify V8 access token', error);
+
+    return {
+      userUid: '',
+      isActivated: false,
+      email: '',
+      walletAddress: '',
+      name: '',
+      profilePicture: null,
+      userAddress: '',
+      role: '',
+    };
   }
-
-  const data = (await response.json()) as Record<string, any>;
-
-  return {
-    userUid: data?.userUid || data?.userAddress || '',
-    isActivated: data?.isActivated || true,
-    email: data?.email || '',
-    walletAddress: data?.walletAddress || '',
-    name: data?.name || '',
-    profilePicture: data?.profilePicture || null,
-    userAddress: data?.userAddress || '',
-    role: data?.role || '',
-  };
 };
