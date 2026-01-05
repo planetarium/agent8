@@ -72,7 +72,7 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
-import { getErrorStatus, HTTPError, isHTTPError } from '~/utils/errors';
+import { FetchError, getErrorStatus } from '~/utils/errors';
 
 const logger = createScopedLogger('Chat');
 
@@ -312,13 +312,8 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
     const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
-      let errorMessage = await response.text();
-
-      if (!errorMessage.trim()) {
-        errorMessage = 'Failed to import starter template';
-      }
-
-      throw new HTTPError(errorMessage, response.status, 'fetchTemplateFromAPI');
+      const serverMessage = (await response.text()).trim();
+      throw new FetchError(serverMessage || response.statusText, response.status, 'import_starter_template');
     }
 
     const result = (await response.json()) as {
@@ -765,6 +760,19 @@ export const ChatImpl = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
         body: () => bodyRef.current,
+
+        // Custom fetch to preserve HTTP status codes in errors
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const response = await fetch(input, init);
+
+          // If response is not ok, throw error with status code
+          if (!response.ok) {
+            const text = await response.text();
+            throw new FetchError(text || response.statusText, response.status);
+          }
+
+          return response;
+        },
       }),
       onData: (data) => {
         const dataType = data?.type || 'unknown';
@@ -1023,12 +1031,20 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
+        const startTime = performance.now();
         setInstallNpm(true);
 
         const boltShell = workbench.boltTerminal;
-        boltShell.ready.then(async () => {
-          await workbench.setupDeployConfig(boltShell);
-        });
+        boltShell.ready
+          .then(async () => {
+            await workbench.setupDeployConfig(boltShell);
+          })
+          .catch((error) => {
+            processError(error instanceof Error ? error.message : 'Failed to setup deploy config', startTime, {
+              error: error instanceof Error ? error : String(error),
+              context: 'setupDeployConfig - useEffect',
+            });
+          });
       }
     }, [files, installNpm]);
 
@@ -1258,13 +1274,12 @@ export const ChatImpl = memo(
             });
 
             if (!descriptionResponse.ok) {
-              let errorMessage = await descriptionResponse.text();
-
-              if (!errorMessage.trim()) {
-                errorMessage = 'Failed to generate image description';
-              }
-
-              throw new HTTPError(errorMessage, descriptionResponse.status, 'image-description API');
+              const serverMessage = (await descriptionResponse.text()).trim();
+              throw new FetchError(
+                serverMessage || descriptionResponse.statusText,
+                descriptionResponse.status,
+                'generate_image_description',
+              );
             }
 
             const descriptions = await descriptionResponse.json();
@@ -1344,7 +1359,9 @@ export const ChatImpl = memo(
           addDebugLog(17);
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
-            if (isHTTPError(e) && (e.status === 401 || e.status === 404)) {
+            const status = getErrorStatus(e);
+
+            if (status === 401 || status === 404) {
               throw e;
             }
 
@@ -1385,7 +1402,7 @@ export const ChatImpl = memo(
                 };
               }
             } catch (error) {
-              if (isHTTPError(error) && error.status === 401) {
+              if (getErrorStatus(error) === 401) {
                 logger.error('Authentication failed during .env generation:', error);
                 throw error;
               }
@@ -1546,18 +1563,6 @@ export const ChatImpl = memo(
 
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
 
-          if (
-            processError(errorMessage, templateSelectionStartTime, {
-              error: error instanceof Error ? error : String(error),
-              context: 'starter template selection',
-            })
-          ) {
-            setChatStarted(false);
-            setFakeLoading(false);
-
-            return;
-          }
-
           // Check if error message has meaningful content
           const isMeaningfulErrorMessage =
             errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
@@ -1587,9 +1592,7 @@ export const ChatImpl = memo(
         // Record prompt activity for subsequent requests
         if (repoStore.get().path) {
           addDebugLog(41);
-          sendActivityPrompt(repoStore.get().path).catch((error) => {
-            logger.warn('Failed to record prompt activity:', error);
-          });
+          sendActivityPrompt(repoStore.get().path);
           addDebugLog(42);
         }
 
