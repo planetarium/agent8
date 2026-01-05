@@ -834,7 +834,7 @@ export const ChatImpl = memo(
         const currentModel = chatStateRef.current.model;
         const currentProvider = chatStateRef.current.provider;
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
-        const processlog = e.message === 'network error' ? logManager.logs.join(',') : undefined;
+        const processlog = logManager.logs.join(',');
 
         if (
           processError(
