@@ -85,7 +85,7 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 // 50 debug logs
 function addDebugLog(value: number | string): void {
-  logManager.add('Chat-' + value);
+  logManager.add('C-' + value);
 }
 
 function isServerError(data: unknown): data is ServerErrorData {
@@ -763,7 +763,6 @@ export const ChatImpl = memo(
       }),
       onData: (data) => {
         const dataType = data?.type || 'unknown';
-        addDebugLog(`1:${dataType}`);
 
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
