@@ -393,6 +393,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           writer.write(createDataLog('StartLoop'));
 
+          let prevLogMessage: string | null = null;
+
           while (true) {
             const { done, value } = await reader.read();
 
@@ -401,15 +403,19 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               break;
             }
 
-            let logMessage = value.type ?? 'unknown';
-            logMessage.replace('tool-input', 't-i');
-            logMessage.replace('tool-output', 't-o');
+            let logMessage: string = value.type ?? 'unknown';
+            logMessage = logMessage.replace('tool-input', 't-i');
+            logMessage = logMessage.replace('tool-output', 't-o');
+            logMessage = logMessage.replace('text-delta', 't-d');
 
             if ('toolName' in value && value.toolName) {
               logMessage += `: ${value.toolName}`;
             }
 
-            writer.write(createDataLog(logMessage));
+            if (logMessage !== prevLogMessage) {
+              writer.write(createDataLog(logMessage));
+              prevLogMessage = logMessage;
+            }
 
             writer.write(value);
           }
