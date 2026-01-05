@@ -90,7 +90,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
       // Add error details if available
       if (payload.error) {
-        const maxErrorLength = 2500;
+        const maxErrorLength = 5000;
         const errorText =
           payload.error.length > maxErrorLength
             ? payload.error.substring(0, maxErrorLength) + '\n\n... (truncated)'
