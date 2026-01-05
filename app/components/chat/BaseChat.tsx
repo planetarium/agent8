@@ -58,21 +58,21 @@ export const VIDEO_GUIDE_TABS = {
         prompt:
           'I want to create a Japanese visual novel about a blonde heroine in a sunset. Keep it in portrait view so that I can play it on a smartphone.',
         icon: StoryIcon,
-        video: '/videos/Story_New.mp4',
+        video: '/videos/Story.webm',
       },
       survivorslike: {
         label: 'Survivorslike',
         prompt:
           'Create a Vampire Survivors like 2D action game that a magician shoots spells to eliminate enemies, utilizing sprite sheets. Make it playable on a mobile device in a portrait view screen.',
         icon: SurvivorsLikeIcon,
-        video: '/videos/Survivorslike.mp4',
+        video: '/videos/Survivorslike.webm',
       },
       'shoot-em-up': {
         label: "Shoot 'em up",
         prompt:
           "Let's make a vertical scroller shooting game in a dark fantasy dungeon crawler concept. Use sprite sheets. Make it in mobile screen resolution for portrait mode.",
         icon: ShootEmUpIcon,
-        video: '/videos/Scroller.mp4',
+        video: '/videos/Scroller.webm',
       },
     },
   },
@@ -83,14 +83,14 @@ export const VIDEO_GUIDE_TABS = {
         label: 'Top-Down',
         prompt: 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
         icon: TopDownIcon,
-        video: '/videos/top-down-game.mp4',
+        video: '/videos/Topdown.webm',
       },
       tps: {
         label: 'TPS',
         prompt:
           'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
         icon: TpsIcon,
-        video: '/videos/tps-game.mp4',
+        video: '/videos/TPS.webm',
       },
     },
   },
@@ -662,10 +662,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           return;
         }
 
-        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom + 30 || 0);
+        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom || 0);
 
-        // 30px 이상 변경되었을 때만 전송
-        if (Math.abs(height - lastHeight) < 30) {
+        if (Math.abs(height - lastHeight) < 15) {
           return;
         }
 
@@ -685,7 +684,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             clearTimeout(timeoutId);
           }
 
-          timeoutId = setTimeout(sendHeight, 500);
+          timeoutId = setTimeout(sendHeight, 200);
           rafId = null;
         });
       };
@@ -740,7 +739,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               'w-[var(--chat-width)]': chatStarted && !isSmallViewport,
               '!w-full !mr-0': isSmallViewport && !hideChatForMobilePreview,
               hidden: hideChatForMobilePreview,
-              '!px-4 md:!px-5 xl:justify-center xl:pb-[100px] xl:h-full': !chatStarted,
+              '!px-4 md:!px-5 xl:justify-center xl:pb-[140px] xl:h-full': !chatStarted,
               'overflow-y-auto': chatStarted,
               [styles.chatStarted]: chatStarted && !isSmallViewport,
             })}
@@ -752,7 +751,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:min-h-0 xl:max-w-[1400px]">
                 {/* Background Image */}
                 <div
-                  className={`fixed inset-0 pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-60`}
+                  className={`fixed top-0 left-1/2 bottom-0 top-0 translate-x-[-50%] xl:inset-0 xl:translate-x-0 w-[890px] md:w-[1280px] xl:w-auto pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-40 xl:opacity-60`}
                   style={{
                     backgroundPosition: '50% -25%',
                     animation: isMobileView
@@ -760,13 +759,13 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       : 'slideDownBackgroundDesktop 1s ease-in-out',
                   }}
                 />
-                <div className="xl:hidden w-full relative z-2 mt-3">
+                <div className="xl:hidden w-full relative z-2 md:mt-3">
                   <V8AppBanner />
                 </div>
                 <div id="intro" className="max-w-chat-before-start mx-auto text-center z-2 mt-2">
                   <div className="flex justify-center">
                     <span
-                      className="text-heading-lg tablet:text-heading-4xl"
+                      className="text-heading-lg xl:text-heading-4xl"
                       style={{
                         background: 'linear-gradient(90deg, var(--color-text-primary, #FFF) 0%, #72E7F8 100%)',
                         backgroundClip: 'text',
@@ -778,10 +777,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     </span>
                   </div>
                 </div>
-                <span className="flex justify-center text-heading-xs text-center tablet:text-heading-sm text-secondary self-stretch z-2 mt-2">
+                <span className="flex justify-center text-heading-xs text-center xl:text-heading-sm text-secondary self-stretch z-2 mt-2">
                   Start here — or make your own.{isMobileView && <br />} What do you want to create?
                 </span>
-                <div className="relative z-2 mt-5 md:mt-4 md:relative rounded-[8px] xl:rounded-[24px] xl:aspect-[16/9] xl:w-full xl:max-w-[min(1400px,calc(61svh*16/9))] xl:min-h-[500px] overflow-hidden">
+                <div className="relative z-2 mt-5 md:mt-4 w-full md:relative rounded-[8px] xl:rounded-[24px] xl:aspect-[16/9] xl:max-w-[min(1400px,calc(61svh*16/9))] xl:min-h-[500px] overflow-hidden">
                   <div
                     className="md:absolute md:left-[1px] md:right-[1px] md:top-[1px] md:z-1 flex flex-col md:items-center md:justify-center gap-2 md:flex-row md:gap-4 xl:gap-7 rounded-[8px] xl:rounded-t-[24px] overflow-hidden"
                     style={
@@ -805,7 +804,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             className={classNames(
                               'col-span-2 flex flex-col gap-[2px] items-center justify-between md:justify-start md:flex-row md:gap-2 rounded-[8px] text-heading-2xs md:py-0 md:px-3 md:h-8 xl:px-4 xl:h-9 xl:text-heading-xs',
                               selectedVideoTab.item.label === listValue.label
-                                ? 'p-[6px] text-interactive-selected border border-interactive-primary bg-gradient-to-t from-[rgba(17,185,210,0.20)] to-[rgba(17,185,210,0.20)] bg-interactive-neutral'
+                                ? 'p-[7px] text-interactive-selected border border-interactive-primary bg-gradient-to-t from-[rgba(17,185,210,0.20)] to-[rgba(17,185,210,0.20)] bg-interactive-neutral'
                                 : 'p-2 text-interactive-neutral bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed',
                               Object.entries(value.list).length === 2 && listIndex === 0 ? 'col-start-2' : '',
                             )}
@@ -823,7 +822,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   </div>
                   <div
                     className={classNames(
-                      'flex flex-col items-start relative cursor-pointer md:aspect-[16/9] border border-primary rounded-[8px] xl:rounded-[24px] xl:max-h-full overflow-hidden mt-3 md:mt-0',
+                      'flex flex-col items-start relative cursor-pointer md:aspect-[16/9] border border-primary rounded-[8px] xl:rounded-[24px] overflow-hidden mt-3 md:mt-0',
                       selectedVideoTab.type === 'mobile' ? 'aspect-[10/9]' : 'aspect-[16/9]',
                     )}
                     onMouseEnter={() => setIsVideoHovered(true)}
@@ -844,7 +843,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     {selectedVideoTab.type === 'mobile' && (
                       <>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/80 backdrop-blur-[10px] pointer-events-none rounded-[8px] xl:rounded-[24px] overflow-hidden" />
-                        <div className="absolute top-[-1px] bottom-[-1px] left-1/2 md:top-[52px] md:bottom-[121px] xl:top-[10.7%] xl:bottom-[15%] -translate-x-1/2 elevation-light-3 aspect-[266/473] rounded-[8px] overflow-hidden">
+                        <div className="absolute top-[-1px] bottom-[-1px] left-1/2 md:top-[52px] md:bottom-[86px] xl:top-[10.7%] xl:bottom-[15%] -translate-x-1/2 elevation-light-3 aspect-[266/473] rounded-[8px] overflow-hidden">
                           <video
                             ref={mobileVideoRef}
                             autoPlay
