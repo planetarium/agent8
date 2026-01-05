@@ -69,12 +69,15 @@ export async function streamText(props: {
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
   toolResults?: ToolContent;
+  onDebugLog?: (message: string) => void;
 }) {
-  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults } = props;
+  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults, onDebugLog } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
   const orchestration = createOrchestration();
+
+  onDebugLog?.('Processing tool results');
 
   // Populate orchestration.readSet from toolResults if provided (for retry scenarios)
   if (toolResults && Array.isArray(toolResults)) {
@@ -93,31 +96,51 @@ export async function streamText(props: {
     }
   }
 
-  const processedMessages = messages.map((message) => {
-    if (message.role === 'user') {
-      const { model, provider, parts } = extractPropertiesFromMessage(message);
-      currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
-      currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
+  onDebugLog?.('Processing messages');
 
-      return { ...message, parts };
-    } else if (message.role == 'assistant') {
-      const parts = [...(message.parts || [])];
+  const processedMessages = messages
+    .map((message) => {
+      if (message.role === 'user') {
+        const { model, provider, parts } = extractPropertiesFromMessage(message);
+        currentModel = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.model : model;
+        currentProvider = model === 'auto' ? FIXED_MODELS.DEFAULT_MODEL.provider.name : provider;
 
-      for (const part of parts) {
-        if (part.type === 'text') {
-          part.text = part.text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
-          part.text = part.text.replace(/<think>.*?<\/think>/s, '');
-          part.text = part.text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '');
-          part.text = part.text.replace(/(<toolCall[^>]*>)([\s\S]*?)(<\/toolCall>)/gs, '');
-          part.text = part.text.replace(/(<toolResult[^>]*>)([\s\S]*?)(<\/toolResult>)/gs, '');
+        return { ...message, parts };
+      } else if (message.role == 'assistant') {
+        const parts = [...(message.parts || [])];
+        const newParts = [];
+
+        for (const part of parts) {
+          if (part.type === 'text') {
+            let text = part.text;
+            text = text.replace(/<div class=\\"__boltThought__\\">.*?<\/div>/s, '');
+            text = text.replace(/<think>.*?<\/think>/s, '');
+            text = text.replace(/(<boltAction[^>]*>)([\s\S]*?)(<\/boltAction>)/gs, '');
+            text = text.replace(/(<toolCall[^>]*>)([\s\S]*?)(<\/toolCall>)/gs, '');
+            text = text.replace(/(<toolResult[^>]*>)([\s\S]*?)(<\/toolResult>)/gs, '');
+
+            if (text.trim().length > 0) {
+              newParts.push({ ...part, text });
+            }
+          } else {
+            newParts.push(part);
+          }
         }
+
+        return { ...message, parts: newParts };
       }
 
-      return { ...message, parts };
-    }
+      return message;
+    })
+    .filter((message) => {
+      if (message.parts && Array.isArray(message.parts) && message.parts.length === 0) {
+        return false;
+      }
 
-    return message;
-  });
+      return true;
+    });
+
+  onDebugLog?.('Selecting model');
 
   const provider = PROVIDER_LIST.find((p) => p.name === currentProvider) || DEFAULT_PROVIDER;
   const staticModels = LLMManager.getInstance().getStaticModelListFromProvider(provider);
@@ -147,6 +170,8 @@ export async function streamText(props: {
   }
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
+
+  onDebugLog?.('Creating tools');
 
   const systemPrompt = getAgent8Prompt(WORK_DIR);
 
@@ -192,6 +217,8 @@ export async function streamText(props: {
   const performancePrompt = getPerformancePrompt(is3dProject(files));
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  onDebugLog?.('Preparing prompts');
+
   /*
    * ============================================
    * Prompt Classification (by change frequency: low → high)
@@ -215,7 +242,7 @@ export async function streamText(props: {
   const dynamicPrompts = [getProjectMdPrompt(files)];
 
   // Compose system messages in order of change frequency (low → high)
-  const coreMessages: ModelMessage[] = [
+  let coreMessages: ModelMessage[] = [
     ...[...staticPrompts, ...projectTypePrompts, ...projectContextPrompts, ...dynamicPrompts].filter(Boolean).map(
       (content) =>
         ({
@@ -236,11 +263,24 @@ export async function streamText(props: {
   // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
   coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
 
+  // Filter out empty messages
+  coreMessages = coreMessages.filter((message) => {
+    if (Array.isArray(message.content)) {
+      return message.content.length > 0;
+    } else if (typeof message.content === 'string') {
+      return message.content.trim().length > 0;
+    }
+
+    return true;
+  });
+
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {
       anthropic: { cacheControl: { type: 'ephemeral' } },
     };
   }
+
+  onDebugLog?.('Starting stream');
 
   const result = _streamText({
     model: provider.getModelInstance({
@@ -272,50 +312,6 @@ export async function streamText(props: {
     },
     ...options,
   });
-
-  (async () => {
-    try {
-      // Track tool calls per step to detect parallel vs sequential calls
-      let currentStep = 0;
-      let toolCallsInStep: string[] = [];
-
-      for await (const part of result.fullStream) {
-        if (part.type === 'error') {
-          const error: any = part.error;
-          logger.error(`${error}`);
-
-          return;
-        }
-
-        // Log step transitions to see parallel tool calls
-        if (part.type === 'start-step') {
-          currentStep++;
-          toolCallsInStep = [];
-        }
-
-        if (part.type === 'tool-call') {
-          toolCallsInStep.push(part.toolName);
-        }
-
-        if (part.type === 'finish-step') {
-          if (toolCallsInStep.length > 1) {
-            logger.info(
-              `[Step ${currentStep}] PARALLEL: ${toolCallsInStep.length} tools called together: [${toolCallsInStep.join(', ')}]`,
-            );
-          } else if (toolCallsInStep.length === 1) {
-            logger.info(`[Step ${currentStep}] Sequential: ${toolCallsInStep[0]}`);
-          }
-        }
-      }
-    } catch (e: any) {
-      if (e.name === 'AbortError') {
-        logger.info('Request aborted.');
-        return;
-      }
-
-      throw e;
-    }
-  })();
 
   return result;
 }

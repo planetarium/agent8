@@ -23,6 +23,11 @@ import {
   PROMPT_COOKIE_KEY,
   PROVIDER_LIST,
   WORK_DIR,
+
+  /*
+   * AUTO_SYNTAX_FIX_TAG_NAME,
+   * SHELL_COMMANDS,
+   */
 } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
@@ -66,6 +71,7 @@ import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { logManager } from '~/lib/debug/LogManager';
 
 const logger = createScopedLogger('Chat');
 
@@ -74,9 +80,218 @@ const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
+// const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
+
+// 50 debug logs
+function addDebugLog(value: number | string): void {
+  logManager.add('Chat-' + value);
+}
+
 function isServerError(data: unknown): data is ServerErrorData {
   return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
 }
+
+/*
+ * interface SyntaxCheckResult {
+ *   success: boolean;
+ *   errorContent: string | null;
+ * }
+ */
+
+/*
+ * async function runSyntaxCheck(workbench: WorkbenchStore): Promise<SyntaxCheckResult> {
+ *   const shell = workbench.boltTerminal;
+ *   await shell.ready;
+ */
+
+/*
+ *   // tsc run and save the result to .build_error.log (prevent interruption with noInterrupt flag)
+ *   const command = `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx tsc -b --noEmit > .build_error.log 2>&1`;
+ *   await shell.executeCommand(Date.now().toString(), command, undefined, { noInterrupt: true });
+ */
+
+/*
+ *   // wait for the command to complete
+ *   await new Promise((resolve) => setTimeout(resolve, 1000));
+ */
+
+/*
+ *   // read the .build_error.log file
+ *   try {
+ *     const container = await workbench.container;
+ *     const errorLog = (await container.fs.readFile('.build_error.log', 'utf-8')) as string;
+ */
+
+/*
+ *     // determine if there are errors
+ *     const hasError =
+ *       errorLog.trim().length > 0 &&
+ *       (errorLog.includes('error TS') || errorLog.includes('Error:') || errorLog.includes('failed'));
+ */
+
+/*
+ *     return {
+ *       success: !hasError,
+ *       errorContent: hasError ? errorLog : null,
+ *     };
+ *   } catch {
+ *     // if the file does not exist, consider it a success
+ *     return { success: true, errorContent: null };
+ *   } finally {
+ *     shell.executeCommand(Date.now().toString(), 'rm -f .build_error.log', undefined, { noInterrupt: true });
+ *   }
+ * }
+ */
+
+/*
+ * async function fixSyntaxErrors(
+ *   targetMessage: UIMessage,
+ *   errorContent: string,
+ *   files: Record<string, any>,
+ *   apiKeys: Record<string, string>,
+ *   promptId: string,
+ *   contextOptimization: boolean,
+ *   currentMessages: UIMessage[],
+ *   parseMessages: (messages: UIMessage[]) => void,
+ * ): Promise<string | null> {
+ *   const fixMessage = `*TypeScript build errors detected. Please fix the following errors:*
+ */
+
+/*
+ * \`\`\`
+ * ${errorContent}
+ * \`\`\`
+ */
+
+// Analyze the errors above and resolve them.`;
+
+/*
+ *   try {
+ *     const response = await fetch('/api/chat', {
+ *       method: 'POST',
+ *       headers: { 'Content-Type': 'application/json' },
+ *       body: JSON.stringify({
+ *         messages: [{ role: 'user', parts: [{ type: 'text', text: fixMessage }] }],
+ *         apiKeys,
+ *         files,
+ *         promptId,
+ *         contextOptimization,
+ *         isSyntaxFix: true,
+ *       }),
+ *     });
+ */
+
+/*
+ *     if (!response.ok || !response.body) {
+ *       logger.error('Failed to call /api/chat for syntax fix');
+ *       return null;
+ *     }
+ */
+
+/*
+ *     // handle the stream response
+ *     const reader = response.body.getReader();
+ *     const decoder = new TextDecoder();
+ *     let buffer = '';
+ */
+
+/*
+ *     // read the entire stream
+ *     while (true) {
+ *       const { done, value } = await reader.read();
+ */
+
+/*
+ *       if (done) {
+ *         break;
+ *       }
+ */
+
+/*
+ *       buffer += decoder.decode(value, { stream: true });
+ *     }
+ */
+
+/*
+ *     // extract the delta values from the text-delta events in the SSE stream
+ *     let fullContent = '';
+ *     const lines = buffer.split('\n');
+ */
+
+/*
+ *     for (const line of lines) {
+ *       if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+ *         try {
+ *           const data = JSON.parse(line.slice(6));
+ */
+
+/*
+ *           if (data.type === 'text-delta' && data.delta) {
+ *             fullContent += data.delta;
+ *           }
+ *         } catch {
+ *           // ignore JSON parsing errors
+ *         }
+ *       }
+ *     }
+ */
+
+//     /*
+//      * parse the syntax fix response using parseMessages
+//      * append the syntax fix response to the message content and parse the entire thing again
+//      */
+//     if (fullContent.trim()) {
+//       logger.info('[SyntaxFix] fullContent:', fullContent);
+
+/*
+ *       // combine the original content with the syntax fix response
+ *       const originalContent = extractTextContent(targetMessage);
+ *       const updatedContent = originalContent + fullContent;
+ */
+
+/*
+ *       // create the updated message
+ *       const updatedMessage: UIMessage = {
+ *         ...targetMessage,
+ *         parts: [{ type: 'text' as const, text: updatedContent }],
+ *       };
+ */
+
+/*
+ *       // create a temporary messages array (update the message or add it to the end)
+ *       const targetIndex = currentMessages.findIndex((m) => m.id === targetMessage.id);
+ *       let tempMessages: UIMessage[];
+ */
+
+/*
+ *       if (targetIndex !== -1) {
+ *         // if the message is already in the messages array, update it
+ *         tempMessages = currentMessages.map((m, i) => (i === targetIndex ? updatedMessage : m));
+ *       } else {
+ *         // if the message is not in the messages array, add it to the end
+ *         tempMessages = [...currentMessages, updatedMessage];
+ *       }
+ */
+
+/*
+ *       // parse the entire thing again using parseMessages (reset and parse, so new artifact/action is registered in workbench)
+ *       parseMessages(tempMessages);
+ *       logger.info('[SyntaxFix] Parsed fix response with messageId:', targetMessage.id);
+ */
+
+/*
+ *       return fullContent;
+ *     }
+ */
+
+/*
+ *     return null;
+ *   } catch (error) {
+ *     logger.error('Failed to fix syntax errors:', error);
+ *     return null;
+ *   }
+ * }
+ */
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
   try {
@@ -427,6 +642,21 @@ export const ChatImpl = memo(
     const [fakeLoading, setFakeLoading] = useState<boolean>(false);
     const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
+
+    /*
+     * const setSyntaxProgress = useCallback((status: 'in-progress' | 'complete', message: string) => {
+     *   setCustomProgressAnnotations([
+     *     {
+     *       type: 'progress',
+     *       label: 'syntax',
+     *       status,
+     *       order: Number.MAX_SAFE_INTEGER,
+     *       message,
+     *     },
+     *   ]);
+     * }, []);
+     */
+
     const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
@@ -491,6 +721,9 @@ export const ChatImpl = memo(
         body: () => bodyRef.current,
       }),
       onData: (data) => {
+        const dataType = data?.type || 'unknown';
+        addDebugLog(`1:${dataType}`);
+
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
           return;
@@ -499,13 +732,23 @@ export const ChatImpl = memo(
         // Extract the inner 'data' property if it exists
         const extractedData = data.data || data;
 
+        // Handle data-log (server-side logs)
+        if (data.type === 'data-log') {
+          if (extractedData && typeof extractedData === 'object' && 'message' in extractedData) {
+            addDebugLog(`50:${(extractedData as { message: string }).message}`);
+          }
+
+          return;
+        }
+
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          handleChatError(extractedData.message, {
+          handleChatError(extractedData.reason, {
             error: extractedData.message,
-            context: `useChat onData callback, reason: ${extractedData.reason}, model: ${model}, provider: ${provider.name}`,
+            context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
             elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+            metadata: extractedData.metadata,
           });
 
           return;
@@ -516,6 +759,8 @@ export const ChatImpl = memo(
           const hasType = (obj: any): obj is { type: string } => obj && typeof obj === 'object' && 'type' in obj;
           const extractedType = hasType(extractedData) ? extractedData.type : null;
           const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
+
+          addDebugLog(`2:${dataType}`);
 
           return [...filtered, extractedData];
         });
@@ -534,6 +779,10 @@ export const ChatImpl = memo(
         });
 
         const reportProvider = model === 'auto' ? 'auto' : provider.name;
+
+        // Collect process logs for network errors
+        const processlog = e.message === 'network error' ? logManager.logs.join(',') : undefined;
+
         handleChatError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           {
@@ -541,12 +790,15 @@ export const ChatImpl = memo(
             context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
             prompt: lastUserPromptRef.current,
             elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+            process: processlog,
           },
         );
         setFakeLoading(false);
       },
 
       onFinish: async ({ message }) => {
+        addDebugLog(3);
+
         const usage =
           message.metadata &&
           typeof message.metadata === 'object' &&
@@ -566,9 +818,66 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
+          /*
+           *setSyntaxProgress('in-progress', 'Checking syntax');
+           *
+           * // 1. run the syntax check
+           *const syntaxResult = await runSyntaxCheck(workbench);
+           *
+           * // final message (fix content may be added)
+           *let finalMessage = message;
+           *
+           *if (!syntaxResult.success && syntaxResult.errorContent) {
+           *  // start displaying the progress
+           *  setSyntaxProgress('in-progress', 'Analyzing errors');
+           *
+           *  // 2. try to fix the errors (1 time)
+           *  logger.info('[SyntaxFix] Attempting to fix TypeScript errors...');
+           *
+           *  const fixContent = await fixSyntaxErrors(
+           *    message,
+           *    syntaxResult.errorContent,
+           *    bodyRef.current.files,
+           *    bodyRef.current.apiKeys,
+           *    bodyRef.current.promptId,
+           *    bodyRef.current.contextOptimization,
+           *    messages,
+           *    parseMessages,
+           *  );
+           *
+           *  if (fixContent) {
+           *    // fix successful - wait for the new actions to complete
+           *    logger.info('[SyntaxFix] Fix actions registered, waiting for completion...');
+           *    await workbench.waitForMessageIdle(message.id, { timeoutMs: AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS });
+           *    logger.info('[SyntaxFix] Fix actions completed');
+           *
+           *    // add the fix content to the message wrapped in <autoSyntaxFix> tag
+           *    const originalContent = extractTextContent(message);
+           *    const updatedContent =
+           *      originalContent + `\n\n<${AUTO_SYNTAX_FIX_TAG_NAME}>\n${fixContent}\n</${AUTO_SYNTAX_FIX_TAG_NAME}>`;
+           *
+           *    // keep the non-text parts (data-prompt, etc.) from the original parts and update only the text
+           *    const nonTextParts = message.parts?.filter((part: any) => part.type !== 'text') || [];
+           *
+           *    finalMessage = {
+           *      ...message,
+           *      parts: [...nonTextParts, { type: 'text' as const, text: updatedContent }],
+           *    };
+           *  }
+           *}
+           *
+           *setCustomProgressAnnotations([]);
+           *setFakeLoading(false);
+           *
+           * // proceed with the original process (success/failure doesn't matter)
+           */
+          addDebugLog(4);
           await runAndPreview(message);
+          addDebugLog(5);
           await new Promise((resolve) => setTimeout(resolve, 1000));
+          addDebugLog(6);
           await handleCommit(message);
+          addDebugLog(7);
         });
 
         setFakeLoading(false);
@@ -774,6 +1083,10 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // Clear logs from previous request
+      logManager.clear();
+      addDebugLog(8);
+
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
@@ -799,6 +1112,8 @@ export const ChatImpl = memo(
       lastUserPromptRef.current = messageContent;
 
       if (chatStarted && Object.keys(files).length === 0) {
+        addDebugLog(9);
+
         const fileRecoveryStartTime = performance.now();
         let recoverySuccessful = false;
         const containerInstance = await workbench.container;
@@ -812,8 +1127,21 @@ export const ChatImpl = memo(
           {
             name: 'Gitbase',
             getFiles: async () => {
+              addDebugLog(10);
+
               const projectPath = repoStore.get().path;
-              return projectPath ? await fetchProjectFiles(projectPath) : {};
+
+              if (projectPath) {
+                addDebugLog(11);
+
+                const files = await fetchProjectFiles(projectPath);
+                addDebugLog(12);
+
+                return files;
+              } else {
+                addDebugLog(13);
+                return {};
+              }
             },
             logSuccess: () => console.log('files recovery from gitbase successful'),
           },
@@ -824,6 +1152,7 @@ export const ChatImpl = memo(
             const files = await strategy.getFiles();
 
             if (Object.keys(files).length > 0) {
+              addDebugLog(14);
               await containerInstance.mount(convertFileMapToFileSystemTree(files));
               strategy.logSuccess();
               recoverySuccessful = true;
@@ -835,6 +1164,7 @@ export const ChatImpl = memo(
         }
 
         if (!recoverySuccessful) {
+          addDebugLog(15);
           reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
             context: 'sendMessage - files check',
           });
@@ -892,6 +1222,8 @@ export const ChatImpl = memo(
       }
 
       if (!chatStarted) {
+        addDebugLog(16);
+
         const templateSelectionStartTime = performance.now();
 
         try {
@@ -909,6 +1241,8 @@ export const ChatImpl = memo(
           const { template, title, projectRepo } = await selectStarterTemplate({
             message: messageContent,
           });
+
+          addDebugLog(20);
 
           if (!template) {
             throw new Error('Not Found Template');
@@ -932,6 +1266,8 @@ export const ChatImpl = memo(
             },
           ]);
 
+          addDebugLog(17);
+
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
             if (e.message.includes('rate limit')) {
               toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
@@ -939,6 +1275,8 @@ export const ChatImpl = memo(
               toast.warning('Failed to import starter template\nRetry again after a few minutes.');
             }
           });
+
+          addDebugLog(21);
 
           const projectPath = temResp?.project?.path;
           const projectName = temResp?.project?.name;
@@ -954,7 +1292,11 @@ export const ChatImpl = memo(
 
           if (accessToken) {
             try {
+              addDebugLog(22);
+
               const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
+
+              addDebugLog(23);
 
               if (user.isActivated && user.walletAddress) {
                 temResp.fileMap['.env'] = {
@@ -977,7 +1319,10 @@ export const ChatImpl = memo(
           );
           workbench.files.set(processedFileMap);
 
+          addDebugLog(24);
+
           const containerInstance = await workbench.container;
+          addDebugLog(25);
           await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
 
           if (isEnabledGitbasePersistence) {
@@ -988,7 +1333,10 @@ export const ChatImpl = memo(
             let branchName = 'develop';
 
             if (enabledTaskMode) {
+              addDebugLog(26);
+
               const { success, message, data } = await createTaskBranch(projectPath);
+              addDebugLog(27);
 
               if (!success) {
                 reportError(message, templateSelectionStartTime, {
@@ -1007,11 +1355,14 @@ export const ChatImpl = memo(
               taskBranch: branchName,
             });
 
+            addDebugLog(28);
+
             // Record prompt activity for first request
             sendActivityPrompt(projectPath).catch((error) => {
               logger.warn('Failed to record prompt activity:', error);
             });
 
+            addDebugLog(29);
             changeChatUrl(projectPath, { replace: true });
           } else {
             repoStore.set({
@@ -1022,11 +1373,14 @@ export const ChatImpl = memo(
             });
 
             // Record prompt activity for first request
+            addDebugLog(30);
             sendActivityPrompt(projectRepo).catch((error) => {
               logger.warn('Failed to record prompt activity:', error);
             });
 
+            addDebugLog(31);
             changeChatUrl(projectRepo, { replace: true });
+            addDebugLog(32);
           }
 
           const firstChatModel =
@@ -1064,6 +1418,7 @@ export const ChatImpl = memo(
             setCustomProgressAnnotations([]);
           }, 1000);
 
+          addDebugLog(33);
           setMessages([
             {
               id: `1-${new Date().getTime()}`,
@@ -1078,21 +1433,29 @@ export const ChatImpl = memo(
               ],
             },
           ]);
+          addDebugLog(34);
           regenerate();
-
+          addDebugLog(35);
           setInput('');
           Cookies.remove(PROMPT_COOKIE_KEY);
 
+          addDebugLog(36);
           sendEventToParent('EVENT', { name: 'START_EDITING' });
 
+          addDebugLog(37);
           setAttachmentList([]);
+          addDebugLog(38);
 
+          addDebugLog(39);
           resetEnhancer();
+          addDebugLog(40);
 
           textareaRef.current?.blur();
 
           return;
         } catch (error) {
+          addDebugLog(18);
+
           // Clear progress annotations on error
           setCustomProgressAnnotations([]);
 
@@ -1126,9 +1489,11 @@ export const ChatImpl = memo(
       try {
         // Record prompt activity for subsequent requests
         if (repoStore.get().path) {
+          addDebugLog(41);
           sendActivityPrompt(repoStore.get().path).catch((error) => {
             logger.warn('Failed to record prompt activity:', error);
           });
+          addDebugLog(42);
         }
 
         if (error != null) {
@@ -1138,9 +1503,13 @@ export const ChatImpl = memo(
         chatStore.setKey('aborted', false);
 
         if (repoStore.get().path) {
+          addDebugLog(43);
+
           const commit = await workbench.commitModifiedFiles();
+          addDebugLog(44);
 
           if (commit) {
+            addDebugLog(45);
             setMessages((prev: UIMessage[]) => [
               ...prev,
               {
@@ -1154,11 +1523,15 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
+            addDebugLog(46);
           }
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const createTaskBranchStartTime = performance.now();
+            addDebugLog(47);
+
             const { success, message, data } = await createTaskBranch(repoStore.get().path);
+            addDebugLog(48);
 
             if (!success) {
               reportError(message, createTaskBranchStartTime, {
@@ -1177,6 +1550,7 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
+        addDebugLog(19);
         sendChatMessage({
           role: 'user',
           parts: [
@@ -1188,7 +1562,7 @@ export const ChatImpl = memo(
             },
           ],
         });
-
+        addDebugLog(49);
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 

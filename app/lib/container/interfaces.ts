@@ -58,7 +58,7 @@ export interface FileSystemTree {
 export interface FileSystem {
   readFile(path: string): Promise<Uint8Array>;
   readFile(path: string, encoding?: BufferEncoding): Promise<string>;
-  writeFile(path: string, content: string | Uint8Array, options?: { encoding?: BufferEncoding }): Promise<void>;
+  writeFile(path: string, content: string | number[], options?: { encoding?: BufferEncoding }): Promise<void>;
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
   readdir(path: string, options?: { withFileTypes?: boolean }): Promise<FileEntry[]>;
   rm(path: string, options?: { force?: boolean; recursive?: boolean }): Promise<void>;
