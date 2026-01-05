@@ -58,21 +58,21 @@ export const VIDEO_GUIDE_TABS = {
         prompt:
           'I want to create a Japanese visual novel about a blonde heroine in a sunset. Keep it in portrait view so that I can play it on a smartphone.',
         icon: StoryIcon,
-        video: '/videos/Story_New.mp4',
+        video: '/videos/Story.webm',
       },
       survivorslike: {
         label: 'Survivorslike',
         prompt:
           'Create a Vampire Survivors like 2D action game that a magician shoots spells to eliminate enemies, utilizing sprite sheets. Make it playable on a mobile device in a portrait view screen.',
         icon: SurvivorsLikeIcon,
-        video: '/videos/Survivorslike.mp4',
+        video: '/videos/Survivorslike.webm',
       },
       'shoot-em-up': {
         label: "Shoot 'em up",
         prompt:
           "Let's make a vertical scroller shooting game in a dark fantasy dungeon crawler concept. Use sprite sheets. Make it in mobile screen resolution for portrait mode.",
         icon: ShootEmUpIcon,
-        video: '/videos/Scroller.mp4',
+        video: '/videos/Scroller.webm',
       },
     },
   },
@@ -83,14 +83,14 @@ export const VIDEO_GUIDE_TABS = {
         label: 'Top-Down',
         prompt: 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.',
         icon: TopDownIcon,
-        video: '/videos/top-down-game.mp4',
+        video: '/videos/Topdown.webm',
       },
       tps: {
         label: 'TPS',
         prompt:
           'Build a simple third-person shooter like Fortnite, with a camera following behind a character moving and shooting in a 3D world.',
         icon: TpsIcon,
-        video: '/videos/tps-game.mp4',
+        video: '/videos/TPS.webm',
       },
     },
   },
@@ -662,10 +662,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           return;
         }
 
-        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom + 30 || 0);
+        const height = chatStarted ? 0 : Math.ceil(ref.current.getBoundingClientRect().bottom || 0);
 
-        // 30px 이상 변경되었을 때만 전송
-        if (Math.abs(height - lastHeight) < 30) {
+        if (Math.abs(height - lastHeight) < 15) {
           return;
         }
 
@@ -685,7 +684,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             clearTimeout(timeoutId);
           }
 
-          timeoutId = setTimeout(sendHeight, 300);
+          timeoutId = setTimeout(sendHeight, 200);
           rafId = null;
         });
       };
