@@ -339,6 +339,7 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
                               variant="secondary-ghost"
                               size="md"
                               onClick={() => handleRestoreClick(version)}
+                              disabled={version.commitHash === repo.latestCommitHash}
                             >
                               <RestoreIcon size={20} />
                               <span className="text-interactive-primary">Restore</span>

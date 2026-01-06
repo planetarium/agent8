@@ -442,55 +442,6 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
           <>
             <div className="flex items-center gap-2">
               <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
-              <div className="flex items-center relative">
-                <IconButton
-                  icon="i-ph:devices"
-                  onClick={toggleDeviceMode}
-                  title={isDeviceModeOn ? 'Switch to Responsive Mode' : 'Switch to Device Mode'}
-                  className={isDeviceModeOn ? 'bg-blue-500 text-white hover:bg-blue-600' : 'hover:bg-gray-100'}
-                />
-                {isDeviceModeOn && (
-                  <>
-                    <IconButton
-                      icon="i-ph:caret-down"
-                      onClick={() => setIsWindowSizeDropdownOpen(!isWindowSizeDropdownOpen)}
-                      className="ml-1"
-                      title="Select Device Size"
-                    />
-                    {isWindowSizeDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-50" onClick={() => setIsWindowSizeDropdownOpen(false)} />
-                        <div className="absolute right-0 top-full mt-2 z-50 min-w-[240px] max-h-[400px] bg-white dark:bg-black rounded-xl shadow-2xl border border-[#E5E7EB] dark:border-[rgba(255,255,255,0.1)] overflow-hidden overflow-y-auto">
-                          {WINDOW_SIZES.map((size) => (
-                            <button
-                              key={size.name}
-                              className={`w-full px-4 py-3.5 text-left text-[#111827] dark:text-gray-300 text-sm whitespace-nowrap flex items-center gap-3 group hover:bg-[#F5EEFF] dark:hover:bg-gray-900 bg-white dark:bg-black ${
-                                selectedDeviceSize.name === size.name ? 'bg-[#F5EEFF] dark:bg-gray-900' : ''
-                              }`}
-                              onClick={() => {
-                                selectDeviceSize(size);
-                                setIsWindowSizeDropdownOpen(false);
-                              }}
-                            >
-                              <div
-                                className={`${size.icon} w-5 h-5 text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200`}
-                              />
-                              <div className="flex flex-col">
-                                <span className="font-medium group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
-                                  {size.name}
-                                </span>
-                                <span className="text-xs text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
-                                  {size.width} × {size.height}
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
               <IconButton
                 icon="i-ph:layout-light"
                 onClick={() => setIsPreviewOnly(!isPreviewOnly)}

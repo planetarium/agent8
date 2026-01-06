@@ -1058,7 +1058,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          if (event.shiftKey) {
+                          // On mobile, Enter key should create a new line (like Shift+Enter on desktop)
+                          if (event.shiftKey || isSmallViewport) {
                             return;
                           }
 

@@ -1,6 +1,7 @@
 import type { Container } from '~/lib/container/interfaces';
 import { atom } from 'nanostores';
 import { playCompletionSound } from '~/utils/sound';
+import { shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
 
 export interface PreviewInfo {
   port: number;
@@ -64,9 +65,10 @@ export class PreviewsStore {
       previewInfo.ready = type === 'open';
       previewInfo.baseUrl = url;
 
-      // Play completion sound when preview is ready
-      if (type === 'open') {
+      // Play completion sound when preview is ready AND streaming just completed
+      if (type === 'open' && shouldPlaySoundOnPreviewReady.get()) {
         playCompletionSound();
+        shouldPlaySoundOnPreviewReady.set(false); // Reset flag after playing
       }
 
       this.previews.set([previewInfo]);

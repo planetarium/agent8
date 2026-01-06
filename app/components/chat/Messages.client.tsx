@@ -19,7 +19,15 @@ import { loadingAnimationData } from '~/utils/animationData';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
-import { StarLineIcon, DiffIcon, RefreshIcon, CopyLineIcon, PlayIcon, ChevronRightIcon } from '~/components/ui/Icons';
+import {
+  StarLineIcon,
+  StarFillIcon,
+  DiffIcon,
+  RefreshIcon,
+  CopyLineIcon,
+  PlayIcon,
+  ChevronRightIcon,
+} from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 
@@ -218,9 +226,33 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         isUserMessage
                           ? 'items-start py-2 px-[14px] gap-[10px] rounded-[24px_0_24px_24px] bg-tertiary mt-3'
                           : 'flex-col justify-center items-center gap-0 pt-[14px] px-[14px] rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3 animate-text-fade',
+
+                        // Make AI response tappable on mobile when collapsed
+                        !isUserMessage && isSmallViewport && !expandedMessages.has(index) ? 'cursor-pointer' : '',
                       )}
+                      onClick={(e) => {
+                        // On mobile, tap anywhere on collapsed AI response to expand
+                        if (!isUserMessage && isSmallViewport && !expandedMessages.has(index)) {
+                          toggleExpanded(index, e);
+                        }
+                      }}
                     >
                       <div className="grid grid-col-1 w-full">
+                        {/* Show saved version name for AI responses */}
+                        {!isUserMessage &&
+                          messageId &&
+                          isCommitHash(messageId.split('-').pop() as string) &&
+                          (() => {
+                            const commitHash = messageId.split('-').pop() as string;
+                            const savedTitle = savedVersions?.get(commitHash);
+
+                            return savedTitle ? (
+                              <div className="flex items-start gap-1 pb-2">
+                                <StarFillIcon size={16} fill="var(--color-text-tertiary)" />
+                                <span className="text-body-sm text-tertiary">{savedTitle}</span>
+                              </div>
+                            ) : null;
+                          })()}
                         {isUserMessage ? (
                           <UserMessage content={messageText} isLast={isLast} />
                         ) : (
@@ -430,7 +462,14 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               <CustomButton
                                 variant="primary-text"
                                 size="sm"
-                                onClick={() => workbenchStore.runPreview()}
+                                onClick={() => {
+                                  workbenchStore.runPreview();
+
+                                  // On mobile, immediately show preview screen
+                                  if (isSmallViewport) {
+                                    workbenchStore.mobilePreviewMode.set(true);
+                                  }
+                                }}
                               >
                                 <PlayIcon color="currentColor" size={20} />
                                 {isSmallViewportForLayout ? 'Run' : 'Run Preview'}

@@ -589,6 +589,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 variant="secondary-ghost"
                                 size="md"
                                 onClick={() => handleRestoreClick(commit)}
+                                disabled={index === 0}
                               >
                                 <RestoreIcon size={20} />
                                 <span className="text-interactive-primary">Restore</span>

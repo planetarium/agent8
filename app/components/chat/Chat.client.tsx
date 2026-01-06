@@ -9,6 +9,8 @@ import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
+import useViewport from '~/lib/hooks';
+import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { chatStore } from '~/lib/stores/chat';
 import {
   useWorkbenchFiles,
@@ -39,7 +41,7 @@ import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
-import { streamingState } from '~/lib/stores/streaming';
+import { streamingState, shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
@@ -492,6 +494,7 @@ export const ChatImpl = memo(
 
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
+    const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
@@ -521,8 +524,18 @@ export const ChatImpl = memo(
       const previews = workbench.previews.get();
 
       if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p: any) => p.ready)) {
-        playCompletionSound();
+        // Play sound only if streaming just completed (flag is set)
+        if (shouldPlaySoundOnPreviewReady.get()) {
+          playCompletionSound();
+          shouldPlaySoundOnPreviewReady.set(false);
+        }
+
         workbench.currentView.set('preview');
+
+        // On mobile, show preview screen immediately
+        if (isSmallViewport) {
+          workbench.mobilePreviewMode.set(true);
+        }
 
         return;
       }
@@ -539,6 +552,11 @@ export const ChatImpl = memo(
         }
 
         break;
+      }
+
+      // On mobile, show preview screen immediately (before waiting for preview to complete)
+      if (isSmallViewport) {
+        workbench.mobilePreviewMode.set(true);
       }
 
       await workbench.runPreview();
@@ -1189,6 +1207,7 @@ export const ChatImpl = memo(
               name: projectName,
               path: projectPath,
               title,
+              latestCommitHash: '',
             });
 
             // Record prompt activity for first request
@@ -1202,6 +1221,7 @@ export const ChatImpl = memo(
               name: projectRepo,
               path: projectRepo,
               title,
+              latestCommitHash: '',
             });
 
             // Record prompt activity for first request
@@ -1479,6 +1499,7 @@ export const ChatImpl = memo(
             name: source.title,
             path: '',
             title: source.title,
+            latestCommitHash: '',
           });
 
           // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
@@ -1706,6 +1727,11 @@ export const ChatImpl = memo(
           isStreaming={isStreaming}
           onStreamingChange={(streaming) => {
             streamingState.set(streaming);
+
+            // Set flag to play sound when preview becomes ready (only when streaming starts)
+            if (streaming) {
+              shouldPlaySoundOnPreviewReady.set(true);
+            }
           }}
           enhancingPrompt={enhancingPrompt}
           promptEnhanced={promptEnhanced}

@@ -184,8 +184,12 @@ ${truncateMessage(
       name: result.data.project.name,
       path: result.data.project.path,
       title: result.data.project.description.split('\n')[0] || result.data.project.name,
+      latestCommitHash: result.data.commitHash,
     });
     changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
+  } else {
+    // Update latestCommitHash for subsequent commits
+    repoStore.setKey('latestCommitHash', result.data.commitHash);
   }
 
   if (revertTo) {
@@ -232,6 +236,9 @@ export const commitUserChanged = async () => {
   if (!result.data.commitHash) {
     throw new Error('The user changed files commit has failed.');
   }
+
+  // Update latestCommitHash
+  repoStore.setKey('latestCommitHash', result.data.commitHash);
 
   if (revertTo) {
     changeChatUrl(location.pathname, { replace: true, searchParams: { revertTo: result.data.commitHash } });

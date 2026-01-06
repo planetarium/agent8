@@ -4,4 +4,5 @@ export const repoStore = map({
   name: '',
   path: '',
   title: '',
+  latestCommitHash: '',
 });

@@ -77,6 +77,7 @@ function reducer(state: State, action: Action): State {
 interface VersionEntry {
   commitHash: string;
   commitTitle: string;
+  title?: string;
 }
 
 export function useVersionFeature() {
@@ -99,7 +100,10 @@ export function useVersionFeature() {
             return;
           }
 
-          const map = new Map<string, string>(versions.map((v: VersionEntry) => [v.commitHash, v.commitTitle]));
+          // Use user-defined title if available, otherwise use commitTitle
+          const map = new Map<string, string>(
+            versions.map((v: VersionEntry) => [v.commitHash, v.title || v.commitTitle]),
+          );
           dispatch({ type: 'SET_SAVED_VERSIONS', versions: map });
         } catch (e) {
           console.error('Failed to fetch version history:', e);
@@ -211,7 +215,9 @@ export function useVersionFeature() {
         );
 
         const { triggerVersionSave } = await import('~/lib/stores/versionEvent');
-        triggerVersionSave(commitHash, commitTitleFromUserMessage);
+
+        // Use user-defined title for display, fall back to commitTitle
+        triggerVersionSave(commitHash, title || commitTitleFromUserMessage);
 
         toast.dismiss(toastId);
         toast.success('Version saved successfully');
@@ -241,7 +247,11 @@ export function useVersionFeature() {
     return null;
   };
 
-  // 7) return modal JSX from hook → ChatImpl is "just plug and play"
+  // 7) Calculate next version number for default title
+  const nextVersionNumber = state.savedVersions.size + 1;
+  const defaultVersionTitle = `Version ${nextVersionNumber}`;
+
+  // 8) return modal JSX from hook → ChatImpl is "just plug and play"
   const modals = (
     <>
       <SaveVersionConfirmModal
@@ -249,6 +259,7 @@ export function useVersionFeature() {
         onClose={closeSave}
         onConfirm={confirmSave}
         commitTitle={getCommitTitleFromMessage(state.save.message)}
+        defaultTitle={defaultVersionTitle}
       />
 
       <RestoreConfirmModal isOpen={state.restore.open} onClose={closeRestore} onConfirm={confirmRestore} />

@@ -1347,9 +1347,9 @@ export class GitlabService {
 
       versionData.versions.unshift(newVersion); // Add to beginning
 
-      // Keep only last 100 versions
-      if (versionData.versions.length > 100) {
-        versionData.versions = versionData.versions.slice(0, 100);
+      // Keep only last 200 versions
+      if (versionData.versions.length > 200) {
+        versionData.versions = versionData.versions.slice(0, 200);
       }
 
       await this.gitlab.ProjectCustomAttributes.set(project.id, 'agent8_version_history', JSON.stringify(versionData));
