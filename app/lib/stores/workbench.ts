@@ -89,6 +89,9 @@ export class WorkbenchStore {
   #messageIdleCallbacks: Map<string, Array<() => void>> = new Map();
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
+  #lastPublishAttemptTime: number = 0;
+  #isPublishCancelled: boolean = false;
+  #isPublishing: WritableAtom<boolean> = atom(false);
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -339,6 +342,10 @@ export class WorkbenchStore {
     return this.#currentContainerAtom;
   }
 
+  get isPublishing() {
+    return this.#isPublishing;
+  }
+
   #setupContainerErrorHandling(container: Container): void {
     container.on('preview-message', (message) => {
       logger.info('Preview message:', message);
@@ -396,6 +403,11 @@ export class WorkbenchStore {
     if (!this.#connectionLostNotified) {
       toast.info('Reconnecting...');
     }
+  }
+
+  #hasRunningArtifactActions(): boolean {
+    const artifacts = this.artifacts.get();
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
   }
 
   get previews() {
@@ -1217,6 +1229,27 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
+    //  If there are running artifact actions, skip immediately
+    if (this.#hasRunningArtifactActions()) {
+      toast.warning('현재 진행 중인 작업이 있습니다. 완료 후 다시 시도해주세요.');
+      logger.info('[Publish] Skipped - Artifact actions are running');
+
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastAttempt = now - this.#lastPublishAttemptTime;
+
+    // If the previous publish attempt was made within 5 seconds, cancel it and start a new one
+    if (timeSinceLastAttempt <= 5000 && this.#isPublishing.get()) {
+      logger.info('[Publish] Cancel previous publish and start new one');
+      await this.#cancelCurrentPublish();
+    }
+
+    this.#lastPublishAttemptTime = now;
+    this.#isPublishing.set(true);
+    this.#isPublishCancelled = false;
+
     this.currentView.set('code');
 
     const shell = this.boltTerminal;
@@ -1278,8 +1311,19 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
+      // Check if this was a user-initiated cancellation
+      if (this.#isPublishCancelled) {
+        logger.info('[Publish] Cancelled by user');
+        this.#isPublishCancelled = false;
+
+        return;
+      }
+
       logger.error('[Publish] Error:', error);
       throw error;
+    } finally {
+      this.#isPublishing.set(false);
+      this.#isPublishCancelled = false;
     }
   }
 
@@ -1294,6 +1338,30 @@ export class WorkbenchStore {
     });
 
     return this.#shellCommandQueue;
+  }
+
+  async #cancelCurrentPublish(): Promise<void> {
+    logger.info('[Publish] Cancelling current publish operations...');
+
+    // Set cancellation flag
+    this.#isPublishCancelled = true;
+
+    // Stop all artifact actions
+    const artifacts = this.artifacts.get();
+    Object.values(artifacts).forEach((artifact) => {
+      artifact.runner.abortAll();
+    });
+    this.#messageToActionQueue.clear();
+
+    // Interrupt the currently running shell command immediately
+    const shell = this.boltTerminal;
+    shell.interruptCurrentCommand();
+
+    // Clear the shell command queue (remove all pending commands)
+    this.#shellCommandQueue = Promise.resolve();
+
+    // Wait for a short time (cleanup time)
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   #handleBuildError(output: string) {
