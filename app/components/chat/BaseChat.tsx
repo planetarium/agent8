@@ -873,6 +873,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               className={classNames(`pt-0 pt-4 relative`, {
                 'h-full flex flex-col': chatStarted,
                 'md:pb-[100px]': !chatStarted,
+                'md:pb-[230px]': !chatStarted && !isStreaming && !!actionAlert && !!actionAlert.content,
               })}
             >
               <ClientOnly>
