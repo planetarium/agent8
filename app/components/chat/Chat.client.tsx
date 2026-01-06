@@ -414,7 +414,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
-  const actionAlert = useStore(workbench.actionAlert);
+  const actionAlert = useWorkbenchActionAlert();
 
   useEffect(() => {
     if (repoStore.get().path) {
