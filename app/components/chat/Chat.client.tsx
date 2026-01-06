@@ -34,6 +34,7 @@ import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
+import { ServiceOutagePage } from '~/components/ui/ServiceOutagePage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -413,6 +414,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
+  const actionAlert = useWorkbenchActionAlert();
 
   useEffect(() => {
     if (repoStore.get().path) {
@@ -499,6 +501,22 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   // Check for 401 error (unauthorized)
   if (errorStatus === 401) {
     return <UnauthorizedPage />;
+  }
+
+  // Check for 503 error (service unavailable) from container initialization
+  const is503Error = (() => {
+    if (!actionAlert?.description?.includes('Machine API request failed')) {
+      return false;
+    }
+
+    const parts = actionAlert.description.split(':');
+    const lastPart = parts[parts.length - 1]?.trim();
+
+    return lastPart === '503';
+  })();
+
+  if (is503Error) {
+    return <ServiceOutagePage />;
   }
 
   return (
