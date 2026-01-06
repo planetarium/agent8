@@ -51,7 +51,7 @@ export function Header() {
       {showHeader && (
         <header
           className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
-            'border-transparent': !chat.started,
+            'border-transparent flex-shrink-0': !chat.started,
             'border-bolt-elements-borderColor': chat.started,
             'mt-5 bg-primary': !chat.started && isEmbedMode,
             'backdrop-blur-[6px] bg-[rgba(17, 19, 21, 0.30)] z-10': chat.started,
