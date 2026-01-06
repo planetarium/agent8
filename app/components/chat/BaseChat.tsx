@@ -888,7 +888,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   return chatStarted ? (
                     <Messages
                       ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pl-6 pb-4 pr-4 mx-auto z-1"
+                      className={classNames('flex flex-col w-full flex-1 max-w-chat pr-4 mx-auto z-1', {
+                        'pl-6 pb-4': !isSmallViewport,
+                        'pl-4': isSmallViewport, // Reduced padding for mobile
+                      })}
                       messages={messages}
                       annotations={data}
                       isStreaming={isStreaming}
@@ -913,6 +916,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
                   {
                     'sticky bottom-4 pr-4': chatStarted && !isSmallViewport,
+                    'sticky bottom-0': chatStarted && isSmallViewport,
                     'pl-6': !isSmallViewport,
                     'tablet:max-w-chat': chatStarted,
                     'md:relative md:-translate-y-[calc(50%+16px)] xl:absolute xl:left-1/2 xl:translate-x-[-50%] max-w-[632px] !pl-0':

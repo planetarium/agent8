@@ -310,7 +310,7 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
 
                               {/* Commit Message (if different from title) */}
                               {version.title && (
-                                <span className="w-[295px] h-5 text-heading-xs text-primary overflow-hidden line-clamp-1 text-ellipsis">
+                                <span className="w-[295px] h-5 text-body-md-medium text-secondary overflow-hidden line-clamp-1 text-ellipsis">
                                   {version.commitTitle}
                                 </span>
                               )}

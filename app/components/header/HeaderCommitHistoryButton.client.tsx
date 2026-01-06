@@ -520,7 +520,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                             {isSmallViewport ? (
                               <>
                                 <div className="flex flex-col items-start gap-2 flex-[1_0_0]">
-                                  <span className="text-heading-sm text-primary self-stretch">
+                                  <span className="text-body-lg-medium text-secondary self-stretch">
                                     {commit.title || commit.message.split('\n')[0]}
                                   </span>
                                   <span
@@ -540,7 +540,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 />
                               </>
                             ) : (
-                              <span className="text-heading-sm text-primary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
+                              <span className="text-body-lg-medium text-secondary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
                                 {commit.title || commit.message.split('\n')[0]}
                               </span>
                             )}

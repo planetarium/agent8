@@ -170,7 +170,7 @@ export function Header() {
           {/* Left side - Chat button, active when isPreviewMode is false */}
           <div
             className={classNames('flex h-[44px] items-center rounded-full', {
-              'w-[112px] px-4 py-3 gap-2 bg-interactive-neutral-subtle': !isPreviewMode,
+              'w-[52px] px-4 py-3 gap-2 bg-interactive-neutral-subtle': !isPreviewMode,
               'w-[44px] pt-3 pb-3 pl-4 pr-2 gap-[10px]': isPreviewMode,
             })}
             style={{
@@ -178,24 +178,11 @@ export function Header() {
             }}
           >
             <ChatIcon size={20} className="flex-shrink-0" />
-            <span
-              className={classNames('text-primary text-body-md-medium whitespace-nowrap overflow-hidden', {
-                'max-w-[40px] opacity-100': !isPreviewMode,
-                'max-w-0 opacity-0': isPreviewMode,
-              })}
-              style={{
-                transition: !isPreviewMode
-                  ? 'max-width 350ms cubic-bezier(0.4, 0, 0.2, 1) 50ms, opacity 200ms ease-out 100ms'
-                  : 'max-width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 150ms ease-out',
-              }}
-            >
-              Chat
-            </span>
           </div>
           {/* Right side - Preview button */}
           <div
             className={classNames('flex h-[44px] items-center gap-2 rounded-full', {
-              'w-[112px] px-4 py-3 bg-interactive-neutral-subtle': isPreviewMode,
+              'w-[52px] px-4 py-3 bg-interactive-neutral-subtle': isPreviewMode,
               'w-[44px] pt-3 pb-3 pl-2 pr-4 bg-transparent': !isPreviewMode,
             })}
             style={{
@@ -203,19 +190,6 @@ export function Header() {
             }}
           >
             <PreviewIcon size={20} className="flex-shrink-0" />
-            <span
-              className={classNames('text-primary text-body-md-medium whitespace-nowrap overflow-hidden', {
-                'max-w-[60px] opacity-100': isPreviewMode,
-                'max-w-0 opacity-0': !isPreviewMode,
-              })}
-              style={{
-                transition: isPreviewMode
-                  ? 'max-width 350ms cubic-bezier(0.4, 0, 0.2, 1) 50ms, opacity 200ms ease-out 100ms'
-                  : 'max-width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 150ms ease-out',
-              }}
-            >
-              Preview
-            </span>
           </div>
         </div>
       )}

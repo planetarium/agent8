@@ -80,22 +80,49 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     useEffect(() => {
       if (lastAssistantIndex >= 0) {
-        setExpandedMessages((prev) => new Set(prev).add(lastAssistantIndex));
-      }
-    }, [lastAssistantIndex]);
-
-    const toggleExpanded = (index: number) => {
-      setExpandedMessages((prev) => {
-        const newSet = new Set(prev);
-
-        if (newSet.has(index)) {
-          newSet.delete(index);
+        /*
+         * On small viewport, keep all messages collapsed.
+         * On larger viewport, only keep the last assistant message expanded.
+         */
+        if (isSmallViewport) {
+          setExpandedMessages(new Set());
         } else {
-          newSet.add(index);
+          setExpandedMessages(new Set([lastAssistantIndex]));
         }
+      }
+    }, [lastAssistantIndex, isSmallViewport]);
 
-        return newSet;
-      });
+    const toggleExpanded = (index: number, event: React.MouseEvent) => {
+      const isExpanding = !expandedMessages.has(index);
+
+      if (isExpanding) {
+        // Get the message container element
+        const button = event.currentTarget as HTMLElement;
+        const messageContainer = button.closest('[data-message-index]') as HTMLElement;
+        const scrollContainer = button.closest('.chat-container') as HTMLElement;
+
+        if (messageContainer && scrollContainer) {
+          const prevHeight = messageContainer.offsetHeight;
+
+          setExpandedMessages((prev) => new Set(prev).add(index));
+
+          // After state update, adjust scroll position to expand upward
+          requestAnimationFrame(() => {
+            const newHeight = messageContainer.offsetHeight;
+            const heightDiff = newHeight - prevHeight;
+            scrollContainer.scrollTop += heightDiff;
+          });
+        } else {
+          setExpandedMessages((prev) => new Set(prev).add(index));
+        }
+      } else {
+        setExpandedMessages((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(index);
+
+          return newSet;
+        });
+      }
     };
 
     return (
@@ -185,6 +212,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     </div>
                   ) : (
                     <div
+                      data-message-index={index}
                       className={classNames(
                         'flex self-stretch',
                         isUserMessage
@@ -199,8 +227,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <AssistantMessage
                             content={messageText}
                             annotations={annotations}
-                            metadata={messageMetadata}
                             expanded={expandedMessages.has(index)}
+                            isSmallViewport={isSmallViewport}
                           />
                         )}
                       </div>
@@ -209,10 +237,26 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       {!isUserMessage && (
                         <div
                           className={classNames(
-                            'flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
-                            { 'border-t border-tertiary': messageText.trim() !== '' },
+                            'relative flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
+                            {
+                              'border-t border-tertiary':
+                                messageText.trim() !== '' &&
+                                !(isSmallViewport && isLast && isGenerating && !expandedMessages.has(index)),
+                            },
                           )}
                         >
+                          {/* Gradient overlay when collapsed on mobile */}
+                          {isSmallViewport && !expandedMessages.has(index) && (
+                            <div
+                              className="absolute left-0 right-0 pointer-events-none"
+                              style={{
+                                height: '40px',
+                                bottom: 'calc(100% - 5px)',
+                                background:
+                                  'linear-gradient(180deg, rgba(17, 19, 21, 0.00) 0%, rgba(17, 19, 21, 0.14) 14.03%, rgba(17, 19, 21, 0.27) 26.24%, rgba(17, 19, 21, 0.38) 36.8%, rgba(17, 19, 21, 0.48) 45.9%, rgba(17, 19, 21, 0.57) 53.7%, rgba(17, 19, 21, 0.65) 60.4%, rgba(17, 19, 21, 0.71) 66.16%, rgba(17, 19, 21, 0.77) 71.17%, rgba(17, 19, 21, 0.82) 75.6%, rgba(17, 19, 21, 0.86) 79.63%, rgba(17, 19, 21, 0.90) 83.44%, rgba(17, 19, 21, 0.93) 87.2%, rgba(17, 19, 21, 0.96) 91.1%, rgba(17, 19, 21, 0.98) 95.3%, #111315 100%)',
+                              }}
+                            />
+                          )}
                           <div className="flex items-center gap-3">
                             {isLast && isGenerating ? (
                               <>
@@ -238,9 +282,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               <span className="text-heading-xs text-subtle">Response Generated</span>
                             )}
                           </div>
-                          {!(isLast && isGenerating) && (
+                          {/* Show All/Hide button: always visible on mobile, hidden during generation on desktop */}
+                          {(isSmallViewport || !(isLast && isGenerating)) && (
                             <button
-                              onClick={() => toggleExpanded(index)}
+                              onClick={(e) => toggleExpanded(index, e)}
                               className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
                             >
                               {expandedMessages.has(index) ? 'Hide' : 'Show All'}
@@ -260,8 +305,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Hide View Diff button for the first AI response and non-last messages */}
-                        {!isFirstAssistantMessage && isLast && (
+                        {/* Hide View Diff button for the first AI response, non-last messages, and mobile */}
+                        {!isFirstAssistantMessage && isLast && !isSmallViewport && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
                               <CustomIconButton
@@ -410,20 +455,29 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
             })
           : null}
 
-        {/* Show loading animation when streaming starts and no AI response yet */}
-        {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
-          <div className="flex flex-col w-full h-full justify-center items-center gap-3">
-            <div style={{ width: isSmallViewport ? '48px' : '80px', height: isSmallViewport ? '48px' : '80px' }}>
-              <Lottie animationData={loadingAnimationData} loop={true} />
-            </div>
-            {isSmallViewport && (
+        {/* Show loading UI when streaming starts and no AI response yet */}
+        {isStreaming &&
+          (messages.length === 0 || messages[messages.length - 1]?.role === 'user') &&
+          (isSmallViewport && messages.length === 0 ? (
+            <div className="flex flex-col w-full h-full justify-center items-center gap-3">
+              <div style={{ width: '48px', height: '48px' }}>
+                <Lottie animationData={loadingAnimationData} loop={true} />
+              </div>
               <div className="flex flex-col justify-center items-center gap-2 self-stretch px-4">
                 <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
                 <span className="text-body-md-medium text-secondary text-center">{randomTip}</span>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+              <div className="flex items-center gap-3">
+                <div style={{ width: '24px', height: '24px' }}>
+                  <Lottie animationData={loadingAnimationData} loop={true} />
+                </div>
+                <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+              </div>
+            </div>
+          ))}
       </div>
     );
   },
