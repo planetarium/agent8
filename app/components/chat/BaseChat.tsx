@@ -753,7 +753,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               <div className="flex flex-col items-center w-full mx-auto md:w-[727px] xl:w-full xl:max-h-[85svh] xl:min-h-0 xl:max-w-[1400px]">
                 {/* Background Image */}
                 <div
-                  className={`absolute top-0 left-1/2 bottom-0 top-0 translate-x-[-50%] xl:inset-0 xl:translate-x-0 w-[890px] h-[426px] md:w-[1280px] md:h-[612px] xl:w-auto xl:h-auto pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-40 xl:opacity-60`}
+                  className={`absolute top-0 left-1/2 bottom-0 top-0 translate-x-[-50%] xl:inset-0 xl:translate-x-0 w-[890px] h-[426px] md:w-[1280px] md:h-[612px] xl:w-auto xl:h-auto pointer-events-none overflow-hidden z-0 bg-[url('/background-image.webp')] bg-cover bg-no-repeat opacity-50 xl:opacity-60`}
                   style={{
                     backgroundPosition: '50% -25%',
                     animation: isMobileView
