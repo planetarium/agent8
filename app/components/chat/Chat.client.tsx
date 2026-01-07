@@ -44,7 +44,7 @@ import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
-import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
+import { convertFileMapToFileSystemTree, prepareFilesForApi } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
 import {
@@ -755,11 +755,21 @@ export const ChatImpl = memo(
     });
     const [chatData, setChatData] = useState<any[]>([]);
 
-    const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
+    const bodyRef = useRef({
+      apiKeys,
+      files: prepareFilesForApi(files),
+      promptId,
+      contextOptimization: contextOptimizationEnabled,
+    });
     const chatStateRef = useRef({ model, provider });
 
     useEffect(() => {
-      bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
+      bodyRef.current = {
+        apiKeys,
+        files: prepareFilesForApi(files),
+        promptId,
+        contextOptimization: contextOptimizationEnabled,
+      };
     }, [apiKeys, files, promptId, contextOptimizationEnabled]);
 
     useEffect(() => {
