@@ -1367,13 +1367,10 @@ export class RemoteContainer implements Container {
       internalOutput = streams[1];
 
       // Command execution implementation
-      executeCommand = async (command: string, signal?: AbortSignal): Promise<ExecutionResult> => {
+      executeCommand = async (command: string): Promise<ExecutionResult> => {
         const sessionId = v4().slice(0, 8);
 
         logger.debug(`[${sessionId}] executeCommand`, command);
-
-        // Check if aborted before starting
-        signal?.throwIfAborted();
 
         // Use currentTerminal instead of original terminal for input
         if (!currentTerminal) {
