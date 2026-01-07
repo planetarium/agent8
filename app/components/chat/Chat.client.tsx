@@ -15,7 +15,6 @@ import {
   useWorkbenchActionAlert,
   useWorkbenchStore,
   useWorkbenchContainer,
-  useWorkbenchIsDeploying,
 } from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
@@ -74,7 +73,7 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
-import { FetchError, getErrorStatus, SkipToastError } from '~/utils/errors';
+import { FetchError, getErrorStatus } from '~/utils/errors';
 
 const logger = createScopedLogger('Chat');
 
@@ -634,7 +633,6 @@ export const ChatImpl = memo(
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
-        skipToast: options?.error instanceof SkipToastError,
         elapsedTime: getElapsedTime(startTime),
       });
 
@@ -716,7 +714,6 @@ export const ChatImpl = memo(
     const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
-    const isDeploying = useWorkbenchIsDeploying();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
@@ -1032,13 +1029,6 @@ export const ChatImpl = memo(
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };
     }, []);
-
-    // Stop chat when deploy starts
-    useEffect(() => {
-      if (isDeploying && (isLoading || fakeLoading)) {
-        abort();
-      }
-    }, [isDeploying, fakeLoading]);
 
     useEffect(() => {
       if (!isLoading) {
@@ -1408,12 +1398,6 @@ export const ChatImpl = memo(
             } else {
               toast.warning('Failed to import starter template\nRetry again after a few minutes.');
             }
-
-            throw new SkipToastError(
-              e.message ?? 'Failed to import starter template',
-              status || 400,
-              'fetch starter template',
-            );
           });
 
           addDebugLog(21);
@@ -1611,9 +1595,6 @@ export const ChatImpl = memo(
           const isMeaningfulErrorMessage =
             errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
 
-          const defaultContext = 'starter template selection';
-          const processlog = logManager.logs.join(',');
-
           processError(
             isMeaningfulErrorMessage
               ? errorMessage
@@ -1621,9 +1602,8 @@ export const ChatImpl = memo(
             templateSelectionStartTime,
             {
               error: error instanceof Error ? error : String(error),
-              context: error instanceof FetchError ? error.context || defaultContext : defaultContext,
+              context: 'starter template selection',
               toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
-              process: processlog,
             },
           );
 
