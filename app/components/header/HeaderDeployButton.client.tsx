@@ -23,7 +23,6 @@ export function HeaderDeployButton() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleDeploy}
-            disabled={isDeploying}
             data-track="editor-deploy"
             className="group relative flex h-10 justify-center items-center gap-2 py-3 px-4 rounded-[4px] border border-white/12 bg-[#1A92A4] hover:bg-[#1A7583] active:bg-[#1B5862] hover:border-[#1A7583] active:border-[#1B5862] focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none disabled:border-disabled disabled:bg-disabled disabled:cursor-not-allowed"
           >
