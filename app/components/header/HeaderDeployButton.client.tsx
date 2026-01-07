@@ -2,47 +2,20 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { RocketIcon } from '~/components/ui/Icons';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { useWorkbenchIsDeploying } from '~/lib/hooks/useWorkbenchStore';
+import { useState } from 'react';
 import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
 
 export function HeaderDeployButton() {
-  const isDeploying = useWorkbenchIsDeploying();
-  const DEPLOY_RETRY_WINDOW = 5000;
-
-  let lastDeployAttemptTime = 0;
-  let hasBeenBlockedOnce = false;
-
+  const [isDeploying, setIsDeploying] = useState(false);
   const handleDeploy = async () => {
-    const { path: chatId, title = 'Game Project' } = repoStore.get();
+    const chatId = repoStore.get().path;
+    const title = repoStore.get().title || 'Game Project';
 
-    if (!chatId) {
-      return;
+    if (chatId) {
+      setIsDeploying(true);
+      await workbenchStore.publish(chatId, title);
+      setIsDeploying(false);
     }
-
-    const now = Date.now();
-    const artifactsRunning = workbenchStore.hasRunningArtifactActions();
-    const shouldRetryDeploy = hasBeenBlockedOnce && now - lastDeployAttemptTime <= DEPLOY_RETRY_WINDOW;
-    const shouldDeployWithCancel = artifactsRunning && shouldRetryDeploy;
-
-    if (!artifactsRunning || shouldDeployWithCancel) {
-      try {
-        workbenchStore.setIsDeploying(true);
-
-        if (shouldDeployWithCancel) {
-          workbenchStore.clearAllTasks();
-        }
-
-        await workbenchStore.publish(chatId, title);
-      } finally {
-        workbenchStore.setIsDeploying(false);
-        hasBeenBlockedOnce = false;
-        lastDeployAttemptTime = 0;
-      }
-      return;
-    }
-
-    hasBeenBlockedOnce = true;
-    lastDeployAttemptTime = now;
   };
 
   return (
