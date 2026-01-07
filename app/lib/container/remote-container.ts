@@ -124,9 +124,6 @@ class RemoteContainerConnection {
   private _maxAttemptsReached: boolean = false;
   private _networkStateListener: ((event: Event) => void) | null = null;
 
-  // Fields for tracking running servers
-  private _runningServerPorts = new Set<number>();
-
   // Fields for tracking state transitions
   private _stateChangeHistory: Array<{
     source: string;
@@ -433,18 +430,10 @@ class RemoteContainerConnection {
 
       switch (message.data.data.type) {
         case 'port':
-          // Track running server ports
-          if (data.type === 'open') {
-            this._runningServerPorts.add(data.port);
-          } else if (data.type === 'close') {
-            this._runningServerPorts.delete(data.port);
-          }
-
           this._listeners.port.forEach((listener) => listener(data.port, data.type, data.url));
           break;
 
         case 'server-ready':
-          this._runningServerPorts.add(data.port);
           this._listeners['server-ready'].forEach((listener) => listener(data.port, data.url));
           break;
 
@@ -1338,7 +1327,7 @@ export class RemoteContainer implements Container {
               return;
             }
 
-            currentTerminal?.input('\x03');
+            currentTerminal?.input(':' + '\n');
           }, 3000);
 
           const { value, done } = await reader.read();
