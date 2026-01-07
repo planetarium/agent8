@@ -1377,17 +1377,7 @@ export const ChatImpl = memo(
           addDebugLog(17);
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
-            const status = getErrorStatus(e);
-
-            if (status === 401 || status === 404) {
-              throw e;
-            }
-
-            if (e.message.includes('rate limit')) {
-              toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
-            } else {
-              toast.warning('Failed to import starter template\nRetry again after a few minutes.');
-            }
+            throw e;
           });
 
           addDebugLog(21);
@@ -1584,7 +1574,7 @@ export const ChatImpl = memo(
           // Check if error message has meaningful content
           const isMeaningfulErrorMessage =
             errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
-
+          const processlog = logManager.logs.join(',');
           processError(
             isMeaningfulErrorMessage
               ? errorMessage
@@ -1594,6 +1584,7 @@ export const ChatImpl = memo(
               error: error instanceof Error ? error : String(error),
               context: 'starter template selection',
               toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
+              process: processlog,
             },
           );
 
