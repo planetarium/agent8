@@ -34,6 +34,7 @@ import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
+import { ServiceOutagePage } from '~/components/ui/ServiceOutagePage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -43,7 +44,7 @@ import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
-import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
+import { convertFileMapToFileSystemTree, prepareFilesForApi } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
 import {
@@ -72,6 +73,7 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
+import { FetchError, getErrorStatus, SkipToastError } from '~/utils/errors';
 
 const logger = createScopedLogger('Chat');
 
@@ -84,7 +86,7 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 // 50 debug logs
 function addDebugLog(value: number | string): void {
-  logManager.add('Chat-' + value);
+  logManager.add('C-' + value);
 }
 
 function isServerError(data: unknown): data is ServerErrorData {
@@ -311,7 +313,8 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
     const response = await fetch(`/api/select-template?${params.toString()}`);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch template: ${response.status}`);
+      const serverMessage = await response.text();
+      throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'import_starter_template');
     }
 
     const result = (await response.json()) as {
@@ -398,13 +401,20 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     hasMore,
     loadBefore,
     loadingBefore,
-    error,
+    error: gitbaseError,
   } = useGitbaseChatHistory();
+
+  const [componentError, setComponentError] = useState<{
+    message: string;
+    status?: number;
+    context?: string;
+  } | null>(null);
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
+  const actionAlert = useWorkbenchActionAlert();
 
   useEffect(() => {
     if (repoStore.get().path) {
@@ -480,7 +490,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     }
   }, [loaded, files, chats, project, workbench]);
 
-  const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
+  const error = componentError || gitbaseError;
+  const errorStatus = getErrorStatus(error);
 
   // Check for 404 error (project not found or access denied)
   if (errorStatus === 404) {
@@ -490,6 +501,22 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   // Check for 401 error (unauthorized)
   if (errorStatus === 401) {
     return <UnauthorizedPage />;
+  }
+
+  // Check for 503 error (service unavailable) from container initialization
+  const is503Error = (() => {
+    if (!actionAlert?.description?.includes('Machine API request failed')) {
+      return false;
+    }
+
+    const parts = actionAlert.description.split(':');
+    const lastPart = parts[parts.length - 1]?.trim();
+
+    return lastPart === '503';
+  })();
+
+  if (is503Error) {
+    return <ServiceOutagePage />;
   }
 
   return (
@@ -510,6 +537,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           loadingBefore={loadingBefore}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
+          setComponentError={setComponentError}
         />
       )}
       <ToastContainer />
@@ -544,6 +572,7 @@ interface ChatProps {
   loadingBefore: boolean;
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  setComponentError: (error: { message: string; status?: number; context?: string } | null) => void;
 }
 
 export const ChatImpl = memo(
@@ -562,6 +591,7 @@ export const ChatImpl = memo(
     loadingBefore,
     isAuthenticated,
     onAuthRequired,
+    setComponentError,
   }: ChatProps) => {
     useShortcuts();
 
@@ -572,17 +602,42 @@ export const ChatImpl = memo(
     const lastUserPromptRef = useRef<string>(undefined);
     const isPageUnloadingRef = useRef<boolean>(false);
 
-    // Helper function to report errors with automatic prompt and elapsed time injection
-    const reportError = (
+    /*
+     * Processes errors and routes them appropriately.
+     * For errors requiring full error page (401 Unauthorized, 404 Not Found),
+     * redirects to UnauthorizedPage or NotFoundPage.
+     * For other errors, reports via Toast and Slack.
+     *
+     * @returns {boolean} true if error page will be shown (401/404), false otherwise
+     */
+    const processError = (
       message: string,
       startTime: number,
       options?: Partial<Omit<HandleChatErrorOptions, 'elapsedTime'>>,
-    ) => {
+    ): boolean => {
+      const status = getErrorStatus(options?.error);
+
+      if (status === 404 || status === 401) {
+        logger.warn(`Error requires full page redirect (${status}) - showing error page`);
+
+        setComponentError({
+          message: options?.error instanceof Error ? options.error.message : message,
+          status,
+          context: options?.context || 'unknown',
+        });
+
+        return true; // Error page will be shown - caller should return early
+      }
+
+      // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
+        skipToast: options?.error instanceof SkipToastError,
         elapsedTime: getElapsedTime(startTime),
       });
+
+      return false; // Normal error handling - caller can continue
     };
 
     const runAndPreview = async (message: UIMessage) => {
@@ -701,11 +756,26 @@ export const ChatImpl = memo(
     });
     const [chatData, setChatData] = useState<any[]>([]);
 
-    const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
+    const bodyRef = useRef({
+      apiKeys,
+      files: prepareFilesForApi(files),
+      promptId,
+      contextOptimization: contextOptimizationEnabled,
+    });
+    const chatStateRef = useRef({ model, provider });
 
     useEffect(() => {
-      bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
+      bodyRef.current = {
+        apiKeys,
+        files: prepareFilesForApi(files),
+        promptId,
+        contextOptimization: contextOptimizationEnabled,
+      };
     }, [apiKeys, files, promptId, contextOptimizationEnabled]);
+
+    useEffect(() => {
+      chatStateRef.current = { model, provider };
+    }, [model, provider]);
 
     const {
       messages,
@@ -719,10 +789,22 @@ export const ChatImpl = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
         body: () => bodyRef.current,
+
+        // Custom fetch to preserve HTTP status codes in errors
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const response = await fetch(input, init);
+
+          // If response is not ok, throw error with status code
+          if (!response.ok) {
+            const serverMessage = await response.text();
+            throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status);
+          }
+
+          return response;
+        },
       }),
       onData: (data) => {
         const dataType = data?.type || 'unknown';
-        addDebugLog(`1:${dataType}`);
 
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -778,21 +860,26 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
-        const reportProvider = model === 'auto' ? 'auto' : provider.name;
+        const currentModel = chatStateRef.current.model;
+        const currentProvider = chatStateRef.current.provider;
+        const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
+        const processlog = logManager.logs.join(',');
 
-        // Collect process logs for network errors
-        const processlog = e.message === 'network error' ? logManager.logs.join(',') : undefined;
+        if (
+          processError(
+            'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+            chatRequestStartTimeRef.current ?? 0,
+            {
+              error: e,
+              context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
+              prompt: lastUserPromptRef.current,
+              process: processlog,
+            },
+          )
+        ) {
+          return;
+        }
 
-        handleChatError(
-          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-          {
-            error: e,
-            context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
-            prompt: lastUserPromptRef.current,
-            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
-            process: processlog,
-          },
-        );
         setFakeLoading(false);
       },
 
@@ -973,12 +1060,20 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
+        const startTime = performance.now();
         setInstallNpm(true);
 
         const boltShell = workbench.boltTerminal;
-        boltShell.ready.then(async () => {
-          await workbench.setupDeployConfig(boltShell);
-        });
+        boltShell.ready
+          .then(async () => {
+            await workbench.setupDeployConfig(boltShell);
+          })
+          .catch((error) => {
+            processError(error instanceof Error ? error.message : 'Failed to setup deploy config', startTime, {
+              error: error instanceof Error ? error : String(error),
+              context: 'setupDeployConfig - useEffect',
+            });
+          });
       }
     }, [files, installNpm]);
 
@@ -1020,10 +1115,12 @@ export const ChatImpl = memo(
       }
 
       if (!commitSucceeded) {
-        reportError(`Code commit failed`, startTime, {
+        processError(`Code commit failed`, startTime, {
           error: lastError instanceof Error ? lastError : String(lastError),
           context: 'handleCommit',
         });
+
+        return;
       }
     };
 
@@ -1165,7 +1262,8 @@ export const ChatImpl = memo(
 
         if (!recoverySuccessful) {
           addDebugLog(15);
-          reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+
+          processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
             context: 'sendMessage - files check',
           });
 
@@ -1204,17 +1302,38 @@ export const ChatImpl = memo(
               }),
             });
 
-            if (descriptionResponse.ok) {
-              const descriptions = await descriptionResponse.json();
+            if (!descriptionResponse.ok) {
+              const serverMessage = await descriptionResponse.text();
+              throw new FetchError(
+                (serverMessage ?? 'unknown error').trim(),
+                descriptionResponse.status,
+                'generate_image_description',
+              );
+            }
 
-              if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
-                for (let i = 0; i < imageAttachments.length; i++) {
-                  imageAttachments[i].features = descriptions[i].features;
-                  imageAttachments[i].details = descriptions[i].details;
-                }
+            const descriptions = await descriptionResponse.json();
+
+            if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+              for (let i = 0; i < imageAttachments.length; i++) {
+                imageAttachments[i].features = descriptions[i].features;
+                imageAttachments[i].details = descriptions[i].details;
               }
             }
           } catch (descError) {
+            if (
+              processError(
+                descError instanceof Error ? descError.message : 'Image description failed',
+                chatRequestStartTimeRef.current ?? 0,
+                {
+                  error: descError instanceof Error ? descError : String(descError),
+                  context: 'image-description API',
+                },
+              )
+            ) {
+              setFakeLoading(false);
+              return;
+            }
+
             logger.error('Error generating image description:', descError);
             toast.warning('Could not generate image description, using default');
           }
@@ -1269,11 +1388,23 @@ export const ChatImpl = memo(
           addDebugLog(17);
 
           const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
+            const status = getErrorStatus(e);
+
+            if (status === 401 || status === 404) {
+              throw e;
+            }
+
             if (e.message.includes('rate limit')) {
               toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
             } else {
               toast.warning('Failed to import starter template\nRetry again after a few minutes.');
             }
+
+            throw new SkipToastError(
+              e.message ?? 'Failed to import starter template',
+              status || 400,
+              'fetch starter template',
+            );
           });
 
           addDebugLog(21);
@@ -1306,6 +1437,11 @@ export const ChatImpl = memo(
                 };
               }
             } catch (error) {
+              if (getErrorStatus(error) === 401) {
+                logger.error('Authentication failed during .env generation:', error);
+                throw error;
+              }
+
               logger.warn('Failed to generate .env for first message:', error);
             }
           }
@@ -1339,9 +1475,10 @@ export const ChatImpl = memo(
               addDebugLog(27);
 
               if (!success) {
-                reportError(message, templateSelectionStartTime, {
+                processError(message, templateSelectionStartTime, {
                   context: 'createTaskBranch - starter template',
                 });
+
                 return;
               }
 
@@ -1465,15 +1602,19 @@ export const ChatImpl = memo(
           const isMeaningfulErrorMessage =
             errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
 
-          reportError(
+          const defaultContext = 'starter template selection';
+          const processlog = logManager.logs.join(',');
+
+          processError(
             isMeaningfulErrorMessage
               ? errorMessage
               : 'Failed to import starter template\nRetry again after a few minutes.',
             templateSelectionStartTime,
             {
               error: error instanceof Error ? error : String(error),
-              context: 'starter template selection',
+              context: error instanceof FetchError ? error.context || defaultContext : defaultContext,
               toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
+              process: processlog,
             },
           );
 
@@ -1490,9 +1631,7 @@ export const ChatImpl = memo(
         // Record prompt activity for subsequent requests
         if (repoStore.get().path) {
           addDebugLog(41);
-          sendActivityPrompt(repoStore.get().path).catch((error) => {
-            logger.warn('Failed to record prompt activity:', error);
-          });
+          sendActivityPrompt(repoStore.get().path);
           addDebugLog(42);
         }
 
@@ -1534,9 +1673,10 @@ export const ChatImpl = memo(
             addDebugLog(48);
 
             if (!success) {
-              reportError(message, createTaskBranchStartTime, {
+              processError(message, createTaskBranchStartTime, {
                 context: 'createTaskBranch - subsequent message',
               });
+
               return;
             }
 
@@ -1575,10 +1715,12 @@ export const ChatImpl = memo(
         logger.error('Error sending message:', error);
 
         if (error instanceof Error) {
-          reportError('Error:' + error?.message, sendMessageFinalStartTime, {
+          processError('Error:' + error?.message, sendMessageFinalStartTime, {
             error,
             context: 'sendMessage function',
           });
+
+          return;
         }
       }
     };
@@ -1730,8 +1872,7 @@ export const ChatImpl = memo(
 
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
-        logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-        reportError(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`, startTime, {
+        processError(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`, startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleTemplateImport',
           prompt: undefined, // Prompt not required (not a chat request)
@@ -1755,24 +1896,21 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
+        processError('No commit hash found', startTime, {
           context: 'handleFork - commit hash validation',
         });
 
         return;
       }
 
-      const nameWords = repoStore.get().name.split('-');
+      const nameWords = repoStore
+        .get()
+        .name.split(/[^a-zA-Z0-9]+/)
+        .filter((word) => word.length > 0);
+      const lastWord = nameWords[nameWords.length - 1];
+      const cleanWords = Number.isInteger(Number(lastWord)) ? nameWords.slice(0, -1) : nameWords;
+      const newRepoName = (cleanWords.length > 0 ? cleanWords.join('-') : 'project').toLowerCase();
 
-      let newRepoName = '';
-
-      if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
-        newRepoName = nameWords.slice(0, -1).join('-');
-      } else {
-        newRepoName = nameWords.join('-');
-      }
-
-      // Show loading toast while forking
       const toastId = toast.loading('Forking project...');
 
       try {
@@ -1785,19 +1923,22 @@ export const ChatImpl = memo(
           toast.success('Forked project successfully');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          reportError('Failed to fork project', startTime, {
+          processError('Failed to fork project', startTime, {
             context: 'handleFork - fork result check',
           });
+
+          return;
         }
       } catch (error) {
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
 
-        reportError('Failed to fork project', startTime, {
+        processError('Failed to fork project', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleFork - catch block',
         });
-        logger.error('Error forking project:', error);
+
+        return;
       }
     };
 
@@ -1810,7 +1951,7 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
+        processError('No commit hash found', startTime, {
           context: 'handleRevert - commit hash validation',
         });
 
@@ -1844,14 +1985,14 @@ export const ChatImpl = memo(
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
               } else {
-                reportError('No parent commit found', startTime, {
+                processError('No parent commit found', startTime, {
                   context: 'handleRetry - parent commit check',
                 });
 
                 return;
               }
             } catch (error) {
-              reportError('Failed to get commit data', startTime, {
+              processError('Failed to get commit data', startTime, {
                 error: error instanceof Error ? error : String(error),
                 context: 'handleRetry - getCommit',
               });
@@ -1863,7 +2004,7 @@ export const ChatImpl = memo(
       }
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
+        processError('No commit hash found', startTime, {
           context: 'handleRetry - commit hash validation',
         });
 
@@ -1881,7 +2022,7 @@ export const ChatImpl = memo(
         const commitHash = message.id?.split('-').pop();
 
         if (!commitHash || !isCommitHash(commitHash)) {
-          reportError('Invalid commit information', startTime, {
+          processError('Invalid commit information', startTime, {
             context: 'handleViewDiff - commit validation',
           });
 
@@ -1894,10 +2035,13 @@ export const ChatImpl = memo(
         workbench.diffCommitHash.set(commitHash);
       } catch (error) {
         console.error('Diff view error:', error);
-        reportError('Error displaying diff view', startTime, {
+
+        processError('Error displaying diff view', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleViewDiff - catch block',
         });
+
+        return;
       }
     };
 

@@ -393,7 +393,7 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           writer.write(createDataLog('StartLoop'));
 
-          let isFirstChunk = true;
+          let prevLogMessage: string | null = null;
 
           while (true) {
             const { done, value } = await reader.read();
@@ -403,9 +403,18 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               break;
             }
 
-            if (isFirstChunk) {
-              writer.write(createDataLog('FirstChunkReceived'));
-              isFirstChunk = false;
+            let logMessage: string = value.type ?? 'unknown';
+            logMessage = logMessage.replace('tool-input', 't-i');
+            logMessage = logMessage.replace('tool-output', 't-o');
+            logMessage = logMessage.replace('text-delta', 't-d');
+
+            if ('toolName' in value && value.toolName) {
+              logMessage += `: ${value.toolName}`;
+            }
+
+            if (logMessage !== prevLogMessage) {
+              writer.write(createDataLog(logMessage));
+              prevLogMessage = logMessage;
             }
 
             writer.write(value);
