@@ -13,19 +13,18 @@ export function HeaderDeployButton() {
   let hasBeenBlockedOnce = false;
 
   const handleDeploy = async () => {
-    const artifactsRunning = workbenchStore.hasRunningArtifactActions();
-    const now = Date.now();
     const { path: chatId, title = 'Game Project' } = repoStore.get();
 
     if (!chatId) {
       return;
     }
 
-    const shouldDeploy = !artifactsRunning;
+    const now = Date.now();
+    const artifactsRunning = workbenchStore.hasRunningArtifactActions();
     const shouldRetryDeploy = hasBeenBlockedOnce && now - lastDeployAttemptTime <= DEPLOY_RETRY_WINDOW;
     const shouldDeployWithCancel = artifactsRunning && shouldRetryDeploy;
 
-    if (shouldDeploy || shouldDeployWithCancel) {
+    if (!artifactsRunning || shouldDeployWithCancel) {
       try {
         workbenchStore.setIsDeploying(true);
 
