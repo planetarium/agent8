@@ -116,6 +116,7 @@ export interface HandleChatErrorOptions {
   prompt?: string;
   elapsedTime?: number;
   toastType?: 'error' | 'warning';
+  skipToast?: boolean;
   sendChatError?: boolean;
   process?: string;
   metadata?: Record<string, any>;
@@ -129,6 +130,7 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
     prompt,
     elapsedTime,
     toastType = 'error',
+    skipToast = false,
     sendChatError = true,
     process,
     metadata,
@@ -140,11 +142,13 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
   // Use replacement message if available, otherwise use original message
   const displayMessage = filter?.replacementMessage || message;
 
-  // Show toast notification
-  if (toastType === 'error') {
-    toast.error(displayMessage);
-  } else {
-    toast.warning(displayMessage);
+  if (!skipToast) {
+    // Show toast notification
+    if (toastType === 'error') {
+      toast.error(displayMessage);
+    } else {
+      toast.warning(displayMessage);
+    }
   }
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
