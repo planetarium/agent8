@@ -789,3 +789,39 @@ export function getFileContents(fileMap: FileMap, path: string): string | null {
 
   return file.content || '';
 }
+
+/**
+ * Prepare files for API request by clearing binary file data
+ * Keeps file metadata (isBinary, mimeType, etc.) but removes heavy buffer/content
+ * This reduces request payload size while preserving file list for LLM context
+ *
+ * @param files FileMap containing all files
+ * @returns FileMap with binary file data cleared
+ */
+export function prepareFilesForApi(files: FileMap): FileMap {
+  if (!files) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(files).map(([path, file]) => {
+      if (!file || file.type === 'folder') {
+        return [path, file];
+      }
+
+      // Clear buffer and content for binary files
+      if (file.isBinary || isBinaryPathByExtension(path)) {
+        return [
+          path,
+          {
+            ...file,
+            content: '',
+            buffer: undefined,
+          },
+        ];
+      }
+
+      return [path, file];
+    }),
+  );
+}
