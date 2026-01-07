@@ -97,6 +97,19 @@ export class ActionRunner {
     this.#pendingActionsCount = 0;
   }
 
+  abortAll(): void {
+    const actions = this.actions.get();
+
+    Object.values(actions).forEach((action) => {
+      if (action.status === 'running' || action.status === 'pending') {
+        action.abort();
+      }
+    });
+
+    // Reset pending actions count after aborting all
+    this.resetPendingActionsCount();
+  }
+
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
 
