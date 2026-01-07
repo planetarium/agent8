@@ -104,6 +104,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -136,6 +137,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
+      import.meta.hot.data.isDeploying = this.isDeploying;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -472,6 +474,10 @@ export class WorkbenchStore {
     this.showWorkbench.set(show);
   }
 
+  setIsDeploying(deploying: boolean) {
+    this.isDeploying.set(deploying);
+  }
+
   setCurrentDocumentContent(newContent: string) {
     const filePath = this.currentDocument.get()?.filePath;
 
@@ -715,6 +721,11 @@ export class WorkbenchStore {
 
       this.#messageIdleCallbacks.get(messageId)!.push(callback);
     });
+  }
+
+  hasRunningArtifactActions(): boolean {
+    const artifacts = this.artifacts.get();
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
   }
 
   async #processMessageClose(messageId: string) {
@@ -1281,6 +1292,17 @@ export class WorkbenchStore {
       logger.error('[Publish] Error:', error);
       throw error;
     }
+  }
+
+  clearAllTasks() {
+    // abort all actions
+    const artifacts = this.artifacts.get();
+    Object.values(artifacts).forEach((artifact) => {
+      artifact.runner.abortAll();
+    });
+
+    // clear action queue
+    this.#messageToActionQueue.clear();
   }
 
   // Helper methods for publish

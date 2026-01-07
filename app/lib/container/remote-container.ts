@@ -1301,7 +1301,13 @@ export class RemoteContainer implements Container {
 
       try {
         while (true) {
+          const resolveTimeout = setTimeout(() => {
+            currentTerminal?.input(':' + '\n');
+          }, 3000);
+
           const { value, done } = await reader.read();
+
+          clearTimeout(resolveTimeout);
 
           if (done) {
             break;
