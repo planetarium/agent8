@@ -3,6 +3,7 @@ import { repoStore } from '~/lib/stores/repo';
 import { RocketIcon } from '~/components/ui/Icons';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWorkbenchIsDeploying } from '~/lib/hooks/useWorkbenchStore';
+import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
 
 export function HeaderDeployButton() {
   const isDeploying = useWorkbenchIsDeploying();
@@ -43,9 +44,6 @@ export function HeaderDeployButton() {
 
     hasBeenBlockedOnce = true;
     lastDeployAttemptTime = now;
-  };
-
-    }
   };
 
   return (
