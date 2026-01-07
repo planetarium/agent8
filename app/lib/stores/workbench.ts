@@ -90,8 +90,8 @@ export class WorkbenchStore {
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
   #lastPublishAttemptTime: number = 0;
-  #isPublishCancelled: boolean = false;
   #isPublishing: WritableAtom<boolean> = atom(false);
+  #shellAbortController: AbortController | null = null;
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -1229,26 +1229,26 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
-    //  If there are running artifact actions, skip immediately
-    if (this.#hasRunningArtifactActions()) {
-      toast.warning('현재 진행 중인 작업이 있습니다. 완료 후 다시 시도해주세요.');
-      logger.info('[Publish] Skipped - Artifact actions are running');
-
-      return;
-    }
-
     const now = Date.now();
     const timeSinceLastAttempt = now - this.#lastPublishAttemptTime;
 
-    // If the previous publish attempt was made within 5 seconds, cancel it and start a new one
-    if (timeSinceLastAttempt <= 5000 && this.#isPublishing.get()) {
-      logger.info('[Publish] Cancel previous publish and start new one');
-      await this.#cancelCurrentPublish();
+    if (this.#hasRunningArtifactActions()) {
+      if (this.#lastPublishAttemptTime === 0) {
+        this.#lastPublishAttemptTime = now;
+        return;
+      }
+
+      if (timeSinceLastAttempt <= 5000) {
+        await this.#cancelAllRunningTasks();
+        this.#lastPublishAttemptTime = 0;
+      }
     }
 
-    this.#lastPublishAttemptTime = now;
+    this.#shellAbortController = new AbortController();
+
+    const signal = this.#shellAbortController.signal;
+
     this.#isPublishing.set(true);
-    this.#isPublishCancelled = false;
 
     this.currentView.set('code');
 
@@ -1257,8 +1257,8 @@ export class WorkbenchStore {
 
     try {
       // Install dependencies
-      await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
+      await this.#runShellCommand(shell, 'rm -rf dist', signal);
+      await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
@@ -1269,10 +1269,10 @@ export class WorkbenchStore {
       await this.commitModifiedFiles();
 
       const container = await this.container;
-      await this.#runShellCommand(shell, `cd ${container.workdir}`);
+      await this.#runShellCommand(shell, `cd ${container.workdir}`, signal);
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, `${SHELL_COMMANDS.BUILD_PROJECT} --base ./`);
+      const buildResult = await this.#runShellCommand(shell, `${SHELL_COMMANDS.BUILD_PROJECT} --base ./`, signal);
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);
@@ -1292,7 +1292,7 @@ export class WorkbenchStore {
       }
 
       // Deploy project
-      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
+      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod', signal);
 
       if (deployResult?.exitCode !== 0) {
         throw new Error('Failed to publish');
@@ -1311,11 +1311,9 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
-      // Check if this was a user-initiated cancellation
-      if (this.#isPublishCancelled) {
-        logger.info('[Publish] Cancelled by user');
-        this.#isPublishCancelled = false;
-
+      // Check if this was a user-initiated cancellation via AbortSignal
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.info('[Publish] Publish operation cancelled');
         return;
       }
 
@@ -1323,16 +1321,17 @@ export class WorkbenchStore {
       throw error;
     } finally {
       this.#isPublishing.set(false);
-      this.#isPublishCancelled = false;
+      this.#shellAbortController = null;
+      this.#lastPublishAttemptTime = 0;
     }
   }
 
   // Helper methods for publish
-  async #runShellCommand(shell: BoltShell, command: string) {
+  async #runShellCommand(shell: BoltShell, command: string, signal?: AbortSignal) {
     // Queue all shell commands to prevent interference
     this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
-      const result = await shell.executeCommand(Date.now().toString(), command);
-      await shell.waitTillOscCode('prompt');
+      const result = await shell.executeCommand(Date.now().toString(), command, undefined, { signal });
+      await shell.waitTillOscCode('prompt', signal);
 
       return result;
     });
@@ -1340,27 +1339,26 @@ export class WorkbenchStore {
     return this.#shellCommandQueue;
   }
 
-  async #cancelCurrentPublish(): Promise<void> {
-    logger.info('[Publish] Cancelling current publish operations...');
+  async #cancelAllRunningTasks(): Promise<void> {
+    this.#shellAbortController?.abort();
 
-    // Set cancellation flag
-    this.#isPublishCancelled = true;
-
-    // Stop all artifact actions
+    // abort all actions
     const artifacts = this.artifacts.get();
     Object.values(artifacts).forEach((artifact) => {
       artifact.runner.abortAll();
     });
+
+    // clear action queue
     this.#messageToActionQueue.clear();
 
-    // Interrupt the currently running shell command immediately
+    // interrupt the currently running shell command at terminal level
     const shell = this.boltTerminal;
     shell.interruptCurrentCommand();
 
-    // Clear the shell command queue (remove all pending commands)
+    // reset shell command queue
     this.#shellCommandQueue = Promise.resolve();
 
-    // Wait for a short time (cleanup time)
+    // wait for cleanup to complete
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 

@@ -121,7 +121,7 @@ export class BoltShell {
     sessionId: string,
     command: string,
     abort?: () => void,
-    options?: { noInterrupt?: boolean },
+    options?: { noInterrupt?: boolean; signal?: AbortSignal },
   ): Promise<ExecutionResult | undefined> {
     if (!this.process || !this.terminal) {
       return undefined;
@@ -146,8 +146,8 @@ export class BoltShell {
           this.interruptCurrentCommand();
         }
 
-        // Use the pre-implemented executeCommand function
-        const executionPromise = this.#shellSession.executeCommand(command);
+        // Use the pre-implemented executeCommand function with AbortSignal
+        const executionPromise = this.#shellSession.executeCommand(command, options?.signal);
         this.executionState.set({
           sessionId,
           active: true,
@@ -186,9 +186,9 @@ export class BoltShell {
     return { output, exitCode };
   }
 
-  async waitTillOscCode(waitCode: string) {
+  async waitTillOscCode(waitCode: string, signal?: AbortSignal) {
     if (this.#shellSession && this.#shellSession.waitTillOscCode) {
-      return await this.#shellSession.waitTillOscCode(waitCode);
+      return await this.#shellSession.waitTillOscCode(waitCode, signal);
     } else {
       throw new Error('BoltShell does not support waitTillOscCode');
     }

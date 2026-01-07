@@ -124,6 +124,9 @@ class RemoteContainerConnection {
   private _maxAttemptsReached: boolean = false;
   private _networkStateListener: ((event: Event) => void) | null = null;
 
+  // Fields for tracking running servers
+  private _runningServerPorts = new Set<number>();
+
   // Fields for tracking state transitions
   private _stateChangeHistory: Array<{
     source: string;
@@ -430,10 +433,18 @@ class RemoteContainerConnection {
 
       switch (message.data.data.type) {
         case 'port':
+          // Track running server ports
+          if (data.type === 'open') {
+            this._runningServerPorts.add(data.port);
+          } else if (data.type === 'close') {
+            this._runningServerPorts.delete(data.port);
+          }
+
           this._listeners.port.forEach((listener) => listener(data.port, data.type, data.url));
           break;
 
         case 'server-ready':
+          this._runningServerPorts.add(data.port);
           this._listeners['server-ready'].forEach((listener) => listener(data.port, data.url));
           break;
 
@@ -953,6 +964,7 @@ export class RemoteContainer implements Container {
 
   private _connection: RemoteContainerConnection;
   private _connectionStateListeners = new Set<ConnectionStateListener>();
+  private _runningServerPorts = new Set<number>();
 
   constructor(serverUrl: string, workdir: string, token: string) {
     this._connection = new RemoteContainerConnection(serverUrl, token);
@@ -982,6 +994,19 @@ export class RemoteContainer implements Container {
           logger.error('Connection state listener error:', error);
         }
       });
+    });
+
+    // Track running server ports
+    this._connection.on('port', (port: number, type: string) => {
+      if (type === 'open') {
+        this._runningServerPorts.add(port);
+      } else if (type === 'close') {
+        this._runningServerPorts.delete(port);
+      }
+    });
+
+    this._connection.on('server-ready', (port: number) => {
+      this._runningServerPorts.add(port);
     });
   }
 
@@ -1256,13 +1281,16 @@ export class RemoteContainer implements Container {
       return { result: null, newExitCode };
     };
 
-    const waitTillOscCode = async (waitCode: string) => {
+    const waitTillOscCode = async (waitCode: string, signal?: AbortSignal) => {
       let fullOutput = '';
       let exitCode = 0;
 
       if (!internalOutput) {
         throw new Error('No internal output stream');
       }
+
+      // Check if aborted before starting
+      signal?.throwIfAborted();
 
       // Create regex for the requested OSC code
       const oscRegex = OSC_PATTERNS.createWaitCodeRegex(waitCode);
@@ -1301,7 +1329,21 @@ export class RemoteContainer implements Container {
 
       try {
         while (true) {
+          // Check if aborted in the loop
+          signal?.throwIfAborted();
+
+          const resolveTimeout = setTimeout(() => {
+            // If dev server is running, don't send Ctrl+C
+            if (this._runningServerPorts.size !== 0) {
+              return;
+            }
+
+            currentTerminal?.input('\x03');
+          }, 3000);
+
           const { value, done } = await reader.read();
+
+          clearTimeout(resolveTimeout);
 
           if (done) {
             break;
@@ -1361,10 +1403,13 @@ export class RemoteContainer implements Container {
       internalOutput = streams[1];
 
       // Command execution implementation
-      executeCommand = async (command: string): Promise<ExecutionResult> => {
+      executeCommand = async (command: string, signal?: AbortSignal): Promise<ExecutionResult> => {
         const sessionId = v4().slice(0, 8);
 
         logger.debug(`[${sessionId}] executeCommand`, command);
+
+        // Check if aborted before starting
+        signal?.throwIfAborted();
 
         // Use currentTerminal instead of original terminal for input
         if (!currentTerminal) {
@@ -1383,11 +1428,11 @@ export class RemoteContainer implements Container {
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
         // Wait for prompt
-        await waitTillOscCode('prompt');
+        await waitTillOscCode('prompt', signal);
 
         // Execute new command
         currentTerminal.input(':' + '\n');
-        await waitTillOscCode('exit');
+        await waitTillOscCode('exit', signal);
         logger.debug('terminal is responsive');
 
         logger.debug(`[${sessionId}] prompt received`, command);
@@ -1397,7 +1442,7 @@ export class RemoteContainer implements Container {
         logger.debug(`[${sessionId}] command executed`, command);
 
         // Wait for execution result
-        const { output, exitCode } = await waitTillOscCode('exit');
+        const { output, exitCode } = await waitTillOscCode('exit', signal);
 
         logger.debug(`[${sessionId}] execution ended`, command, exitCode);
 
