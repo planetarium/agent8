@@ -30,7 +30,7 @@ export function HeaderDeployButton() {
         workbenchStore.setIsDeploying(true);
 
         if (shouldDeployWithCancel) {
-          await workbenchStore.cancelAllRunningTasks();
+          workbenchStore.clearAllTasks();
         }
 
         await workbenchStore.publish(chatId, title);

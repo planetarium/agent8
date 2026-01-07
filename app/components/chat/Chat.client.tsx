@@ -1009,7 +1009,7 @@ export const ChatImpl = memo(
       if (isDeploying && (isLoading || fakeLoading)) {
         abort();
       }
-    }, [isDeploying]);
+    }, [isDeploying, fakeLoading]);
 
     useEffect(() => {
       if (!isLoading) {

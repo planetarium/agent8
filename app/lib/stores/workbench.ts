@@ -1294,7 +1294,7 @@ export class WorkbenchStore {
     }
   }
 
-  async cancelAllRunningTasks(): Promise<void> {
+  clearAllTasks() {
     // abort all actions
     const artifacts = this.artifacts.get();
     Object.values(artifacts).forEach((artifact) => {
@@ -1303,16 +1303,6 @@ export class WorkbenchStore {
 
     // clear action queue
     this.#messageToActionQueue.clear();
-
-    // interrupt the currently running shell command at terminal level
-    const shell = this.boltTerminal;
-    shell.interruptCurrentCommand();
-
-    // reset shell command queue
-    this.#shellCommandQueue = Promise.resolve();
-
-    // wait for cleanup to complete
-    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   // Helper methods for publish
