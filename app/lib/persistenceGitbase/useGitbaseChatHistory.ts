@@ -178,6 +178,11 @@ export function useGitbaseChatHistory() {
 
         setProject(data.data.project);
 
+        // Set latest commit hash from the first commit (most recent)
+        if (data.data.commits.length > 0) {
+          repoStore.setKey('latestCommitHash', data.data.commits[0].id);
+        }
+
         const newMessages = parseCommitMessages(data.data.commits);
 
         // Get restore history and filter by commit time range

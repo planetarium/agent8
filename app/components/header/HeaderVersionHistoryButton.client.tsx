@@ -222,14 +222,14 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
               sideOffset={5}
               side="bottom"
               align="end"
               alignOffset={0}
             >
               View versions to compare or restore
-              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-38px]" />
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>
@@ -310,7 +310,7 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
 
                               {/* Commit Message (if different from title) */}
                               {version.title && (
-                                <span className="w-[295px] h-5 text-heading-xs text-primary overflow-hidden line-clamp-1 text-ellipsis">
+                                <span className="w-[295px] h-5 text-body-md-medium text-secondary overflow-hidden line-clamp-1 text-ellipsis">
                                   {version.commitTitle}
                                 </span>
                               )}
@@ -339,6 +339,7 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
                               variant="secondary-ghost"
                               size="md"
                               onClick={() => handleRestoreClick(version)}
+                              disabled={version.commitHash === repo.latestCommitHash}
                             >
                               <RestoreIcon size={20} />
                               <span className="text-interactive-primary">Restore</span>

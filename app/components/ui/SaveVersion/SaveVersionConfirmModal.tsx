@@ -9,23 +9,30 @@ export interface SaveVersionConfirmModalProps {
   onClose: () => void;
   onConfirm: (title: string, description: string) => void;
   commitTitle: string | null;
+  defaultTitle?: string;
 }
 
 // Removing HTML tags from input
 const sanitizeInput = (input: string) => input.replace(/<[^>]*>/g, '');
 
-export function SaveVersionConfirmModal({ isOpen, onClose, onConfirm, commitTitle }: SaveVersionConfirmModalProps) {
+export function SaveVersionConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  commitTitle,
+  defaultTitle = '',
+}: SaveVersionConfirmModalProps) {
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
-  // Reset fields when modal opens
+  // Reset fields when modal opens, use defaultTitle if provided
   useEffect(() => {
     if (isOpen) {
-      setTitle('');
+      setTitle(defaultTitle);
       setDescription('');
     }
-  }, [isOpen]);
+  }, [isOpen, defaultTitle]);
 
   if (!commitTitle) {
     return null;

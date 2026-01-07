@@ -71,7 +71,7 @@ export const ResizeHandle = ({ minChatWidth = 380, minWorkbenchWidth = 780 }: Re
     <div
       ref={handleRef}
       onMouseDown={handleMouseDown}
-      className="fixed top-[var(--header-height)] bottom-0 w-2 z-50 left-[calc(var(--chat-width)-4px)] cursor-col-resize"
+      className="fixed top-[var(--header-height)] bottom-0 w-3 z-50 left-[var(--chat-width)] cursor-col-resize"
     />
   );
 };

@@ -18,19 +18,65 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
   const attachments = content ? extractAttachments(content) : [];
 
   const textRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false);
   const [expanded, setExpanded] = useState<boolean>(isLast);
+
+  // Collapse when this message is no longer the last one
+  useEffect(() => {
+    if (!isLast) {
+      setExpanded(false);
+    }
+  }, [isLast]);
+
+  // Handle expand/collapse with upward expansion (keep bottom fixed)
+  const handleToggleExpand = () => {
+    if (!expanded && containerRef.current) {
+      // Get scroll container (chat container)
+      const scrollContainer = containerRef.current.closest('.chat-container');
+
+      if (scrollContainer) {
+        const prevHeight = containerRef.current.offsetHeight;
+
+        setExpanded(true);
+
+        // After state update, adjust scroll position
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            const newHeight = containerRef.current.offsetHeight;
+            const heightDiff = newHeight - prevHeight;
+            scrollContainer.scrollTop += heightDiff;
+          }
+        });
+      } else {
+        setExpanded(true);
+      }
+    } else {
+      setExpanded(false);
+    }
+  };
+
+  // Check if content has code blocks (```)
+  const hasCodeBlock = textContent.includes('```');
+
+  // Max height for collapsed state (approximately 3 lines)
+  const MAX_COLLAPSED_HEIGHT = 72; // 24px line-height * 3 lines
 
   // Check if text overflows 3 lines
   useEffect(() => {
     const checkOverflow = () => {
       if (textRef.current) {
         const element = textRef.current;
-        const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 24;
-        const maxHeight = lineHeight * 3;
 
-        // Check if content exceeds 3 lines
-        setIsOverflowing(element.scrollHeight > maxHeight + 4); // 4px tolerance
+        if (hasCodeBlock) {
+          // For code blocks, use max-height comparison
+          setIsOverflowing(element.scrollHeight > MAX_COLLAPSED_HEIGHT + 4);
+        } else {
+          // For regular text, use line-height based comparison
+          const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 24;
+          const maxHeight = lineHeight * 3;
+          setIsOverflowing(element.scrollHeight > maxHeight + 4);
+        }
       }
     };
 
@@ -40,14 +86,20 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
     window.addEventListener('resize', checkOverflow);
 
     return () => window.removeEventListener('resize', checkOverflow);
-  }, [textContent]);
+  }, [textContent, hasCodeBlock]);
 
   return (
-    <div className="overflow-hidden pt-[4px] text-body-md-regular-relaxed text-secondary">
+    <div ref={containerRef} className="overflow-hidden text-body-md-regular-relaxed text-secondary">
       <div className="flex flex-col gap-4">
         {textContent && (
           <div>
-            <div ref={textRef} className={!expanded && isOverflowing ? 'line-clamp-3' : ''}>
+            <div
+              ref={textRef}
+              className={!expanded && isOverflowing ? (hasCodeBlock ? 'overflow-hidden' : 'line-clamp-3') : ''}
+              style={
+                !expanded && isOverflowing && hasCodeBlock ? { maxHeight: `${MAX_COLLAPSED_HEIGHT}px` } : undefined
+              }
+            >
               <Markdown html>{textContent}</Markdown>
             </div>
           </div>
@@ -61,7 +113,7 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
       {isOverflowing && (
         <div className="flex justify-end pt-2">
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={handleToggleExpand}
             className="flex text-interactive-neutral text-heading-xs bg-transparent gap-0.5 items-center"
           >
             {expanded ? 'Hide' : 'Show All'}

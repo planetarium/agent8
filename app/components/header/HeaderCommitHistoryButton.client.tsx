@@ -427,14 +427,14 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-lg-medium"
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
               sideOffset={5}
               side="bottom"
               align="end"
               alignOffset={0}
             >
               View commits to fork or restore
-              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-40px]" />
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>
@@ -520,7 +520,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                             {isSmallViewport ? (
                               <>
                                 <div className="flex flex-col items-start gap-2 flex-[1_0_0]">
-                                  <span className="text-heading-sm text-primary self-stretch">
+                                  <span className="text-body-lg-medium text-secondary self-stretch">
                                     {commit.title || commit.message.split('\n')[0]}
                                   </span>
                                   <span
@@ -540,7 +540,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 />
                               </>
                             ) : (
-                              <span className="text-heading-sm text-primary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
+                              <span className="text-body-lg-medium text-secondary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
                                 {commit.title || commit.message.split('\n')[0]}
                               </span>
                             )}
@@ -589,6 +589,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 variant="secondary-ghost"
                                 size="md"
                                 onClick={() => handleRestoreClick(commit)}
+                                disabled={index === 0}
                               >
                                 <RestoreIcon size={20} />
                                 <span className="text-interactive-primary">Restore</span>

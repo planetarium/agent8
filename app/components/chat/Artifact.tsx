@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { computed } from 'nanostores';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { createHighlighter, type BundledLanguage, type BundledTheme, type HighlighterGeneric } from 'shiki';
 import Lottie from 'lottie-react';
 
@@ -33,9 +33,7 @@ interface ArtifactProps {
 }
 
 export const Artifact = memo(({ artifactId }: ArtifactProps) => {
-  const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
-  const [allActionFinished, setAllActionFinished] = useState(false);
 
   const artifacts = useWorkbenchArtifacts();
   const artifact = artifacts[artifactId];
@@ -51,78 +49,17 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
     }),
   );
 
-  const toggleActions = () => {
-    userToggledActions.current = true;
-    setShowActions(!showActions);
-  };
-
   useEffect(() => {
-    if (actions.length && !showActions && !userToggledActions.current) {
+    if (actions.length && !showActions) {
       setShowActions(true);
-    }
-
-    if (actions.length !== 0 && artifact.type === 'bundled') {
-      const finished = !actions.find((action) => action.status !== 'complete');
-
-      if (allActionFinished !== finished) {
-        setAllActionFinished(finished);
-      }
     }
   }, [actions]);
 
-  const withHeader = artifact.title || actions.length > 1;
-
-  const header = (
-    <div className="flex">
-      <button
-        className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
-        onClick={() => {
-          const showWorkbench = workbenchStore.showWorkbench.get();
-          workbenchStore.showWorkbench.set(!showWorkbench);
-        }}
-      >
-        {artifact.type == 'bundled' && (
-          <>
-            <div className="p-4">
-              {allActionFinished ? (
-                <div className={'i-ph:files-light'} style={{ fontSize: '2rem' }}></div>
-              ) : (
-                <div className={'i-svg-spinners:90-ring-with-bg'} style={{ fontSize: '2rem' }}></div>
-              )}
-            </div>
-            <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-          </>
-        )}
-        <div className="px-5 p-3.5 w-full text-left">
-          <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
-          <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
-        </div>
-      </button>
-      <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-      <AnimatePresence>
-        {actions.length && artifact.type !== 'bundled' && (
-          <motion.button
-            initial={{ width: 0 }}
-            animate={{ width: 'auto' }}
-            exit={{ width: 0 }}
-            transition={{ duration: 0.15, ease: cubicEasingFn }}
-            className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
-            onClick={toggleActions}
-          >
-            <div className="p-4">
-              <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-            </div>
-          </motion.button>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-
   return (
-    <div className={`${withHeader ? 'artifact' : 'single-action-artifact'} flex flex-col overflow-hidden w-full`}>
-      {withHeader && header}
+    <div className="flex flex-col overflow-hidden w-full">
+      {/* Header hidden as per design request */}
       <AnimatePresence>
-        {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
+        {showActions && actions.length > 0 && (
           <motion.div
             className="actions"
             initial={{ height: 0 }}
@@ -130,7 +67,6 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             exit={{ height: '0px' }}
             transition={{ duration: 0.15 }}
           >
-            {withHeader && <div className="h-[1px]" />}
             <div className="text-left">
               <ActionList actions={actions} />
             </div>

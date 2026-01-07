@@ -881,7 +881,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   return chatStarted ? (
                     <Messages
                       ref={messageRef}
-                      className="flex flex-col w-full flex-1 max-w-chat pl-6 pb-4 pr-4 mx-auto z-1"
+                      className={classNames('flex flex-col w-full flex-1 max-w-chat pr-4 mx-auto z-1', {
+                        'pl-6 pb-4': !isSmallViewport,
+                        'pl-4': isSmallViewport, // Reduced padding for mobile
+                      })}
                       messages={messages}
                       annotations={data}
                       isStreaming={isStreaming}
@@ -906,6 +909,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
                   {
                     'sticky bottom-4 pr-4': chatStarted && !isSmallViewport,
+                    'sticky bottom-0': chatStarted && isSmallViewport,
                     'pl-6': !isSmallViewport,
                     'tablet:max-w-chat': chatStarted,
                     'md:-translate-y-[calc(50%+16px)] md:absolute md:left-1/2 md:translate-x-[-50%] max-w-[632px] !pl-0':
@@ -1047,7 +1051,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          if (event.shiftKey) {
+                          // On mobile, Enter key should create a new line (like Shift+Enter on desktop)
+                          if (event.shiftKey || isSmallViewport) {
                             return;
                           }
 
@@ -1096,7 +1101,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
-                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                               sideOffset={5}
                               side="top"
                             >
@@ -1117,7 +1122,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
                               <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                                 sideOffset={5}
                                 side="top"
                               >
@@ -1147,7 +1152,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-body-md-medium"
                                   sideOffset={5}
                                   side={'bottom'}
                                 >

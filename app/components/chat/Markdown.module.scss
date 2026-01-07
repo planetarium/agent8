@@ -9,7 +9,7 @@ $code-font-size: 13px;
 
 .MarkdownContent {
   line-height: 1.6;
-  color: var(--bolt-elements-textPrimary);
+  color: inherit;
 
   > *:not(:last-child) {
     margin-block-end: 16px;
@@ -20,7 +20,7 @@ $code-font-size: 13px;
   }
 
   :global(.single-action-artifact) {
-    margin: 1.0em 0;
+    margin: 1em 0;
   }
 
   :is(h1, h2, h3, h4, h5, h6) {
