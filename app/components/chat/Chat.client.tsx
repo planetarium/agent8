@@ -1393,7 +1393,7 @@ export const ChatImpl = memo(
             throw new SkipToastError(
               e.message ?? 'Failed to import starter template',
               status || 400,
-              e.context || 'starter template selection',
+              'fetch starter template',
             );
           });
 
