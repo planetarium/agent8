@@ -24,11 +24,6 @@ import {
   PROMPT_COOKIE_KEY,
   PROVIDER_LIST,
   WORK_DIR,
-
-  /*
-   * AUTO_SYNTAX_FIX_TAG_NAME,
-   * SHELL_COMMANDS,
-   */
 } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
@@ -83,8 +78,6 @@ const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
-// const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
-
 let prevDebugLog: string | null = null;
 let duplicatedDebugCount: number = 1;
 
@@ -120,208 +113,6 @@ function shouldShowErrorPage(error: unknown): boolean {
   const status = getErrorStatus(error);
   return status === 401 || status === 404;
 }
-
-/*
- * interface SyntaxCheckResult {
- *   success: boolean;
- *   errorContent: string | null;
- * }
- */
-
-/*
- * async function runSyntaxCheck(workbench: WorkbenchStore): Promise<SyntaxCheckResult> {
- *   const shell = workbench.boltTerminal;
- *   await shell.ready;
- */
-
-/*
- *   // tsc run and save the result to .build_error.log (prevent interruption with noInterrupt flag)
- *   const command = `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx tsc -b --noEmit > .build_error.log 2>&1`;
- *   await shell.executeCommand(Date.now().toString(), command, undefined, { noInterrupt: true });
- */
-
-/*
- *   // wait for the command to complete
- *   await new Promise((resolve) => setTimeout(resolve, 1000));
- */
-
-/*
- *   // read the .build_error.log file
- *   try {
- *     const container = await workbench.container;
- *     const errorLog = (await container.fs.readFile('.build_error.log', 'utf-8')) as string;
- */
-
-/*
- *     // determine if there are errors
- *     const hasError =
- *       errorLog.trim().length > 0 &&
- *       (errorLog.includes('error TS') || errorLog.includes('Error:') || errorLog.includes('failed'));
- */
-
-/*
- *     return {
- *       success: !hasError,
- *       errorContent: hasError ? errorLog : null,
- *     };
- *   } catch {
- *     // if the file does not exist, consider it a success
- *     return { success: true, errorContent: null };
- *   } finally {
- *     shell.executeCommand(Date.now().toString(), 'rm -f .build_error.log', undefined, { noInterrupt: true });
- *   }
- * }
- */
-
-/*
- * async function fixSyntaxErrors(
- *   targetMessage: UIMessage,
- *   errorContent: string,
- *   files: Record<string, any>,
- *   apiKeys: Record<string, string>,
- *   promptId: string,
- *   contextOptimization: boolean,
- *   currentMessages: UIMessage[],
- *   parseMessages: (messages: UIMessage[]) => void,
- * ): Promise<string | null> {
- *   const fixMessage = `*TypeScript build errors detected. Please fix the following errors:*
- */
-
-/*
- * \`\`\`
- * ${errorContent}
- * \`\`\`
- */
-
-// Analyze the errors above and resolve them.`;
-
-/*
- *   try {
- *     const response = await fetch('/api/chat', {
- *       method: 'POST',
- *       headers: { 'Content-Type': 'application/json' },
- *       body: JSON.stringify({
- *         messages: [{ role: 'user', parts: [{ type: 'text', text: fixMessage }] }],
- *         apiKeys,
- *         files,
- *         promptId,
- *         contextOptimization,
- *         isSyntaxFix: true,
- *       }),
- *     });
- */
-
-/*
- *     if (!response.ok || !response.body) {
- *       logger.error('Failed to call /api/chat for syntax fix');
- *       return null;
- *     }
- */
-
-/*
- *     // handle the stream response
- *     const reader = response.body.getReader();
- *     const decoder = new TextDecoder();
- *     let buffer = '';
- */
-
-/*
- *     // read the entire stream
- *     while (true) {
- *       const { done, value } = await reader.read();
- */
-
-/*
- *       if (done) {
- *         break;
- *       }
- */
-
-/*
- *       buffer += decoder.decode(value, { stream: true });
- *     }
- */
-
-/*
- *     // extract the delta values from the text-delta events in the SSE stream
- *     let fullContent = '';
- *     const lines = buffer.split('\n');
- */
-
-/*
- *     for (const line of lines) {
- *       if (line.startsWith('data: ') && line !== 'data: [DONE]') {
- *         try {
- *           const data = JSON.parse(line.slice(6));
- */
-
-/*
- *           if (data.type === 'text-delta' && data.delta) {
- *             fullContent += data.delta;
- *           }
- *         } catch {
- *           // ignore JSON parsing errors
- *         }
- *       }
- *     }
- */
-
-//     /*
-//      * parse the syntax fix response using parseMessages
-//      * append the syntax fix response to the message content and parse the entire thing again
-//      */
-//     if (fullContent.trim()) {
-//       logger.info('[SyntaxFix] fullContent:', fullContent);
-
-/*
- *       // combine the original content with the syntax fix response
- *       const originalContent = extractTextContent(targetMessage);
- *       const updatedContent = originalContent + fullContent;
- */
-
-/*
- *       // create the updated message
- *       const updatedMessage: UIMessage = {
- *         ...targetMessage,
- *         parts: [{ type: 'text' as const, text: updatedContent }],
- *       };
- */
-
-/*
- *       // create a temporary messages array (update the message or add it to the end)
- *       const targetIndex = currentMessages.findIndex((m) => m.id === targetMessage.id);
- *       let tempMessages: UIMessage[];
- */
-
-/*
- *       if (targetIndex !== -1) {
- *         // if the message is already in the messages array, update it
- *         tempMessages = currentMessages.map((m, i) => (i === targetIndex ? updatedMessage : m));
- *       } else {
- *         // if the message is not in the messages array, add it to the end
- *         tempMessages = [...currentMessages, updatedMessage];
- *       }
- */
-
-/*
- *       // parse the entire thing again using parseMessages (reset and parse, so new artifact/action is registered in workbench)
- *       parseMessages(tempMessages);
- *       logger.info('[SyntaxFix] Parsed fix response with messageId:', targetMessage.id);
- */
-
-/*
- *       return fullContent;
- *     }
- */
-
-/*
- *     return null;
- *   } catch (error) {
- *     logger.error('Failed to fix syntax errors:', error);
- *     return null;
- *   }
- * }
- */
 
 async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string, signal?: AbortSignal) {
   try {
@@ -729,20 +520,6 @@ export const ChatImpl = memo(
     const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
 
-    /*
-     * const setSyntaxProgress = useCallback((status: 'in-progress' | 'complete', message: string) => {
-     *   setCustomProgressAnnotations([
-     *     {
-     *       type: 'progress',
-     *       label: 'syntax',
-     *       status,
-     *       order: Number.MAX_SAFE_INTEGER,
-     *       message,
-     *     },
-     *   ]);
-     * }, []);
-     */
-
     const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
@@ -923,60 +700,6 @@ export const ChatImpl = memo(
 
         workbench.onMessageClose(message.id, async () => {
           addDebugLog('onMessageClose');
-
-          /*
-           *setSyntaxProgress('in-progress', 'Checking syntax');
-           *
-           * // 1. run the syntax check
-           *const syntaxResult = await runSyntaxCheck(workbench);
-           *
-           * // final message (fix content may be added)
-           *let finalMessage = message;
-           *
-           *if (!syntaxResult.success && syntaxResult.errorContent) {
-           *  // start displaying the progress
-           *  setSyntaxProgress('in-progress', 'Analyzing errors');
-           *
-           *  // 2. try to fix the errors (1 time)
-           *  logger.info('[SyntaxFix] Attempting to fix TypeScript errors...');
-           *
-           *  const fixContent = await fixSyntaxErrors(
-           *    message,
-           *    syntaxResult.errorContent,
-           *    bodyRef.current.files,
-           *    bodyRef.current.apiKeys,
-           *    bodyRef.current.promptId,
-           *    bodyRef.current.contextOptimization,
-           *    messages,
-           *    parseMessages,
-           *  );
-           *
-           *  if (fixContent) {
-           *    // fix successful - wait for the new actions to complete
-           *    logger.info('[SyntaxFix] Fix actions registered, waiting for completion...');
-           *    await workbench.waitForMessageIdle(message.id, { timeoutMs: AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS });
-           *    logger.info('[SyntaxFix] Fix actions completed');
-           *
-           *    // add the fix content to the message wrapped in <autoSyntaxFix> tag
-           *    const originalContent = extractTextContent(message);
-           *    const updatedContent =
-           *      originalContent + `\n\n<${AUTO_SYNTAX_FIX_TAG_NAME}>\n${fixContent}\n</${AUTO_SYNTAX_FIX_TAG_NAME}>`;
-           *
-           *    // keep the non-text parts (data-prompt, etc.) from the original parts and update only the text
-           *    const nonTextParts = message.parts?.filter((part: any) => part.type !== 'text') || [];
-           *
-           *    finalMessage = {
-           *      ...message,
-           *      parts: [...nonTextParts, { type: 'text' as const, text: updatedContent }],
-           *    };
-           *  }
-           *}
-           *
-           *setCustomProgressAnnotations([]);
-           *setFakeLoading(false);
-           *
-           * // proceed with the original process (success/failure doesn't matter)
-           */
           addDebugLog('Start:runAndPreview');
           await runAndPreview(message);
           addDebugLog('Complete:runAndPreview');
