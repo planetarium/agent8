@@ -4,7 +4,7 @@ import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
-import { SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { ERROR_NAMES, SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
@@ -111,6 +111,7 @@ export class WorkbenchStore {
   #connectionLostNotified = false;
   #messageToActionQueue: Map<string, ActionQueueItem | null> = new Map();
   #shellCommandQueue: Promise<any> = Promise.resolve();
+  #shellAbortController: AbortController | null = null;
 
   // Container initialization state management
   #initializationState: 'idle' | 'initializing' | 'reinitializing' = 'idle';
@@ -581,8 +582,56 @@ export class WorkbenchStore {
     this.#filesStore.resetFileModifications();
   }
 
+  resetFiles() {
+    this.#filesStore.files.set({});
+    this.#filesStore.resetFileModifications();
+  }
+
   abortAllActions() {
-    // TODO: what do we wanna do and how do we wanna recover from this?
+    // 1. Process and clear all message action queues
+    for (const queueItem of this.#messageToActionQueue.values()) {
+      if (queueItem) {
+        // Traverse the linked list and abort all actions
+        let current: ActionQueueItem | undefined = queueItem;
+
+        while (current) {
+          // Get the artifact for this action
+          const artifact = this.#getArtifact(current.data.artifactId);
+
+          if (artifact) {
+            // Abort pending/running actions in this artifact
+            const actions = artifact.runner.actions.get();
+
+            for (const [actionId, action] of Object.entries(actions)) {
+              if (!action.executed && action.status !== 'complete') {
+                action.abort?.();
+                artifact.runner.actions.setKey(actionId, {
+                  ...action,
+                  status: 'aborted',
+                  executed: true,
+                });
+              }
+            }
+          }
+
+          // Clear the queue item
+          current.executeAction = () => undefined;
+
+          const next: ActionQueueItem | undefined = current.next;
+          current.next = undefined;
+          current = next;
+        }
+      }
+    }
+
+    this.#messageToActionQueue.clear();
+
+    // 2. Abort shell commands
+    this.#shellAbortController?.abort();
+    this.#shellAbortController = null;
+
+    // 3. Reset shell command queue
+    this.#shellCommandQueue = Promise.resolve();
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
@@ -1049,14 +1098,14 @@ export class WorkbenchStore {
     this.#previewsStore.setPublishedUrl(url);
   }
 
-  async commitModifiedFiles(): Promise<{ id: string; message: string } | undefined> {
+  async commitModifiedFiles(signal?: AbortSignal): Promise<{ id: string; message: string } | undefined> {
     const modifiedFiles = this.getModifiedFiles();
 
     let result;
 
     if (modifiedFiles !== undefined) {
       if (isEnabledGitbasePersistence) {
-        const { data: commit } = await commitUserChanged();
+        const { data: commit } = await commitUserChanged(signal);
         const id = 'assistant-' + commit.commitHash;
 
         result = { id, message: commit.message };
@@ -1285,10 +1334,19 @@ export class WorkbenchStore {
 
   // Helper methods for publish
   async #runShellCommand(shell: BoltShell, command: string) {
+    // Create abort controller for this command
+    this.#shellAbortController = new AbortController();
+
+    const signal = this.#shellAbortController.signal;
+
     // Queue all shell commands to prevent interference
     this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
-      const result = await shell.executeCommand(Date.now().toString(), command);
-      await shell.waitTillOscCode('prompt');
+      const abortPromise = new Promise<never>((_, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', ERROR_NAMES.ABORT)), { once: true });
+      });
+
+      const result = await Promise.race([shell.executeCommand(Date.now().toString(), command), abortPromise]);
+      await Promise.race([shell.waitTillOscCode('prompt'), abortPromise]);
 
       return result;
     });

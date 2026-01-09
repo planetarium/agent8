@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
+  ERROR_NAMES,
   FIXED_MODELS,
   PROMPT_COOKIE_KEY,
   PROVIDER_LIST,
@@ -73,7 +74,7 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
-import { FetchError, getErrorStatus } from '~/utils/errors';
+import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
 
 const logger = createScopedLogger('Chat');
 
@@ -84,13 +85,40 @@ const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
 // const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
 
-// 50 debug logs
-function addDebugLog(value: number | string): void {
-  logManager.add('C-' + value);
+let prevDebugLog: string | null = null;
+let duplicatedDebugCount: number = 1;
+
+function clearDebugLog(): void {
+  logManager.clear();
+  prevDebugLog = null;
+  duplicatedDebugCount = 1;
+}
+
+function addDebugLog(value: string): void {
+  let log = value;
+
+  if (prevDebugLog === value) {
+    duplicatedDebugCount++;
+    log = `x${duplicatedDebugCount}`;
+  } else {
+    prevDebugLog = value;
+    duplicatedDebugCount = 1;
+  }
+
+  logManager.add(log);
 }
 
 function isServerError(data: unknown): data is ServerErrorData {
   return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
+}
+
+/**
+ * Checks if the error requires showing a full error page (401/404).
+ * @returns true if error page should be shown, false otherwise
+ */
+function shouldShowErrorPage(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return status === 401 || status === 404;
 }
 
 /*
@@ -295,7 +323,7 @@ function isServerError(data: unknown): data is ServerErrorData {
  * }
  */
 
-async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string, signal?: AbortSignal) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
@@ -310,7 +338,7 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
       params.append('projectRepo', projectRepo);
     }
 
-    const response = await fetch(`/api/select-template?${params.toString()}`);
+    const response = await fetch(`/api/select-template?${params.toString()}`, { signal });
 
     if (!response.ok) {
       const serverMessage = await response.text();
@@ -325,7 +353,12 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
 
     return result;
   } catch (error) {
-    logger.error('Error fetching template from API:', error);
+    if (isAbortError(error)) {
+      logger.info('Template fetch aborted by user');
+    } else {
+      logger.error('Error fetching template from API:', error);
+    }
+
     throw error;
   }
 }
@@ -601,23 +634,22 @@ export const ChatImpl = memo(
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
     const isPageUnloadingRef = useRef<boolean>(false);
+    const sendMessageAbortControllerRef = useRef<AbortController | null>(null);
 
     /*
      * Processes errors and routes them appropriately.
      * For errors requiring full error page (401 Unauthorized, 404 Not Found),
      * redirects to UnauthorizedPage or NotFoundPage.
      * For other errors, reports via Toast and Slack.
-     *
-     * @returns {boolean} true if error page will be shown (401/404), false otherwise
      */
     const processError = (
       message: string,
       startTime: number,
       options?: Partial<Omit<HandleChatErrorOptions, 'elapsedTime'>>,
-    ): boolean => {
-      const status = getErrorStatus(options?.error);
+    ) => {
+      if (shouldShowErrorPage(options?.error)) {
+        const status = getErrorStatus(options?.error) || 400;
 
-      if (status === 404 || status === 401) {
         logger.warn(`Error requires full page redirect (${status}) - showing error page`);
 
         setComponentError({
@@ -626,7 +658,7 @@ export const ChatImpl = memo(
           context: options?.context || 'unknown',
         });
 
-        return true; // Error page will be shown - caller should return early
+        return;
       }
 
       // Other errors: handle within component
@@ -636,7 +668,7 @@ export const ChatImpl = memo(
         elapsedTime: getElapsedTime(startTime),
       });
 
-      return false; // Normal error handling - caller can continue
+      return;
     };
 
     const runAndPreview = async (message: UIMessage) => {
@@ -793,8 +825,6 @@ export const ChatImpl = memo(
         },
       }),
       onData: (data) => {
-        const dataType = data?.type || 'unknown';
-
         // Ignore empty data
         if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
           return;
@@ -806,7 +836,7 @@ export const ChatImpl = memo(
         // Handle data-log (server-side logs)
         if (data.type === 'data-log') {
           if (extractedData && typeof extractedData === 'object' && 'message' in extractedData) {
-            addDebugLog(`50:${(extractedData as { message: string }).message}`);
+            addDebugLog(`data:${(extractedData as { message: string }).message}`);
           }
 
           return;
@@ -831,8 +861,6 @@ export const ChatImpl = memo(
           const extractedType = hasType(extractedData) ? extractedData.type : null;
           const filtered = prev.filter((item) => !hasType(item) || item.type !== extractedType);
 
-          addDebugLog(`2:${dataType}`);
-
           return [...filtered, extractedData];
         });
       },
@@ -841,6 +869,8 @@ export const ChatImpl = memo(
           logger.debug('Skipping error notification, page is unloading');
           return;
         }
+
+        setFakeLoading(false);
 
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
@@ -854,26 +884,24 @@ export const ChatImpl = memo(
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
         const processlog = logManager.logs.join(',');
 
-        if (
-          processError(
-            'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-            chatRequestStartTimeRef.current ?? 0,
-            {
-              error: e,
-              context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
-              prompt: lastUserPromptRef.current,
-              process: processlog,
-            },
-          )
-        ) {
+        processError(
+          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+          chatRequestStartTimeRef.current ?? 0,
+          {
+            error: e,
+            context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
+            prompt: lastUserPromptRef.current,
+            process: processlog,
+          },
+        );
+
+        if (shouldShowErrorPage(e)) {
           return;
         }
-
-        setFakeLoading(false);
       },
 
       onFinish: async ({ message }) => {
-        addDebugLog(3);
+        addDebugLog('onFinish');
 
         const usage =
           message.metadata &&
@@ -894,6 +922,8 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
+          addDebugLog('onMessageClose');
+
           /*
            *setSyntaxProgress('in-progress', 'Checking syntax');
            *
@@ -947,13 +977,13 @@ export const ChatImpl = memo(
            *
            * // proceed with the original process (success/failure doesn't matter)
            */
-          addDebugLog(4);
+          addDebugLog('Start:runAndPreview');
           await runAndPreview(message);
-          addDebugLog(5);
+          addDebugLog('Complete:runAndPreview');
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          addDebugLog(6);
+          addDebugLog('Start:handleCommit');
           await handleCommit(message);
-          addDebugLog(7);
+          addDebugLog('Complete:handleCommit');
         });
 
         setFakeLoading(false);
@@ -1019,6 +1049,38 @@ export const ChatImpl = memo(
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };
     }, []);
+
+    // Refs to hold latest function references for cleanup
+    const stopRef = useRef(stop);
+    const workbenchRef = useRef(workbench);
+
+    useEffect(() => {
+      stopRef.current = stop;
+      workbenchRef.current = workbench;
+    }, [stop, workbench]);
+
+    /**
+     * Aborts all in-progress operations (first chat preparation, streaming, workbench actions).
+     * Used by both user-initiated abort and component unmount cleanup.
+     */
+    const abortAllOperations = () => {
+      if (sendMessageAbortControllerRef.current) {
+        sendMessageAbortControllerRef.current.abort();
+        sendMessageAbortControllerRef.current = null;
+      }
+
+      stopRef.current();
+      workbenchRef.current.abortAllActions();
+    };
+
+    /*
+     * Cleanup on unmount - abort all in-progress operations
+     * useEffect(() => {
+     *   return () => {
+     *     abortAllOperations();
+     *   };
+     * }, []);
+     */
 
     useEffect(() => {
       if (!isLoading) {
@@ -1122,11 +1184,11 @@ export const ChatImpl = memo(
     };
 
     const abort = () => {
-      stop();
+      abortAllOperations();
+
       setFakeLoading(false);
       setChatData([]);
       chatStore.setKey('aborted', true);
-      workbench.abortAllActions();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -1134,6 +1196,401 @@ export const ChatImpl = memo(
         model,
         provider: provider.name,
       });
+    };
+
+    /**
+     * Resets the first chat state when the first prompt is aborted.
+     * Clears files, workbench, chat store, and repo store.
+     */
+    const resetFirstChatState = () => {
+      setChatStarted(false);
+      workbenchRef.current.resetFiles();
+      workbenchRef.current.showWorkbench.set(false);
+      chatStore.setKey('started', false);
+      repoStore.set({
+        name: '',
+        path: '',
+        title: '',
+        taskBranch: DEFAULT_TASK_BRANCH,
+      });
+    };
+
+    /**
+     * Initializes the first chat session with template selection and project setup.
+     * This function can be aborted via AbortSignal.
+     */
+    const prepareFirstChat = async (
+      messageContent: string,
+      currentAttachmentList: ChatAttachment[],
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('First chat initialization aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const templateSelectionStartTime = performance.now();
+
+      // Set progress annotation for analyzing request
+      setCustomProgressAnnotations([
+        {
+          type: 'progress',
+          label: 'analyze',
+          status: 'in-progress',
+          order: 1,
+          message: 'Analyzing your request...',
+        },
+      ]);
+
+      checkAborted();
+      addDebugLog('Start:selectStarterTemplate');
+
+      const { template, title, projectRepo } = await selectStarterTemplate({
+        message: messageContent,
+        signal,
+      });
+
+      addDebugLog('Complete:selectStarterTemplate');
+      checkAborted();
+
+      if (!template) {
+        throw new Error('Not Found Template');
+      }
+
+      // Update progress annotation for selecting template
+      setCustomProgressAnnotations([
+        {
+          type: 'progress',
+          label: 'analyze',
+          status: 'complete',
+          order: 1,
+          message: 'Request analyzed',
+        },
+        {
+          type: 'progress',
+          label: 'template',
+          status: 'in-progress',
+          order: 2,
+          message: 'Setting up base project...',
+        },
+      ]);
+
+      checkAborted();
+      addDebugLog('Start:fetchTemplateFromAPI');
+
+      const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, signal).catch((e) => {
+        checkAborted();
+
+        if (shouldShowErrorPage(e)) {
+          throw e;
+        }
+
+        if (e.message.includes('rate limit')) {
+          toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+        } else {
+          toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+        }
+      });
+
+      addDebugLog('Complete:fetchTemplateFromAPI');
+      checkAborted();
+
+      const projectPath = temResp?.project?.path;
+      const projectName = temResp?.project?.name;
+      const templateCommitId = temResp?.commit?.id;
+      workbench.showWorkbench.set(true);
+
+      if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+        addDebugLog('Not Found Template Data');
+        throw new Error('Not Found Template Data');
+      }
+
+      // Inject .env into fileMap so Agent can read it in the first response
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+      if (accessToken) {
+        try {
+          checkAborted();
+          addDebugLog('Start:verifyV8AccessToken');
+
+          const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+
+          addDebugLog('Complete:verifyV8AccessToken');
+          checkAborted();
+
+          if (user.isActivated && user.walletAddress) {
+            temResp.fileMap['.env'] = {
+              type: 'file',
+              content: getEnvContent(user.walletAddress),
+              isBinary: false,
+            };
+          }
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+
+          if (getErrorStatus(error) === 401) {
+            logger.error('Authentication failed during .env generation:', error);
+            throw error;
+          }
+
+          logger.warn('Failed to generate .env for first message:', error);
+          addDebugLog('Failed to generate .env for first message');
+        }
+      }
+
+      checkAborted();
+
+      const processedFileMap = Object.entries(temResp.fileMap).reduce(
+        (acc, [key, value]) => {
+          acc[WORK_DIR + '/' + key] = value;
+          return acc;
+        },
+        {} as Record<string, any>,
+      );
+      workbench.files.set(processedFileMap);
+
+      checkAborted();
+
+      const containerInstance = await workbench.container;
+
+      checkAborted();
+      await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+
+      checkAborted();
+
+      if (isEnabledGitbasePersistence) {
+        if (!projectPath || !projectName || !templateCommitId) {
+          throw new Error('Cannot create project');
+        }
+
+        let branchName = 'develop';
+
+        if (enabledTaskMode) {
+          checkAborted();
+          addDebugLog('Start:createTaskBranch');
+
+          const { success, message, data } = await createTaskBranch(projectPath, signal);
+          addDebugLog('Complete:createTaskBranch');
+          checkAborted();
+
+          if (!success) {
+            addDebugLog('Failed to create task branch');
+            processError(message, templateSelectionStartTime, {
+              context: 'createTaskBranch - starter template',
+            });
+
+            return;
+          }
+
+          branchName = data.branchName;
+        }
+
+        repoStore.set({
+          name: projectName,
+          path: projectPath,
+          title,
+          taskBranch: branchName,
+        });
+
+        // Record prompt activity for first request
+        sendActivityPrompt(projectPath).catch((error) => {
+          logger.warn('Failed to record prompt activity:', error);
+          addDebugLog('Failed to record prompt activity - projectPath');
+        });
+
+        changeChatUrl(projectPath, { replace: true });
+      } else {
+        repoStore.set({
+          name: projectRepo,
+          path: projectRepo,
+          title,
+          taskBranch: 'develop',
+        });
+
+        // Record prompt activity for first request
+        sendActivityPrompt(projectRepo).catch((error) => {
+          logger.warn('Failed to record prompt activity:', error);
+          addDebugLog('Failed to record prompt activity - projectRepo');
+        });
+
+        changeChatUrl(projectRepo, { replace: true });
+      }
+
+      const firstChatModel =
+        model === 'auto'
+          ? template.name.includes('3d')
+            ? FIXED_MODELS.FIRST_3D_CHAT
+            : FIXED_MODELS.FIRST_2D_CHAT
+          : {
+              model,
+              provider,
+            };
+
+      const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
+
+      // Complete template selection
+      setCustomProgressAnnotations([
+        {
+          type: 'progress',
+          label: 'analyze',
+          status: 'complete',
+          order: 1,
+          message: 'Request analyzed',
+        },
+        {
+          type: 'progress',
+          label: 'template',
+          status: 'complete',
+          order: 2,
+          message: 'Template selected',
+        },
+      ]);
+
+      // Clear progress annotations after a short delay
+      setTimeout(() => {
+        setCustomProgressAnnotations([]);
+      }, 1000);
+      checkAborted();
+
+      setMessages([
+        {
+          id: `1-${new Date().getTime()}`,
+          role: 'user',
+          parts: [
+            {
+              type: 'text',
+              text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                currentAttachmentList,
+              )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+            },
+          ],
+        },
+      ]);
+      checkAborted();
+
+      regenerate();
+
+      setInput('');
+      Cookies.remove(PROMPT_COOKIE_KEY);
+
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
+
+      setAttachmentList([]);
+      resetEnhancer();
+
+      textareaRef.current?.blur();
+    };
+
+    /**
+     * Recovers files when chatStarted is true but files are empty.
+     * This is a defensive measure for edge cases like page refresh or container restart.
+     * Returns true if recovery successful, false otherwise.
+     */
+    const recoverFiles = async (signal: AbortSignal): Promise<boolean> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('File recovery aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const containerInstance = await workbench.container;
+      checkAborted();
+
+      const fileRecoveryStrategies = [
+        {
+          name: 'Workbench',
+          getFiles: () => workbench.files.get(),
+        },
+        {
+          name: 'Gitbase',
+          getFiles: async () => {
+            const projectPath = repoStore.get().path;
+
+            if (projectPath) {
+              return await fetchProjectFiles(projectPath);
+            }
+
+            return {};
+          },
+        },
+      ];
+
+      for (const strategy of fileRecoveryStrategies) {
+        try {
+          checkAborted();
+
+          const files = await strategy.getFiles();
+          checkAborted();
+
+          if (Object.keys(files).length > 0) {
+            checkAborted();
+            await containerInstance.mount(convertFileMapToFileSystemTree(files));
+            checkAborted();
+
+            return true;
+          }
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      return false;
+    };
+
+    /**
+     * Generates descriptions for image attachments using AI.
+     * Updates the attachment objects with features and details.
+     */
+    const generateImageDescriptions = async (
+      messageContent: string,
+      imageAttachments: ChatAttachment[],
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Image description generation aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const urls = imageAttachments.map((item) => item.url);
+      const descriptionResponse = await fetch('/api/image-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageContent,
+          imageUrls: urls,
+        }),
+        signal,
+      });
+      checkAborted();
+
+      if (!descriptionResponse.ok) {
+        const serverMessage = await descriptionResponse.text();
+        checkAborted();
+
+        throw new FetchError(
+          (serverMessage ?? 'unknown error').trim(),
+          descriptionResponse.status,
+          'generate_image_description',
+        );
+      }
+
+      const descriptions = await descriptionResponse.json();
+      checkAborted();
+
+      if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+        for (let i = 0; i < imageAttachments.length; i++) {
+          imageAttachments[i].features = descriptions[i].features;
+          imageAttachments[i].details = descriptions[i].details;
+        }
+      }
     };
 
     useEffect(() => {
@@ -1170,8 +1627,8 @@ export const ChatImpl = memo(
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
       // Clear logs from previous request
-      logManager.clear();
-      addDebugLog(8);
+      clearDebugLog();
+      addDebugLog('sendMessage');
 
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
@@ -1198,65 +1655,29 @@ export const ChatImpl = memo(
       lastUserPromptRef.current = messageContent;
 
       if (chatStarted && Object.keys(files).length === 0) {
-        addDebugLog(9);
+        sendMessageAbortControllerRef.current = new AbortController();
 
         const fileRecoveryStartTime = performance.now();
-        let recoverySuccessful = false;
-        const containerInstance = await workbench.container;
 
-        const fileRecoveryStrategies = [
-          {
-            name: 'Workbench',
-            getFiles: () => workbench.files.get(),
-            logSuccess: () => console.log('files recovery from workbench successful'),
-          },
-          {
-            name: 'Gitbase',
-            getFiles: async () => {
-              addDebugLog(10);
+        try {
+          const recovered = await recoverFiles(sendMessageAbortControllerRef.current.signal);
 
-              const projectPath = repoStore.get().path;
+          if (!recovered) {
+            processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+              context: 'sendMessage - files check',
+            });
 
-              if (projectPath) {
-                addDebugLog(11);
-
-                const files = await fetchProjectFiles(projectPath);
-                addDebugLog(12);
-
-                return files;
-              } else {
-                addDebugLog(13);
-                return {};
-              }
-            },
-            logSuccess: () => console.log('files recovery from gitbase successful'),
-          },
-        ];
-
-        for (const strategy of fileRecoveryStrategies) {
-          try {
-            const files = await strategy.getFiles();
-
-            if (Object.keys(files).length > 0) {
-              addDebugLog(14);
-              await containerInstance.mount(convertFileMapToFileSystemTree(files));
-              strategy.logSuccess();
-              recoverySuccessful = true;
-              break;
-            }
-          } catch (error) {
-            console.error(`${strategy.name} recovery failed:`, error);
+            return;
           }
-        }
+        } catch (error) {
+          if (isAbortError(error)) {
+            logger.info('File recovery aborted by user');
+            return;
+          }
 
-        if (!recoverySuccessful) {
-          addDebugLog(15);
-
-          processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
-            context: 'sendMessage - files check',
-          });
-
-          return;
+          throw error;
+        } finally {
+          sendMessageAbortControllerRef.current = null;
         }
       }
 
@@ -1269,349 +1690,63 @@ export const ChatImpl = memo(
       runAnimation();
       workbench.currentView.set('code');
 
-      if (attachmentList.length > 0) {
+      const wasFirstChat = !chatStarted;
+      const startTime = performance.now();
+      sendMessageAbortControllerRef.current = new AbortController();
+
+      try {
+        // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
           ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
         );
 
         if (imageAttachments.length > 0) {
-          setFakeLoading(true);
-
-          const urls = imageAttachments.map((item) => item.url);
-
           try {
-            const descriptionResponse = await fetch('/api/image-description', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                message: messageContent,
-                imageUrls: urls,
-              }),
-            });
-
-            if (!descriptionResponse.ok) {
-              const serverMessage = await descriptionResponse.text();
-              throw new FetchError(
-                (serverMessage ?? 'unknown error').trim(),
-                descriptionResponse.status,
-                'generate_image_description',
-              );
-            }
-
-            const descriptions = await descriptionResponse.json();
-
-            if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
-              for (let i = 0; i < imageAttachments.length; i++) {
-                imageAttachments[i].features = descriptions[i].features;
-                imageAttachments[i].details = descriptions[i].details;
-              }
-            }
+            addDebugLog('Start:generateImageDescriptions');
+            await generateImageDescriptions(
+              messageContent,
+              imageAttachments,
+              sendMessageAbortControllerRef.current.signal,
+            );
+            addDebugLog('Complete:generateImageDescriptions');
           } catch (descError) {
-            if (
-              processError(
-                descError instanceof Error ? descError.message : 'Image description failed',
-                chatRequestStartTimeRef.current ?? 0,
-                {
-                  error: descError instanceof Error ? descError : String(descError),
-                  context: 'image-description API',
-                },
-              )
-            ) {
-              setFakeLoading(false);
-              return;
+            addDebugLog('Fail:generateImageDescriptions');
+
+            // AbortError should propagate to outer catch
+            if (isAbortError(descError)) {
+              throw descError;
             }
 
-            logger.error('Error generating image description:', descError);
+            // shouldShowErrorPage errors should propagate to outer catch (will be handled there)
+            if (shouldShowErrorPage(descError)) {
+              throw descError;
+            }
+
+            // Non-critical errors only: log and continue with default
+            processError(
+              descError instanceof Error ? descError.message : 'Image description failed',
+              chatRequestStartTimeRef.current ?? 0,
+              {
+                error: descError instanceof Error ? descError : String(descError),
+                context: 'image-description API',
+                skipToast: true,
+              },
+            );
             toast.warning('Could not generate image description, using default');
           }
         }
-      }
 
-      if (!chatStarted) {
-        addDebugLog(16);
-
-        const templateSelectionStartTime = performance.now();
-
-        try {
-          // Set progress annotation for analyzing request
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'in-progress',
-              order: 1,
-              message: 'Analyzing your request...',
-            },
-          ]);
-
-          const { template, title, projectRepo } = await selectStarterTemplate({
-            message: messageContent,
-          });
-
-          addDebugLog(20);
-
-          if (!template) {
-            throw new Error('Not Found Template');
-          }
-
-          // Update progress annotation for selecting template
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'complete',
-              order: 1,
-              message: 'Request analyzed',
-            },
-            {
-              type: 'progress',
-              label: 'template',
-              status: 'in-progress',
-              order: 2,
-              message: 'Setting up base project...',
-            },
-          ]);
-
-          addDebugLog(17);
-
-          const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
-            const status = getErrorStatus(e);
-
-            if (status === 401 || status === 404) {
-              throw e;
-            }
-
-            if (e.message.includes('rate limit')) {
-              toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
-            } else {
-              toast.warning('Failed to import starter template\nRetry again after a few minutes.');
-            }
-          });
-
-          addDebugLog(21);
-
-          const projectPath = temResp?.project?.path;
-          const projectName = temResp?.project?.name;
-          const templateCommitId = temResp?.commit?.id;
-          workbench.showWorkbench.set(true);
-
-          if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
-            throw new Error('Not Found Template Data');
-          }
-
-          // Inject .env into fileMap so Agent can read it in the first response
-          const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
-
-          if (accessToken) {
-            try {
-              addDebugLog(22);
-
-              const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
-
-              addDebugLog(23);
-
-              if (user.isActivated && user.walletAddress) {
-                temResp.fileMap['.env'] = {
-                  type: 'file',
-                  content: getEnvContent(user.walletAddress),
-                  isBinary: false,
-                };
-              }
-            } catch (error) {
-              if (getErrorStatus(error) === 401) {
-                logger.error('Authentication failed during .env generation:', error);
-                throw error;
-              }
-
-              logger.warn('Failed to generate .env for first message:', error);
-            }
-          }
-
-          const processedFileMap = Object.entries(temResp.fileMap).reduce(
-            (acc, [key, value]) => {
-              acc[WORK_DIR + '/' + key] = value;
-              return acc;
-            },
-            {} as Record<string, any>,
-          );
-          workbench.files.set(processedFileMap);
-
-          addDebugLog(24);
-
-          const containerInstance = await workbench.container;
-          addDebugLog(25);
-          await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-
-          if (isEnabledGitbasePersistence) {
-            if (!projectPath || !projectName || !templateCommitId) {
-              throw new Error('Cannot create project');
-            }
-
-            let branchName = 'develop';
-
-            if (enabledTaskMode) {
-              addDebugLog(26);
-
-              const { success, message, data } = await createTaskBranch(projectPath);
-              addDebugLog(27);
-
-              if (!success) {
-                processError(message, templateSelectionStartTime, {
-                  context: 'createTaskBranch - starter template',
-                });
-
-                return;
-              }
-
-              branchName = data.branchName;
-            }
-
-            repoStore.set({
-              name: projectName,
-              path: projectPath,
-              title,
-              taskBranch: branchName,
-            });
-
-            addDebugLog(28);
-
-            // Record prompt activity for first request
-            sendActivityPrompt(projectPath).catch((error) => {
-              logger.warn('Failed to record prompt activity:', error);
-            });
-
-            addDebugLog(29);
-            changeChatUrl(projectPath, { replace: true });
-          } else {
-            repoStore.set({
-              name: projectRepo,
-              path: projectRepo,
-              title,
-              taskBranch: 'develop',
-            });
-
-            // Record prompt activity for first request
-            addDebugLog(30);
-            sendActivityPrompt(projectRepo).catch((error) => {
-              logger.warn('Failed to record prompt activity:', error);
-            });
-
-            addDebugLog(31);
-            changeChatUrl(projectRepo, { replace: true });
-            addDebugLog(32);
-          }
-
-          const firstChatModel =
-            model === 'auto'
-              ? template.name.includes('3d')
-                ? FIXED_MODELS.FIRST_3D_CHAT
-                : FIXED_MODELS.FIRST_2D_CHAT
-              : {
-                  model,
-                  provider,
-                };
-
-          const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
-
-          // Complete template selection
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'complete',
-              order: 1,
-              message: 'Request analyzed',
-            },
-            {
-              type: 'progress',
-              label: 'template',
-              status: 'complete',
-              order: 2,
-              message: 'Template selected',
-            },
-          ]);
-
-          // Clear progress annotations after a short delay
-          setTimeout(() => {
-            setCustomProgressAnnotations([]);
-          }, 1000);
-
-          addDebugLog(33);
-          setMessages([
-            {
-              id: `1-${new Date().getTime()}`,
-              role: 'user',
-              parts: [
-                {
-                  type: 'text',
-                  text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-                    attachmentList,
-                  )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
-                },
-              ],
-            },
-          ]);
-          addDebugLog(34);
-          regenerate();
-          addDebugLog(35);
-          setInput('');
-          Cookies.remove(PROMPT_COOKIE_KEY);
-
-          addDebugLog(36);
-          sendEventToParent('EVENT', { name: 'START_EDITING' });
-
-          addDebugLog(37);
-          setAttachmentList([]);
-          addDebugLog(38);
-
-          addDebugLog(39);
-          resetEnhancer();
-          addDebugLog(40);
-
-          textareaRef.current?.blur();
-
-          return;
-        } catch (error) {
-          addDebugLog(18);
-
-          // Clear progress annotations on error
-          setCustomProgressAnnotations([]);
-
-          const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
-
-          // Check if error message has meaningful content
-          const isMeaningfulErrorMessage =
-            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
-
-          processError(
-            isMeaningfulErrorMessage
-              ? errorMessage
-              : 'Failed to import starter template\nRetry again after a few minutes.',
-            templateSelectionStartTime,
-            {
-              error: error instanceof Error ? error : String(error),
-              context: 'starter template selection',
-              toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
-            },
-          );
-
-          setChatStarted(false);
-          setFakeLoading(false);
+        if (wasFirstChat) {
+          addDebugLog('Start:prepareFirstChat');
+          await prepareFirstChat(messageContent, attachmentList, sendMessageAbortControllerRef.current.signal);
+          addDebugLog('Complete:prepareFirstChat');
 
           return;
         }
-      }
 
-      const sendMessageFinalStartTime = performance.now();
-
-      try {
         // Record prompt activity for subsequent requests
         if (repoStore.get().path) {
-          addDebugLog(41);
           sendActivityPrompt(repoStore.get().path);
-          addDebugLog(42);
         }
 
         if (error != null) {
@@ -1621,13 +1756,12 @@ export const ChatImpl = memo(
         chatStore.setKey('aborted', false);
 
         if (repoStore.get().path) {
-          addDebugLog(43);
+          addDebugLog('Start:commitModifiedFiles');
 
-          const commit = await workbench.commitModifiedFiles();
-          addDebugLog(44);
+          const commit = await workbench.commitModifiedFiles(sendMessageAbortControllerRef.current.signal);
+          addDebugLog('Complete:commitModifiedFiles');
 
           if (commit) {
-            addDebugLog(45);
             setMessages((prev: UIMessage[]) => [
               ...prev,
               {
@@ -1641,15 +1775,17 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
-            addDebugLog(46);
           }
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const createTaskBranchStartTime = performance.now();
-            addDebugLog(47);
+            addDebugLog('Start:createTaskBranch');
 
-            const { success, message, data } = await createTaskBranch(repoStore.get().path);
-            addDebugLog(48);
+            const { success, message, data } = await createTaskBranch(
+              repoStore.get().path,
+              sendMessageAbortControllerRef.current.signal,
+            );
+            addDebugLog('Complete:createTaskBranch');
 
             if (!success) {
               processError(message, createTaskBranchStartTime, {
@@ -1669,7 +1805,7 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
-        addDebugLog(19);
+        addDebugLog('Start:sendChatMessage');
         sendChatMessage({
           role: 'user',
           parts: [
@@ -1681,7 +1817,7 @@ export const ChatImpl = memo(
             },
           ],
         });
-        addDebugLog(49);
+        addDebugLog('Complete:sendChatMessage');
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 
@@ -1691,16 +1827,54 @@ export const ChatImpl = memo(
 
         textareaRef.current?.blur();
       } catch (error) {
-        logger.error('Error sending message:', error);
+        addDebugLog('Fail:sendMessage');
 
-        if (error instanceof Error) {
-          processError('Error:' + error?.message, sendMessageFinalStartTime, {
-            error,
-            context: 'sendMessage function',
-          });
+        // Clean up on any error
+        setCustomProgressAnnotations([]);
+        setFakeLoading(false);
 
+        // Reset first chat state for any error
+        if (wasFirstChat) {
+          resetFirstChatState();
+        }
+
+        // AbortError is a normal cancellation - handle gracefully
+        if (isAbortError(error)) {
+          logger.info('Send message aborted by user');
           return;
         }
+
+        logger.error('Error in sendMessage:', error);
+
+        const errorObj = error instanceof Error ? error : String(error);
+        const context = wasFirstChat ? 'starter template selection' : 'sendMessage function';
+
+        let displayMessage: string;
+        let toastType: 'error' | 'warning' = 'error';
+
+        if (wasFirstChat) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
+          const isMeaningful =
+            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
+
+          displayMessage = isMeaningful
+            ? errorMessage
+            : 'Failed to import starter template\nRetry again after a few minutes.';
+
+          if (!isMeaningful) {
+            toastType = 'warning';
+          }
+        } else {
+          displayMessage = 'Error:' + (error instanceof Error ? error.message : String(error));
+        }
+
+        processError(displayMessage, startTime, {
+          error: errorObj,
+          context,
+          toastType,
+        });
+      } finally {
+        sendMessageAbortControllerRef.current = null;
       }
     };
 

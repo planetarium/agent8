@@ -128,6 +128,11 @@ export const EXCLUSIVE_3D_DOC_TOOLS = [
   'read_vibe_starter_3d_view_controllers',
 ];
 
+// Error names
+export const ERROR_NAMES = {
+  ABORT: 'AbortError',
+} as const;
+
 export const ATTACHMENT_EXTS = [
   '.png',
   '.jpg',
