@@ -402,6 +402,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         if (!ATTACHMENT_EXTS.includes(fileExt)) {
           handleChatError('Not allowed file type', {
             context: 'uploadFileAndAddToAttachmentList - file type validation',
+            sendChatError: false,
           });
           return;
         }
@@ -424,6 +425,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         } else {
           handleChatError('Only media files are allowed', {
             context: 'uploadFileAndAddToAttachmentList - media file validation',
+            sendChatError: false,
           });
           return;
         }
