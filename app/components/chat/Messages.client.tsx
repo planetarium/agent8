@@ -168,8 +168,20 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
+
+              /*
+               * Only consider it the first assistant message if there are no more messages to load
+               * and it's truly the first visible assistant message in the entire chat history
+               */
               const isFirstAssistantMessage =
-                !isUserMessage && messages.slice(0, index).filter((m) => m.role === 'assistant').length === 0;
+                !isUserMessage &&
+                !hasMore &&
+                messages.slice(0, index).filter((m) => {
+                  const meta = m.metadata as any;
+                  const isHiddenMsg = meta?.annotations?.includes('hidden');
+
+                  return m.role === 'assistant' && !isHiddenMsg;
+                }).length === 0;
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
@@ -314,21 +326,19 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               <span className="text-heading-xs text-subtle">Response Generated</span>
                             )}
                           </div>
-                          {/* Show All/Hide button: always visible on mobile, hidden during generation on desktop */}
-                          {(isSmallViewport || !(isLast && isGenerating)) && (
-                            <button
-                              onClick={(e) => toggleExpanded(index, e)}
-                              className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
-                            >
-                              {expandedMessages.has(index) ? 'Hide' : 'Show All'}
-                              <ChevronRightIcon
-                                width={16}
-                                height={16}
-                                fill="currentColor"
-                                className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
-                              />
-                            </button>
-                          )}
+                          {/* Show All/Hide button: always visible */}
+                          <button
+                            onClick={(e) => toggleExpanded(index, e)}
+                            className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
+                          >
+                            {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                            <ChevronRightIcon
+                              width={16}
+                              height={16}
+                              fill="currentColor"
+                              className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                            />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -337,8 +347,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Hide View Diff button for the first AI response, non-last messages, and mobile */}
-                        {!isFirstAssistantMessage && isLast && !isSmallViewport && (
+                        {/* Hide View Diff button for the first AI response and mobile */}
+                        {!isFirstAssistantMessage && !isSmallViewport && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
                               <CustomIconButton
@@ -367,7 +377,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               size="sm"
                               icon={<CopyLineIcon size={20} />}
                               onClick={() => {
-                                navigator.clipboard.writeText(messageText);
+                                // Get rendered text from message content only (excludes UI buttons like Show All/Hide)
+                                const messageElement = document.querySelector(
+                                  `[data-message-index="${index}"]`,
+                                ) as HTMLElement | null;
+                                const contentElement = messageElement?.querySelector(
+                                  '[data-message-content]',
+                                ) as HTMLElement | null;
+                                const textToCopy = contentElement?.innerText || messageText;
+                                navigator.clipboard.writeText(textToCopy);
                                 toast.success('Copied to clipboard');
                               }}
                               disabled={isGenerating}

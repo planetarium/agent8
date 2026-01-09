@@ -50,7 +50,7 @@ export function Header() {
     <TooltipProvider>
       {showHeader && (
         <header
-          className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
+          className={classNames('flex items-center py-5 px-7 border-b h-[var(--header-height)]', {
             'border-transparent flex-shrink-0': !chat.started,
             'border-bolt-elements-borderColor': chat.started,
             'mt-5 bg-primary': !chat.started && isEmbedMode,
@@ -75,8 +75,8 @@ export function Header() {
           {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
             <div className="flex justify-between items-center self-stretch w-full">
               <span
-                className={classNames('text-interactive-neutral overflow-visible', {
-                  'px-4': !isEmbedMode,
+                className={classNames('text-interactive-neutral overflow-visible flex-1 min-w-0', {
+                  'pl-4': !isEmbedMode,
                 })}
               >
                 <ClientOnly>{() => <ChatDescription />}</ClientOnly>
@@ -84,11 +84,11 @@ export function Header() {
 
               {/* Desktop: Show all buttons */}
               {!isSmallViewport && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                   {repo.path && (
                     <Dropdown
                       trigger={
-                        <CustomIconButton variant="secondary-outlined" size="md" icon={<MoreIcon size={20} />} />
+                        <CustomIconButton variant="secondary-outlined" size="md" icon={<MoreIcon size={22} />} />
                       }
                       align="end"
                       size="compact"

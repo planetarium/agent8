@@ -63,7 +63,6 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
   const randomTip = useRandomTip();
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPreviewOnly, setIsPreviewOnly] = useState(false);
   const hasSelectedPreview = useRef(false);
   const previews = useWorkbenchPreviews();
   const selectedView = useWorkbenchCurrentView();
@@ -424,10 +423,7 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={`w-full h-full flex flex-col relative ${isPreviewOnly ? 'fixed inset-0 z-50 bg-white' : ''}`}
-    >
+    <div ref={containerRef} className="w-full h-full flex flex-col relative">
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
@@ -442,11 +438,6 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
           <>
             <div className="flex items-center gap-2">
               <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
-              <IconButton
-                icon="i-ph:layout-light"
-                onClick={() => setIsPreviewOnly(!isPreviewOnly)}
-                title={isPreviewOnly ? 'Show Full Interface' : 'Show Preview Only'}
-              />
               <IconButton
                 icon={isFullscreen ? 'i-ph:arrows-in' : 'i-ph:arrows-out'}
                 onClick={toggleFullscreen}
@@ -554,12 +545,6 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
                   </>
                 )}
               </div>
-
-              <IconButton
-                icon="i-ph:layout-light"
-                onClick={() => setIsPreviewOnly(!isPreviewOnly)}
-                title={isPreviewOnly ? 'Show Full Interface' : 'Show Preview Only'}
-              />
 
               <IconButton
                 icon={isFullscreen ? 'i-ph:arrows-in' : 'i-ph:arrows-out'}
