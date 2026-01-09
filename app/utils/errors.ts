@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 /**
  * Custom error class for fetch/HTTP errors with status code
  */
@@ -10,6 +12,24 @@ export class FetchError extends Error {
     super(message);
     this.name = 'FetchError';
   }
+}
+
+/**
+ * Helper function to check if an error is an abort/cancel error
+ * Supports: DOMException (fetch), CanceledError (axios)
+ */
+export function isAbortError(error: unknown): boolean {
+  // fetch API: DOMException with name 'AbortError'
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  // axios: CanceledError
+  if (axios.isCancel(error)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
