@@ -13,7 +13,7 @@ import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import type { RestoreHistoryEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
+import { restoreEventStore } from '~/lib/stores/restore';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
 
@@ -119,8 +119,6 @@ export function useGitbaseChatHistory() {
         return;
       }
 
-      logger.debug(`loaded, page: ${page}, untilCommit: ${untilCommit}`);
-
       if (!force) {
         // 이미 로딩 중이면 종료
         if (loading) {
@@ -215,20 +213,22 @@ export function useGitbaseChatHistory() {
                 return restoreTime >= minTime; // Include all restores from minTime onwards
               });
 
-              restoreMessages = filteredHistory.map((entry: RestoreHistoryEntry) => ({
-                id: `restore-${entry.commitHash}`,
-                role: 'assistant' as const,
-                parts: [
-                  {
-                    type: 'text' as const,
-                    text: `${entry.commitTitle}`,
+              restoreMessages = filteredHistory.map((entry: RestoreHistoryEntry) => {
+                return {
+                  id: `restore-${entry.commitHash}`,
+                  role: 'assistant' as const,
+                  parts: [
+                    {
+                      type: 'text' as const,
+                      text: `${entry.commitTitle}`,
+                    },
+                  ],
+                  metadata: {
+                    createdAt: new Date(entry.restoredAt),
+                    annotations: ['restore-message'],
                   },
-                ],
-                metadata: {
-                  createdAt: new Date(entry.restoredAt),
-                  annotations: ['restore-message'],
-                },
-              }));
+                };
+              });
             }
           }
         } catch (err) {
@@ -290,6 +290,7 @@ export function useGitbaseChatHistory() {
 
             return 0;
           });
+
           setChats(allMessages);
         }
 
@@ -358,7 +359,40 @@ export function useGitbaseChatHistory() {
           const savedRestorePoint = await getRestorePoint(projectPath);
 
           if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
-            revertToCommit = savedRestorePoint;
+            /*
+             * Check if a new commit was created after the restore.
+             * If so, ignore the restore point and load latest files.
+             */
+            const [latestCommitData, restoreHistory] = await Promise.all([
+              getProjectCommits(projectPath, { branch: 'develop', page: 1 }),
+              getRestoreHistory(projectPath),
+            ]);
+
+            if (latestCommitData.success && latestCommitData.data.commits.length > 0) {
+              const latestCommit = latestCommitData.data.commits[0];
+              const latestCommitTime = new Date(latestCommit.created_at).getTime();
+
+              const restoreEntry = restoreHistory.find(
+                (entry: RestoreHistoryEntry) => entry.commitHash === savedRestorePoint,
+              );
+
+              if (restoreEntry) {
+                const restoredAt = new Date(restoreEntry.restoredAt).getTime();
+
+                // Only use restore point if no new commit after restore
+                if (latestCommitTime <= restoredAt) {
+                  revertToCommit = savedRestorePoint;
+                } else {
+                  logger.info('New commit found after restore, ignoring saved restore point');
+                }
+              } else {
+                // No restore entry found, use the saved restore point
+                revertToCommit = savedRestorePoint;
+              }
+            } else {
+              // Couldn't fetch commits, use the saved restore point as fallback
+              revertToCommit = savedRestorePoint;
+            }
           }
         } catch (err) {
           console.warn('Failed to get restore point from GitLab:', err);
@@ -386,7 +420,34 @@ export function useGitbaseChatHistory() {
             const savedRestorePoint = await getRestorePoint(projectPath);
 
             if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
-              revertToCommit = savedRestorePoint;
+              // Check if a new commit was created after the restore
+              const [latestCommitData, restoreHistory] = await Promise.all([
+                getProjectCommits(projectPath, { branch: 'develop', page: 1 }),
+                getRestoreHistory(projectPath),
+              ]);
+
+              if (latestCommitData.success && latestCommitData.data.commits.length > 0) {
+                const latestCommit = latestCommitData.data.commits[0];
+                const latestCommitTime = new Date(latestCommit.created_at).getTime();
+
+                const restoreEntry = restoreHistory.find(
+                  (entry: RestoreHistoryEntry) => entry.commitHash === savedRestorePoint,
+                );
+
+                if (restoreEntry) {
+                  const restoredAt = new Date(restoreEntry.restoredAt).getTime();
+
+                  if (latestCommitTime <= restoredAt) {
+                    revertToCommit = savedRestorePoint;
+                  } else {
+                    logger.info('New commit found after restore, ignoring saved restore point');
+                  }
+                } else {
+                  revertToCommit = savedRestorePoint;
+                }
+              } else {
+                revertToCommit = savedRestorePoint;
+              }
             }
           } catch (err) {
             console.warn('Failed to get restore point from GitLab:', err);
@@ -400,29 +461,11 @@ export function useGitbaseChatHistory() {
     return () => unsubscribe();
   }, [load, projectPath]);
 
-  // Subscribe to restore events and add message to chat
+  // Subscribe to restore events - only update cached history (Chat component handles UI)
   useEffect(() => {
     const unsubscribe = restoreEventStore.subscribe((event) => {
       if (event && loaded) {
-        const restoreMessage: UIMessage = {
-          id: `restore-${event.commitHash}-${event.timestamp}`,
-          role: 'assistant',
-          parts: [
-            {
-              type: 'text',
-              text: `${event.commitTitle}`,
-            },
-          ],
-          metadata: {
-            createdAt: new Date(),
-            annotations: ['restore-message'],
-          },
-        };
-
-        // Add restore message to the end of chats (most recent)
-        setChats((prevChats) => [...prevChats, restoreMessage]);
-
-        // Update cached restore history with new entry
+        // Update cached restore history with new entry (for future page loads)
         const newEntry: RestoreHistoryEntry = {
           commitHash: event.commitHash,
           commitTitle: event.commitTitle,
@@ -431,8 +474,10 @@ export function useGitbaseChatHistory() {
 
         setCachedRestoreHistory((prevHistory) => [newEntry, ...prevHistory].slice(0, 200));
 
-        // Clear the event after processing
-        clearRestoreEvent();
+        /*
+         * Note: We don't update chats here because it would overwrite current session messages.
+         * The Chat component handles adding restore message to initialMessages directly.
+         */
       }
     });
 

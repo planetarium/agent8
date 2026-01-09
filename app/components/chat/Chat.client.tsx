@@ -42,6 +42,7 @@ import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
 import { streamingState, shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
+import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
@@ -359,7 +360,11 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
   useEffect(() => {
     if (loaded && chats.length > 0) {
       setInitialMessages(chats);
-    } else if (!loaded) {
+    } else if (loaded && chats.length === 0) {
+      /*
+       * Only clear when loaded=true but no chats (new project)
+       * Don't clear when loaded=false to prevent UI flicker during restore
+       */
       setInitialMessages([]);
     }
   }, [loaded, chats]);
@@ -865,6 +870,34 @@ export const ChatImpl = memo(
         }
       }
     }, [initialMessages]);
+
+    // Handle restore events - add restore message directly to messages (bypass initialMessages)
+    useEffect(() => {
+      const unsubscribe = restoreEventStore.subscribe((event) => {
+        if (event) {
+          const restoreMessage: UIMessage = {
+            id: `restore-${event.commitHash}-${event.timestamp}`,
+            role: 'assistant',
+            parts: [
+              {
+                type: 'text',
+                text: `${event.commitTitle}`,
+              },
+            ],
+            metadata: {
+              createdAt: new Date(),
+              annotations: ['restore-message'],
+            },
+          };
+
+          // Add restore message to current messages directly
+          setMessages((prev) => [...prev, restoreMessage]);
+          clearRestoreEvent();
+        }
+      });
+
+      return () => unsubscribe();
+    }, [setMessages]);
 
     useEffect(() => {
       processSampledMessages({
