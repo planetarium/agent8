@@ -53,3 +53,14 @@ export function getErrorStatus(error: unknown): number | null {
 
   return null;
 }
+
+export class SkipToastError extends FetchError {
+  constructor(
+    message: string,
+    public status: number,
+    public context?: string,
+  ) {
+    super(message, status, context);
+    this.name = 'SkipToastError';
+  }
+}
