@@ -1,6 +1,5 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { createUIMessageStream, createUIMessageStreamResponse, generateId, type UIMessage } from 'ai';
-import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/common/prompts/prompts';
 import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
 import { createScopedLogger } from '~/utils/logger';
@@ -9,8 +8,8 @@ import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { extractTextContent } from '~/utils/message';
-import SwitchableStream from '~/lib/.server/llm/switchable-stream';
-import { TOOL_NAMES } from '~/utils/constants';
+import { ERROR_NAMES, TOOL_NAMES } from '~/utils/constants';
+import { isAbortError } from '~/utils/errors';
 import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
 import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/submit-actions';
 import {
@@ -127,7 +126,13 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
   const cookieHeader = request.headers.get('Cookie');
 
-  const stream = new SwitchableStream();
+  // Helper function to check if request has been aborted
+  const checkAborted = () => {
+    if (request.signal.aborted) {
+      logger.info('Request aborted by client');
+      throw new DOMException('Request aborted by client', ERROR_NAMES.ABORT);
+    }
+  };
 
   const cumulativeUsage = {
     completionTokens: 0,
@@ -295,17 +300,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 );
               }
 
-              // stream.close();
               return;
             }
-
-            if (stream.switches >= MAX_RESPONSE_SEGMENTS) {
-              throw Error('Cannot continue message: Maximum segments reached');
-            }
-
-            const switchesLeft = MAX_RESPONSE_SEGMENTS - stream.switches;
-
-            logger.info(`Reached max token limit (${MAX_TOKENS}): Continuing message (${switchesLeft} switches left)`);
 
             // Only add assistant message if content is not empty
             if (content && content.trim().length > 0) {
@@ -317,6 +313,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               role: 'user',
               parts: [{ type: 'text', text: `[Model: ${model}]\n\n[Provider: ${provider}]\n\n${CONTINUE_PROMPT}` }],
             });
+
+            checkAborted();
 
             const result = await streamText({
               messages,
@@ -332,6 +330,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               const reader = uiStream.getReader();
 
               while (true) {
+                checkAborted();
+
                 const { done, value } = await reader.read();
 
                 if (done) {
@@ -341,6 +341,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
                 writer.write(value);
               }
             } catch (error) {
+              // AbortError is expected when client disconnects
+              if (isAbortError(error)) {
+                logger.info('Continuation streaming aborted by client');
+                return;
+              }
+
               writer.write(
                 createDataError(
                   'stream-processing',
@@ -362,6 +368,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
         let result;
 
         try {
+          checkAborted();
+
           result = await streamText({
             messages,
             env,
@@ -396,6 +404,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           let prevLogMessage: string | null = null;
 
           while (true) {
+            checkAborted();
+
             const { done, value } = await reader.read();
 
             if (done) {
@@ -420,6 +430,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             writer.write(value);
           }
         } catch (error) {
+          // AbortError is expected when client disconnects
+          if (isAbortError(error)) {
+            logger.info('Stream processing aborted by client');
+            return;
+          }
+
           writer.write(
             createDataError('stream-processing', error instanceof Error ? error.message : 'Stream processing failed'),
           );

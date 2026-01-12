@@ -200,7 +200,7 @@ ${truncateMessage(
   return result;
 };
 
-export const commitUserChanged = async () => {
+export const commitUserChanged = async (signal?: AbortSignal) => {
   const modifiedFiles = workbenchStore.getModifiedFiles();
   const projectName = repoStore.get().name;
   const title = repoStore.get().title;
@@ -221,15 +221,19 @@ export const commitUserChanged = async () => {
       content: (file as any).content,
     }));
 
-  const response = await axios.post('/api/gitlab/commits', {
-    projectName,
-    isFirstCommit: false,
-    description: title,
-    files,
-    commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
-    baseCommit: revertTo,
-    branch: taskBranch,
-  });
+  const response = await axios.post(
+    '/api/gitlab/commits',
+    {
+      projectName,
+      isFirstCommit: false,
+      description: title,
+      files,
+      commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
+      baseCommit: revertTo,
+      branch: taskBranch,
+    },
+    { signal },
+  );
 
   const result = response.data;
 
@@ -383,16 +387,20 @@ export const getTaskBranches = async (projectPath: string) => {
   return response.data;
 };
 
-export const createTaskBranch = async (projectPath: string) => {
+export const createTaskBranch = async (projectPath: string, signal?: AbortSignal) => {
   const url = new URL(window.location.href);
   const revertToParam = url.searchParams.get('revertTo');
   const revertTo = revertToParam && isCommitHash(revertToParam) ? revertToParam : null;
 
-  const response = await axios.post('/api/gitlab/task-branches', {
-    projectPath,
-    action: 'create',
-    baseRef: revertTo || 'develop',
-  });
+  const response = await axios.post(
+    '/api/gitlab/task-branches',
+    {
+      projectPath,
+      action: 'create',
+      baseRef: revertTo || 'develop',
+    },
+    { signal },
+  );
 
   return response.data;
 };

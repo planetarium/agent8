@@ -7,7 +7,7 @@ import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
 import { TEMPLATE_BASIC, TEMPLATE_MAP } from '~/constants/template';
 import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
-import { FetchError } from './errors';
+import { FetchError, isAbortError } from './errors';
 
 // Zod schema for template selection response
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
@@ -85,19 +85,26 @@ MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
 
 let templates: Template[] = STARTER_TEMPLATES;
 
-export const selectStarterTemplate = async (options: { message: string }) => {
+export const selectStarterTemplate = async (options: { message: string; signal?: AbortSignal }) => {
+  const { message, signal } = options;
+
   try {
     const branch = import.meta.env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
     const response = await fetch(
       `https://raw.githubusercontent.com/planetarium/agent8-templates/${branch}/templates.json`,
+      { signal },
     );
     templates = await response.json();
-  } catch {
+  } catch (e) {
+    // Re-throw AbortError
+    if (isAbortError(e)) {
+      throw e;
+    }
+
     console.log('Failed to fetch templates, using local fallback');
     templates = STARTER_TEMPLATES;
   }
 
-  const { message } = options;
   const requestBody = {
     message,
     system: starterTemplateSelectionPrompt(templates),
@@ -106,6 +113,7 @@ export const selectStarterTemplate = async (options: { message: string }) => {
   const response = await fetch('/api/startcall', {
     method: 'POST',
     body: JSON.stringify(requestBody),
+    signal,
   });
 
   if (!response.ok) {
