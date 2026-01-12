@@ -4,7 +4,7 @@ import Lottie from 'lottie-react';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
-import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { useRandomTip } from '~/lib/hooks/useRandomTip';
 
 import type { JSONValue, UIMessage } from 'ai';
@@ -20,13 +20,14 @@ import { loadingAnimationData } from '~/utils/animationData';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import {
-  StarLineIcon,
+  BookmarkLineIcon,
   StarFillIcon,
   DiffIcon,
   RefreshIcon,
   CopyLineIcon,
   PlayIcon,
   ChevronRightIcon,
+  RevertIcon,
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -59,6 +60,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       annotations = [],
       progressAnnotations = [],
       onRetry,
+      onRevert,
       onViewDiff,
       onSaveVersion,
       onRestoreVersion,
@@ -73,9 +75,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Check for mobile viewport
     const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
-
-    // For Run Preview button layout purposes
-    const isSmallViewportForLayout = useViewport(MOBILE_BREAKPOINT);
 
     // Random game creation tip
     const randomTip = useRandomTip();
@@ -329,7 +328,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           {/* Show All/Hide button: always visible */}
                           <button
                             onClick={(e) => toggleExpanded(index, e)}
-                            className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
+                            className="flex text-interactive-neutral text-heading-2xs bg-primary gap-0.5 items-center"
                           >
                             {expandedMessages.has(index) ? 'Hide' : 'Show All'}
                             <ChevronRightIcon
@@ -347,29 +346,38 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Hide View Diff button for the first AI response and mobile */}
-                        {!isFirstAssistantMessage && !isSmallViewport && (
-                          <Tooltip.Root delayDuration={100}>
-                            <Tooltip.Trigger asChild>
-                              <CustomIconButton
-                                variant="secondary-transparent"
-                                size="sm"
-                                icon={<DiffIcon size={20} />}
-                                onClick={() => onViewDiff?.(message)}
-                                disabled={isGenerating}
-                              />
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                side="bottom"
-                              >
-                                View diff
-                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        )}
+                        {/* Show Save button for assistant messages that haven't been saved yet */}
+                        {role === 'assistant' &&
+                          messageId &&
+                          (() => {
+                            const commitHash = messageId.split('-').pop() as string;
+                            const savedTitle = savedVersions?.get(commitHash);
+
+                            return !savedTitle && isCommitHash(commitHash);
+                          })() && (
+                            <Tooltip.Root delayDuration={100}>
+                              <Tooltip.Trigger asChild>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<BookmarkLineIcon width={20} height={20} />}
+                                  onClick={() => onSaveVersion?.(message)}
+                                  disabled={isGenerating}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                  side="bottom"
+                                >
+                                  Save to Version History
+                                  <br />
+                                  and restore when needed
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
                             <CustomIconButton
@@ -401,6 +409,32 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         </Tooltip.Root>
+                        {/* Show Revert button for assistant messages with commit hash (except last message) */}
+                        {messageId &&
+                          isCommitHash(messageId.split('-').pop() as string) &&
+                          role === 'assistant' &&
+                          !isLast && (
+                            <Tooltip.Root delayDuration={100}>
+                              <Tooltip.Trigger asChild>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<RevertIcon width={20} height={20} />}
+                                  onClick={() => onRevert?.(message)}
+                                  disabled={isGenerating}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                  side="bottom"
+                                >
+                                  Revert
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
                         {/* Show Retry button only for the last message */}
                         {index > 0 && messages[index - 1]?.role === 'user' && isLast && (
                           <Tooltip.Root delayDuration={100}>
@@ -428,6 +462,29 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Portal>
                           </Tooltip.Root>
                         )}
+                        {/* Show View Diff button after Retry (if Retry exists) or after Revert (if no Retry) */}
+                        {!isFirstAssistantMessage && !isSmallViewport && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<DiffIcon size={20} />}
+                                onClick={() => onViewDiff?.(message)}
+                                disabled={isGenerating}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                side="bottom"
+                              >
+                                View diff
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
                       </div>
                       <div className="flex items-center">
                         {messageId &&
@@ -448,30 +505,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               >
                                 Restore
                               </CustomButton>
-                            ) : !savedTitle ? (
-                              <Tooltip.Root delayDuration={100}>
-                                <Tooltip.Trigger asChild>
-                                  <CustomButton
-                                    variant="secondary-text"
-                                    size="sm"
-                                    onClick={() => onSaveVersion?.(message)}
-                                  >
-                                    <StarLineIcon size={20} />
-                                    Save
-                                  </CustomButton>
-                                </Tooltip.Trigger>
-                                <Tooltip.Portal>
-                                  <Tooltip.Content
-                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                    side="bottom"
-                                  >
-                                    Save to Version History
-                                    <br />
-                                    and restore when needed
-                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                                  </Tooltip.Content>
-                                </Tooltip.Portal>
-                              </Tooltip.Root>
                             ) : null;
                           })()}
                         {isLast && (
@@ -490,7 +523,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 }}
                               >
                                 <PlayIcon color="currentColor" size={20} />
-                                {isSmallViewportForLayout ? 'Run' : 'Run Preview'}
+                                Preview
                               </CustomButton>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>

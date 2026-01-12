@@ -17,11 +17,14 @@ export interface BaseModalProps {
 
 interface ActionsProps {
   children: React.ReactNode;
+  gap?: 'gap-2' | 'gap-3';
+  layout?: 'default' | 'horizontal';
 }
 
 interface CancelButtonProps {
   children?: React.ReactNode;
   onClick?: () => void;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 interface ConfirmButtonProps {
@@ -29,18 +32,19 @@ interface ConfirmButtonProps {
   onClick?: () => void;
   disabled?: boolean;
   type?: 'button' | 'submit';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 // Actions container component
-function Actions({ children }: ActionsProps) {
+function Actions({ children, gap = 'gap-3', layout = 'default' }: ActionsProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <div className="flex flex-col items-start gap-[10px] self-stretch">
       <div
-        className={classNames('flex items-center gap-3 self-stretch', {
-          'justify-end': !isSmallViewport,
-          'flex-col-reverse': isSmallViewport,
+        className={classNames('flex items-center self-stretch', gap, {
+          'justify-end': (!isSmallViewport && layout === 'default') || layout === 'horizontal',
+          'flex-col-reverse': isSmallViewport && layout === 'default',
         })}
       >
         {children}
@@ -50,14 +54,14 @@ function Actions({ children }: ActionsProps) {
 }
 
 // Cancel button component
-function CancelButton({ children = 'Cancel', onClick }: CancelButtonProps) {
+function CancelButton({ children = 'Cancel', onClick, size = 'lg' }: CancelButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <CustomButton
       className={isSmallViewport ? 'w-full' : ''}
       variant="secondary-ghost"
-      size="lg"
+      size={size}
       type="button"
       onClick={onClick}
     >
@@ -67,14 +71,14 @@ function CancelButton({ children = 'Cancel', onClick }: CancelButtonProps) {
 }
 
 // Confirm button component
-function ConfirmButton({ children, onClick, disabled, type = 'button' }: ConfirmButtonProps) {
+function ConfirmButton({ children, onClick, disabled, type = 'button', size = 'lg' }: ConfirmButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <CustomButton
       className={isSmallViewport ? 'w-full' : ''}
       variant="primary-filled"
-      size="lg"
+      size={size}
       type={type}
       onClick={onClick}
       disabled={disabled}

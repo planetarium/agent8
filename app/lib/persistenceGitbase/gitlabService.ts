@@ -1364,6 +1364,24 @@ export class GitlabService {
   /**
    * Get version history for a project
    */
+  async getProjectBranches(projectPath: string): Promise<{ name: string; commit: { id: string; message: string } }[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const branches = await this.gitlab.Branches.all(project.id);
+
+      return branches.map((branch: any) => ({
+        name: branch.name,
+        commit: {
+          id: branch.commit.id,
+          message: branch.commit.message,
+        },
+      }));
+    } catch (error) {
+      logger.error('Failed to get project branches:', error);
+      return [];
+    }
+  }
+
   async getVersionHistory(projectPath: string): Promise<VersionEntry[]> {
     try {
       const project = await this.gitlab.Projects.show(projectPath);

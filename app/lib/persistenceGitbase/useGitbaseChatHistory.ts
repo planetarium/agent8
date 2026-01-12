@@ -161,6 +161,7 @@ export function useGitbaseChatHistory() {
           branch: 'develop',
           untilCommit,
           page,
+          all: true, // 모든 브랜치의 커밋을 포함
         })) as CommitResponse;
 
         if (!data.success) {
@@ -176,12 +177,17 @@ export function useGitbaseChatHistory() {
 
         setProject(data.data.project);
 
+        // Sort commits by time (most recent first) since we're getting from all branches
+        const sortedCommits = data.data.commits.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+
         // Set latest commit hash from the first commit (most recent)
-        if (data.data.commits.length > 0) {
-          repoStore.setKey('latestCommitHash', data.data.commits[0].id);
+        if (sortedCommits.length > 0) {
+          repoStore.setKey('latestCommitHash', sortedCommits[0].id);
         }
 
-        const newMessages = parseCommitMessages(data.data.commits);
+        const newMessages = parseCommitMessages(sortedCommits);
 
         // Get restore history and filter by commit time range
         let restoreMessages: UIMessage[] = [];
@@ -236,9 +242,23 @@ export function useGitbaseChatHistory() {
         }
 
         if (page > 1) {
-          // Load More: Merge new messages with restore messages and existing chats, then sort
+          /*
+           * Load More: Merge new messages with restore messages and existing chats, then sort
+           * Filter restore messages to avoid duplicates with existing ones
+           */
+          //
           setChats((prevChats) => {
-            const allMessages = [...newMessages, ...restoreMessages, ...prevChats];
+            // Get existing restore message IDs to avoid duplicates
+            const existingRestoreIds = new Set(
+              prevChats
+                .filter((msg) => (msg.metadata as any)?.annotations?.includes('restore-message'))
+                .map((msg) => msg.id),
+            );
+
+            // Filter out already added restore messages
+            const newRestoreMessages = restoreMessages.filter((msg) => !existingRestoreIds.has(msg.id));
+
+            const allMessages = [...newMessages, ...newRestoreMessages, ...prevChats];
 
             allMessages.sort((a, b) => {
               const metadataA = a.metadata as any;

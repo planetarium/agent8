@@ -151,16 +151,24 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
         projectPath: repo.path,
         page: page.toString(),
         perPage: COMMITS_PER_PAGE.toString(),
+        all: 'true',
       });
 
       const response = await fetch(`/api/gitlab/commits?${params}`);
       const data: CommitResponse = await response.json();
 
       if (data.success && data.data) {
-        const filteredCommits = data.data.commits.filter((commit) => !commit.message.startsWith('Merge branch'));
+        const filteredCommits = data.data.commits
+          .filter((commit) => !commit.message.startsWith('Merge branch'))
+          .sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime()); // 최신순 정렬
 
         if (append) {
-          setCommits((prev) => [...prev, ...filteredCommits]);
+          setCommits((prev) => {
+            const combined = [...prev, ...filteredCommits];
+
+            // 전체 목록도 시간순으로 재정렬 (페이지네이션 시 섞일 수 있음)
+            return combined.sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime());
+          });
         } else {
           setCommits(filteredCommits);
         }
@@ -189,10 +197,10 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
 
   // Fetch commits when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && repo.path) {
       fetchCommits(1);
     }
-  }, [isOpen]);
+  }, [isOpen, repo.path]);
 
   const handleLoadMore = () => {
     if (hasMore && !loading) {
@@ -455,7 +463,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
               onClick={(e) => e.stopPropagation()}
             >
               {!isSmallViewport ? (
-                <header className="flex items-cennter gap-2 self-stretch">
+                <header className="flex items-center gap-2 self-stretch">
                   <h1 className="text-heading-md text-primary flex-[1_0_0]">Commit History</h1>
                   <button
                     onClick={() => setIsOpen(false)}

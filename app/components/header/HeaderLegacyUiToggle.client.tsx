@@ -30,10 +30,10 @@ export function HeaderLegacyUiToggle({ asMenuItem = false, onClose }: HeaderLega
     return (
       <>
         <div className="flex flex-col items-start gap-2 w-full bg-transparent cursor-pointer" onClick={handleClick}>
-          <span className="text-primary text-body-md-medium">Switch to previous UI</span>
+          <span className="text-primary text-body-md-medium">Switch to Old UI</span>
           <span className="text-tertiary text-body-sm">
-            If you need to review branches you worked on through Tasks, you&apos;ll have to use the previous UI. This
-            feature will be removed soon and replaced with the Save Version feature in the new UI.
+            If you did not merge the work you were previously working on, you must merge it in the old UI. Old UI will
+            be removed soon, so please merge the old tasks.
           </span>
         </div>
         <LegacyUiConfirmModal isOpen={isModalOpen} onClose={handleModalClose} onConfirm={handleConfirm} />
