@@ -21,13 +21,14 @@ import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import {
   BookmarkLineIcon,
+  BookmarkFillIcon,
   StarFillIcon,
   DiffIcon,
   RefreshIcon,
   CopyLineIcon,
   PlayIcon,
   ChevronRightIcon,
-  RevertIcon,
+  RestoreIcon,
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -41,9 +42,9 @@ interface MessagesProps {
   progressAnnotations?: ProgressAnnotation[];
   onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
-  onRevert?: (message: UIMessage) => void;
   onViewDiff?: (message: UIMessage) => void;
   onSaveVersion?: (message: UIMessage) => void;
+  onDeleteVersion?: (commitHash: string) => void;
   onRestoreVersion?: (commitHash: string, commitTitle: string) => void;
   savedVersions?: Map<string, string>;
   hasMore?: boolean;
@@ -60,9 +61,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       annotations = [],
       progressAnnotations = [],
       onRetry,
-      onRevert,
       onViewDiff,
       onSaveVersion,
+      onDeleteVersion,
       onRestoreVersion,
       savedVersions,
       hasMore,
@@ -193,9 +194,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     key={index}
                     className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
                   >
-                    <div className="flex items-center gap-2 self-stretch">
-                      <span className="text-body-md-medium text-secondary">Restored</span>
-                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{messageText}</span>
+                    <div className="flex items-center gap-2 self-stretch overflow-hidden">
+                      <span className="text-body-md-medium text-secondary shrink-0">Restored</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0] truncate">{messageText}</span>
                     </div>
                   </div>
                 );
@@ -211,7 +212,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
                   >
                     <div className="flex items-center gap-2 self-stretch">
-                      <span className="text-body-md-medium text-secondary">Forked from</span>
+                      <span className="text-body-md-medium text-secondary">Copied from</span>
                       <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{forkSource}</span>
                     </div>
                   </div>
@@ -346,38 +347,62 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Show Save button for assistant messages that haven't been saved yet */}
+                        {/* Show Bookmark button for assistant messages with commit hash */}
                         {role === 'assistant' &&
                           messageId &&
                           (() => {
                             const commitHash = messageId.split('-').pop() as string;
-                            const savedTitle = savedVersions?.get(commitHash);
 
-                            return !savedTitle && isCommitHash(commitHash);
-                          })() && (
-                            <Tooltip.Root delayDuration={100}>
-                              <Tooltip.Trigger asChild>
-                                <CustomIconButton
-                                  variant="secondary-transparent"
-                                  size="sm"
-                                  icon={<BookmarkLineIcon width={20} height={20} />}
-                                  onClick={() => onSaveVersion?.(message)}
-                                  disabled={isGenerating}
-                                />
-                              </Tooltip.Trigger>
-                              <Tooltip.Portal>
-                                <Tooltip.Content
-                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                  side="bottom"
-                                >
-                                  Save to Version History
-                                  <br />
-                                  and restore when needed
-                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                                </Tooltip.Content>
-                              </Tooltip.Portal>
-                            </Tooltip.Root>
-                          )}
+                            return isCommitHash(commitHash);
+                          })() &&
+                          (() => {
+                            const commitHash = messageId.split('-').pop() as string;
+                            const savedTitle = savedVersions?.get(commitHash);
+                            const isSaved = !!savedTitle;
+
+                            return (
+                              <Tooltip.Root delayDuration={100}>
+                                <Tooltip.Trigger asChild>
+                                  <CustomIconButton
+                                    variant="secondary-transparent"
+                                    size="sm"
+                                    icon={
+                                      isSaved ? (
+                                        <BookmarkFillIcon size={20} />
+                                      ) : (
+                                        <BookmarkLineIcon width={20} height={20} />
+                                      )
+                                    }
+                                    onClick={() => {
+                                      if (isSaved) {
+                                        onDeleteVersion?.(commitHash);
+                                      } else {
+                                        onSaveVersion?.(message);
+                                      }
+                                    }}
+                                    disabled={isGenerating}
+                                  />
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                  <Tooltip.Content
+                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                    side="bottom"
+                                  >
+                                    {isSaved ? (
+                                      'Remove from Bookmarks'
+                                    ) : (
+                                      <>
+                                        Save to Bookmarks
+                                        <br />
+                                        and restore when needed
+                                      </>
+                                    )}
+                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                  </Tooltip.Content>
+                                </Tooltip.Portal>
+                              </Tooltip.Root>
+                            );
+                          })()}
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
                             <CustomIconButton
@@ -409,7 +434,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         </Tooltip.Root>
-                        {/* Show Revert button for assistant messages with commit hash (except last message) */}
+                        {/* Show Restore button for assistant messages with commit hash (except last message) */}
                         {messageId &&
                           isCommitHash(messageId.split('-').pop() as string) &&
                           role === 'assistant' &&
@@ -419,8 +444,20 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 <CustomIconButton
                                   variant="secondary-transparent"
                                   size="sm"
-                                  icon={<RevertIcon width={20} height={20} />}
-                                  onClick={() => onRevert?.(message)}
+                                  icon={<RestoreIcon size={20} color="currentColor" />}
+                                  onClick={() => {
+                                    const commitHash = messageId.split('-').pop() as string;
+
+                                    // Find the previous user message to use as title
+                                    const prevUserMessage = messages
+                                      .slice(0, index)
+                                      .reverse()
+                                      .find((m) => m.role === 'user');
+                                    const userMessageText = prevUserMessage
+                                      ? extractAllTextContent(prevUserMessage)
+                                      : messageText;
+                                    onRestoreVersion?.(commitHash, userMessageText);
+                                  }}
                                   disabled={isGenerating}
                                 />
                               </Tooltip.Trigger>
@@ -429,7 +466,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
                                   side="bottom"
                                 >
-                                  Revert
+                                  Restore
                                   <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
                                 </Tooltip.Content>
                               </Tooltip.Portal>

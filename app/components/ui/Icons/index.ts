@@ -6,6 +6,7 @@ export { GlobalIcon } from './GlobalIcon';
 export { LinkIcon } from './LinkIcon';
 export { BookLineIcon } from './BookLineIcon';
 export { BookmarkLineIcon } from './BookmarkLineIcon';
+export { BookmarkFillIcon } from './BookmarkFillIcon';
 export { ChevronDoubleDownIcon } from './ChevronDoubleDownIcon';
 export { ChevronRightIcon } from './ChevronRightIcon';
 export { ArrowTopLineIcon } from './ArrowTopLineIcon';

@@ -49,16 +49,14 @@ export function SaveVersionConfirmModal({
   const isFormValid = title.trim().length > 0;
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Save to Version History">
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Save to Bookmarks">
       {/* Content */}
       <div
         className={classNames('flex flex-col items-start gap-4 self-stretch', {
           'pb-4': isSmallViewport,
         })}
       >
-        <span className="text-body-md-medium text-tertiary self-stretch">
-          Save versions to easily compare and restore them
-        </span>
+        <span className="text-body-md-medium text-tertiary self-stretch">Save a named point you can restore later</span>
 
         {/* Version Title Input */}
         <div
@@ -106,7 +104,7 @@ export function SaveVersionConfirmModal({
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
         <BaseModal.ConfirmButton onClick={handleConfirm} disabled={!isFormValid}>
-          Save
+          Save bookmark
         </BaseModal.ConfirmButton>
       </BaseModal.Actions>
     </BaseModal>

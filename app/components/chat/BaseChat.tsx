@@ -145,8 +145,8 @@ interface BaseChatProps {
   onProjectZipImport?: (title: string, zipFile: File) => void;
   handleRetry?: (message: UIMessage) => void;
   handleFork?: (message: UIMessage) => void;
-  handleRevert?: (message: UIMessage) => void;
   handleSaveVersion?: (message: UIMessage) => void;
+  handleDeleteVersion?: (commitHash: string) => void;
   handleRestoreVersion?: (commitHash: string, commitTitle: string) => void;
   savedVersions?: Map<string, string>;
   onViewDiff?: (message: UIMessage) => void;
@@ -187,8 +187,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       onProjectZipImport,
       handleRetry,
       handleFork,
-      handleRevert,
       handleSaveVersion,
+      handleDeleteVersion,
       handleRestoreVersion,
       savedVersions,
       onViewDiff,
@@ -891,8 +891,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       progressAnnotations={progressAnnotations}
                       onRetry={handleRetry}
                       onFork={handleFork}
-                      onRevert={handleRevert}
                       onSaveVersion={handleSaveVersion}
+                      onDeleteVersion={handleDeleteVersion}
                       onRestoreVersion={handleRestoreVersion}
                       savedVersions={savedVersions}
                       onViewDiff={onViewDiff}

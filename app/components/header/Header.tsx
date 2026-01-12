@@ -17,7 +17,7 @@ import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
-import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
+import { HeaderBookmarksButton } from './HeaderBookmarksButton.client';
 import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
 import WithTooltip from '~/components/ui/Tooltip';
 import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
@@ -108,7 +108,7 @@ export function Header() {
                     </Dropdown>
                   )}
                   {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
-                  {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderBookmarksButton />}</ClientOnly>}
                   {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
                   <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
                 </div>
@@ -128,15 +128,13 @@ export function Header() {
                     {repo.path && (
                       <>
                         <DropdownItem>
-                          <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
-                        </DropdownItem>
-                        <DropdownItem>
                           <ClientOnly>{() => <HeaderVisibilityButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                         <DropdownItem>
-                          <ClientOnly>
-                            {() => <HeaderVersionHistoryButton asMenuItem onClose={closeDropdown} />}
-                          </ClientOnly>
+                          <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>{() => <HeaderBookmarksButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                         <DropdownItem>
                           <ClientOnly>

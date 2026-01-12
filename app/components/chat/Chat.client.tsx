@@ -1618,7 +1618,7 @@ export const ChatImpl = memo(
       }
 
       // Show loading toast while forking
-      const toastId = toast.loading('Forking project...');
+      const toastId = toast.loading('Creating a copy...');
 
       try {
         const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title);
@@ -1630,7 +1630,7 @@ export const ChatImpl = memo(
           toast.success('Fork created — now in your copy.');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          reportError('Failed to fork project', startTime, {
+          reportError('Failed to create copy', startTime, {
             context: 'handleFork - fork result check',
           });
         }
@@ -1638,31 +1638,12 @@ export const ChatImpl = memo(
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
 
-        reportError('Failed to fork project', startTime, {
+        reportError('Failed to create copy', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleFork - catch block',
         });
         logger.error('Error forking project:', error);
       }
-    };
-
-    const handleRevert = async (message: UIMessage) => {
-      const startTime = performance.now();
-
-      workbench.currentView.set('code');
-      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-      const commitHash = message.id.split('-').pop();
-
-      if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
-          context: 'handleRevert - commit hash validation',
-        });
-
-        return;
-      }
-
-      await revertTo(commitHash);
     };
 
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
@@ -1783,8 +1764,8 @@ export const ChatImpl = memo(
           handleStop={abort}
           handleRetry={handleRetry}
           handleFork={handleFork}
-          handleRevert={handleRevert}
           handleSaveVersion={version.openSave}
+          handleDeleteVersion={version.openDelete}
           handleRestoreVersion={version.openRestore}
           savedVersions={version.savedVersions}
           onViewDiff={handleViewDiff}

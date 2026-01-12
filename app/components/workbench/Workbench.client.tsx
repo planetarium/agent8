@@ -499,7 +499,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         )}
 
         {showWorkbench && !isSmallViewport && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
-          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
+          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
             <div className="absolute inset-0 pr-7">
               <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
@@ -515,12 +515,12 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
 
         <div
           className={classNames('fixed z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier', {
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
               isSmallViewport && !mobilePreviewMode,
             'top-0 bottom-0 left-0 right-0 w-full': isSmallViewport && mobilePreviewMode,
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
               showWorkbench && !isSmallViewport,
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[100%] w-[var(--workbench-inner-width)]':
               !showWorkbench && !isSmallViewport,
           })}
         >

@@ -477,17 +477,6 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                 </div>
               )}
 
-              <div className="flex flex-col items-start gap-1 self-stretch">
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Create a Copy</span> creates a new project from the selected version.
-                  Chat history won&apos;t be copied to the new project.
-                </span>
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Restore</span> reverts the current project to the selected version.
-                  Changes after that version may be lost, but your chat history will remain.
-                </span>
-              </div>
-
               <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
                 <div
                   className={`flex flex-col items-start gap-3 overflow-y-auto self-stretch ${isSmallViewport ? 'h-full' : 'h-[600px]'}`}
@@ -569,9 +558,9 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                               </span>
                             )}
                             <div
-                              className={classNames('flex items-center', {
-                                'self-stretch gap-3': !isSmallViewport,
-                                'flex-[1_0_0] gap-2': isSmallViewport,
+                              className={classNames('flex items-center gap-3', {
+                                'self-stretch': !isSmallViewport,
+                                'flex-[1_0_0]': isSmallViewport,
                               })}
                             >
                               {!isSmallViewport && (
