@@ -760,10 +760,13 @@ export const ChatImpl = memo(
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
 
-    // Detect page reload/unload
+    // Detect page reload/unload and abort in-progress operations
     useEffect(() => {
       const handleBeforeUnload = () => {
         isPageUnloadingRef.current = true;
+
+        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
+        abortAllOperations();
       };
 
       window.addEventListener('beforeunload', handleBeforeUnload);
