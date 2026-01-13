@@ -1,11 +1,11 @@
 import { Fragment, forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
 import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
-import { useRandomTip } from '~/lib/hooks/useRandomTip';
 
 import type { JSONValue, UIMessage } from 'ai';
 import type { ProgressAnnotation } from '~/types/context';
@@ -29,9 +29,25 @@ import {
   PlayIcon,
   ChevronRightIcon,
   RestoreIcon,
+  CodeGenLoadingIcon,
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
+
+// Game creation tips (from Preview.tsx)
+const gameCreationTips = [
+  'Keep your game simple and focused on one core mechanic.',
+  'Test your game frequently on different devices.',
+  'Use clear visual feedback for player actions.',
+  'Balance difficulty - make it challenging but not frustrating.',
+  'Add sound effects to enhance the player experience.',
+  'Consider mobile-first design for broader accessibility.',
+  'Use intuitive controls that feel natural.',
+  'If an error occurs, capture the screen or exact error message and send it to the AI for faster fixes.',
+  'Write requirements in detail and include examples.',
+  'For complex requests, add "Proceed step-by-step" so the AI can handle them gradually.',
+  'If you need collisions for characters and walls, say "Set accurate collision bounds."',
+];
 
 interface MessagesProps {
   id?: string;
@@ -77,8 +93,18 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     // Check for mobile viewport
     const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
 
-    // Random game creation tip
-    const randomTip = useRandomTip();
+    // Random game creation tip that changes every 5 seconds
+    const [currentTipIndex, setCurrentTipIndex] = useState(0);
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setCurrentTipIndex((prev) => (prev + 1) % gameCreationTips.length);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }, []);
+
+    const randomTip = gameCreationTips[currentTipIndex];
 
     // Track expanded state for each message (AI messages only)
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
@@ -586,13 +612,35 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         {isStreaming &&
           (messages.length === 0 || messages[messages.length - 1]?.role === 'user') &&
           (isSmallViewport && messages.length === 0 ? (
-            <div className="flex flex-col w-full h-full justify-center items-center gap-3">
-              <div style={{ width: '48px', height: '48px' }}>
-                <Lottie animationData={loadingAnimationData} loop={true} />
+            <div className="flex flex-col w-full h-full justify-center items-center gap-5">
+              <div className="relative">
+                <CodeGenLoadingIcon size={256} />
+                <div className="absolute top-[calc(50%-16px)] left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12">
+                  <Lottie animationData={loadingAnimationData} loop={true} />
+                </div>
+                <span className="absolute top-[calc(50%+48px)] left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave">
+                  Generating code
+                </span>
               </div>
-              <div className="flex flex-col justify-center items-center gap-2 self-stretch px-4">
-                <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
-                <span className="text-body-md-medium text-secondary text-center">{randomTip}</span>
+
+              <div className="flex flex-col items-center justify-start py-2 max-w-md">
+                <div className="flex flex-col justify-start items-center self-stretch">
+                  <span className="text-body-lg-regular text-subtle mb-2">Tip</span>
+                  <div className="min-h-[3.5rem] flex items-start justify-center">
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={currentTipIndex}
+                        className="text-body-lg-regular text-secondary text-center leading-relaxed"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                      >
+                        {randomTip}
+                      </motion.span>
+                    </AnimatePresence>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

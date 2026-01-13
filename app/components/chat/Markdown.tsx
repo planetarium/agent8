@@ -5,6 +5,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { rehypePlugins, remarkPlugins, allowedHTMLElements } from '~/utils/markdown';
 import { Artifact } from './Artifact';
 import { CodeBlock } from './CodeBlock';
+import { ToolCall } from './ToolCall';
 import { ToolResult } from './ToolResult';
 
 import styles from './Markdown.module.scss';
@@ -61,8 +62,7 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
               content = content.slice(1, -1);
             }
 
-            // ToolCall UI hidden
-            return null;
+            return <ToolCall toolCall={JSON.parse(content)} id={props.id!} />;
           } catch (error) {
             logger.error(`Error parsing tool call: ${error}`);
             return <pre>{children}</pre>;

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import Lottie from 'lottie-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { IconButton } from '~/components/ui/IconButton';
 import {
   useWorkbenchPreviews,
@@ -16,10 +17,15 @@ import { PortDropdown } from './PortDropdown';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import type { ActionAlert } from '~/types/actions';
 import CustomButton from '~/components/ui/CustomButton';
-import { PlayIcon, RightLineIcon } from '~/components/ui/Icons';
+import {
+  CodeGenLoadingIcon,
+  NoPreviewAvailableIcon,
+  PlayIcon,
+  PreviewRunningLoadingIcon,
+  RightLineIcon,
+} from '~/components/ui/Icons';
 import { loadingAnimationData } from '~/utils/animationData';
 import { sendMessageToParent } from '~/utils/postMessage';
-import { useRandomTip } from '~/lib/hooks/useRandomTip';
 import PreviewQrCode from '~/components/workbench/PreviewQrCode';
 
 type ResizeSide = 'left' | 'right' | null;
@@ -30,6 +36,21 @@ interface WindowSize {
   height: number;
   icon: string;
 }
+
+// Game creation tips (from useRandomTip hook)
+const gameCreationTips = [
+  'Keep your game simple and focused on one core mechanic.',
+  'Test your game frequently on different devices.',
+  'Use clear visual feedback for player actions.',
+  'Balance difficulty - make it challenging but not frustrating.',
+  'Add sound effects to enhance the player experience.',
+  'Consider mobile-first design for broader accessibility.',
+  'Use intuitive controls that feel natural.',
+  'If an error occurs, capture the screen or exact error message and send it to the AI for faster fixes.',
+  'Write requirements in detail and include examples.',
+  'For complex requests, add "Proceed step-by-step" so the AI can handle them gradually.',
+  'If you need collisions for characters and walls, say "Set accurate collision bounds."',
+];
 
 const WINDOW_SIZES: WindowSize[] = [
   { name: 'iPhone 14 Pro Max', width: 430, height: 932, icon: 'i-ph:device-mobile' },
@@ -50,17 +71,28 @@ const WINDOW_SIZES: WindowSize[] = [
 
 interface PreviewProps {
   isStreaming?: boolean;
+  workbenchState?: 'disconnected' | 'failed' | 'reconnecting' | 'preparing' | 'ready';
 }
 
-export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
+export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
 
-  // Random game creation tip
-  const randomTip = useRandomTip();
+  // Random game creation tips that change every 5 seconds
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTipIndex((prev) => (prev + 1) % gameCreationTips.length);
+    }, 5000); // Change every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const randomTip = gameCreationTips[currentTipIndex];
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const hasSelectedPreview = useRef(false);
@@ -635,18 +667,50 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
                 sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin allow-pointer-lock allow-downloads"
               />
             </>
-          ) : isStreaming || isRunningPreview ? (
+          ) : isStreaming ||
+            isRunningPreview ||
+            (isSmallViewport &&
+              mobilePreviewMode &&
+              (workbenchState === 'preparing' || workbenchState === 'reconnecting')) ? (
             <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
-              <div className="flex-1 flex flex-col justify-center items-center gap-4 px-8">
-                <div style={{ width: '80px', height: '80px' }}>
-                  <Lottie animationData={loadingAnimationData} loop={true} />
-                </div>
-                {!(isSmallViewport && mobilePreviewMode) && (
-                  <div className="flex flex-col justify-center items-center gap-2 max-w-md">
-                    <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
-                    <span className="text-body-lg-regular text-secondary text-center self-stretch">{randomTip}</span>
+              <div className="flex-1 flex flex-col justify-center items-center gap-6 px-8">
+                <div className="relative">
+                  {isStreaming ? <CodeGenLoadingIcon size={256} /> : <PreviewRunningLoadingIcon size={256} />}
+                  <div
+                    className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 ${isStreaming ? 'top-[calc(50%-16px)]' : 'top-1/2'}`}
+                  >
+                    <Lottie animationData={loadingAnimationData} loop={true} />
                   </div>
-                )}
+                  <span
+                    className={`absolute left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave whitespace-nowrap ${isStreaming ? 'top-[calc(50%+48px)]' : 'bottom-6'}`}
+                  >
+                    {isStreaming
+                      ? 'Generating code'
+                      : workbenchState === 'preparing' || workbenchState === 'reconnecting'
+                        ? 'Preparing workbench'
+                        : 'Running preview'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center justify-start py-2 max-w-md">
+                  <div className="flex flex-col justify-start items-center self-stretch">
+                    <span className="text-body-lg-regular text-subtle mb-2">Tip</span>
+                    <div className="min-h-[3.5rem] flex items-start justify-center">
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={currentTipIndex}
+                          className="text-body-lg-regular text-secondary text-center leading-relaxed"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        >
+                          {randomTip}
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </div>
               </div>
               {!(isSmallViewport && mobilePreviewMode) && (
                 <div className="flex py-5 justify-center items-center gap-3">
@@ -667,8 +731,15 @@ export const Preview = memo(({ isStreaming = false }: PreviewProps) => {
               )}
             </div>
           ) : (
-            <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
-              No preview available
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col w-full h-full justify-center items-center gap-5">
+                <NoPreviewAvailableIcon size={256} />
+                <div className="flex flex-col items-center justify-center gap-1 self-stretch">
+                  <span className="text-body-md-medium text-tertiary">No available preview</span>
+                  <span className="text-body-lg-regular text-secondary">Please run the preview again</span>
+                </div>
+              </div>
+              <div className="h-20" />
             </div>
           )}
 

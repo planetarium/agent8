@@ -3,6 +3,7 @@ import React, { type RefCallback, useCallback, useEffect, useRef, useState } fro
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import { WorkbenchSkeleton } from '~/components/workbench/WorkbenchSkeleton';
 import { ResizeHandle } from '~/components/ui/ResizeHandle';
 import { useWorkbenchShowWorkbench, useWorkbenchMobilePreviewMode } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
@@ -1227,6 +1228,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
           </div>
           {showWorkbench && !isSmallViewport && <ResizeHandle minChatWidth={426} minWorkbenchWidth={747} />}
+
+          {/* Show skeleton when chat started but workbench is not ready yet */}
+          {chatStarted && !showWorkbench && !isSmallViewport && (
+            <WorkbenchSkeleton isSmallViewport={isSmallViewport} variant="initial" />
+          )}
+
           <ClientOnly>
             {() => (
               <Workbench

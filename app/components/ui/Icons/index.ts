@@ -42,3 +42,6 @@ export { MoreIcon } from './MoreIcon';
 export { PreviewIcon } from './PreviewIcon';
 export { ChatIcon } from './ChatIcon';
 export { QrCodeIcon } from './QrCodeIcon';
+export { NoPreviewAvailableIcon } from './NoPreviewAvailableIcon';
+export { CodeGenLoadingIcon } from './CodeGenLoadingIcon';
+export { PreviewRunningLoadingIcon } from './PreviewRunningLoadingIcon';
