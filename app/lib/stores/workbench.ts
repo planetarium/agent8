@@ -104,6 +104,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -137,6 +138,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
+      import.meta.hot.data.isDeploying = this.isDeploying;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -612,6 +614,9 @@ export class WorkbenchStore {
                 });
               }
             }
+
+            // Reset pending actions count for this artifact
+            artifact.runner.resetPendingActionsCount();
           }
 
           // Clear the queue item
@@ -764,6 +769,11 @@ export class WorkbenchStore {
 
       this.#messageIdleCallbacks.get(messageId)!.push(callback);
     });
+  }
+
+  hasRunningArtifactActions(): boolean {
+    const artifacts = this.artifacts.get();
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
   }
 
   async #processMessageClose(messageId: string) {
@@ -1234,6 +1244,8 @@ export class WorkbenchStore {
   }
 
   async runPreview() {
+    this.#stopShellCommand();
+
     this.currentView.set('code');
 
     const shell = this.boltTerminal;
@@ -1266,12 +1278,20 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
+    if (this.isDeploying.get()) {
+      return;
+    }
+
+    this.#stopShellCommand();
+
     this.currentView.set('code');
 
     const shell = this.boltTerminal;
     await shell.ready;
 
     try {
+      this.isDeploying.set(true);
+
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
       await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
@@ -1301,9 +1321,12 @@ export class WorkbenchStore {
 
       try {
         buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
-      } catch {}
+      } catch (error) {
+        console.error('Failed to read build file', error);
+      }
 
       if (!buildFile) {
+        console.error('No build file found');
         throw new Error('Failed to publish');
       }
 
@@ -1329,6 +1352,8 @@ export class WorkbenchStore {
     } catch (error) {
       logger.error('[Publish] Error:', error);
       throw error;
+    } finally {
+      this.isDeploying.set(false);
     }
   }
 
@@ -1368,6 +1393,25 @@ export class WorkbenchStore {
     if (!shouldIgnoreError(alert)) {
       this.actionAlert.set(alert);
     }
+  }
+
+  #stopShellCommand(): boolean {
+    const shell = this.boltTerminal;
+
+    if (!shell.isInit) {
+      return false;
+    }
+
+    // BoltShell의 interruptCurrentCommand 사용
+    const interrupted = shell.interruptCurrentCommand();
+
+    if (interrupted) {
+      logger.info('[StopShellCommand] Shell command interrupted successfully');
+    } else {
+      logger.warn('[StopShellCommand] No active command to interrupt');
+    }
+
+    return interrupted;
   }
 
   #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {

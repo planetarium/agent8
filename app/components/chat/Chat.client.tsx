@@ -15,6 +15,7 @@ import {
   useWorkbenchActionAlert,
   useWorkbenchStore,
   useWorkbenchContainer,
+  useWorkbenchIsDeploying,
 } from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
@@ -523,6 +524,7 @@ export const ChatImpl = memo(
     const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
+    const isDeploying = useWorkbenchIsDeploying();
     const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
 
     const [model, setModel] = useState(() => {
@@ -678,6 +680,10 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
+        if (isDeploying) {
+          return;
+        }
+
         addDebugLog('onFinish');
 
         const usage =
@@ -804,6 +810,16 @@ export const ChatImpl = memo(
      *   };
      * }, []);
      */
+
+    // Stop chat when deploy starts
+    useEffect(() => {
+      console.log('#### useEffect: isDeploying', isDeploying);
+
+      if (isDeploying && (isLoading || fakeLoading)) {
+        console.log('#### Stop chat when deploy starts');
+        abort();
+      }
+    }, [isDeploying, fakeLoading]);
 
     useEffect(() => {
       if (!isLoading) {
