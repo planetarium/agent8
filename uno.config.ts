@@ -170,6 +170,7 @@ export default defineConfig({
 
     'text-accent-primary': 'text-[var(--color-text-accent-primary)]',
     'text-accent-primary-subtler': 'text-[var(--color-text-accent-primary-subtler)]',
+    'text-accent-orange': 'text-[var(--color-text-accent-orange,#F79009)]',
     'text-interactive-neutral': 'text-[var(--color-text-interactive-neutral)]',
     'text-interactive-selected': 'text-[var(--color-text-interactive-selected)]',
     'text-interactive-neutral-hovered': 'text-[#EBEEF4]',

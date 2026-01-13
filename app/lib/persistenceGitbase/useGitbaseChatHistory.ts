@@ -43,6 +43,7 @@ interface CommitResponse {
       id: string;
       name: string;
       description: string;
+      created_at?: string;
     };
     commits: Commit[];
     pagination: PaginationInfo;
@@ -56,6 +57,7 @@ export function useGitbaseChatHistory() {
     id: string;
     name: string;
     description: string;
+    created_at?: string;
   }>({
     id: '',
     name: '',

@@ -415,6 +415,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
         repoStore.set({
           ...repoStore.get(),
           title: project.description.split('\n')[0],
+          createdAt: project.created_at || '',
         });
       }
     }
@@ -1241,6 +1242,7 @@ export const ChatImpl = memo(
               path: projectPath,
               title,
               latestCommitHash: '',
+              createdAt: '',
             });
 
             // Record prompt activity for first request
@@ -1255,6 +1257,7 @@ export const ChatImpl = memo(
               path: projectRepo,
               title,
               latestCommitHash: '',
+              createdAt: '',
             });
 
             // Record prompt activity for first request
@@ -1533,6 +1536,7 @@ export const ChatImpl = memo(
             path: '',
             title: source.title,
             latestCommitHash: '',
+            createdAt: '',
           });
 
           // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경

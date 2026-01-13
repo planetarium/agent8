@@ -593,6 +593,7 @@ export class GitlabService {
       id: number;
       name: string;
       description: string;
+      created_at?: string;
     };
     commits: GitlabCommit[];
     hasMore: boolean;
@@ -671,6 +672,7 @@ export class GitlabService {
           id: project.id,
           name: project.name,
           description: project.description,
+          created_at: typeof project.created_at === 'string' ? project.created_at : undefined,
         },
         commits,
         hasMore,

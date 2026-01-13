@@ -19,6 +19,7 @@ import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
 import { HeaderBookmarksButton } from './HeaderBookmarksButton.client';
 import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
+import { LegacyProjectBanner } from './LegacyProjectBanner';
 import WithTooltip from '~/components/ui/Tooltip';
 import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -191,6 +192,9 @@ export function Header() {
           </div>
         </div>
       )}
+
+      {/* Legacy Project Banner */}
+      <LegacyProjectBanner chatStarted={chat.started} />
     </TooltipProvider>
   );
 }

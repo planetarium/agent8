@@ -45,3 +45,5 @@ export { QrCodeIcon } from './QrCodeIcon';
 export { NoPreviewAvailableIcon } from './NoPreviewAvailableIcon';
 export { CodeGenLoadingIcon } from './CodeGenLoadingIcon';
 export { PreviewRunningLoadingIcon } from './PreviewRunningLoadingIcon';
+export { WarningLinedIcon } from './WarningLinedIcon';
+export { ExternalLinkIcon } from './ExternalLinkIcon';
