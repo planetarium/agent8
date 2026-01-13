@@ -64,3 +64,13 @@ export class SkipToastError extends FetchError {
     this.name = 'SkipToastError';
   }
 }
+
+/**
+ * Error thrown when LLM repeats a previous response (tool-input-start detected)
+ */
+export class LLMRepeatResponseError extends Error {
+  constructor(message: string = 'llm-repeat-response') {
+    super(message);
+    this.name = 'LLMRepeatResponseError';
+  }
+}
