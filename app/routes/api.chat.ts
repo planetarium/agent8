@@ -9,7 +9,7 @@ import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from 
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { extractTextContent } from '~/utils/message';
 import { ERROR_NAMES, TOOL_NAMES } from '~/utils/constants';
-import { isAbortError } from '~/utils/errors';
+import { isAbortError, LLMRepeatResponseError } from '~/utils/errors';
 import { normalizeContent, sanitizeXmlAttributeValue } from '~/utils/stringUtils';
 import { COMPLETE_FIELD } from '~/lib/.server/llm/tools/submit-actions';
 import {
@@ -349,8 +349,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
               writer.write(
                 createDataError(
-                  'stream-processing',
-                  error instanceof Error ? error.message : 'Stream processing failed',
+                  'stream-processing-continuation',
+                  error instanceof Error ? error.message : 'Stream processing continuation failed',
                 ),
               );
             }
@@ -365,30 +365,21 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
         writer.write(createDataLog('StartLLM'));
 
-        let result;
+        checkAborted();
 
-        try {
-          checkAborted();
+        const result = await streamText({
+          messages,
+          env,
+          options,
+          files,
+          tools: mcpTools,
+          abortSignal: request.signal,
+          onDebugLog: (message) => {
+            writer.write(createDataLog(message));
+          },
+        });
 
-          result = await streamText({
-            messages,
-            env,
-            options,
-            files,
-            tools: mcpTools,
-            abortSignal: request.signal,
-            onDebugLog: (message) => {
-              writer.write(createDataLog(message));
-            },
-          });
-
-          writer.write(createDataLog('EndLLM'));
-        } catch (error) {
-          writer.write(
-            createDataError('llm-generation', error instanceof Error ? error.message : 'LLM generation failed'),
-          );
-          return;
-        }
+        writer.write(createDataLog('EndLLM'));
 
         try {
           writer.write(createDataLog('ToUIMessageStream'));
@@ -403,6 +394,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           let prevLogMessage: string | null = null;
 
+          // Step-level repeat detection
+          let currentStepContent = '';
+          let previousStepContent = '';
+          let consecutiveRepeatCount = 0;
+          const MAX_CONSECUTIVE_REPEATS = 2;
+
           while (true) {
             checkAborted();
 
@@ -411,6 +408,39 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
             if (done) {
               writer.write(createDataLog('LoopDone'));
               break;
+            }
+
+            const messageType = value.type;
+
+            // Step start: begin content collection
+            if (messageType === 'start-step') {
+              currentStepContent = '';
+            }
+
+            // Collect step content
+            if (messageType === 'text-delta' && 'delta' in value) {
+              currentStepContent += value.delta || '';
+            } else if (messageType === 'tool-input-available' && 'toolName' in value && 'input' in value) {
+              try {
+                currentStepContent += `tool:${value.toolName}:${JSON.stringify(value.input)}`;
+              } catch {
+                currentStepContent += `tool:${value.toolName}:[unstringifiable]`;
+              }
+            }
+
+            // Step end: compare with previous step
+            if (messageType === 'finish-step') {
+              if (currentStepContent && currentStepContent === previousStepContent) {
+                consecutiveRepeatCount++;
+
+                if (consecutiveRepeatCount >= MAX_CONSECUTIVE_REPEATS) {
+                  throw new LLMRepeatResponseError();
+                }
+              } else {
+                consecutiveRepeatCount = 0;
+              }
+
+              previousStepContent = currentStepContent;
             }
 
             let logMessage: string = value.type ?? 'unknown';
@@ -433,6 +463,14 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           // AbortError is expected when client disconnects
           if (isAbortError(error)) {
             logger.info('Stream processing aborted by client');
+            return;
+          }
+
+          // LLM repeat response error
+          if (error instanceof LLMRepeatResponseError) {
+            logger.info('LLM repeat response detected');
+            writer.write(createDataError('llm-repeat-response', error.message));
+
             return;
           }
 

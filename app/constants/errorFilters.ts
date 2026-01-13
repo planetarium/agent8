@@ -47,6 +47,12 @@ export const ERROR_FILTERS: ErrorFilter[] = [
     caseSensitive: false,
     replacementMessage: "You don't have enough credit",
   },
+  {
+    pattern: 'llm-repeat-response',
+    reason: 'LLM repeat response error',
+    caseSensitive: false,
+    replacementMessage: 'The LLM is repeating itself. Please try again.',
+  },
 ];
 
 /**
