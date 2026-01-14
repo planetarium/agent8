@@ -1256,6 +1256,8 @@ export class RemoteContainer implements Container {
       return { result: null, newExitCode };
     };
 
+    let isWaitingForOscCode = false;
+
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
       let exitCode = 0;
@@ -1300,6 +1302,8 @@ export class RemoteContainer implements Container {
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
 
       try {
+        isWaitingForOscCode = true;
+
         while (true) {
           const { value, done } = await reader.read();
 
@@ -1348,6 +1352,7 @@ export class RemoteContainer implements Container {
           }
         }
       } finally {
+        isWaitingForOscCode = false;
         reader.releaseLock();
       }
 
@@ -1380,17 +1385,15 @@ export class RemoteContainer implements Container {
         // Interrupt current execution
         currentTerminal.input('\x03');
 
-        logger.debug(`[${sessionId}] waiting for prompt`, command);
+        // for dead lock prevention
+        if (isWaitingForOscCode) {
+          currentTerminal.input(':' + '\n');
+        }
 
-        // Prevent dead lock by sending prompt after 3 seconds
-        const resolveTimeout = setTimeout(() => {
-          currentTerminal?.input(':' + '\n');
-        }, 3000);
+        logger.debug(`[${sessionId}] waiting for prompt`, command);
 
         // Wait for prompt
         await waitTillOscCode('prompt');
-
-        clearTimeout(resolveTimeout);
 
         // Execute new command
         currentTerminal.input(':' + '\n');

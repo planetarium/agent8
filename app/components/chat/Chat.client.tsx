@@ -453,9 +453,12 @@ export const ChatImpl = memo(
         return;
       }
 
+      const processlog = logManager.logs.join(',');
+
       // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
+        process: processlog,
         ...options,
         elapsedTime: getElapsedTime(startTime),
       });
@@ -627,14 +630,11 @@ export const ChatImpl = memo(
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          const processlog = logManager.logs.join(',');
-          handleChatError(extractedData.reason, {
+          processError(extractedData.message, chatRequestStartTimeRef.current ?? 0, {
             error: extractedData.message,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
-            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
             metadata: extractedData.metadata,
-            process: processlog,
           });
 
           return;
@@ -667,7 +667,6 @@ export const ChatImpl = memo(
         const currentModel = chatStateRef.current.model;
         const currentProvider = chatStateRef.current.provider;
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
-        const processlog = logManager.logs.join(',');
 
         processError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -676,7 +675,6 @@ export const ChatImpl = memo(
             error: e,
             context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
             prompt: lastUserPromptRef.current,
-            process: processlog,
           },
         );
 
