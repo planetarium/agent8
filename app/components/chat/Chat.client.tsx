@@ -460,7 +460,7 @@ export const ChatImpl = memo(
         prompt: lastUserPromptRef.current,
         ...options,
         elapsedTime: getElapsedTime(startTime),
-        process: options?.process || processlog,
+        process: options?.process ?? processlog,
       });
 
       return;

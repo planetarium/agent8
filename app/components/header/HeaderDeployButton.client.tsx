@@ -26,7 +26,7 @@ export function HeaderDeployButton() {
     const isRetryAttempt = now - lastDeployAttemptTimeRef.current <= DEPLOY_RETRY_WINDOW;
     lastDeployAttemptTimeRef.current = now;
 
-    if (isArtifactsRunning || !isRetryAttempt) {
+    if (isArtifactsRunning && !isRetryAttempt) {
       return;
     }
 
