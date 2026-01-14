@@ -22,7 +22,6 @@ export function HeaderDeployButton() {
     }
 
     const now = Date.now();
-
     const isArtifactsRunning = workbenchStore.hasRunningArtifactActions();
     const isRetryAttempt = now - lastDeployAttemptTimeRef.current <= DEPLOY_RETRY_WINDOW;
     lastDeployAttemptTimeRef.current = now;
