@@ -231,3 +231,18 @@ export function is3dProject(files: any): boolean {
 
   return false;
 }
+
+const ASSET_INLINE_PROMPT_LIMIT = 10000;
+
+/**
+ * Check if asset content can be included inline in the system prompt
+ * @param content - The asset content string
+ * @returns true if content is small enough to include inline
+ */
+export function canInlineAssetInPrompt(content: string | null | undefined): boolean {
+  if (!content) {
+    return true;
+  }
+
+  return content.length <= ASSET_INLINE_PROMPT_LIMIT;
+}
