@@ -525,8 +525,12 @@ export const ChatImpl = memo(
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const isDeploying = useWorkbenchIsDeploying();
-    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
+    const isDeployingRef = useRef(isDeploying);
+    useEffect(() => {
+      isDeployingRef.current = isDeploying;
+    }, [isDeploying]);
 
+    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('SelectedModel');
       return savedModel || DEFAULT_MODEL;
@@ -680,7 +684,8 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
-        if (isDeploying) {
+        if (isDeployingRef.current) {
+          addDebugLog('onFinish: isDeploying, skipping');
           return;
         }
 
@@ -813,10 +818,8 @@ export const ChatImpl = memo(
 
     // Stop chat when deploy starts
     useEffect(() => {
-      console.log('#### useEffect: isDeploying', isDeploying);
-
       if (isDeploying && (isLoading || fakeLoading)) {
-        console.log('#### Stop chat when deploy starts');
+        logger.info('Stop chat when deploy starts');
         abort();
       }
     }, [isDeploying, fakeLoading]);

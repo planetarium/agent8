@@ -1244,8 +1244,6 @@ export class WorkbenchStore {
   }
 
   async runPreview() {
-    this.#stopShellCommand();
-
     this.currentView.set('code');
 
     const shell = this.boltTerminal;
@@ -1281,8 +1279,6 @@ export class WorkbenchStore {
     if (this.isDeploying.get()) {
       return;
     }
-
-    this.#stopShellCommand();
 
     this.currentView.set('code');
 
@@ -1393,25 +1389,6 @@ export class WorkbenchStore {
     if (!shouldIgnoreError(alert)) {
       this.actionAlert.set(alert);
     }
-  }
-
-  #stopShellCommand(): boolean {
-    const shell = this.boltTerminal;
-
-    if (!shell.isInit) {
-      return false;
-    }
-
-    // BoltShell의 interruptCurrentCommand 사용
-    const interrupted = shell.interruptCurrentCommand();
-
-    if (interrupted) {
-      logger.info('[StopShellCommand] Shell command interrupted successfully');
-    } else {
-      logger.warn('[StopShellCommand] No active command to interrupt');
-    }
-
-    return interrupted;
   }
 
   #handleSuccessfulDeployment(verseId: string, chatId: string, title: string, sha?: string, parentVerseId?: string) {
