@@ -16,6 +16,8 @@ import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client
 import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
+import { gameCreationTips } from '~/constants/gameCreationTips';
+import { getCommitHashFromMessageId } from '~/utils/messageUtils';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -33,21 +35,6 @@ import {
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
-
-// Game creation tips (from Preview.tsx)
-const gameCreationTips = [
-  'Keep your game simple and focused on one core mechanic.',
-  'Test your game frequently on different devices.',
-  'Use clear visual feedback for player actions.',
-  'Balance difficulty - make it challenging but not frustrating.',
-  'Add sound effects to enhance the player experience.',
-  'Consider mobile-first design for broader accessibility.',
-  'Use intuitive controls that feel natural.',
-  'If an error occurs, capture the screen or exact error message and send it to the AI for faster fixes.',
-  'Write requirements in detail and include examples.',
-  'For complex requests, add "Proceed step-by-step" so the AI can handle them gradually.',
-  'If you need collisions for characters and walls, say "Set accurate collision bounds."',
-];
 
 interface MessagesProps {
   id?: string;
@@ -279,9 +266,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         {/* Show saved version name for AI responses */}
                         {!isUserMessage &&
                           messageId &&
-                          isCommitHash(messageId.split('-').pop() as string) &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
                             const savedTitle = savedVersions?.get(commitHash);
 
                             return savedTitle ? (
@@ -377,12 +364,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         {role === 'assistant' &&
                           messageId &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
 
                             return isCommitHash(commitHash);
                           })() &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
                             const savedTitle = savedVersions?.get(commitHash);
                             const isSaved = !!savedTitle;
 
@@ -462,7 +449,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         </Tooltip.Root>
                         {/* Show Restore button for assistant messages with commit hash (except last message) */}
                         {messageId &&
-                          isCommitHash(messageId.split('-').pop() as string) &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           role === 'assistant' &&
                           !isLast && (
                             <Tooltip.Root delayDuration={100}>
@@ -472,7 +459,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   size="sm"
                                   icon={<RestoreIcon size={20} color="currentColor" />}
                                   onClick={() => {
-                                    const commitHash = messageId.split('-').pop() as string;
+                                    const commitHash = getCommitHashFromMessageId(messageId);
 
                                     // Find the previous user message to use as title
                                     const prevUserMessage = messages
@@ -551,9 +538,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                       </div>
                       <div className="flex items-center">
                         {messageId &&
-                          isCommitHash(messageId.split('-').pop() as string) &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
                             const savedTitle = savedVersions?.get(commitHash);
 
                             /*

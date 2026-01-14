@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
@@ -131,52 +131,57 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
 
   const COMMITS_PER_PAGE = 50;
 
-  const fetchCommits = async (page: number = 1, append: boolean = false) => {
-    if (!repo.path) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params = new URLSearchParams({
-        projectPath: repo.path,
-        page: page.toString(),
-        perPage: COMMITS_PER_PAGE.toString(),
-        all: 'true',
-      });
-
-      const response = await fetch(`/api/gitlab/commits?${params}`);
-      const data: CommitResponse = await response.json();
-
-      if (data.success && data.data) {
-        const filteredCommits = data.data.commits
-          .filter((commit) => !commit.message.startsWith('Merge branch'))
-          .sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime()); // 최신순 정렬
-
-        if (append) {
-          setCommits((prev) => {
-            const combined = [...prev, ...filteredCommits];
-
-            // 전체 목록도 시간순으로 재정렬 (페이지네이션 시 섞일 수 있음)
-            return combined.sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime());
-          });
-        } else {
-          setCommits(filteredCommits);
-        }
-
-        setHasMore(data.data.pagination.hasMore);
-        setCurrentPage(page);
-      } else {
-        setError(data.message || 'Failed to fetch commits');
+  const fetchCommits = useCallback(
+    async (page: number = 1, append: boolean = false) => {
+      if (!repo.path) {
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams({
+          projectPath: repo.path,
+          page: page.toString(),
+          perPage: COMMITS_PER_PAGE.toString(),
+          all: 'true',
+        });
+
+        const response = await fetch(`/api/gitlab/commits?${params}`);
+        const data: CommitResponse = await response.json();
+
+        if (data.success && data.data) {
+          const filteredCommits = data.data.commits
+            .filter((commit) => !commit.message.startsWith('Merge branch'))
+            .sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime()); // 최신순 정렬
+
+          if (append) {
+            setCommits((prev) => {
+              const combined = [...prev, ...filteredCommits];
+
+              // 전체 목록도 시간순으로 재정렬 (페이지네이션 시 섞일 수 있음)
+              return combined.sort(
+                (a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime(),
+              );
+            });
+          } else {
+            setCommits(filteredCommits);
+          }
+
+          setHasMore(data.data.pagination.hasMore);
+          setCurrentPage(page);
+        } else {
+          setError(data.message || 'Failed to fetch commits');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repo.path],
+  );
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -193,7 +198,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
     if (isOpen && repo.path) {
       fetchCommits(1);
     }
-  }, [isOpen, repo.path]);
+  }, [isOpen, repo.path, fetchCommits]);
 
   const handleLoadMore = () => {
     if (hasMore && !loading) {
