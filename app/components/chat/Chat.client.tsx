@@ -323,24 +323,37 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     return <NotFoundPage />;
   }
 
+  const isMachineAPIError = actionAlert?.description?.includes('Machine API');
+
+  // Check for Machine API 401 error (unauthorized) from container initialization
+  const isMachineAPI401Error = isMachineAPIError && actionAlert?.status === 401;
+
   // Check for 401 error (unauthorized)
-  if (errorStatus === 401) {
+  if (errorStatus === 401 || isMachineAPI401Error) {
     return <UnauthorizedPage />;
   }
 
-  // Check for 503 error (service unavailable) from container initialization
-  const is503Error = (() => {
-    if (!actionAlert?.description?.includes('Machine API request failed')) {
+  // Check for Machine API 503 error (service unavailable) from container initialization
+  const isMachineAPI503Error = (() => {
+    if (!isMachineAPIError) {
       return false;
     }
 
-    const parts = actionAlert.description.split(':');
-    const lastPart = parts[parts.length - 1]?.trim();
+    if (actionAlert) {
+      if (actionAlert.status === 503) {
+        return true;
+      }
 
-    return lastPart === '503';
+      const parts = actionAlert.description.split(':');
+      const lastPart = parts[parts.length - 1]?.trim();
+
+      return lastPart === '503';
+    }
+
+    return false;
   })();
 
-  if (is503Error) {
+  if (isMachineAPI503Error) {
     return <ServiceOutagePage />;
   }
 

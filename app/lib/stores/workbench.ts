@@ -34,7 +34,7 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
-import { DeployError } from '~/utils/errors';
+import { DeployError, StatusCodeError } from '~/utils/errors';
 
 const { saveAs } = fileSaver;
 
@@ -217,6 +217,7 @@ export class WorkbenchStore {
         description: error instanceof Error ? error.message : String(error),
         content: `Failed to initialize container\n\nError: ${error instanceof Error ? error.stack : error}`,
         source: 'preview',
+        status: error instanceof StatusCodeError ? error.status : undefined,
       } satisfies ActionAlert;
 
       if (!shouldIgnoreError(alert)) {

@@ -1,6 +1,7 @@
 import type { Container, ContainerFactory, ContainerOptions } from './interfaces';
 import { createScopedLogger } from '~/utils/logger';
 import { RemoteContainer } from './remote-container';
+import { MachineAPIError } from '~/utils/errors';
 
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const logger = createScopedLogger('remote-container');
@@ -91,10 +92,10 @@ export class RemoteContainerFactory implements ContainerFactory {
             },
             '*',
           );
-          throw new Error('Unauthorized access, reloading page');
+          throw new MachineAPIError('Unauthorized access, reloading page', response.status);
         }
 
-        throw new Error(`API response error: ${response.status}`);
+        throw new MachineAPIError(`API response error: ${response.status}`, response.status);
       }
 
       const machineId = ((await response.json()) as { machine_id?: string }).machine_id;
@@ -105,7 +106,13 @@ export class RemoteContainerFactory implements ContainerFactory {
 
       return machineId;
     } catch (error) {
-      throw new Error(`Machine API request failed: ${error}`);
+      const prefixMessage = 'Machine API request failed';
+
+      if (error instanceof MachineAPIError) {
+        throw new MachineAPIError(`${prefixMessage}: ${error.message}`, error.status);
+      } else {
+        throw new Error(`${prefixMessage}: ${error}`);
+      }
     }
   }
 
