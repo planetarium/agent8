@@ -3,7 +3,13 @@ import { WORK_DIR, TOOL_NAMES, VIBE_STARTER_3D_PACKAGE_NAME } from '~/utils/cons
 import { IGNORE_PATTERNS } from '~/utils/fileUtils';
 import ignore from 'ignore';
 import { path } from '~/utils/path';
-import { extractMarkdownFileNamesFromUnpkgHtml, fetchWithCache, is3dProject, resolvePackageVersion } from '~/lib/utils';
+import {
+  canInlineAssetInPrompt,
+  extractMarkdownFileNamesFromUnpkgHtml,
+  fetchWithCache,
+  is3dProject,
+  resolvePackageVersion,
+} from '~/lib/utils';
 import {
   SUBMIT_FILE_ACTION_FIELDS,
   SUBMIT_MODIFY_ACTION_FIELDS,
@@ -662,7 +668,19 @@ export function getResourceSystemPrompt(files: any) {
     assetFile[`${WORK_DIR}/src/assets.json`] = files[`${WORK_DIR}/src/assets.json`];
 
     const assetContext = createFilesContext(assetFile, true);
-    resourceContext += `\n${assetContext}\n`;
+
+    if (canInlineAssetInPrompt(assetContext)) {
+      resourceContext += `\n${assetContext}\n`;
+    } else {
+      // Asset context is too large, provide tool usage guidance instead
+      resourceContext += `
+  <asset_file_notice>
+    The assets.json file is too large to include in context (${assetContext.length} characters).
+    When you need to reference available resources, use the ${TOOL_NAMES.READ_FILES_CONTENTS} tool to read "src/assets.json".
+    Only read this file when absolutely necessary for your task.
+  </asset_file_notice>
+`;
+    }
   }
 
   return `
