@@ -1301,13 +1301,7 @@ export class RemoteContainer implements Container {
 
       try {
         while (true) {
-          const resolveTimeout = setTimeout(() => {
-            currentTerminal?.input(':' + '\n');
-          }, 3000);
-
           const { value, done } = await reader.read();
-
-          clearTimeout(resolveTimeout);
 
           if (done) {
             break;
@@ -1388,8 +1382,15 @@ export class RemoteContainer implements Container {
 
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
+        // Prevent dead lock by sending prompt after 3 seconds
+        const resolveTimeout = setTimeout(() => {
+          currentTerminal?.input(':' + '\n');
+        }, 3000);
+
         // Wait for prompt
         await waitTillOscCode('prompt');
+
+        clearTimeout(resolveTimeout);
 
         // Execute new command
         currentTerminal.input(':' + '\n');
@@ -1399,7 +1400,6 @@ export class RemoteContainer implements Container {
         logger.debug(`[${sessionId}] prompt received`, command);
 
         currentTerminal.input(command.trim() + '\n');
-
         logger.debug(`[${sessionId}] command executed`, command);
 
         // Wait for execution result

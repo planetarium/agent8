@@ -34,6 +34,7 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
+import { DeployError } from '~/utils/errors';
 
 const { saveAs } = fileSaver;
 
@@ -1280,13 +1281,12 @@ export class WorkbenchStore {
       return;
     }
 
-    this.currentView.set('code');
-
-    const shell = this.boltTerminal;
-    await shell.ready;
-
     try {
       this.isDeploying.set(true);
+      this.currentView.set('code');
+
+      const shell = this.boltTerminal;
+      await shell.ready;
 
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
@@ -1313,24 +1313,29 @@ export class WorkbenchStore {
 
       const wc = await this.container;
 
+      const errorMessage = 'Failed to publish';
       let buildFile = '';
+      let failedReason = '';
 
       try {
         buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
       } catch (error) {
+        failedReason = 'read build file';
         console.error('Failed to read build file', error);
       }
 
       if (!buildFile) {
+        failedReason = 'no build file';
         console.error('No build file found');
-        throw new Error('Failed to publish');
+
+        throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
       }
 
       // Deploy project
       const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
 
       if (deployResult?.exitCode !== 0) {
-        throw new Error('Failed to publish');
+        throw new Error(errorMessage);
       }
 
       const taskBranch = repoStore.get().taskBranch;

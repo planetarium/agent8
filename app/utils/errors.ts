@@ -64,3 +64,10 @@ export class SkipToastError extends FetchError {
     this.name = 'SkipToastError';
   }
 }
+
+export class DeployError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeployError';
+  }
+}
