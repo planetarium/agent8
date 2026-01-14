@@ -74,3 +74,23 @@ export class LLMRepeatResponseError extends Error {
     this.name = 'LLMRepeatResponseError';
   }
 }
+
+export class StatusCodeError extends Error {
+  constructor(
+    message: string = 'Status code error',
+    public status: number,
+  ) {
+    super(message);
+    this.name = 'StatusCodeError';
+  }
+}
+
+export class MachineAPIError extends StatusCodeError {
+  constructor(
+    message: string = 'Machine API error',
+    public status: number,
+  ) {
+    super(message, status);
+    this.name = 'MachineAPIError';
+  }
+}
