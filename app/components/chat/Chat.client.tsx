@@ -630,7 +630,7 @@ export const ChatImpl = memo(
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          processError(extractedData.message, chatRequestStartTimeRef.current ?? 0, {
+          processError(extractedData.reason, chatRequestStartTimeRef.current ?? 0, {
             error: extractedData.message,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,

@@ -46,6 +46,8 @@ const BUFFER_CONFIG = {
   TRUNCATED_LOCAL_SIZE: 5000,
 };
 
+const STREAM_READ_IDLE_TIMEOUT_MS = 3000;
+
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
@@ -1305,7 +1307,13 @@ export class RemoteContainer implements Container {
         isWaitingForOscCode = true;
 
         while (true) {
+          const streamReadTimeoutId = setTimeout(() => {
+            currentTerminal?.input(':' + '\n');
+          }, STREAM_READ_IDLE_TIMEOUT_MS);
+
           const { value, done } = await reader.read();
+
+          clearTimeout(streamReadTimeoutId);
 
           if (done) {
             break;

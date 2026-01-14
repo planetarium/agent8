@@ -6,12 +6,13 @@ import { useWorkbenchIsDeploying } from '~/lib/hooks/useWorkbenchStore';
 import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
 import { DeployError } from '~/utils/errors';
 import { toast } from 'react-toastify';
+import { useRef } from 'react';
 
 export function HeaderDeployButton() {
   const isDeploying = useWorkbenchIsDeploying();
   const DEPLOY_RETRY_WINDOW = 5000;
 
-  let lastDeployAttemptTimeRef = 0;
+  const lastDeployAttemptTimeRef = useRef(0);
 
   const handleDeploy = async () => {
     const { path: chatId, title = 'Game Project' } = repoStore.get();
@@ -21,29 +22,27 @@ export function HeaderDeployButton() {
     }
 
     const now = Date.now();
-    const artifactsRunning = workbenchStore.hasRunningArtifactActions();
 
-    const shouldRetryDeploy = now - lastDeployAttemptTimeRef <= DEPLOY_RETRY_WINDOW;
-    const shouldDeployWithCancel = artifactsRunning && shouldRetryDeploy;
+    const isArtifactsRunning = workbenchStore.hasRunningArtifactActions();
+    const isRetryAttempt = now - lastDeployAttemptTimeRef.current <= DEPLOY_RETRY_WINDOW;
 
-    if (!artifactsRunning || shouldDeployWithCancel) {
+    if (!isArtifactsRunning || isRetryAttempt) {
       try {
-        if (shouldDeployWithCancel) {
+        if (isArtifactsRunning) {
           workbenchStore.abortAllActions();
         }
 
         await workbenchStore.publish(chatId, title);
       } catch (error) {
-        if (error instanceof DeployError) {
-          toast.warning(error.message);
-        }
+        const errorMessage = error instanceof DeployError ? error.message : 'Failed to deploy';
+        toast.warning(errorMessage);
       } finally {
-        lastDeployAttemptTimeRef = 0;
+        lastDeployAttemptTimeRef.current = 0;
       }
       return;
     }
 
-    lastDeployAttemptTimeRef = now;
+    lastDeployAttemptTimeRef.current = now;
   };
 
   return (
