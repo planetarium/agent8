@@ -3,6 +3,7 @@ import React, { type RefCallback, useCallback, useEffect, useRef, useState } fro
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { Workbench } from '~/components/workbench/Workbench.client';
+import { WorkbenchSkeleton } from '~/components/workbench/WorkbenchSkeleton';
 import { ResizeHandle } from '~/components/ui/ResizeHandle';
 import { useWorkbenchShowWorkbench, useWorkbenchMobilePreviewMode } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
@@ -145,8 +146,8 @@ interface BaseChatProps {
   onProjectZipImport?: (title: string, zipFile: File) => void;
   handleRetry?: (message: UIMessage) => void;
   handleFork?: (message: UIMessage) => void;
-  handleRevert?: (message: UIMessage) => void;
   handleSaveVersion?: (message: UIMessage) => void;
+  handleDeleteVersion?: (commitHash: string) => void;
   handleRestoreVersion?: (commitHash: string, commitTitle: string) => void;
   savedVersions?: Map<string, string>;
   onViewDiff?: (message: UIMessage) => void;
@@ -187,8 +188,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       onProjectZipImport,
       handleRetry,
       handleFork,
-      handleRevert,
       handleSaveVersion,
+      handleDeleteVersion,
       handleRestoreVersion,
       savedVersions,
       onViewDiff,
@@ -891,8 +892,8 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       progressAnnotations={progressAnnotations}
                       onRetry={handleRetry}
                       onFork={handleFork}
-                      onRevert={handleRevert}
                       onSaveVersion={handleSaveVersion}
+                      onDeleteVersion={handleDeleteVersion}
                       onRestoreVersion={handleRestoreVersion}
                       savedVersions={savedVersions}
                       onViewDiff={onViewDiff}
@@ -1227,6 +1228,12 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             )}
           </div>
           {showWorkbench && !isSmallViewport && <ResizeHandle minChatWidth={426} minWorkbenchWidth={747} />}
+
+          {/* Show skeleton when chat started but workbench is not ready yet */}
+          {chatStarted && !showWorkbench && !isSmallViewport && (
+            <WorkbenchSkeleton isSmallViewport={isSmallViewport} variant="initial" />
+          )}
+
           <ClientOnly>
             {() => (
               <Workbench

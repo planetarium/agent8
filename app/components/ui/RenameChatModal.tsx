@@ -66,9 +66,9 @@ export const RenameChatModal = ({ isOpen, onClose, onConfirm, currentName }: Ren
           />
         </div>
 
-        <BaseModal.Actions>
-          <BaseModal.CancelButton onClick={onClose} />
-          <BaseModal.ConfirmButton type="submit" disabled={!name.trim()}>
+        <BaseModal.Actions gap="gap-2" layout="horizontal">
+          <BaseModal.CancelButton onClick={onClose} size="md" />
+          <BaseModal.ConfirmButton type="submit" disabled={!name.trim()} size="md">
             Save
           </BaseModal.ConfirmButton>
         </BaseModal.Actions>

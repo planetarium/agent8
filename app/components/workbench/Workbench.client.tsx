@@ -35,6 +35,7 @@ import { Preview } from './Preview';
 import useViewport from '~/lib/hooks';
 import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { ResourcePanel } from './ResourcePanel';
+import { WorkbenchSkeleton } from './WorkbenchSkeleton';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -499,28 +500,17 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
         )}
 
         {showWorkbench && !isSmallViewport && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
-          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier max-h-[968px]">
-            <div className="absolute inset-0 pr-7">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
-                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
-                    <div className="w-5 h-5 mx-auto mb-2 border-2 border-bolt-elements-button-primary-background border-t-transparent rounded-full animate-spin" />
-                    <div className="text-sm text-bolt-elements-textPrimary">Preparing Workbench...</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <WorkbenchSkeleton isSmallViewport={isSmallViewport} variant="preparing" />
         )}
 
         <div
           className={classNames('fixed z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier', {
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[100%] pointer-events-none w-[var(--workbench-inner-width)]':
               isSmallViewport && !mobilePreviewMode,
             'top-0 bottom-0 left-0 right-0 w-full': isSmallViewport && mobilePreviewMode,
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[var(--workbench-left)] w-[var(--workbench-inner-width)]':
               showWorkbench && !isSmallViewport,
-            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 max-h-[968px] left-[100%] w-[var(--workbench-inner-width)]':
+            'top-[calc(var(--header-height)+0.5rem)] bottom-4.5 mr-4 left-[100%] w-[var(--workbench-inner-width)]':
               !showWorkbench && !isSmallViewport,
           })}
         >
@@ -604,7 +594,7 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                   initial={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
                   animate={{ x: isSmallViewport && mobilePreviewMode ? 0 : selectedView === 'preview' ? 0 : '100%' }}
                 >
-                  <Preview isStreaming={isStreaming} />
+                  <Preview isStreaming={isStreaming} workbenchState={workbenchState} />
                 </View>
               </div>
             </div>

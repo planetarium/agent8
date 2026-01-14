@@ -87,9 +87,9 @@ export function ChatDescription({ asMenuItem = false, onClose }: ChatDescription
   }
 
   return (
-    <div className="flex items-center justify-center pt-3 pb-2">
-      <div className="flex items-center gap-3">
-        <span className="max-w-[150px] truncate">{repo.title}</span>
+    <div className="flex items-center pt-2 pb-2 min-w-0 overflow-hidden">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="truncate">{repo.title}</span>
         {!isSmallViewport && (
           <Tooltip.Root delayDuration={100}>
             <Tooltip.Trigger asChild>

@@ -14,6 +14,7 @@ import { restoreVersion } from '~/utils/restoreVersion';
 
 import { RestoreConfirmModal } from '~/components/ui/Restore';
 import { SaveVersionConfirmModal } from '~/components/ui/SaveVersion';
+import { BaseModal } from '~/components/ui/BaseModal';
 
 interface RestoreInfo {
   commitHash: string;
@@ -23,6 +24,7 @@ interface RestoreInfo {
 interface State {
   save: { open: boolean; message: UIMessage | null };
   restore: { open: boolean; info: RestoreInfo | null };
+  delete: { open: boolean; commitHash: string | null };
   savedVersions: Map<string, string>;
 }
 
@@ -31,6 +33,8 @@ type Action =
   | { type: 'CLOSE_SAVE' }
   | { type: 'OPEN_RESTORE'; info: RestoreInfo }
   | { type: 'CLOSE_RESTORE' }
+  | { type: 'OPEN_DELETE'; commitHash: string }
+  | { type: 'CLOSE_DELETE' }
   | { type: 'SET_SAVED_VERSIONS'; versions: Map<string, string> }
   | { type: 'ADD_SAVED_VERSION'; commitHash: string; commitTitle: string }
   | { type: 'REMOVE_SAVED_VERSION'; commitHash: string };
@@ -38,6 +42,7 @@ type Action =
 const initialState: State = {
   save: { open: false, message: null },
   restore: { open: false, info: null },
+  delete: { open: false, commitHash: null },
   savedVersions: new Map(),
 };
 
@@ -51,6 +56,10 @@ function reducer(state: State, action: Action): State {
       return { ...state, restore: { open: true, info: action.info } };
     case 'CLOSE_RESTORE':
       return { ...state, restore: { open: false, info: null } };
+    case 'OPEN_DELETE':
+      return { ...state, delete: { open: true, commitHash: action.commitHash } };
+    case 'CLOSE_DELETE':
+      return { ...state, delete: { open: false, commitHash: null } };
 
     case 'SET_SAVED_VERSIONS':
       return { ...state, savedVersions: action.versions };
@@ -106,7 +115,7 @@ export function useVersionFeature() {
           );
           dispatch({ type: 'SET_SAVED_VERSIONS', versions: map });
         } catch (e) {
-          console.error('Failed to fetch version history:', e);
+          console.error('Failed to fetch Bookmark history:', e);
         }
       })();
     }
@@ -145,6 +154,11 @@ export function useVersionFeature() {
   const closeSave = React.useCallback(() => dispatch({ type: 'CLOSE_SAVE' }), []);
   const closeRestore = React.useCallback(() => dispatch({ type: 'CLOSE_RESTORE' }), []);
 
+  const openDelete = React.useCallback((commitHash: string) => {
+    dispatch({ type: 'OPEN_DELETE', commitHash });
+  }, []);
+  const closeDelete = React.useCallback(() => dispatch({ type: 'CLOSE_DELETE' }), []);
+
   // 4) Restore confirm logic (modal OK)
   const confirmRestore = React.useCallback(async () => {
     if (!state.restore.info || !projectPath) {
@@ -161,6 +175,36 @@ export function useVersionFeature() {
       commitTitle: restoreInfo.commitTitle,
     });
   }, [state.restore.info, projectPath]);
+
+  // 4.5) Delete confirm logic (modal OK)
+  const confirmDelete = React.useCallback(async () => {
+    if (!state.delete.commitHash || !projectPath) {
+      return;
+    }
+
+    // Close modal immediately to prevent duplicate clicks
+    const commitHashToDelete = state.delete.commitHash;
+    dispatch({ type: 'CLOSE_DELETE' });
+
+    const toastId = toast.loading('Deleting bookmark...');
+
+    try {
+      const { deleteVersion } = await import('~/lib/persistenceGitbase/api.client');
+      await deleteVersion(projectPath, commitHashToDelete);
+
+      const { triggerVersionDelete } = await import('~/lib/stores/versionEvent');
+      triggerVersionDelete(commitHashToDelete);
+
+      toast.dismiss(toastId);
+      toast.success('Bookmark deleted successfully');
+    } catch (error) {
+      toast.dismiss(toastId);
+      handleChatError('Failed to delete bookmark', {
+        error: error instanceof Error ? error : String(error),
+        context: 'useVersionFeature/confirmDelete',
+      });
+    }
+  }, [state.delete.commitHash, projectPath]);
 
   // 5) Save confirm logic (modal Save)
   const confirmSave = React.useCallback(
@@ -185,7 +229,7 @@ export function useVersionFeature() {
       // Close modal first
       dispatch({ type: 'CLOSE_SAVE' });
 
-      const toastId = toast.loading('Saving version...');
+      const toastId = toast.loading('Saving Bookmark...');
 
       try {
         // Get commit to extract user message (commit title)
@@ -202,8 +246,8 @@ export function useVersionFeature() {
 
         const cleanedMessage = stripMetadata(rawUserMessage).trim();
         const commitTitleFromUserMessage = cleanedMessage
-          ? cleanedMessage.split('\n')[0].slice(0, 100) || 'Saved version'
-          : 'Saved version';
+          ? cleanedMessage.split('\n')[0].slice(0, 100) || 'Saved Bookmark'
+          : 'Saved Bookmark';
 
         const { saveVersion } = await import('~/lib/persistenceGitbase/api.client');
         await saveVersion(
@@ -220,10 +264,10 @@ export function useVersionFeature() {
         triggerVersionSave(commitHash, title || commitTitleFromUserMessage);
 
         toast.dismiss(toastId);
-        toast.success('Version saved successfully');
+        toast.success('Bookmark saved successfully');
       } catch (error) {
         toast.dismiss(toastId);
-        handleChatError('Failed to save version', {
+        handleChatError('Failed to save Bookmark', {
           error: error instanceof Error ? error : String(error),
           context: 'useVersionFeature/confirmSave',
         });
@@ -249,7 +293,7 @@ export function useVersionFeature() {
 
   // 7) Calculate next version number for default title
   const nextVersionNumber = state.savedVersions.size + 1;
-  const defaultVersionTitle = `Version ${nextVersionNumber}`;
+  const defaultVersionTitle = `Bookmark ${nextVersionNumber}`;
 
   // 8) return modal JSX from hook → ChatImpl is "just plug and play"
   const modals = (
@@ -263,12 +307,21 @@ export function useVersionFeature() {
       />
 
       <RestoreConfirmModal isOpen={state.restore.open} onClose={closeRestore} onConfirm={confirmRestore} />
+
+      <BaseModal isOpen={state.delete.open} onClose={closeDelete} title="Remove from bookmarks?">
+        <BaseModal.Description>You can add it again anytime</BaseModal.Description>
+        <BaseModal.Actions>
+          <BaseModal.CancelButton onClick={closeDelete} />
+          <BaseModal.DestructiveButton onClick={confirmDelete}>Delete</BaseModal.DestructiveButton>
+        </BaseModal.Actions>
+      </BaseModal>
     </>
   );
 
   return {
     savedVersions: state.savedVersions,
     openSave,
+    openDelete,
     openRestore,
     modals,
   };

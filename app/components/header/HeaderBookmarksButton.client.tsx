@@ -5,9 +5,19 @@ import { useStore } from '@nanostores/react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 import { repoStore } from '~/lib/stores/repo';
-import { getVersionHistory, deleteVersion } from '~/lib/persistenceGitbase/api.client';
+import { getVersionHistory, deleteVersion, forkProject } from '~/lib/persistenceGitbase/api.client';
 import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
-import { CloseIcon, StarLineIcon, DeleteIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { handleChatError } from '~/utils/errorNotification';
+import { classNames } from '~/utils/classNames';
+import {
+  CloseIcon,
+  StarLineIcon,
+  DeleteIcon,
+  RestoreIcon,
+  ChevronRightIcon,
+  BookmarkLineIcon,
+} from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { BaseModal } from '~/components/ui/BaseModal';
@@ -30,21 +40,48 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, version }: DeleteConfi
   }
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Are you sure you want to delete this version?">
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Remove from bookmarks?">
+      <BaseModal.Description>You can add it again anytime</BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
-        <BaseModal.DestructiveButton onClick={onConfirm}>Delete</BaseModal.DestructiveButton>
+        <BaseModal.DestructiveButton onClick={onConfirm}>Remove</BaseModal.DestructiveButton>
       </BaseModal.Actions>
     </BaseModal>
   );
 }
 
-interface HeaderVersionHistoryButtonProps {
+// Fork Confirmation Modal Component
+interface ForkConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  version: VersionEntry | null;
+}
+
+function ForkConfirmModal({ isOpen, onClose, onConfirm, version }: ForkConfirmModalProps) {
+  if (!version) {
+    return null;
+  }
+
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Create a copy of this version?">
+      <BaseModal.Description>
+        This creates a new project from this version. Chat history won&apos;t be copied to the new project.
+      </BaseModal.Description>
+      <BaseModal.Actions>
+        <BaseModal.CancelButton onClick={onClose} />
+        <BaseModal.ConfirmButton onClick={onConfirm}>Create copy</BaseModal.ConfirmButton>
+      </BaseModal.Actions>
+    </BaseModal>
+  );
+}
+
+interface HeaderBookmarksButtonProps {
   asMenuItem?: boolean;
   onClose?: () => void;
 }
 
-export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: HeaderVersionHistoryButtonProps) {
+export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBookmarksButtonProps) {
   const repo = useStore(repoStore);
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -58,6 +95,8 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
   const [selectedVersionForRestore, setSelectedVersionForRestore] = useState<VersionEntry | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [selectedVersionForDelete, setSelectedVersionForDelete] = useState<VersionEntry | null>(null);
+  const [isForkModalOpen, setIsForkModalOpen] = useState<boolean>(false);
+  const [selectedVersionForFork, setSelectedVersionForFork] = useState<VersionEntry | null>(null);
 
   const VERSIONS_PER_PAGE = 20;
 
@@ -186,6 +225,73 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
     }
   };
 
+  // Open fork confirmation modal
+  const handleForkClick = (version: VersionEntry) => {
+    setSelectedVersionForFork(version);
+    setIsForkModalOpen(true);
+  };
+
+  // Actual fork logic after confirmation
+  const handleForkConfirm = async () => {
+    if (!selectedVersionForFork) {
+      return;
+    }
+
+    const commitHash = selectedVersionForFork.commitHash;
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      handleChatError('No commit hash found', {
+        context: 'handleFork - commit hash validation',
+      });
+
+      setIsForkModalOpen(false);
+
+      return;
+    }
+
+    const nameWords = repo.name.split('-');
+
+    let newRepoName = '';
+
+    if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
+      newRepoName = nameWords.slice(0, -1).join('-');
+    } else {
+      newRepoName = nameWords.join('-');
+    }
+
+    // Close modal first
+    setIsForkModalOpen(false);
+
+    // Show loading toast while forking
+    const toastId = toast.loading('Creating a copy...');
+
+    try {
+      const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title, {
+        resetEnv: true,
+      });
+
+      // Dismiss the loading toast
+      toast.dismiss(toastId);
+
+      if (forkedProject && forkedProject.success) {
+        toast.success('Copy created — now in your copy.');
+        window.location.href = '/chat/' + forkedProject.project.path;
+      } else {
+        handleChatError('Failed to create copy', {
+          context: 'handleFork - fork result check',
+        });
+      }
+    } catch (error) {
+      // Dismiss the loading toast and show error
+      toast.dismiss(toastId);
+
+      handleChatError('Failed to create copy', {
+        error: error instanceof Error ? error : String(error),
+        context: 'handleFork - catch block',
+      });
+    }
+  };
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     const scrollTop = target.scrollTop;
@@ -209,15 +315,15 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
           className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
           onClick={() => handleOpenChange(true)}
         >
-          <StarLineIcon size={20} />
-          <span>Version History</span>
+          <BookmarkLineIcon width={20} height={20} />
+          <span>Bookmarks</span>
         </div>
       ) : (
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
             <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
               <StarLineIcon size={20} />
-              Versions
+              Bookmarks
             </CustomButton>
           </Tooltip.Trigger>
           <Tooltip.Portal>
@@ -245,14 +351,14 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
               className={`overflow-hidden flex flex-col items-start bg-primary gap-3 ${
                 isSmallViewport
                   ? 'w-full h-full px-4'
-                  : 'max-w-[800px] w-full border border-secondary rounded-2xl elevation-light-3 p-8'
+                  : 'max-w-[615px] w-full border border-secondary rounded-2xl elevation-light-3 p-8'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
               {!isSmallViewport ? (
                 <header className="flex items-center gap-2 self-stretch">
-                  <h1 className="text-heading-md text-primary flex-[1_0_0]">Version History</h1>
+                  <h1 className="text-heading-md text-primary flex-[1_0_0]">Bookmarks</h1>
                   <button
                     onClick={() => handleOpenChange(false)}
                     className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
@@ -268,9 +374,20 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
                     icon={<ChevronRightIcon className="rotate-180" width={20} height={20} />}
                     onClick={() => handleOpenChange(false)}
                   />
-                  <h1 className="text-heading-xs text-primary flex-[1_0_0]">Version History</h1>
+                  <h1 className="text-heading-xs text-primary flex-[1_0_0]">Bookmarks</h1>
                 </div>
               )}
+
+              <div className="flex flex-col items-start gap-1 self-stretch">
+                <span className="text-heading-2xs text-tertiary">
+                  <span className="text-secondary">Create a Copy</span> creates a new project from the selected version.
+                  Chat history won&apos;t be copied to the new project.
+                </span>
+                <span className="text-heading-2xs text-tertiary">
+                  <span className="text-secondary">Restore</span> reverts the current project to the selected version.
+                  Changes after that version may be lost, but your chat history will remain.
+                </span>
+              </div>
 
               {/* Content */}
               <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
@@ -332,8 +449,20 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
                           )}
 
                           {/* Actions */}
-                          <div className="flex justify-end items-start gap-2 self-stretch">
-                            {isSmallViewport && <div className="flex-[1_0_0]" />}
+                          <div
+                            className={classNames('flex items-start self-stretch', {
+                              'gap-2': isSmallViewport,
+                              'justify-end gap-2': !isSmallViewport,
+                            })}
+                          >
+                            <CustomButton
+                              className={isSmallViewport ? 'flex-[1_0_0]' : ''}
+                              variant="secondary-ghost"
+                              size="md"
+                              onClick={() => handleForkClick(version)}
+                            >
+                              <span>Create a Copy</span>
+                            </CustomButton>
                             <CustomButton
                               className={isSmallViewport ? 'flex-[1_0_0]' : ''}
                               variant="secondary-ghost"
@@ -396,6 +525,14 @@ export function HeaderVersionHistoryButton({ asMenuItem = false, onClose }: Head
           </div>,
           document.body,
         )}
+
+      {/* Fork Confirmation Modal */}
+      <ForkConfirmModal
+        isOpen={isForkModalOpen}
+        onClose={() => setIsForkModalOpen(false)}
+        onConfirm={handleForkConfirm}
+        version={selectedVersionForFork}
+      />
 
       {/* Restore Confirmation Modal */}
       <RestoreConfirmModal

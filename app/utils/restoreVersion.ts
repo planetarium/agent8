@@ -1,6 +1,6 @@
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { fetchProjectFiles, setRestorePoint } from '~/lib/persistenceGitbase/api.client';
+import { fetchProjectFiles, setRestorePoint, getCommit } from '~/lib/persistenceGitbase/api.client';
 import { triggerRestoreEvent } from '~/lib/stores/restore';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { handleChatError } from '~/utils/errorNotification';
@@ -9,7 +9,7 @@ import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
 export interface RestoreVersionParams {
   projectPath: string;
   commitHash: string;
-  commitTitle: string;
+  commitTitle?: string; // Optional - will be fetched from API if not provided
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
@@ -28,6 +28,10 @@ export async function restoreVersion({
   const toastId = toast.loading('Restoring version...');
 
   try {
+    // Fetch commit info to get the proper title
+    const { data: commitData } = await getCommit(projectPath, commitHash);
+    const actualCommitTitle = commitData.commit.title || commitTitle || 'Unknown version';
+
     // Fetch files from the specific commit
     const files = await fetchProjectFiles(projectPath, commitHash);
 
@@ -59,7 +63,7 @@ export async function restoreVersion({
 
     // Save restore point to GitLab
     try {
-      await setRestorePoint(projectPath, commitHash, commitTitle);
+      await setRestorePoint(projectPath, commitHash, actualCommitTitle);
     } catch (err) {
       console.warn('Failed to save restore point to GitLab:', err);
 
@@ -70,7 +74,7 @@ export async function restoreVersion({
     window.history.replaceState(null, '', `/chat/${projectPath}?revertTo=${commitHash}`);
 
     // Trigger restore event to add message to chat
-    triggerRestoreEvent(commitHash, commitTitle);
+    triggerRestoreEvent(commitHash, actualCommitTitle);
 
     toast.dismiss(toastId);
     toast.success('Restored — now viewing this version.');

@@ -29,9 +29,9 @@ export default function PreviewQrCode({ className, value }: PreviewQrCodeProps) 
               side="bottom"
               sideOffset={10}
               align="end"
-              className="!elevation-light-2 inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
+              className="!elevation-light-2 inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
             >
-              <p className="text-body-lg-medium text-inverse">
+              <p className="text-inverse">
                 Test your game on a mobile device by scanning the Preview QR code!
                 <br />
                 Run Preview to make sure the current version runs correctly.

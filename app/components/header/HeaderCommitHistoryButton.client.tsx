@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import { useStore } from '@nanostores/react';
@@ -21,7 +21,7 @@ import { Button } from '~/components/ui/Button';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import CustomButton from '~/components/ui/CustomButton';
 import { BaseModal } from '~/components/ui/BaseModal';
-import { HistoryIcon, CloseIcon, OutLinkIcon, ForkIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
+import { HistoryIcon, CloseIcon, OutLinkIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
 
 interface Commit {
   id: string;
@@ -68,16 +68,14 @@ function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConf
   }
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Are you sure you want to restore this commit?">
-      <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
-        <span className="text-body-md-medium text-tertiary self-stretch">
-          Changes will be applied to this project. Publishing will update the existing project.
-        </span>
-      </div>
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Restore this version?">
+      <BaseModal.Description>
+        This will replace the current project code with this version. Chat history will remain.
+      </BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
         <BaseModal.ConfirmButton onClick={onConfirm}>
-          <RestoreIcon size={24} color="#f3f5f8" />
+          <RestoreIcon size={20} color="#f3f5f8" />
           Restore
         </BaseModal.ConfirmButton>
       </BaseModal.Actions>
@@ -99,18 +97,13 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmMod
   }
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Are you sure you want to fork this commit?">
-      <div className="flex flex-col items-start pb-4 gap-4 self-stretch">
-        <span className="text-body-md-medium text-tertiary self-stretch">
-          A new project will be created. Publishing will produce a separate project from the original.
-        </span>
-      </div>
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Create a copy of this version?">
+      <BaseModal.Description>
+        This creates a new project from this version. Chat history won&apos;t be copied to the new project.
+      </BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
-        <BaseModal.ConfirmButton onClick={onConfirm}>
-          <ForkIcon size={24} fill="#f3f5f8" />
-          Fork
-        </BaseModal.ConfirmButton>
+        <BaseModal.ConfirmButton onClick={onConfirm}>Create copy</BaseModal.ConfirmButton>
       </BaseModal.Actions>
     </BaseModal>
   );
@@ -138,44 +131,57 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
 
   const COMMITS_PER_PAGE = 50;
 
-  const fetchCommits = async (page: number = 1, append: boolean = false) => {
-    if (!repo.path) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params = new URLSearchParams({
-        projectPath: repo.path,
-        page: page.toString(),
-        perPage: COMMITS_PER_PAGE.toString(),
-      });
-
-      const response = await fetch(`/api/gitlab/commits?${params}`);
-      const data: CommitResponse = await response.json();
-
-      if (data.success && data.data) {
-        const filteredCommits = data.data.commits.filter((commit) => !commit.message.startsWith('Merge branch'));
-
-        if (append) {
-          setCommits((prev) => [...prev, ...filteredCommits]);
-        } else {
-          setCommits(filteredCommits);
-        }
-
-        setHasMore(data.data.pagination.hasMore);
-        setCurrentPage(page);
-      } else {
-        setError(data.message || 'Failed to fetch commits');
+  const fetchCommits = useCallback(
+    async (page: number = 1, append: boolean = false) => {
+      if (!repo.path) {
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams({
+          projectPath: repo.path,
+          page: page.toString(),
+          perPage: COMMITS_PER_PAGE.toString(),
+          all: 'true',
+        });
+
+        const response = await fetch(`/api/gitlab/commits?${params}`);
+        const data: CommitResponse = await response.json();
+
+        if (data.success && data.data) {
+          const filteredCommits = data.data.commits
+            .filter((commit) => !commit.message.startsWith('Merge branch'))
+            .sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime()); // 최신순 정렬
+
+          if (append) {
+            setCommits((prev) => {
+              const combined = [...prev, ...filteredCommits];
+
+              // 전체 목록도 시간순으로 재정렬 (페이지네이션 시 섞일 수 있음)
+              return combined.sort(
+                (a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime(),
+              );
+            });
+          } else {
+            setCommits(filteredCommits);
+          }
+
+          setHasMore(data.data.pagination.hasMore);
+          setCurrentPage(page);
+        } else {
+          setError(data.message || 'Failed to fetch commits');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repo.path],
+  );
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
@@ -189,10 +195,10 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
 
   // Fetch commits when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && repo.path) {
       fetchCommits(1);
     }
-  }, [isOpen]);
+  }, [isOpen, repo.path, fetchCommits]);
 
   const handleLoadMore = () => {
     if (hasMore && !loading) {
@@ -280,7 +286,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
     setIsForkModalOpen(false);
 
     // Show loading toast while forking
-    const toastId = toast.loading('Forking project...');
+    const toastId = toast.loading('Creating a copy...');
 
     try {
       const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title, {
@@ -291,10 +297,10 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       toast.dismiss(toastId);
 
       if (forkedProject && forkedProject.success) {
-        toast.success('Fork created — now in your copy.');
+        toast.success('Copy created — now in your copy.');
         window.location.href = '/chat/' + forkedProject.project.path;
       } else {
-        handleChatError('Failed to fork project', {
+        handleChatError('Failed to create copy', {
           context: 'handleFork - fork result check',
           prompt: commitInfo || undefined,
           elapsedTime: getElapsedTime(startTime),
@@ -304,7 +310,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
 
-      handleChatError('Failed to fork project', {
+      handleChatError('Failed to create copy', {
         error: error instanceof Error ? error : String(error),
         context: 'handleFork - catch block',
         prompt: commitInfo || undefined,
@@ -455,7 +461,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
               onClick={(e) => e.stopPropagation()}
             >
               {!isSmallViewport ? (
-                <header className="flex items-cennter gap-2 self-stretch">
+                <header className="flex items-center gap-2 self-stretch">
                   <h1 className="text-heading-md text-primary flex-[1_0_0]">Commit History</h1>
                   <button
                     onClick={() => setIsOpen(false)}
@@ -475,6 +481,17 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                   <h1 className="text-heading-xs text-primary flex-[1_0_0]">Commit History</h1>
                 </div>
               )}
+
+              <div className="flex flex-col items-start gap-1 self-stretch">
+                <span className="text-heading-2xs text-tertiary">
+                  <span className="text-secondary">Create a Copy</span> creates a new project from the selected version.
+                  Chat history won&apos;t be copied to the new project.
+                </span>
+                <span className="text-heading-2xs text-tertiary">
+                  <span className="text-secondary">Restore</span> reverts the current project to the selected version.
+                  Changes after that version may be lost, but your chat history will remain.
+                </span>
+              </div>
 
               <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
                 <div
@@ -557,9 +574,9 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                               </span>
                             )}
                             <div
-                              className={classNames('flex items-center gap-3', {
-                                'self-stretch': !isSmallViewport,
-                                'flex-[1_0_0]': isSmallViewport,
+                              className={classNames('flex items-center', {
+                                'self-stretch gap-3': !isSmallViewport,
+                                'flex-[1_0_0] gap-2': isSmallViewport,
                               })}
                             >
                               {!isSmallViewport && (
@@ -581,8 +598,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 size="md"
                                 onClick={() => handleForkClick(commit)}
                               >
-                                <ForkIcon size={20} />
-                                <span>Fork</span>
+                                <span>Create a Copy</span>
                               </CustomButton>
                               <CustomButton
                                 className={isSmallViewport ? 'flex-[1_0_0]' : ''}

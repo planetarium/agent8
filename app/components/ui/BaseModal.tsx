@@ -17,11 +17,14 @@ export interface BaseModalProps {
 
 interface ActionsProps {
   children: React.ReactNode;
+  gap?: 'gap-2' | 'gap-3';
+  layout?: 'horizontal' | 'stacked';
 }
 
 interface CancelButtonProps {
   children?: React.ReactNode;
   onClick?: () => void;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 interface ConfirmButtonProps {
@@ -29,18 +32,18 @@ interface ConfirmButtonProps {
   onClick?: () => void;
   disabled?: boolean;
   type?: 'button' | 'submit';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 // Actions container component
-function Actions({ children }: ActionsProps) {
+function Actions({ children, gap = 'gap-2', layout = 'horizontal' }: ActionsProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <div className="flex flex-col items-start gap-[10px] self-stretch">
       <div
-        className={classNames('flex items-center gap-3 self-stretch', {
-          'justify-end': !isSmallViewport,
-          'flex-col-reverse': isSmallViewport,
+        className={classNames('flex items-center self-stretch justify-end', gap, {
+          'flex-col-reverse': isSmallViewport && layout === 'stacked',
         })}
       >
         {children}
@@ -50,14 +53,14 @@ function Actions({ children }: ActionsProps) {
 }
 
 // Cancel button component
-function CancelButton({ children = 'Cancel', onClick }: CancelButtonProps) {
+function CancelButton({ children = 'Cancel', onClick, size = 'md' }: CancelButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <CustomButton
       className={isSmallViewport ? 'w-full' : ''}
       variant="secondary-ghost"
-      size="lg"
+      size={size}
       type="button"
       onClick={onClick}
     >
@@ -67,14 +70,14 @@ function CancelButton({ children = 'Cancel', onClick }: CancelButtonProps) {
 }
 
 // Confirm button component
-function ConfirmButton({ children, onClick, disabled, type = 'button' }: ConfirmButtonProps) {
+function ConfirmButton({ children, onClick, disabled, type = 'button', size = 'md' }: ConfirmButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <CustomButton
       className={isSmallViewport ? 'w-full' : ''}
       variant="primary-filled"
-      size="lg"
+      size={size}
       type={type}
       onClick={onClick}
       disabled={disabled}
@@ -85,20 +88,33 @@ function ConfirmButton({ children, onClick, disabled, type = 'button' }: Confirm
 }
 
 // Destructive button component (for delete actions)
-function DestructiveButton({ children, onClick, disabled, type = 'button' }: ConfirmButtonProps) {
+function DestructiveButton({ children, onClick, disabled, type = 'button', size = 'md' }: ConfirmButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
     <CustomButton
       className={isSmallViewport ? 'w-full' : ''}
       variant="destructive-filled"
-      size="lg"
+      size={size}
       type={type}
       onClick={onClick}
       disabled={disabled}
     >
       {children}
     </CustomButton>
+  );
+}
+
+// Description component for modal content
+interface DescriptionProps {
+  children: React.ReactNode;
+}
+
+function Description({ children }: DescriptionProps) {
+  return (
+    <div className="flex flex-col items-start pb-4 self-stretch">
+      <span className="text-body-md-medium text-tertiary">{children}</span>
+    </div>
   );
 }
 
@@ -151,6 +167,7 @@ export function BaseModal({ isOpen, isHiddenTitleSection, modalClassName, onClos
 
 // Attach sub-components
 BaseModal.Actions = Actions;
+BaseModal.Description = Description;
 BaseModal.CancelButton = CancelButton;
 BaseModal.ConfirmButton = ConfirmButton;
 BaseModal.DestructiveButton = DestructiveButton;

@@ -1,11 +1,11 @@
 import { Fragment, forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
-import { MOBILE_BREAKPOINT, CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
-import { useRandomTip } from '~/lib/hooks/useRandomTip';
+import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 
 import type { JSONValue, UIMessage } from 'ai';
 import type { ProgressAnnotation } from '~/types/context';
@@ -16,17 +16,22 @@ import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client
 import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
+import { gameCreationTips } from '~/constants/gameCreationTips';
+import { getCommitHashFromMessageId } from '~/utils/messageUtils';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
 import {
-  StarLineIcon,
+  BookmarkLineIcon,
+  BookmarkFillIcon,
   StarFillIcon,
   DiffIcon,
   RefreshIcon,
   CopyLineIcon,
   PlayIcon,
   ChevronRightIcon,
+  RestoreIcon,
+  CodeGenLoadingIcon,
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -40,9 +45,9 @@ interface MessagesProps {
   progressAnnotations?: ProgressAnnotation[];
   onRetry?: (message: UIMessage, prevMessage?: UIMessage) => void;
   onFork?: (message: UIMessage) => void;
-  onRevert?: (message: UIMessage) => void;
   onViewDiff?: (message: UIMessage) => void;
   onSaveVersion?: (message: UIMessage) => void;
+  onDeleteVersion?: (commitHash: string) => void;
   onRestoreVersion?: (commitHash: string, commitTitle: string) => void;
   savedVersions?: Map<string, string>;
   hasMore?: boolean;
@@ -61,6 +66,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       onRetry,
       onViewDiff,
       onSaveVersion,
+      onDeleteVersion,
       onRestoreVersion,
       savedVersions,
       hasMore,
@@ -74,11 +80,18 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     // Check for mobile viewport
     const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
 
-    // For Run Preview button layout purposes
-    const isSmallViewportForLayout = useViewport(MOBILE_BREAKPOINT);
+    // Random game creation tip that changes every 5 seconds
+    const [currentTipIndex, setCurrentTipIndex] = useState(0);
 
-    // Random game creation tip
-    const randomTip = useRandomTip();
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setCurrentTipIndex((prev) => (prev + 1) % gameCreationTips.length);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }, []);
+
+    const randomTip = gameCreationTips[currentTipIndex];
 
     // Track expanded state for each message (AI messages only)
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
@@ -168,8 +181,20 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
+
+              /*
+               * Only consider it the first assistant message if there are no more messages to load
+               * and it's truly the first visible assistant message in the entire chat history
+               */
               const isFirstAssistantMessage =
-                !isUserMessage && messages.slice(0, index).filter((m) => m.role === 'assistant').length === 0;
+                !isUserMessage &&
+                !hasMore &&
+                messages.slice(0, index).filter((m) => {
+                  const meta = m.metadata as any;
+                  const isHiddenMsg = meta?.annotations?.includes('hidden');
+
+                  return m.role === 'assistant' && !isHiddenMsg;
+                }).length === 0;
 
               if (isHidden || isMergeMessage) {
                 return <Fragment key={index} />;
@@ -182,9 +207,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     key={index}
                     className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
                   >
-                    <div className="flex items-center gap-2 self-stretch">
-                      <span className="text-body-md-medium text-secondary">Restored</span>
-                      <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{messageText}</span>
+                    <div className="flex items-center gap-2 self-stretch overflow-hidden">
+                      <span className="text-body-md-medium text-secondary shrink-0">Restored</span>
+                      <span className="text-heading-xs text-accent-primary flex-[1_0_0] truncate">{messageText}</span>
                     </div>
                   </div>
                 );
@@ -200,7 +225,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                     className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
                   >
                     <div className="flex items-center gap-2 self-stretch">
-                      <span className="text-body-md-medium text-secondary">Forked from</span>
+                      <span className="text-body-md-medium text-secondary">Copied from</span>
                       <span className="text-heading-xs text-accent-primary flex-[1_0_0]">{forkSource}</span>
                     </div>
                   </div>
@@ -241,9 +266,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         {/* Show saved version name for AI responses */}
                         {!isUserMessage &&
                           messageId &&
-                          isCommitHash(messageId.split('-').pop() as string) &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
                             const savedTitle = savedVersions?.get(commitHash);
 
                             return savedTitle ? (
@@ -314,21 +339,19 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               <span className="text-heading-xs text-subtle">Response Generated</span>
                             )}
                           </div>
-                          {/* Show All/Hide button: always visible on mobile, hidden during generation on desktop */}
-                          {(isSmallViewport || !(isLast && isGenerating)) && (
-                            <button
-                              onClick={(e) => toggleExpanded(index, e)}
-                              className="flex text-interactive-neutral text-heading-xs bg-primary gap-0.5 items-center"
-                            >
-                              {expandedMessages.has(index) ? 'Hide' : 'Show All'}
-                              <ChevronRightIcon
-                                width={16}
-                                height={16}
-                                fill="currentColor"
-                                className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
-                              />
-                            </button>
-                          )}
+                          {/* Show All/Hide button: always visible */}
+                          <button
+                            onClick={(e) => toggleExpanded(index, e)}
+                            className="flex text-interactive-neutral text-heading-2xs bg-primary gap-0.5 items-center"
+                          >
+                            {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                            <ChevronRightIcon
+                              width={16}
+                              height={16}
+                              fill="currentColor"
+                              className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                            />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -337,29 +360,62 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Hide View Diff button for the first AI response, non-last messages, and mobile */}
-                        {!isFirstAssistantMessage && isLast && !isSmallViewport && (
-                          <Tooltip.Root delayDuration={100}>
-                            <Tooltip.Trigger asChild>
-                              <CustomIconButton
-                                variant="secondary-transparent"
-                                size="sm"
-                                icon={<DiffIcon size={20} />}
-                                onClick={() => onViewDiff?.(message)}
-                                disabled={isGenerating}
-                              />
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                side="bottom"
-                              >
-                                View diff
-                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        )}
+                        {/* Show Bookmark button for assistant messages with commit hash */}
+                        {role === 'assistant' &&
+                          messageId &&
+                          (() => {
+                            const commitHash = getCommitHashFromMessageId(messageId);
+
+                            return isCommitHash(commitHash);
+                          })() &&
+                          (() => {
+                            const commitHash = getCommitHashFromMessageId(messageId);
+                            const savedTitle = savedVersions?.get(commitHash);
+                            const isSaved = !!savedTitle;
+
+                            return (
+                              <Tooltip.Root delayDuration={100}>
+                                <Tooltip.Trigger asChild>
+                                  <CustomIconButton
+                                    variant="secondary-transparent"
+                                    size="sm"
+                                    icon={
+                                      isSaved ? (
+                                        <BookmarkFillIcon size={20} />
+                                      ) : (
+                                        <BookmarkLineIcon width={20} height={20} />
+                                      )
+                                    }
+                                    onClick={() => {
+                                      if (isSaved) {
+                                        onDeleteVersion?.(commitHash);
+                                      } else {
+                                        onSaveVersion?.(message);
+                                      }
+                                    }}
+                                    disabled={isGenerating}
+                                  />
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                  <Tooltip.Content
+                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                    side="bottom"
+                                  >
+                                    {isSaved ? (
+                                      'Remove from Bookmarks'
+                                    ) : (
+                                      <>
+                                        Save to Bookmarks
+                                        <br />
+                                        and restore when needed
+                                      </>
+                                    )}
+                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                  </Tooltip.Content>
+                                </Tooltip.Portal>
+                              </Tooltip.Root>
+                            );
+                          })()}
                         <Tooltip.Root delayDuration={100}>
                           <Tooltip.Trigger asChild>
                             <CustomIconButton
@@ -367,7 +423,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               size="sm"
                               icon={<CopyLineIcon size={20} />}
                               onClick={() => {
-                                navigator.clipboard.writeText(messageText);
+                                // Get rendered text from message content only (excludes UI buttons like Show All/Hide)
+                                const messageElement = document.querySelector(
+                                  `[data-message-index="${index}"]`,
+                                ) as HTMLElement | null;
+                                const contentElement = messageElement?.querySelector(
+                                  '[data-message-content]',
+                                ) as HTMLElement | null;
+                                const textToCopy = contentElement?.innerText || messageText;
+                                navigator.clipboard.writeText(textToCopy);
                                 toast.success('Copied to clipboard');
                               }}
                               disabled={isGenerating}
@@ -383,6 +447,44 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         </Tooltip.Root>
+                        {/* Show Restore button for assistant messages with commit hash (except last message) */}
+                        {messageId &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
+                          role === 'assistant' &&
+                          !isLast && (
+                            <Tooltip.Root delayDuration={100}>
+                              <Tooltip.Trigger asChild>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<RestoreIcon size={20} color="currentColor" />}
+                                  onClick={() => {
+                                    const commitHash = getCommitHashFromMessageId(messageId);
+
+                                    // Find the previous user message to use as title
+                                    const prevUserMessage = messages
+                                      .slice(0, index)
+                                      .reverse()
+                                      .find((m) => m.role === 'user');
+                                    const userMessageText = prevUserMessage
+                                      ? extractAllTextContent(prevUserMessage)
+                                      : messageText;
+                                    onRestoreVersion?.(commitHash, userMessageText);
+                                  }}
+                                  disabled={isGenerating}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                  side="bottom"
+                                >
+                                  Restore
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
                         {/* Show Retry button only for the last message */}
                         {index > 0 && messages[index - 1]?.role === 'user' && isLast && (
                           <Tooltip.Root delayDuration={100}>
@@ -410,12 +512,35 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Portal>
                           </Tooltip.Root>
                         )}
+                        {/* Show View Diff button after Retry (if Retry exists) or after Revert (if no Retry) */}
+                        {!isFirstAssistantMessage && !isSmallViewport && (
+                          <Tooltip.Root delayDuration={100}>
+                            <Tooltip.Trigger asChild>
+                              <CustomIconButton
+                                variant="secondary-transparent"
+                                size="sm"
+                                icon={<DiffIcon size={20} />}
+                                onClick={() => onViewDiff?.(message)}
+                                disabled={isGenerating}
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                side="bottom"
+                              >
+                                View diff
+                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
                       </div>
                       <div className="flex items-center">
                         {messageId &&
-                          isCommitHash(messageId.split('-').pop() as string) &&
+                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           (() => {
-                            const commitHash = messageId.split('-').pop() as string;
+                            const commitHash = getCommitHashFromMessageId(messageId);
                             const savedTitle = savedVersions?.get(commitHash);
 
                             /*
@@ -430,30 +555,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               >
                                 Restore
                               </CustomButton>
-                            ) : !savedTitle ? (
-                              <Tooltip.Root delayDuration={100}>
-                                <Tooltip.Trigger asChild>
-                                  <CustomButton
-                                    variant="secondary-text"
-                                    size="sm"
-                                    onClick={() => onSaveVersion?.(message)}
-                                  >
-                                    <StarLineIcon size={20} />
-                                    Save
-                                  </CustomButton>
-                                </Tooltip.Trigger>
-                                <Tooltip.Portal>
-                                  <Tooltip.Content
-                                    className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                    side="bottom"
-                                  >
-                                    Save to Version History
-                                    <br />
-                                    and restore when needed
-                                    <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                                  </Tooltip.Content>
-                                </Tooltip.Portal>
-                              </Tooltip.Root>
                             ) : null;
                           })()}
                         {isLast && (
@@ -472,7 +573,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 }}
                               >
                                 <PlayIcon color="currentColor" size={20} />
-                                {isSmallViewportForLayout ? 'Run' : 'Run Preview'}
+                                Preview
                               </CustomButton>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
@@ -498,13 +599,35 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         {isStreaming &&
           (messages.length === 0 || messages[messages.length - 1]?.role === 'user') &&
           (isSmallViewport && messages.length === 0 ? (
-            <div className="flex flex-col w-full h-full justify-center items-center gap-3">
-              <div style={{ width: '48px', height: '48px' }}>
-                <Lottie animationData={loadingAnimationData} loop={true} />
+            <div className="flex flex-col w-full h-full justify-center items-center gap-5">
+              <div className="relative">
+                <CodeGenLoadingIcon size={256} />
+                <div className="absolute top-[calc(50%-16px)] left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12">
+                  <Lottie animationData={loadingAnimationData} loop={true} />
+                </div>
+                <span className="absolute top-[calc(50%+48px)] left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave">
+                  Generating code
+                </span>
               </div>
-              <div className="flex flex-col justify-center items-center gap-2 self-stretch px-4">
-                <span className="text-body-md-medium text-tertiary">Game Creation Tips</span>
-                <span className="text-body-md-medium text-secondary text-center">{randomTip}</span>
+
+              <div className="flex flex-col items-center justify-start py-2 max-w-md">
+                <div className="flex flex-col justify-start items-center self-stretch">
+                  <span className="text-body-lg-regular text-subtle mb-2">Tip</span>
+                  <div className="min-h-[3.5rem] flex items-start justify-center">
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={currentTipIndex}
+                        className="text-body-lg-regular text-secondary text-center leading-relaxed"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                      >
+                        {randomTip}
+                      </motion.span>
+                    </AnimatePresence>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

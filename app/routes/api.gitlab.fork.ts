@@ -169,7 +169,7 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
         newProject.id,
         forkFromTag,
         'develop',
-        `Forked from ${projectPath} at ${commitSha}`,
+        `Copied from ${projectPath} at ${commitSha}`,
       );
 
       // Create verse-from tag if this is a verse-based fork
@@ -191,6 +191,6 @@ async function forkAction({ context, request }: ActionFunctionArgs) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to fork repository: ${errorMessage}`);
+    throw new Error(`Failed to create copy: ${errorMessage}`);
   }
 }

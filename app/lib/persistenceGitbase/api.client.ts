@@ -185,6 +185,7 @@ ${truncateMessage(
       path: result.data.project.path,
       title: result.data.project.description.split('\n')[0] || result.data.project.name,
       latestCommitHash: result.data.commitHash,
+      createdAt: result.data.project.created_at || '',
     });
     changeChatUrl(result.data.project.path, { replace: true, ignoreChangeEvent: true });
   } else {

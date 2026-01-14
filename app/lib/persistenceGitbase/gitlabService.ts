@@ -593,6 +593,7 @@ export class GitlabService {
       id: number;
       name: string;
       description: string;
+      created_at?: string;
     };
     commits: GitlabCommit[];
     hasMore: boolean;
@@ -671,6 +672,7 @@ export class GitlabService {
           id: project.id,
           name: project.name,
           description: project.description,
+          created_at: typeof project.created_at === 'string' ? project.created_at : undefined,
         },
         commits,
         hasMore,
@@ -1364,6 +1366,24 @@ export class GitlabService {
   /**
    * Get version history for a project
    */
+  async getProjectBranches(projectPath: string): Promise<{ name: string; commit: { id: string; message: string } }[]> {
+    try {
+      const project = await this.gitlab.Projects.show(projectPath);
+      const branches = await this.gitlab.Branches.all(project.id);
+
+      return branches.map((branch: any) => ({
+        name: branch.name,
+        commit: {
+          id: branch.commit.id,
+          message: branch.commit.message,
+        },
+      }));
+    } catch (error) {
+      logger.error('Failed to get project branches:', error);
+      return [];
+    }
+  }
+
   async getVersionHistory(projectPath: string): Promise<VersionEntry[]> {
     try {
       const project = await this.gitlab.Projects.show(projectPath);

@@ -258,6 +258,7 @@ export default function Index() {
         path: repoPath,
         title: repoName,
         latestCommitHash: '', // Will be set by useGitbaseChatHistory when commits are loaded
+        createdAt: '',
       });
     }
   }, [repoPath, repoName]);

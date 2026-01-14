@@ -98,7 +98,7 @@ export const AssistantMessage = memo(
             )}
           </div>
         </>
-        <div className="markdown-container text-body-md-regular-relaxed text-secondary">
+        <div className="markdown-container text-body-md-regular-relaxed text-secondary" data-message-content>
           <div
             className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
             style={

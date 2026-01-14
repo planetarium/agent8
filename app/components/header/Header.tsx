@@ -17,8 +17,9 @@ import { HeaderDeployButton } from './HeaderDeployButton.client';
 import { HeaderVisibilityButton } from './HeaderVisibilityButton.client';
 import { HeaderGitCloneButton } from './HeaderGitCloneButton.client';
 import { HeaderCommitHistoryButton } from './HeaderCommitHistoryButton.client';
-import { HeaderVersionHistoryButton } from './HeaderVersionHistoryButton.client';
+import { HeaderBookmarksButton } from './HeaderBookmarksButton.client';
 import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
+import { LegacyProjectBanner } from './LegacyProjectBanner';
 import WithTooltip from '~/components/ui/Tooltip';
 import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -50,7 +51,7 @@ export function Header() {
     <TooltipProvider>
       {showHeader && (
         <header
-          className={classNames('flex items-center p-5 border-b h-[var(--header-height)]', {
+          className={classNames('flex items-center py-5 px-7 border-b h-[var(--header-height)]', {
             'border-transparent flex-shrink-0': !chat.started,
             'border-bolt-elements-borderColor': chat.started,
             'mt-5 bg-primary': !chat.started && isEmbedMode,
@@ -75,8 +76,8 @@ export function Header() {
           {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
             <div className="flex justify-between items-center self-stretch w-full">
               <span
-                className={classNames('text-interactive-neutral overflow-visible', {
-                  'px-4': !isEmbedMode,
+                className={classNames('text-interactive-neutral overflow-visible flex-1 min-w-0', {
+                  'pl-4': !isEmbedMode,
                 })}
               >
                 <ClientOnly>{() => <ChatDescription />}</ClientOnly>
@@ -84,11 +85,11 @@ export function Header() {
 
               {/* Desktop: Show all buttons */}
               {!isSmallViewport && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                   {repo.path && (
                     <Dropdown
                       trigger={
-                        <CustomIconButton variant="secondary-outlined" size="md" icon={<MoreIcon size={20} />} />
+                        <CustomIconButton variant="secondary-outlined" size="md" icon={<MoreIcon size={22} />} />
                       }
                       align="end"
                       size="compact"
@@ -108,7 +109,7 @@ export function Header() {
                     </Dropdown>
                   )}
                   {repo.path && <ClientOnly>{() => <HeaderCommitHistoryButton />}</ClientOnly>}
-                  {repo.path && <ClientOnly>{() => <HeaderVersionHistoryButton />}</ClientOnly>}
+                  {repo.path && <ClientOnly>{() => <HeaderBookmarksButton />}</ClientOnly>}
                   {repo.path && <ClientOnly>{() => <HeaderVisibilityButton />}</ClientOnly>}
                   <ClientOnly>{() => <HeaderDeployButton />}</ClientOnly>
                 </div>
@@ -128,15 +129,13 @@ export function Header() {
                     {repo.path && (
                       <>
                         <DropdownItem>
-                          <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
-                        </DropdownItem>
-                        <DropdownItem>
                           <ClientOnly>{() => <HeaderVisibilityButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                         <DropdownItem>
-                          <ClientOnly>
-                            {() => <HeaderVersionHistoryButton asMenuItem onClose={closeDropdown} />}
-                          </ClientOnly>
+                          <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
+                        </DropdownItem>
+                        <DropdownItem>
+                          <ClientOnly>{() => <HeaderBookmarksButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                         <DropdownItem>
                           <ClientOnly>
@@ -193,6 +192,9 @@ export function Header() {
           </div>
         </div>
       )}
+
+      {/* Legacy Project Banner */}
+      <LegacyProjectBanner chatStarted={chat.started} />
     </TooltipProvider>
   );
 }
