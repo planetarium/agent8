@@ -458,9 +458,9 @@ export const ChatImpl = memo(
       // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
-        process: processlog,
         ...options,
         elapsedTime: getElapsedTime(startTime),
+        process: options?.process || processlog,
       });
 
       return;

@@ -25,24 +25,25 @@ export function HeaderDeployButton() {
 
     const isArtifactsRunning = workbenchStore.hasRunningArtifactActions();
     const isRetryAttempt = now - lastDeployAttemptTimeRef.current <= DEPLOY_RETRY_WINDOW;
+    lastDeployAttemptTimeRef.current = now;
 
-    if (!isArtifactsRunning || isRetryAttempt) {
-      try {
-        if (isArtifactsRunning) {
-          workbenchStore.abortAllActions();
-        }
-
-        await workbenchStore.publish(chatId, title);
-      } catch (error) {
-        const errorMessage = error instanceof DeployError ? error.message : 'Failed to deploy';
-        toast.warning(errorMessage);
-      } finally {
-        lastDeployAttemptTimeRef.current = 0;
-      }
+    if (isArtifactsRunning || !isRetryAttempt) {
       return;
     }
 
-    lastDeployAttemptTimeRef.current = now;
+    // run deploy
+    try {
+      if (isArtifactsRunning) {
+        workbenchStore.abortAllActions();
+      }
+
+      await workbenchStore.publish(chatId, title);
+    } catch (error) {
+      const errorMessage = error instanceof DeployError ? error.message : 'Failed to deploy';
+      toast.warning(errorMessage);
+    } finally {
+      lastDeployAttemptTimeRef.current = 0;
+    }
   };
 
   return (
