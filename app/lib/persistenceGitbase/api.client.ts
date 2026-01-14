@@ -491,21 +491,6 @@ export const saveVersion = async (
   return response.data;
 };
 
-export const getProjectBranches = async (projectPath: string) => {
-  try {
-    const response = await axios.get('/api/gitlab/branches', {
-      params: {
-        projectPath,
-      },
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Failed to fetch project branches:', error);
-    return { success: false, data: { branches: [] } };
-  }
-};
-
 export const getVersionHistory = async (projectPath: string) => {
   try {
     const response = await axios.get('/api/gitlab/version-history', {
