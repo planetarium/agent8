@@ -989,6 +989,7 @@ export const ChatImpl = memo(
       };
 
       const templateSelectionStartTime = performance.now();
+      let accessToken = '';
 
       // Set progress annotation for analyzing request
       setCustomProgressAnnotations([
@@ -1065,7 +1066,7 @@ export const ChatImpl = memo(
       }
 
       // Inject .env into fileMap so Agent can read it in the first response
-      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+      accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
 
       if (accessToken) {
         try {
@@ -1112,10 +1113,32 @@ export const ChatImpl = memo(
 
       checkAborted();
 
-      const containerInstance = await workbench.container;
+      let containerInstance = await workbench.container;
 
       checkAborted();
-      await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+
+      /*
+       * 테스트 코드
+       * containerInstance.forceDisconnectForTesting(1000, 'test');
+       */
+      // containerInstance.close();
+
+      //=======================================================
+
+      try {
+        await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+      } catch {
+        const recoverySuccess = await recoverWorkbench(accessToken, signal);
+
+        console.log('#### test', recoverySuccess);
+
+        if (!recoverySuccess) {
+          throw new Error('Failed to recover workbench');
+        }
+
+        containerInstance = await workbench.container;
+        await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
+      }
 
       checkAborted();
 
@@ -1240,6 +1263,57 @@ export const ChatImpl = memo(
       resetEnhancer();
 
       textareaRef.current?.blur();
+    };
+
+    /**
+     * Recovers the workbench when the container connection is lost.
+     * Returns true if recovery successful, false otherwise.
+     */
+    const recoverWorkbench = async (accessToken: string, signal: AbortSignal): Promise<boolean> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Workbench recovery aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const workbenchConnectionState = workbench.connectionState.get();
+
+      if (workbenchConnectionState === 'connected') {
+        return true;
+      }
+
+      checkAborted();
+
+      try {
+        logger.info('🔌 Container connection lost, waiting for auto-reconnect...');
+        await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+
+        logger.info('✅ Container connection restored');
+
+        return true;
+      } catch {}
+
+      checkAborted();
+
+      if (!accessToken) {
+        return false;
+      }
+
+      const REINIT_ATTEMPTS = 2;
+
+      for (let i = 0; i < REINIT_ATTEMPTS; i++) {
+        try {
+          checkAborted();
+          logger.info(`Attempting container reinitialization (${i + 1}/${REINIT_ATTEMPTS})...`);
+          await workbench.reinitializeContainer(accessToken);
+
+          return true;
+        } catch {
+          logger.warn(`Container reinitialization failed (attempt ${i + 1}/${REINIT_ATTEMPTS})`);
+        }
+      }
+
+      return false;
     };
 
     /**
