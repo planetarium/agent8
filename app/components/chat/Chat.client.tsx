@@ -1316,6 +1316,8 @@ export const ChatImpl = memo(
       };
 
       const urls = imageAttachments.map((item) => item.url);
+      checkAborted();
+
       const descriptionResponse = await fetch('/api/image-description', {
         method: 'POST',
         headers: {
@@ -1450,9 +1452,17 @@ export const ChatImpl = memo(
 
       const wasFirstChat = !chatStarted;
       const startTime = performance.now();
-      sendMessageAbortControllerRef.current = new AbortController();
+      const abortController = new AbortController();
+      const signal = abortController.signal;
+      sendMessageAbortControllerRef.current = abortController;
 
       try {
+        const checkAborted = () => {
+          if (signal.aborted) {
+            throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
+          }
+        };
+
         // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
           ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
@@ -1461,11 +1471,7 @@ export const ChatImpl = memo(
         if (imageAttachments.length > 0) {
           try {
             addDebugLog('Start:generateImageDescriptions');
-            await generateImageDescriptions(
-              messageContent,
-              imageAttachments,
-              sendMessageAbortControllerRef.current.signal,
-            );
+            await generateImageDescriptions(messageContent, imageAttachments, signal);
             addDebugLog('Complete:generateImageDescriptions');
           } catch (descError) {
             addDebugLog('Fail:generateImageDescriptions');
@@ -1496,7 +1502,7 @@ export const ChatImpl = memo(
 
         if (wasFirstChat) {
           addDebugLog('Start:prepareFirstChat');
-          await prepareFirstChat(messageContent, attachmentList, sendMessageAbortControllerRef.current.signal);
+          await prepareFirstChat(messageContent, attachmentList, signal);
           addDebugLog('Complete:prepareFirstChat');
 
           return;
@@ -1514,9 +1520,11 @@ export const ChatImpl = memo(
         chatStore.setKey('aborted', false);
 
         if (repoStore.get().path) {
+          checkAborted();
           addDebugLog('Start:commitModifiedFiles');
 
-          const commit = await workbench.commitModifiedFiles(sendMessageAbortControllerRef.current.signal);
+          const commit = await workbench.commitModifiedFiles(signal);
+          checkAborted();
           addDebugLog('Complete:commitModifiedFiles');
 
           if (commit) {
@@ -1537,12 +1545,11 @@ export const ChatImpl = memo(
 
           if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
             const createTaskBranchStartTime = performance.now();
+            checkAborted();
             addDebugLog('Start:createTaskBranch');
 
-            const { success, message, data } = await createTaskBranch(
-              repoStore.get().path,
-              sendMessageAbortControllerRef.current.signal,
-            );
+            const { success, message, data } = await createTaskBranch(repoStore.get().path, signal);
+            checkAborted();
             addDebugLog('Complete:createTaskBranch');
 
             if (!success) {
@@ -1563,6 +1570,7 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
+        checkAborted();
         addDebugLog('Start:sendChatMessage');
         sendChatMessage({
           role: 'user',
