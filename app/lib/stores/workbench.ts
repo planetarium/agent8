@@ -1343,7 +1343,7 @@ export class WorkbenchStore {
       try {
         lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
       } catch (error) {
-        failedReason = 'no task found to deploy.';
+        failedReason = 'task not found';
         throw error;
       }
 
