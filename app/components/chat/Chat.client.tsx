@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import useViewport from '~/lib/hooks';
+import { useWakeLock } from '~/lib/hooks/useWakeLock';
 import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { chatStore } from '~/lib/stores/chat';
 import {
@@ -1736,6 +1737,9 @@ export const ChatImpl = memo(
     };
 
     const isStreaming = isLoading || fakeLoading || loading;
+
+    // Enable Wake Lock to prevent screen from turning off during streaming
+    useWakeLock(isStreaming);
 
     return (
       <>

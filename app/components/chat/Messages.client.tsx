@@ -1,6 +1,7 @@
 import { Fragment, forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
@@ -75,6 +76,30 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Check for mobile viewport
     const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
+
+    // Rotating messages for mobile loading state
+    const [currentMessageIndex, setCurrentMessageIndex] = useState<number>(0);
+    const loadingMessages = [
+      'Generating Response...',
+      'Leaving this screen may stop it.',
+      'Stay here to keep it running.',
+    ];
+
+    useEffect(() => {
+      // Cycle messages when streaming on mobile (regardless of message state)
+      const shouldCycleMessages = isStreaming && isSmallViewport;
+
+      if (!shouldCycleMessages) {
+        setCurrentMessageIndex(0);
+        return undefined;
+      }
+
+      const interval = setInterval(() => {
+        setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+      }, 3000);
+
+      return () => clearInterval(interval);
+    }, [isStreaming, isSmallViewport]);
 
     // Track expanded state for each message (AI messages only)
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
@@ -219,11 +244,28 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 <Fragment key={index}>
                   {!isUserMessage && messageText.trim() === '' && isLast && isGenerating ? (
                     <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
-                      <div className="flex items-center gap-3">
-                        <div style={{ width: '24px', height: '24px' }}>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div style={{ width: '24px', height: '24px' }} className="shrink-0">
                           <Lottie animationData={loadingAnimationData} loop={true} />
                         </div>
-                        <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                        <div className="flex-1 min-w-0">
+                          {isSmallViewport ? (
+                            <AnimatePresence mode="wait">
+                              <motion.span
+                                key={currentMessageIndex}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.6 }}
+                                className="text-heading-xs block shimmer-text"
+                              >
+                                {loadingMessages[currentMessageIndex]}
+                              </motion.span>
+                            </AnimatePresence>
+                          ) : (
+                            <span className="text-heading-xs shimmer-text">Generating Response...</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -300,10 +342,27 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <div className="flex items-center gap-3">
                             {isLast && isGenerating ? (
                               <>
-                                <div style={{ width: '24px', height: '24px' }}>
+                                <div style={{ width: '24px', height: '24px' }} className="shrink-0">
                                   <Lottie animationData={loadingAnimationData} loop={true} />
                                 </div>
-                                <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+                                <div className="flex-1 min-w-0">
+                                  {isSmallViewport ? (
+                                    <AnimatePresence mode="wait">
+                                      <motion.span
+                                        key={currentMessageIndex}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{ duration: 0.6 }}
+                                        className="text-heading-xs block shimmer-text"
+                                      >
+                                        {loadingMessages[currentMessageIndex]}
+                                      </motion.span>
+                                    </AnimatePresence>
+                                  ) : (
+                                    <span className="text-heading-xs shimmer-text">Generating Response...</span>
+                                  )}
+                                </div>
                               </>
                             ) : isLast ? (
                               <span
@@ -581,11 +640,28 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
         {/* Show loading UI when streaming starts and no AI response yet */}
         {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
           <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
-            <div className="flex items-center gap-3">
-              <div style={{ width: '24px', height: '24px' }}>
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div style={{ width: '24px', height: '24px' }} className="shrink-0">
                 <Lottie animationData={loadingAnimationData} loop={true} />
               </div>
-              <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
+              <div className="flex-1 min-w-0">
+                {isSmallViewport ? (
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={currentMessageIndex}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.6 }}
+                      className="text-heading-xs block shimmer-text"
+                    >
+                      {loadingMessages[currentMessageIndex]}
+                    </motion.span>
+                  </AnimatePresence>
+                ) : (
+                  <span className="text-heading-xs shimmer-text">Generating Response...</span>
+                )}
+              </div>
             </div>
           </div>
         )}
