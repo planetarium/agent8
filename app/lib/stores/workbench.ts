@@ -1340,7 +1340,7 @@ export class WorkbenchStore {
       }
 
       const taskBranch = repoStore.get().taskBranch;
-      let lastCommitHash;
+      let lastCommitHash = '';
 
       try {
         lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
