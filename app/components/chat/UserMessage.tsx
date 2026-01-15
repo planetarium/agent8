@@ -114,7 +114,7 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
         <div className="flex justify-end pt-2">
           <button
             onClick={handleToggleExpand}
-            className="flex text-interactive-neutral text-heading-xs bg-transparent gap-0.5 items-center"
+            className="flex text-interactive-neutral text-heading-2xs bg-transparent gap-0.5 items-center"
           >
             {expanded ? 'Hide' : 'Show All'}
             <ChevronRightIcon width={16} height={16} fill="currentColor" className={expanded ? '-rotate-90' : ''} />

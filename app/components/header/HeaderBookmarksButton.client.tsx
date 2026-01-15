@@ -10,14 +10,7 @@ import type { VersionEntry } from '~/lib/persistenceGitbase/gitlabService';
 import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { handleChatError } from '~/utils/errorNotification';
 import { classNames } from '~/utils/classNames';
-import {
-  CloseIcon,
-  StarLineIcon,
-  DeleteIcon,
-  RestoreIcon,
-  ChevronRightIcon,
-  BookmarkLineIcon,
-} from '~/components/ui/Icons';
+import { CloseIcon, DeleteIcon, RestoreIcon, ChevronRightIcon, BookmarkLineIcon } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { BaseModal } from '~/components/ui/BaseModal';
@@ -322,7 +315,7 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
             <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
-              <StarLineIcon size={20} />
+              <BookmarkLineIcon width={20} height={20} />
               Bookmarks
             </CustomButton>
           </Tooltip.Trigger>
@@ -379,13 +372,38 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
               )}
 
               <div className="flex flex-col items-start gap-1 self-stretch">
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Create a Copy</span> creates a new project from the selected version.
-                  Chat history won&apos;t be copied to the new project.
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Create a Copy
+                  </span>{' '}
+                  creates a new project from the selected version. Chat history won&apos;t be copied to the new project.
                 </span>
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Restore</span> reverts the current project to the selected version.
-                  Changes after that version may be lost, but your chat history will remain.
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Restore
+                  </span>{' '}
+                  reverts the current project to the selected version. Changes after that version may be lost, but your
+                  chat history will remain.
                 </span>
               </div>
 
@@ -402,12 +420,12 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
                   {loading && displayedVersions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full w-full">
                       <div className="animate-spin rounded-full h-10 w-10 border-2 border-zinc-600 border-t-zinc-400 mb-4" />
-                      <div className="text-zinc-400 text-sm">Loading versions...</div>
+                      <div className="text-zinc-400 text-sm">Loading Bookmarks...</div>
                     </div>
                   ) : displayedVersions.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full w-full">
-                      <StarLineIcon size={48} fill="rgba(255, 255, 255, 0.3)" />
-                      <div className="text-zinc-400 text-lg font-medium mb-2 mt-4">No saved versions</div>
+                    <div className="flex flex-col items-center justify-center h-full w-full text-zinc-400">
+                      <BookmarkLineIcon width={48} height={48} />
+                      <div className="text-zinc-400 text-lg font-medium mb-2 mt-4">No saved Bookmarks</div>
                     </div>
                   ) : (
                     <>
@@ -478,7 +496,7 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
                       ))}
 
                       {/* Load More Button */}
-                      {(hasMore || displayedVersions.length > 0) && (
+                      {(hasMore || loadingMore) && (
                         <div className="flex justify-center py-6 w-full">
                           <CustomButton
                             variant="secondary-ghost"
@@ -491,15 +509,10 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-zinc-400 border-t-white"></div>
                                 Loading...
                               </div>
-                            ) : hasMore ? (
+                            ) : (
                               <div className="flex items-center gap-2">
                                 <div className="i-ph:arrow-down" />
                                 Load More
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <div className="i-ph:check-circle" />
-                                All Loaded
                               </div>
                             )}
                           </CustomButton>

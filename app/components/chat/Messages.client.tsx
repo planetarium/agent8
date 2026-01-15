@@ -1,7 +1,6 @@
 import { Fragment, forwardRef, useState, useEffect } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import useViewport from '~/lib/hooks';
@@ -16,7 +15,6 @@ import { isEnabledGitbasePersistence } from '~/lib/persistenceGitbase/api.client
 import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
-import { gameCreationTips } from '~/constants/gameCreationTips';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
 
 import { AssistantMessage } from './AssistantMessage';
@@ -24,14 +22,12 @@ import { UserMessage } from './UserMessage';
 import {
   BookmarkLineIcon,
   BookmarkFillIcon,
-  StarFillIcon,
   DiffIcon,
   RefreshIcon,
   CopyLineIcon,
   PlayIcon,
   ChevronRightIcon,
   RestoreIcon,
-  CodeGenLoadingIcon,
 } from '~/components/ui/Icons';
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
@@ -79,19 +75,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Check for mobile viewport
     const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
-
-    // Random game creation tip that changes every 5 seconds
-    const [currentTipIndex, setCurrentTipIndex] = useState(0);
-
-    useEffect(() => {
-      const interval = setInterval(() => {
-        setCurrentTipIndex((prev) => (prev + 1) % gameCreationTips.length);
-      }, 5000);
-
-      return () => clearInterval(interval);
-    }, []);
-
-    const randomTip = gameCreationTips[currentTipIndex];
 
     // Track expanded state for each message (AI messages only)
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
@@ -272,8 +255,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             const savedTitle = savedVersions?.get(commitHash);
 
                             return savedTitle ? (
-                              <div className="flex items-start gap-1 pb-2">
-                                <StarFillIcon size={16} fill="var(--color-text-tertiary)" />
+                              <div className="flex items-start gap-1 pb-2 text-tertiary">
+                                <BookmarkFillIcon size={16} />
                                 <span className="text-body-sm text-tertiary">{savedTitle}</span>
                               </div>
                             ) : null;
@@ -596,50 +579,16 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
           : null}
 
         {/* Show loading UI when streaming starts and no AI response yet */}
-        {isStreaming &&
-          (messages.length === 0 || messages[messages.length - 1]?.role === 'user') &&
-          (isSmallViewport && messages.length === 0 ? (
-            <div className="flex flex-col w-full h-full justify-center items-center gap-5">
-              <div className="relative">
-                <CodeGenLoadingIcon size={256} />
-                <div className="absolute top-[calc(50%-16px)] left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12">
-                  <Lottie animationData={loadingAnimationData} loop={true} />
-                </div>
-                <span className="absolute top-[calc(50%+48px)] left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave">
-                  Generating code
-                </span>
+        {isStreaming && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
+          <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+            <div className="flex items-center gap-3">
+              <div style={{ width: '24px', height: '24px' }}>
+                <Lottie animationData={loadingAnimationData} loop={true} />
               </div>
-
-              <div className="flex flex-col items-center justify-start py-2 max-w-md">
-                <div className="flex flex-col justify-start items-center self-stretch">
-                  <span className="text-body-lg-regular text-subtle mb-2">Tip</span>
-                  <div className="min-h-[3.5rem] flex items-start justify-center">
-                    <AnimatePresence mode="wait">
-                      <motion.span
-                        key={currentTipIndex}
-                        className="text-body-lg-regular text-secondary text-center leading-relaxed"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                      >
-                        {randomTip}
-                      </motion.span>
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
+              <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
             </div>
-          ) : (
-            <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
-              <div className="flex items-center gap-3">
-                <div style={{ width: '24px', height: '24px' }}>
-                  <Lottie animationData={loadingAnimationData} loop={true} />
-                </div>
-                <span className="text-heading-xs animate-text-color-wave">Generating Response...</span>
-              </div>
-            </div>
-          ))}
+          </div>
+        )}
       </div>
     );
   },
