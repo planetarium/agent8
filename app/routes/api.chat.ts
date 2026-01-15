@@ -400,6 +400,12 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
           let consecutiveRepeatCount = 0;
           const MAX_CONSECUTIVE_REPEATS = 2;
 
+          // Text-delta repeat detection (within a single step)
+          let textDeltaHistory: string[] = [];
+          let consecutiveTextDeltaCount = 0;
+          const MAX_TEXT_DELTA_REPEATS = 2;
+          const MAX_CONSECUTIVE_TEXT_DELTAS = 20;
+
           while (true) {
             checkAborted();
 
@@ -417,9 +423,35 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               currentStepContent = '';
             }
 
+            // Reset text-delta counters when non-text-delta message arrives
+            if (messageType !== 'text-delta') {
+              consecutiveTextDeltaCount = 0;
+              textDeltaHistory = [];
+            }
+
             // Collect step content
             if (messageType === 'text-delta' && 'delta' in value) {
-              currentStepContent += value.delta || '';
+              const delta = value.delta || '';
+              currentStepContent += delta;
+
+              // Increment consecutive text-delta count
+              consecutiveTextDeltaCount++;
+
+              // Check for repeated content (3+ same deltas)
+              if (delta.length > 0) {
+                textDeltaHistory.push(delta);
+
+                const repeatCount = textDeltaHistory.filter((h) => h === delta).length;
+
+                if (repeatCount > MAX_TEXT_DELTA_REPEATS) {
+                  throw new LLMRepeatResponseError();
+                }
+              }
+
+              // Stop if text-delta exceeds max consecutive count
+              if (consecutiveTextDeltaCount >= MAX_CONSECUTIVE_TEXT_DELTAS) {
+                throw new LLMRepeatResponseError();
+              }
             } else if (messageType === 'tool-input-available' && 'toolName' in value && 'input' in value) {
               try {
                 currentStepContent += `tool:${value.toolName}:${JSON.stringify(value.input)}`;
