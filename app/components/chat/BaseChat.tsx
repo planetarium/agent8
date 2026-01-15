@@ -45,7 +45,6 @@ import {
   StartGuideMobileIcon,
   StartGuideDesktopIcon,
 } from '~/components/ui/Icons';
-import V8AppBanner from '~/components/chat/V8AppBanner';
 
 const TEXTAREA_MIN_HEIGHT = 40;
 const MAX_ATTACHMENTS = 10;
@@ -761,13 +760,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       : 'slideDownBackgroundDesktop 1s ease-in-out',
                   }}
                 />
-                <div className="xl:hidden w-full relative z-2">
-                  <V8AppBanner />
-                </div>
-                <div id="intro" className="max-w-chat-before-start mx-auto text-center z-2 mt-2">
+                <div id="intro" className="max-w-chat-before-start mx-auto text-center z-2">
                   <div className="flex justify-center">
                     <span
-                      className="text-heading-lg xl:text-heading-4xl"
+                      className="text-heading-md xl:text-heading-4xl xl:elevation-shadow-3"
                       style={{
                         background: 'linear-gradient(90deg, var(--color-text-primary, #FFF) 0%, #72E7F8 100%)',
                         backgroundClip: 'text',
@@ -775,12 +771,16 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         WebkitTextFillColor: 'transparent',
                       }}
                     >
-                      Game Creation, Simplified
+                      <span className="xl:hidden">What do you want to create?</span>
+                      <span className="hidden xl:block">Game Creation, Simplified</span>
                     </span>
                   </div>
                 </div>
-                <span className="flex justify-center text-heading-xs text-center xl:text-heading-sm text-secondary self-stretch z-2 mt-2">
-                  Start here — or make your own.{isMobileView && <br />} What do you want to create?
+                <span className="flex justify-center text-primary xl:text-secondary text-body-lg-medium text-center xl:text-heading-sm self-stretch z-2 mt-1 xl:mt-2">
+                  <span className="xl:hidden">Start with an example — or write your own</span>
+                  <span className="hidden xl:block">
+                    What do you want to create? Start with an example — or write your own
+                  </span>
                 </span>
                 <div className="relative z-2 mt-5 md:mt-4 w-full md:relative rounded-[8px] xl:rounded-[24px] xl:max-w-[min(1400px,calc(60svh*16/9))] xl:min-h-[500px] overflow-hidden">
                   <div className="md:absolute md:left-[1px] md:right-[1px] md:top-[1px] md:z-1 flex flex-col md:items-center md:justify-center gap-2 md:flex-row md:gap-4 xl:gap-7 rounded-[8px] xl:rounded-t-[24px] overflow-hidden md:bg-[linear-gradient(180deg,_#000_0%,_rgba(0,0,0,0.98)_4.7%,_rgba(0,0,0,0.96)_8.9%,_rgba(0,0,0,0.93)_12.8%,_rgba(0,0,0,0.90)_16.56%,_rgba(0,0,0,0.86)_20.37%,_rgba(0,0,0,0.82)_24.4%,_rgba(0,0,0,0.77)_28.83%,_rgba(0,0,0,0.71)_33.84%,_rgba(0,0,0,0.65)_39.6%,_rgba(0,0,0,0.57)_46.3%,_rgba(0,0,0,0.48)_54.1%,_rgba(0,0,0,0.38)_63.2%,_rgba(0,0,0,0.27)_73.76%,_rgba(0,0,0,0.14)_85.97%,_rgba(0,0,0,0.00)_100%)]">
