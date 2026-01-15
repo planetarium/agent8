@@ -12,7 +12,7 @@ import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 
 import CustomButton from '~/components/ui/CustomButton';
 import { Switch } from '~/components/ui/Switch';
-import { ShareFillIcon, ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
+import { ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
 
 type VisibilityType = 'public' | 'private';
 
@@ -130,7 +130,7 @@ export function HeaderVisibilityButton({ asMenuItem = false, onClose }: HeaderVi
                 </>
               ) : (
                 <>
-                  <ShareFillIcon width={20} height={20} />
+                  <ShareLineIcon width={20} height={20} />
                   Share
                 </>
               )}

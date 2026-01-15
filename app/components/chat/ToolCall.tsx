@@ -110,7 +110,7 @@ export const ToolCall = ({ toolCall, id }: ToolCallProps) => {
       <div className="flex items-center gap-1 flex-[1_0_0]">
         <span className="text-body-sm text-tertiary">Generate</span>
         <div className="flex items-center gap-0.5">
-          <img src={iconPath} alt={mcpServerName || 'Tool'} className="w-5 h-5" />
+          <img src={iconPath} alt={mcpServerName || 'Tool'} className="w-4 h-4" />
           <span className="text-body-sm text-secondary">{mcpServerName || toolCall.toolName}</span>
         </div>
       </div>

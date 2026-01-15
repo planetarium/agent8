@@ -45,7 +45,7 @@ export const WorkbenchSkeleton = ({ isSmallViewport, variant = 'initial' }: Work
               </div>
 
               {/* Center - URL bar skeleton */}
-              <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm">
+              <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm">
                 <div className="w-full h-5 rounded" />
               </div>
 

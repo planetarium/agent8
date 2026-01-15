@@ -1024,6 +1024,9 @@ export const ChatImpl = memo(
       chatStore.setKey('started', true);
 
       setChatStarted(true);
+
+      // Send START_EDITING event to parent when chat starts
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {

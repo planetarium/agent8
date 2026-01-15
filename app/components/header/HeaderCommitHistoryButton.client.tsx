@@ -483,13 +483,38 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
               )}
 
               <div className="flex flex-col items-start gap-1 self-stretch">
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Create a Copy</span> creates a new project from the selected version.
-                  Chat history won&apos;t be copied to the new project.
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Create a Copy
+                  </span>{' '}
+                  creates a new project from the selected version. Chat history won&apos;t be copied to the new project.
                 </span>
-                <span className="text-heading-2xs text-tertiary">
-                  <span className="text-secondary">Restore</span> reverts the current project to the selected version.
-                  Changes after that version may be lost, but your chat history will remain.
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Restore
+                  </span>{' '}
+                  reverts the current project to the selected version. Changes after that version may be lost, but your
+                  chat history will remain.
                 </span>
               </div>
 
@@ -615,33 +640,24 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                         </div>
                       ))}
 
-                      {(hasMore || commits.length > 0) && (
+                      {(hasMore || loading) && (
                         <div className="flex justify-center py-6 w-full">
                           <Button
                             onClick={handleLoadMore}
                             disabled={loading || !hasMore}
                             variant="secondary"
                             size="sm"
-                            className={`min-w-[140px] transition-all duration-200 ${
-                              hasMore
-                                ? 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white border-zinc-500 shadow-lg hover:shadow-xl'
-                                : 'bg-zinc-700 text-zinc-400 border-zinc-600 cursor-not-allowed'
-                            }`}
+                            className="min-w-[140px] transition-all duration-200 bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white border-zinc-500 shadow-lg hover:shadow-xl"
                           >
                             {loading ? (
                               <div className="flex items-center gap-2">
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-zinc-400 border-t-white"></div>
                                 Loading...
                               </div>
-                            ) : hasMore ? (
+                            ) : (
                               <div className="flex items-center gap-2">
                                 <div className="i-ph:arrow-down" />
                                 Load More
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <div className="i-ph:check-circle" />
-                                All Loaded
                               </div>
                             )}
                           </Button>
