@@ -1340,7 +1340,16 @@ export class WorkbenchStore {
       }
 
       const taskBranch = repoStore.get().taskBranch;
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      let lastCommitHash;
+
+      try {
+        lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      } catch (error) {
+        failedReason = 'no history to deploy.';
+        console.error('Failed to get last commit hash', error);
+        throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
+      }
+
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
