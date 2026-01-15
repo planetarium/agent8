@@ -1345,7 +1345,7 @@ export class WorkbenchStore {
       try {
         lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
       } catch (error) {
-        failedReason = 'no history to deploy.';
+        failedReason = 'no task found to deploy.';
         console.error('Failed to get last commit hash', error);
         throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
       }
