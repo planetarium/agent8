@@ -15,6 +15,7 @@ import {
   useWorkbenchActionAlert,
   useWorkbenchStore,
   useWorkbenchContainer,
+  useWorkbenchIsDeploying,
 } from '~/lib/hooks/useWorkbenchStore';
 import {
   DEFAULT_MODEL,
@@ -465,11 +466,14 @@ export const ChatImpl = memo(
         return;
       }
 
+      const processlog = logManager.logs.join(',');
+
       // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
         elapsedTime: getElapsedTime(startTime),
+        process: options?.process ?? processlog,
       });
 
       return;
@@ -536,8 +540,13 @@ export const ChatImpl = memo(
     const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
-    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
+    const isDeploying = useWorkbenchIsDeploying();
+    const isDeployingRef = useRef(isDeploying);
+    useEffect(() => {
+      isDeployingRef.current = isDeploying;
+    }, [isDeploying]);
 
+    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('SelectedModel');
       return savedModel || DEFAULT_MODEL;
@@ -634,11 +643,10 @@ export const ChatImpl = memo(
 
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          handleChatError(extractedData.reason, {
+          processError(extractedData.reason, chatRequestStartTimeRef.current ?? 0, {
             error: extractedData.message,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
-            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
             metadata: extractedData.metadata,
           });
 
@@ -672,7 +680,6 @@ export const ChatImpl = memo(
         const currentModel = chatStateRef.current.model;
         const currentProvider = chatStateRef.current.provider;
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
-        const processlog = logManager.logs.join(',');
 
         processError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -681,7 +688,6 @@ export const ChatImpl = memo(
             error: e,
             context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
             prompt: lastUserPromptRef.current,
-            process: processlog,
           },
         );
 
@@ -691,6 +697,11 @@ export const ChatImpl = memo(
       },
 
       onFinish: async ({ message }) => {
+        if (isDeployingRef.current) {
+          addDebugLog('onFinish: isDeploying, skipping');
+          return;
+        }
+
         addDebugLog('onFinish');
 
         const usage =
@@ -820,6 +831,14 @@ export const ChatImpl = memo(
      *   };
      * }, []);
      */
+
+    // Stop chat when deploy starts
+    useEffect(() => {
+      if (isDeploying && (isLoading || fakeLoading)) {
+        logger.info('Stop chat when deploy starts');
+        abort();
+      }
+    }, [isDeploying, fakeLoading]);
 
     useEffect(() => {
       if (!isLoading) {
