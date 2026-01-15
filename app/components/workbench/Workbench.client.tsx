@@ -540,26 +540,32 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
                 </div>
               )}
               <div className="relative flex-1 overflow-hidden">
-                {/* Hide other views on mobile preview mode, show only Preview */}
+                {/* Code view - hidden off-screen on mobile preview mode but still rendered for terminal */}
+                <View
+                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
+                  animate={{
+                    x: isSmallViewport && mobilePreviewMode ? '-100%' : selectedView === 'code' ? 0 : '-100%',
+                  }}
+                  style={{
+                    visibility: isSmallViewport && mobilePreviewMode ? 'hidden' : 'visible',
+                  }}
+                >
+                  <EditorPanel
+                    editorDocument={currentDocument}
+                    isStreaming={isStreaming}
+                    selectedFile={selectedFile}
+                    files={files}
+                    unsavedFiles={unsavedFiles}
+                    onFileSelect={onFileSelect}
+                    onEditorScroll={onEditorScroll}
+                    onEditorChange={onEditorChange}
+                    onFileSave={onFileSave}
+                    onFileReset={onFileReset}
+                  />
+                </View>
+                {/* Hide other views on mobile preview mode */}
                 {!(isSmallViewport && mobilePreviewMode) && (
                   <>
-                    <View
-                      initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                      animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                    >
-                      <EditorPanel
-                        editorDocument={currentDocument}
-                        isStreaming={isStreaming}
-                        selectedFile={selectedFile}
-                        files={files}
-                        unsavedFiles={unsavedFiles}
-                        onFileSelect={onFileSelect}
-                        onEditorScroll={onEditorScroll}
-                        onEditorChange={onEditorChange}
-                        onFileSave={onFileSave}
-                        onFileReset={onFileReset}
-                      />
-                    </View>
                     <View
                       initial={{ x: '100%' }}
                       animate={{ x: selectedView === 'resource' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
