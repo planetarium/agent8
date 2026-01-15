@@ -1302,18 +1302,22 @@ export class RemoteContainer implements Container {
 
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
+      let streamReadTimeoutId: NodeJS.Timeout | null = null;
 
       try {
         isWaitingForOscCode = true;
 
-        while (true) {
-          const streamReadTimeoutId = setTimeout(() => {
-            currentTerminal?.input(':' + '\n');
-          }, STREAM_READ_IDLE_TIMEOUT_MS);
+        streamReadTimeoutId = setTimeout(() => {
+          currentTerminal?.input(':' + '\n');
+        }, STREAM_READ_IDLE_TIMEOUT_MS);
 
+        while (true) {
           const { value, done } = await reader.read();
 
-          clearTimeout(streamReadTimeoutId);
+          if (streamReadTimeoutId) {
+            clearTimeout(streamReadTimeoutId);
+            streamReadTimeoutId = null;
+          }
 
           if (done) {
             break;
@@ -1360,6 +1364,11 @@ export class RemoteContainer implements Container {
           }
         }
       } finally {
+        if (streamReadTimeoutId) {
+          clearTimeout(streamReadTimeoutId);
+          streamReadTimeoutId = null;
+        }
+
         isWaitingForOscCode = false;
         reader.releaseLock();
       }
