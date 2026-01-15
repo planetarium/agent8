@@ -65,6 +65,13 @@ export class SkipToastError extends FetchError {
   }
 }
 
+export class DeployError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeployError';
+  }
+}
+
 /**
  * Error thrown when LLM repeats a previous response (tool-input-start detected)
  */
