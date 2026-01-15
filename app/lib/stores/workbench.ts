@@ -34,7 +34,7 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
-import { StatusCodeError } from '~/utils/errors';
+import { DeployError, StatusCodeError } from '~/utils/errors';
 
 const { saveAs } = fileSaver;
 
@@ -105,6 +105,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -138,6 +139,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
+      import.meta.hot.data.isDeploying = this.isDeploying;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -614,6 +616,9 @@ export class WorkbenchStore {
                 });
               }
             }
+
+            // Reset pending actions count for this artifact
+            artifact.runner.resetPendingActionsCount();
           }
 
           // Clear the queue item
@@ -766,6 +771,11 @@ export class WorkbenchStore {
 
       this.#messageIdleCallbacks.get(messageId)!.push(callback);
     });
+  }
+
+  hasRunningArtifactActions(): boolean {
+    const artifacts = this.artifacts.get();
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
   }
 
   async #processMessageClose(messageId: string) {
@@ -1268,12 +1278,19 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
-    this.currentView.set('code');
+    if (this.isDeploying.get()) {
+      return;
+    }
 
-    const shell = this.boltTerminal;
-    await shell.ready;
+    let failedReason = '';
 
     try {
+      this.isDeploying.set(true);
+      this.currentView.set('code');
+
+      const shell = this.boltTerminal;
+      await shell.ready;
+
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
       await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
@@ -1303,21 +1320,33 @@ export class WorkbenchStore {
 
       try {
         buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
-      } catch {}
+      } catch (error) {
+        failedReason = 'read build file';
+        console.error('Failed to read build file', error);
+      }
 
       if (!buildFile) {
-        throw new Error('Failed to publish');
+        failedReason = 'no build file';
+        throw new Error();
       }
 
       // Deploy project
       const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
 
       if (deployResult?.exitCode !== 0) {
-        throw new Error('Failed to publish');
+        throw new Error();
       }
 
       const taskBranch = repoStore.get().taskBranch;
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      let lastCommitHash = '';
+
+      try {
+        lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      } catch (error) {
+        failedReason = 'task not found';
+        throw error;
+      }
+
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
@@ -1329,8 +1358,11 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
+      const errorMessage = 'Failed to publish';
       logger.error('[Publish] Error:', error);
-      throw error;
+      throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
+    } finally {
+      this.isDeploying.set(false);
     }
   }
 
