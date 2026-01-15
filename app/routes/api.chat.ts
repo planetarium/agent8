@@ -402,9 +402,9 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
           // Text-delta repeat detection (within a single step)
           let textDeltaHistory: string[] = [];
-          let consecutiveTextDeltaCount = 0;
           const MAX_TEXT_DELTA_REPEATS = 2;
-          const MAX_CONSECUTIVE_TEXT_DELTAS = 20;
+          const MIN_DELTA_LENGTH_FOR_REPEAT_CHECK = 10;
+          const MAX_TEXT_DELTA_HISTORY_SIZE = 20;
 
           while (true) {
             checkAborted();
@@ -423,9 +423,8 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               currentStepContent = '';
             }
 
-            // Reset text-delta counters when non-text-delta message arrives
+            // Reset text-delta history when non-text-delta message arrives
             if (messageType !== 'text-delta') {
-              consecutiveTextDeltaCount = 0;
               textDeltaHistory = [];
             }
 
@@ -434,23 +433,19 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
               const delta = value.delta || '';
               currentStepContent += delta;
 
-              // Increment consecutive text-delta count
-              consecutiveTextDeltaCount++;
-
-              // Check for repeated content (3+ same deltas)
-              if (delta.length > 0) {
+              // Check for repeated content (3+ same deltas in recent 20, only for deltas >= 10 chars)
+              if (delta.length >= MIN_DELTA_LENGTH_FOR_REPEAT_CHECK) {
                 textDeltaHistory.push(delta);
+
+                if (textDeltaHistory.length > MAX_TEXT_DELTA_HISTORY_SIZE) {
+                  textDeltaHistory.shift();
+                }
 
                 const repeatCount = textDeltaHistory.filter((h) => h === delta).length;
 
                 if (repeatCount > MAX_TEXT_DELTA_REPEATS) {
                   throw new LLMRepeatResponseError();
                 }
-              }
-
-              // Stop if text-delta exceeds max consecutive count
-              if (consecutiveTextDeltaCount >= MAX_CONSECUTIVE_TEXT_DELTAS) {
-                throw new LLMRepeatResponseError();
               }
             } else if (messageType === 'tool-input-available' && 'toolName' in value && 'input' in value) {
               try {
