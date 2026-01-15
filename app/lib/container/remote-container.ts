@@ -46,6 +46,8 @@ const BUFFER_CONFIG = {
   TRUNCATED_LOCAL_SIZE: 5000,
 };
 
+const STREAM_READ_IDLE_TIMEOUT_MS = 3000;
+
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
@@ -1256,6 +1258,8 @@ export class RemoteContainer implements Container {
       return { result: null, newExitCode };
     };
 
+    let isWaitingForOscCode = false;
+
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
       let exitCode = 0;
@@ -1300,8 +1304,16 @@ export class RemoteContainer implements Container {
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
 
       try {
+        isWaitingForOscCode = true;
+
         while (true) {
+          const streamReadTimeoutId = setTimeout(() => {
+            currentTerminal?.input(':' + '\n');
+          }, STREAM_READ_IDLE_TIMEOUT_MS);
+
           const { value, done } = await reader.read();
+
+          clearTimeout(streamReadTimeoutId);
 
           if (done) {
             break;
@@ -1348,6 +1360,7 @@ export class RemoteContainer implements Container {
           }
         }
       } finally {
+        isWaitingForOscCode = false;
         reader.releaseLock();
       }
 
@@ -1380,6 +1393,11 @@ export class RemoteContainer implements Container {
         // Interrupt current execution
         currentTerminal.input('\x03');
 
+        // for dead lock prevention
+        if (isWaitingForOscCode) {
+          currentTerminal.input(':' + '\n');
+        }
+
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
         // Wait for prompt
@@ -1393,7 +1411,6 @@ export class RemoteContainer implements Container {
         logger.debug(`[${sessionId}] prompt received`, command);
 
         currentTerminal.input(command.trim() + '\n');
-
         logger.debug(`[${sessionId}] command executed`, command);
 
         // Wait for execution result

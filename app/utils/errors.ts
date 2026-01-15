@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 /**
  * Custom error class for fetch/HTTP errors with status code
  */
@@ -10,6 +12,24 @@ export class FetchError extends Error {
     super(message);
     this.name = 'FetchError';
   }
+}
+
+/**
+ * Helper function to check if an error is an abort/cancel error
+ * Supports: DOMException (fetch), CanceledError (axios)
+ */
+export function isAbortError(error: unknown): boolean {
+  // fetch API: DOMException with name 'AbortError'
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  // axios: CanceledError
+  if (axios.isCancel(error)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -42,5 +62,42 @@ export class SkipToastError extends FetchError {
   ) {
     super(message, status, context);
     this.name = 'SkipToastError';
+  }
+}
+
+export class DeployError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeployError';
+  }
+}
+
+/**
+ * Error thrown when LLM repeats a previous response (tool-input-start detected)
+ */
+export class LLMRepeatResponseError extends Error {
+  constructor(message: string = 'llm-repeat-response') {
+    super(message);
+    this.name = 'LLMRepeatResponseError';
+  }
+}
+
+export class StatusCodeError extends Error {
+  constructor(
+    message: string = 'Status code error',
+    public status: number,
+  ) {
+    super(message);
+    this.name = 'StatusCodeError';
+  }
+}
+
+export class MachineAPIError extends StatusCodeError {
+  constructor(
+    message: string = 'Machine API error',
+    public status: number,
+  ) {
+    super(message, status);
+    this.name = 'MachineAPIError';
   }
 }

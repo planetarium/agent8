@@ -2,19 +2,46 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { repoStore } from '~/lib/stores/repo';
 import { RocketIcon } from '~/components/ui/Icons';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { useState } from 'react';
+import { useWorkbenchIsDeploying } from '~/lib/hooks/useWorkbenchStore';
 import LoadingSpinnerIcon from '~/components/ui/Icons/LoadingSpinnerIcon';
+import { DeployError } from '~/utils/errors';
+import { toast } from 'react-toastify';
+import { useRef } from 'react';
 
 export function HeaderDeployButton() {
-  const [isDeploying, setIsDeploying] = useState(false);
-  const handleDeploy = async () => {
-    const chatId = repoStore.get().path;
-    const title = repoStore.get().title || 'Game Project';
+  const isDeploying = useWorkbenchIsDeploying();
+  const DEPLOY_RETRY_WINDOW = 5000;
 
-    if (chatId) {
-      setIsDeploying(true);
+  const lastDeployAttemptTimeRef = useRef(0);
+
+  const handleDeploy = async () => {
+    const { path: chatId, title = 'Game Project' } = repoStore.get();
+
+    if (!chatId) {
+      return;
+    }
+
+    const now = Date.now();
+    const isArtifactsRunning = workbenchStore.hasRunningArtifactActions();
+    const isRetryAttempt = now - lastDeployAttemptTimeRef.current <= DEPLOY_RETRY_WINDOW;
+    lastDeployAttemptTimeRef.current = now;
+
+    if (isArtifactsRunning && !isRetryAttempt) {
+      return;
+    }
+
+    // run deploy
+    try {
+      if (isArtifactsRunning) {
+        workbenchStore.abortAllActions();
+      }
+
       await workbenchStore.publish(chatId, title);
-      setIsDeploying(false);
+    } catch (error) {
+      const errorMessage = error instanceof DeployError ? error.message : 'Failed to deploy';
+      toast.warning(errorMessage);
+    } finally {
+      lastDeployAttemptTimeRef.current = 0;
     }
   };
 

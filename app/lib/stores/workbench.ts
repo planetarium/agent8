@@ -4,7 +4,7 @@ import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
-import { SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { ERROR_NAMES, SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
@@ -34,6 +34,7 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
+import { DeployError, StatusCodeError } from '~/utils/errors';
 
 const { saveAs } = fileSaver;
 
@@ -104,6 +105,7 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
+  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -111,6 +113,7 @@ export class WorkbenchStore {
   #connectionLostNotified = false;
   #messageToActionQueue: Map<string, ActionQueueItem | null> = new Map();
   #shellCommandQueue: Promise<any> = Promise.resolve();
+  #shellAbortController: AbortController | null = null;
 
   // Container initialization state management
   #initializationState: 'idle' | 'initializing' | 'reinitializing' = 'idle';
@@ -136,6 +139,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
+      import.meta.hot.data.isDeploying = this.isDeploying;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -213,6 +217,7 @@ export class WorkbenchStore {
         description: error instanceof Error ? error.message : String(error),
         content: `Failed to initialize container\n\nError: ${error instanceof Error ? error.stack : error}`,
         source: 'preview',
+        status: error instanceof StatusCodeError ? error.status : undefined,
       } satisfies ActionAlert;
 
       if (!shouldIgnoreError(alert)) {
@@ -581,8 +586,59 @@ export class WorkbenchStore {
     this.#filesStore.resetFileModifications();
   }
 
+  resetFiles() {
+    this.#filesStore.files.set({});
+    this.#filesStore.resetFileModifications();
+  }
+
   abortAllActions() {
-    // TODO: what do we wanna do and how do we wanna recover from this?
+    // 1. Process and clear all message action queues
+    for (const queueItem of this.#messageToActionQueue.values()) {
+      if (queueItem) {
+        // Traverse the linked list and abort all actions
+        let current: ActionQueueItem | undefined = queueItem;
+
+        while (current) {
+          // Get the artifact for this action
+          const artifact = this.#getArtifact(current.data.artifactId);
+
+          if (artifact) {
+            // Abort pending/running actions in this artifact
+            const actions = artifact.runner.actions.get();
+
+            for (const [actionId, action] of Object.entries(actions)) {
+              if (!action.executed && action.status !== 'complete') {
+                action.abort?.();
+                artifact.runner.actions.setKey(actionId, {
+                  ...action,
+                  status: 'aborted',
+                  executed: true,
+                });
+              }
+            }
+
+            // Reset pending actions count for this artifact
+            artifact.runner.resetPendingActionsCount();
+          }
+
+          // Clear the queue item
+          current.executeAction = () => undefined;
+
+          const next: ActionQueueItem | undefined = current.next;
+          current.next = undefined;
+          current = next;
+        }
+      }
+    }
+
+    this.#messageToActionQueue.clear();
+
+    // 2. Abort shell commands
+    this.#shellAbortController?.abort();
+    this.#shellAbortController = null;
+
+    // 3. Reset shell command queue
+    this.#shellCommandQueue = Promise.resolve();
   }
 
   addArtifact({ messageId, title, id, type }: ArtifactCallbackData) {
@@ -715,6 +771,11 @@ export class WorkbenchStore {
 
       this.#messageIdleCallbacks.get(messageId)!.push(callback);
     });
+  }
+
+  hasRunningArtifactActions(): boolean {
+    const artifacts = this.artifacts.get();
+    return Object.values(artifacts).some((artifact) => artifact.runner.isRunning());
   }
 
   async #processMessageClose(messageId: string) {
@@ -1049,14 +1110,14 @@ export class WorkbenchStore {
     this.#previewsStore.setPublishedUrl(url);
   }
 
-  async commitModifiedFiles(): Promise<{ id: string; message: string } | undefined> {
+  async commitModifiedFiles(signal?: AbortSignal): Promise<{ id: string; message: string } | undefined> {
     const modifiedFiles = this.getModifiedFiles();
 
     let result;
 
     if (modifiedFiles !== undefined) {
       if (isEnabledGitbasePersistence) {
-        const { data: commit } = await commitUserChanged();
+        const { data: commit } = await commitUserChanged(signal);
         const id = 'assistant-' + commit.commitHash;
 
         result = { id, message: commit.message };
@@ -1217,12 +1278,19 @@ export class WorkbenchStore {
   }
 
   async publish(chatId: string, title: string) {
-    this.currentView.set('code');
+    if (this.isDeploying.get()) {
+      return;
+    }
 
-    const shell = this.boltTerminal;
-    await shell.ready;
+    let failedReason = '';
 
     try {
+      this.isDeploying.set(true);
+      this.currentView.set('code');
+
+      const shell = this.boltTerminal;
+      await shell.ready;
+
       // Install dependencies
       await this.#runShellCommand(shell, 'rm -rf dist');
       await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
@@ -1252,21 +1320,33 @@ export class WorkbenchStore {
 
       try {
         buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
-      } catch {}
+      } catch (error) {
+        failedReason = 'read build file';
+        console.error('Failed to read build file', error);
+      }
 
       if (!buildFile) {
-        throw new Error('Failed to publish');
+        failedReason = 'no build file';
+        throw new Error();
       }
 
       // Deploy project
       const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
 
       if (deployResult?.exitCode !== 0) {
-        throw new Error('Failed to publish');
+        throw new Error();
       }
 
       const taskBranch = repoStore.get().taskBranch;
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      let lastCommitHash = '';
+
+      try {
+        lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
+      } catch (error) {
+        failedReason = 'task not found';
+        throw error;
+      }
+
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
@@ -1278,17 +1358,29 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
+      const errorMessage = 'Failed to publish';
       logger.error('[Publish] Error:', error);
-      throw error;
+      throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
+    } finally {
+      this.isDeploying.set(false);
     }
   }
 
   // Helper methods for publish
   async #runShellCommand(shell: BoltShell, command: string) {
+    // Create abort controller for this command
+    this.#shellAbortController = new AbortController();
+
+    const signal = this.#shellAbortController.signal;
+
     // Queue all shell commands to prevent interference
     this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
-      const result = await shell.executeCommand(Date.now().toString(), command);
-      await shell.waitTillOscCode('prompt');
+      const abortPromise = new Promise<never>((_, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('Aborted', ERROR_NAMES.ABORT)), { once: true });
+      });
+
+      const result = await Promise.race([shell.executeCommand(Date.now().toString(), command), abortPromise]);
+      await Promise.race([shell.waitTillOscCode('prompt'), abortPromise]);
 
       return result;
     });
