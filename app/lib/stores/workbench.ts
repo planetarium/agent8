@@ -1282,6 +1282,8 @@ export class WorkbenchStore {
       return;
     }
 
+    let failedReason = '';
+
     try {
       this.isDeploying.set(true);
       this.currentView.set('code');
@@ -1314,9 +1316,7 @@ export class WorkbenchStore {
 
       const wc = await this.container;
 
-      const errorMessage = 'Failed to publish';
       let buildFile = '';
-      let failedReason = '';
 
       try {
         buildFile = await wc.fs.readFile('dist/index.html', 'utf-8');
@@ -1327,16 +1327,14 @@ export class WorkbenchStore {
 
       if (!buildFile) {
         failedReason = 'no build file';
-        console.error('No build file found');
-
-        throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
+        throw new Error();
       }
 
       // Deploy project
       const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
 
       if (deployResult?.exitCode !== 0) {
-        throw new Error(errorMessage);
+        throw new Error();
       }
 
       const taskBranch = repoStore.get().taskBranch;
@@ -1346,8 +1344,7 @@ export class WorkbenchStore {
         lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
       } catch (error) {
         failedReason = 'no task found to deploy.';
-        console.error('Failed to get last commit hash', error);
-        throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
+        throw error;
       }
 
       const { tags } = await getTags(repoStore.get().path);
@@ -1361,8 +1358,9 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
+      const errorMessage = 'Failed to publish';
       logger.error('[Publish] Error:', error);
-      throw error;
+      throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
     } finally {
       this.isDeploying.set(false);
     }
