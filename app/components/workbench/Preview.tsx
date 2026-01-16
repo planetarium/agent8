@@ -178,12 +178,51 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
       setUrl('');
       setIframeUrl(undefined);
 
-      return;
+      return undefined;
     }
 
     const { baseUrl } = activePreview;
     setUrl(baseUrl);
-    setIframeUrl(baseUrl);
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+    const retryDelay = 300;
+
+    const checkAndLoad = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      try {
+        const res = await fetch(baseUrl, { method: 'HEAD' });
+
+        if (!cancelled && res.ok) {
+          setIframeUrl(baseUrl);
+
+          return;
+        }
+      } catch {
+        // Container not ready
+      }
+
+      attempts++;
+
+      if (!cancelled && attempts < maxAttempts) {
+        timeoutId = setTimeout(checkAndLoad, retryDelay);
+      } else if (!cancelled) {
+        // Maximum attempts reached, just load the URL
+        setIframeUrl(baseUrl);
+      }
+    };
+
+    checkAndLoad();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [activePreview]);
 
   const validateUrl = useCallback(
