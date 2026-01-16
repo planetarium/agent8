@@ -33,6 +33,12 @@ import {
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 
+const LOADING_MESSAGES = [
+  'Generating Response...',
+  'Leaving this screen may stop it.',
+  'Stay here to keep it running.',
+] as const;
+
 interface MessagesProps {
   id?: string;
   className?: string;
@@ -55,10 +61,9 @@ interface MessagesProps {
 interface LoadingMessageProps {
   isSmallViewport: boolean;
   currentMessageIndex: number;
-  loadingMessages: string[];
 }
 
-const LoadingMessage = ({ isSmallViewport, currentMessageIndex, loadingMessages }: LoadingMessageProps) => {
+const LoadingMessage = ({ isSmallViewport, currentMessageIndex }: LoadingMessageProps) => {
   if (isSmallViewport) {
     return (
       <AnimatePresence mode="wait">
@@ -70,7 +75,7 @@ const LoadingMessage = ({ isSmallViewport, currentMessageIndex, loadingMessages 
           transition={{ duration: 0.6 }}
           className="text-heading-xs block shimmer-text"
         >
-          {loadingMessages[currentMessageIndex]}
+          {LOADING_MESSAGES[currentMessageIndex]}
         </motion.span>
       </AnimatePresence>
     );
@@ -106,11 +111,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Rotating messages for mobile loading state
     const [currentMessageIndex, setCurrentMessageIndex] = useState<number>(0);
-    const loadingMessages = [
-      'Generating Response...',
-      'Leaving this screen may stop it.',
-      'Stay here to keep it running.',
-    ];
 
     useEffect(() => {
       // Cycle messages when streaming on mobile (regardless of message state)
@@ -122,7 +122,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       }
 
       const interval = setInterval(() => {
-        setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+        setCurrentMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
       }, 3000);
 
       return () => clearInterval(interval);
@@ -269,11 +269,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <Lottie animationData={loadingAnimationData} loop={true} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <LoadingMessage
-                            isSmallViewport={isSmallViewport}
-                            currentMessageIndex={currentMessageIndex}
-                            loadingMessages={loadingMessages}
-                          />
+                          <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
                         </div>
                       </div>
                     </div>
@@ -346,7 +342,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   <LoadingMessage
                                     isSmallViewport={isSmallViewport}
                                     currentMessageIndex={currentMessageIndex}
-                                    loadingMessages={loadingMessages}
                                   />
                                 </div>
                               </>
@@ -631,11 +626,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 <Lottie animationData={loadingAnimationData} loop={true} />
               </div>
               <div className="flex-1 min-w-0">
-                <LoadingMessage
-                  isSmallViewport={isSmallViewport}
-                  currentMessageIndex={currentMessageIndex}
-                  loadingMessages={loadingMessages}
-                />
+                <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
               </div>
             </div>
           </div>
