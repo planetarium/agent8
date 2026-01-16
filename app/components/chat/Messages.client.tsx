@@ -33,6 +33,12 @@ import {
 import CustomButton from '~/components/ui/CustomButton';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 
+const LOADING_MESSAGES = [
+  'Generating Response...',
+  'Leaving this screen may stop it.',
+  'Stay here to keep it running.',
+] as const;
+
 interface MessagesProps {
   id?: string;
   className?: string;
@@ -51,6 +57,32 @@ interface MessagesProps {
   loadingBefore?: boolean;
   loadBefore?: () => Promise<void>;
 }
+
+interface LoadingMessageProps {
+  isSmallViewport: boolean;
+  currentMessageIndex: number;
+}
+
+const LoadingMessage = ({ isSmallViewport, currentMessageIndex }: LoadingMessageProps) => {
+  if (isSmallViewport) {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={currentMessageIndex}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.6 }}
+          className="text-heading-xs block shimmer-text"
+        >
+          {LOADING_MESSAGES[currentMessageIndex]}
+        </motion.span>
+      </AnimatePresence>
+    );
+  }
+
+  return <span className="text-heading-xs shimmer-text">Generating Response...</span>;
+};
 
 export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
   (props: MessagesProps, ref: ForwardedRef<HTMLDivElement> | undefined) => {
@@ -79,11 +111,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     // Rotating messages for mobile loading state
     const [currentMessageIndex, setCurrentMessageIndex] = useState<number>(0);
-    const loadingMessages = [
-      'Generating Response...',
-      'Leaving this screen may stop it.',
-      'Stay here to keep it running.',
-    ];
 
     useEffect(() => {
       // Cycle messages when streaming on mobile (regardless of message state)
@@ -95,7 +122,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       }
 
       const interval = setInterval(() => {
-        setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+        setCurrentMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
       }, 3000);
 
       return () => clearInterval(interval);
@@ -109,17 +136,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     useEffect(() => {
       if (lastAssistantIndex >= 0) {
-        /*
-         * On small viewport, keep all messages collapsed.
-         * On larger viewport, only keep the last assistant message expanded.
-         */
-        if (isSmallViewport) {
-          setExpandedMessages(new Set());
-        } else {
-          setExpandedMessages(new Set([lastAssistantIndex]));
-        }
+        // Always keep the last assistant message expanded on all viewports
+        setExpandedMessages(new Set([lastAssistantIndex]));
       }
-    }, [lastAssistantIndex, isSmallViewport]);
+    }, [lastAssistantIndex]);
 
     const toggleExpanded = (index: number, event: React.MouseEvent) => {
       const isExpanding = !expandedMessages.has(index);
@@ -249,22 +269,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <Lottie animationData={loadingAnimationData} loop={true} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          {isSmallViewport ? (
-                            <AnimatePresence mode="wait">
-                              <motion.span
-                                key={currentMessageIndex}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                transition={{ duration: 0.6 }}
-                                className="text-heading-xs block shimmer-text"
-                              >
-                                {loadingMessages[currentMessageIndex]}
-                              </motion.span>
-                            </AnimatePresence>
-                          ) : (
-                            <span className="text-heading-xs shimmer-text">Generating Response...</span>
-                          )}
+                          <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
                         </div>
                       </div>
                     </div>
@@ -327,18 +332,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             },
                           )}
                         >
-                          {/* Gradient overlay when collapsed on mobile */}
-                          {isSmallViewport && !expandedMessages.has(index) && (
-                            <div
-                              className="absolute left-0 right-0 pointer-events-none"
-                              style={{
-                                height: '40px',
-                                bottom: 'calc(100% - 5px)',
-                                background:
-                                  'linear-gradient(180deg, rgba(17, 19, 21, 0.00) 0%, rgba(17, 19, 21, 0.14) 14.03%, rgba(17, 19, 21, 0.27) 26.24%, rgba(17, 19, 21, 0.38) 36.8%, rgba(17, 19, 21, 0.48) 45.9%, rgba(17, 19, 21, 0.57) 53.7%, rgba(17, 19, 21, 0.65) 60.4%, rgba(17, 19, 21, 0.71) 66.16%, rgba(17, 19, 21, 0.77) 71.17%, rgba(17, 19, 21, 0.82) 75.6%, rgba(17, 19, 21, 0.86) 79.63%, rgba(17, 19, 21, 0.90) 83.44%, rgba(17, 19, 21, 0.93) 87.2%, rgba(17, 19, 21, 0.96) 91.1%, rgba(17, 19, 21, 0.98) 95.3%, #111315 100%)',
-                              }}
-                            />
-                          )}
                           <div className="flex items-center gap-3">
                             {isLast && isGenerating ? (
                               <>
@@ -346,22 +339,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   <Lottie animationData={loadingAnimationData} loop={true} />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  {isSmallViewport ? (
-                                    <AnimatePresence mode="wait">
-                                      <motion.span
-                                        key={currentMessageIndex}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        transition={{ duration: 0.6 }}
-                                        className="text-heading-xs block shimmer-text"
-                                      >
-                                        {loadingMessages[currentMessageIndex]}
-                                      </motion.span>
-                                    </AnimatePresence>
-                                  ) : (
-                                    <span className="text-heading-xs shimmer-text">Generating Response...</span>
-                                  )}
+                                  <LoadingMessage
+                                    isSmallViewport={isSmallViewport}
+                                    currentMessageIndex={currentMessageIndex}
+                                  />
                                 </div>
                               </>
                             ) : isLast ? (
@@ -645,22 +626,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 <Lottie animationData={loadingAnimationData} loop={true} />
               </div>
               <div className="flex-1 min-w-0">
-                {isSmallViewport ? (
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={currentMessageIndex}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.6 }}
-                      className="text-heading-xs block shimmer-text"
-                    >
-                      {loadingMessages[currentMessageIndex]}
-                    </motion.span>
-                  </AnimatePresence>
-                ) : (
-                  <span className="text-heading-xs shimmer-text">Generating Response...</span>
-                )}
+                <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
               </div>
             </div>
           </div>

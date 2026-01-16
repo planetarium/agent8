@@ -1031,6 +1031,13 @@ export const ChatImpl = memo(
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // Enable Wake Lock immediately on user gesture (button click)
+      try {
+        await enableWakeLock();
+      } catch (error) {
+        console.warn('Failed to enable Wake Lock on send:', error);
+      }
+
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
@@ -1738,8 +1745,8 @@ export const ChatImpl = memo(
 
     const isStreaming = isLoading || fakeLoading || loading;
 
-    // Enable Wake Lock to prevent screen from turning off during streaming
-    useWakeLock(isStreaming);
+    // Get Wake Lock controls (disableWakeLock is handled automatically by the hook)
+    const { enableWakeLock } = useWakeLock(isStreaming);
 
     return (
       <>
