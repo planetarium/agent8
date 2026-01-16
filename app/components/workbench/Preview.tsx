@@ -178,12 +178,61 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
       setUrl('');
       setIframeUrl(undefined);
 
-      return;
+      return undefined;
     }
 
     const { baseUrl } = activePreview;
     setUrl(baseUrl);
-    setIframeUrl(baseUrl);
+
+    const abortController = new AbortController();
+    const maxAttempts = 10;
+    const retryDelay = 300;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+    let attempts = 0;
+
+    const checkAndLoad = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      try {
+        const res = await fetch(baseUrl, {
+          method: 'HEAD',
+          signal: abortController.signal,
+        });
+
+        if (!cancelled && res.ok) {
+          setIframeUrl(baseUrl);
+
+          return;
+        }
+      } catch (error) {
+        // AbortError is expected when cleanup runs
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+
+        // Container not ready
+      }
+
+      attempts++;
+
+      if (!cancelled && attempts < maxAttempts) {
+        timeoutId = setTimeout(checkAndLoad, retryDelay);
+      } else if (!cancelled) {
+        // Maximum attempts reached, just load the URL
+        setIframeUrl(baseUrl);
+      }
+    };
+
+    checkAndLoad();
+
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      clearTimeout(timeoutId);
+    };
   }, [activePreview]);
 
   const validateUrl = useCallback(
