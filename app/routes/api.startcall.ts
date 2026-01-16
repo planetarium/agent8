@@ -1,14 +1,31 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { generateObject } from 'ai';
-import { FIXED_MODELS } from '~/utils/constants';
+import { STARTER_TEMPLATES, PROVIDER_LIST } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
-import type { Template } from '~/types/template';
+import type { TemplateSelectionResponse, Template } from '~/types/template';
+import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
+import { isAbortError, isApiKeyError } from '~/utils/errors';
+import { retry } from '~/utils/promises';
 
 export const action = withV8AuthUser(startcallAction, { checkCredit: true });
 
 const logger = createScopedLogger('api.startcall');
+
+const MAX_RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 500;
+
+const FALLBACK_MODELS = [
+  {
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+    model: 'gemini-2.5-flash',
+  },
+  {
+    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+    model: 'gemini-3-flash-preview',
+  },
+];
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -76,40 +93,100 @@ MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
 
 async function startcallAction({ context, request }: ActionFunctionArgs) {
   const env = { ...process.env, ...context.cloudflare?.env } as Env;
-  const { message, template } = await request.json<{
+  const { message } = await request.json<{
     message: string;
-    template: Template[];
   }>();
 
-  const provider = FIXED_MODELS.SELECT_STARTER_TEMPLATE.provider;
-  const model = FIXED_MODELS.SELECT_STARTER_TEMPLATE.model;
+  let templates: Template[] = STARTER_TEMPLATES;
 
   try {
-    const result = await generateObject({
-      model: provider.getModelInstance({
-        model,
-        serverEnv: env,
-      }),
-      schema: TEMPLATE_SELECTION_SCHEMA,
-      messages: [
-        {
-          role: 'system',
-          content: starterTemplateSelectionPrompt(template),
-          providerOptions: {
-            anthropic: {
-              cacheControl: { type: 'ephemeral' },
-            },
-          },
-        },
-        {
-          role: 'user',
-          content: `${message}`,
-        },
-      ],
-      abortSignal: request.signal,
-    });
+    const branch = env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
+    const response = await fetch(
+      `https://raw.githubusercontent.com/planetarium/agent8-templates/${branch}/templates.json`,
+      { signal: request.signal },
+    );
 
-    // Process usage after generation
+    if(!response.ok){
+      throw new Error(`Failed to fetch templates from GitHub`);
+    }
+
+    templates = await response.json() as Template[];
+
+  } catch {
+    logger.info('Failed to fetch templates, using local fallback');
+    templates = STARTER_TEMPLATES;
+  }
+
+  try {
+    // Track which provider/model was used for credit consumption
+    let usedProvider = FALLBACK_MODELS[0].provider;
+    let usedModel = FALLBACK_MODELS[0].model;
+
+    const result = await retry(
+      async (attempt) => {
+        // Select model based on attempt number
+        const { provider: currentProvider, model: currentModel } = FALLBACK_MODELS[attempt];
+
+        usedProvider = currentProvider;
+        usedModel = currentModel;
+
+        logger.info(`Attempt ${attempt + 1}: Using ${currentProvider.name} - ${currentModel}`);
+
+        try {
+          const result = await generateObject({
+            model: currentProvider.getModelInstance({
+              model: currentModel,
+              serverEnv: env,
+            }),
+            schema: TEMPLATE_SELECTION_SCHEMA,
+            messages: [
+              {
+                role: 'system',
+                content: starterTemplateSelectionPrompt(templates),
+                providerOptions: {
+                  anthropic: {
+                    cacheControl: { type: 'ephemeral' },
+                  },
+                },
+              },
+              {
+                role: 'user',
+                content: `${message}`,
+              },
+            ],
+            abortSignal: request.signal,
+          });
+
+          // schema validation check
+          const selection = result.object;
+          const validationResult = TEMPLATE_SELECTION_SCHEMA.safeParse(selection);
+
+          if (!validationResult.success) {
+            const errorDetails = validationResult.error.issues
+              .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+              .join(', ');
+
+            throw new Error(`Template selection validation failed: ${errorDetails}`);
+          }
+
+          return result;
+        } catch (error) {
+          // Log error before retry decision
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.warn(`Attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS} failed: ${errorMessage}`);
+          throw error;
+        }
+      },
+      {
+        maxRetries: MAX_RETRY_ATTEMPTS,
+        delayMs: RETRY_DELAY_MS,
+        shouldRetry: (error) => {
+          return !isAbortError(error) && !isApiKeyError(error);
+        },
+      },
+    );
+
+    // On success, handle usage (consume user credit)
     if (result.usage) {
       let cacheRead = 0;
       let cacheWrite = 0;
@@ -122,7 +199,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
 
       const consumeUserCredit = context.consumeUserCredit as ContextConsumeUserCredit;
       await consumeUserCredit({
-        model: { provider: provider.name, name: model },
+        model: { provider: usedProvider.name, name: usedModel },
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
         cacheRead,
@@ -130,20 +207,37 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
         description: 'Start Call',
       });
     }
+    const selection = result.object;
 
-    return result.toJsonResponse();
-  } catch (error: unknown) {
-    logger.error(error);
+    const selectedTemplate = templates.find((t) => t.name === selection.templateName);
+    const response: TemplateSelectionResponse = {
+      templateName: selection.templateName,
+      title: selection.title,
+      projectRepo: selection.projectRepo,
+      nextActionSuggestion: selection.nextActionSuggestion,
+      template: selectedTemplate,
+    };
 
-    if (error instanceof Error && error.message?.includes('API key')) {
+    return Response.json(response);
+  } catch (error) {
+    if(isAbortError(error)) {
+      throw new Response('Aborted', {
+        status: 499,
+        statusText: 'Client Closed Request',
+      });
+    }
+
+    logger.error('All retry attempts failed', error);
+
+    if (isApiKeyError(error)) {
       throw new Response('Invalid or missing API key', {
         status: 401,
         statusText: 'Unauthorized',
       });
     }
 
-    // 실제 에러 메시지를 body에 포함시키기
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    // Include the actual error message in the body
+    const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Response(errorMessage, {
       status: 500,
       statusText: 'Internal Server Error',

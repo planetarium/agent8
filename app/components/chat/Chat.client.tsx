@@ -1049,6 +1049,7 @@ export const ChatImpl = memo(
           toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
         } else {
           toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+          logger.error('Failed to fetch template from API:', e);
         }
       });
 
@@ -1127,10 +1128,12 @@ export const ChatImpl = memo(
 
       try {
         await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-      } catch {
-        const recoverySuccess = await recoverWorkbench(accessToken, signal);
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
 
-        console.log('#### test', recoverySuccess);
+        const recoverySuccess = await recoverWorkbench(accessToken, signal);
 
         if (!recoverySuccess) {
           throw new Error('Failed to recover workbench');
@@ -1287,11 +1290,15 @@ export const ChatImpl = memo(
       try {
         logger.info('🔌 Container connection lost, waiting for auto-reconnect...');
         await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
-
+        checkAborted();
         logger.info('✅ Container connection restored');
 
         return true;
-      } catch {}
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+      }
 
       checkAborted();
 
@@ -1306,9 +1313,14 @@ export const ChatImpl = memo(
           checkAborted();
           logger.info(`Attempting container reinitialization (${i + 1}/${REINIT_ATTEMPTS})...`);
           await workbench.reinitializeContainer(accessToken);
+          checkAborted();
 
           return true;
-        } catch {
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+
           logger.warn(`Container reinitialization failed (attempt ${i + 1}/${REINIT_ATTEMPTS})`);
         }
       }

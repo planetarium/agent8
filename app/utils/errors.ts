@@ -33,6 +33,13 @@ export function isAbortError(error: unknown): boolean {
 }
 
 /**
+ * Helper function to check if an error is an API key related error
+ */
+export function isApiKeyError(error: unknown): boolean {
+  return error instanceof Error && error.message?.includes('API key');
+}
+
+/**
  * Helper function to extract HTTP status code from various error types
  * Supports: FetchError, Response, and any object with a status property
  */
