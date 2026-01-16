@@ -111,7 +111,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
 
     const result = await retry(
       async (attempt) => {
-        const modelIndex = Math.min(attempt, FIXED_MODELS.SELECT_STARTER_TEMPLATES.length - 1);
+        const modelIndex = attempt % FIXED_MODELS.SELECT_STARTER_TEMPLATES.length;
 
         // select model based on attempt number
         const { provider: currentProvider, model: currentModel } = FIXED_MODELS.SELECT_STARTER_TEMPLATES[modelIndex];
