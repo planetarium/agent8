@@ -184,11 +184,12 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
     const { baseUrl } = activePreview;
     setUrl(baseUrl);
 
+    const abortController = new AbortController();
+    const maxAttempts = 10;
+    const retryDelay = 300;
     let timeoutId: ReturnType<typeof setTimeout>;
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 10;
-    const retryDelay = 300;
 
     const checkAndLoad = async () => {
       if (cancelled) {
@@ -196,14 +197,22 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
       }
 
       try {
-        const res = await fetch(baseUrl, { method: 'HEAD' });
+        const res = await fetch(baseUrl, {
+          method: 'HEAD',
+          signal: abortController.signal,
+        });
 
         if (!cancelled && res.ok) {
           setIframeUrl(baseUrl);
 
           return;
         }
-      } catch {
+      } catch (error) {
+        // AbortError is expected when cleanup runs
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+
         // Container not ready
       }
 
@@ -221,6 +230,7 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
     return () => {
       cancelled = true;
+      abortController.abort();
       clearTimeout(timeoutId);
     };
   }, [activePreview]);
