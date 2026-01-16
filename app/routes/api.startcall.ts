@@ -1,11 +1,10 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { generateObject } from 'ai';
-import { STARTER_TEMPLATES, PROVIDER_LIST, FIXED_MODELS } from '~/utils/constants';
+import { STARTER_TEMPLATES, FIXED_MODELS } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
 import type { TemplateSelectionResponse, Template } from '~/types/template';
-import { PROVIDER_NAMES } from '~/lib/modules/llm/provider-names';
 import { isAbortError, isApiKeyError } from '~/utils/errors';
 import { retry } from '~/utils/promises';
 
@@ -95,12 +94,11 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
       { signal: request.signal },
     );
 
-    if (!response.ok){
+    if (!response.ok) {
       throw new Error(`Failed to fetch templates from GitHub`);
     }
 
-    templates = await response.json() as Template[];
-
+    templates = (await response.json()) as Template[];
   } catch {
     logger.info('Failed to fetch templates, using local fallback');
     templates = STARTER_TEMPLATES;
@@ -114,6 +112,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
     const result = await retry(
       async (attempt) => {
         const modelIndex = Math.min(attempt, FIXED_MODELS.SELECT_STARTER_TEMPLATES.length - 1);
+
         // select model based on attempt number
         const { provider: currentProvider, model: currentModel } = FIXED_MODELS.SELECT_STARTER_TEMPLATES[modelIndex];
 
@@ -197,6 +196,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
         description: 'Start Call',
       });
     }
+
     const selection = result.object;
 
     const selectedTemplate = templates.find((t) => t.name === selection.templateName);

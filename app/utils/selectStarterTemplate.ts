@@ -11,8 +11,15 @@ import { FetchError } from './errors';
 // Zod schema for template selection - API 검증용
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
   templateName: z.string().min(1, 'Template name cannot be empty').describe('The selected template name'),
-  title: z.string().min(1, 'Title cannot be empty').describe('A proper title for the project').default('Untitled Project'),
-  projectRepo: z.string().min(1, 'Project repository name cannot be empty').describe('The name of the new project repository'),
+  title: z
+    .string()
+    .min(1, 'Title cannot be empty')
+    .describe('A proper title for the project')
+    .default('Untitled Project'),
+  projectRepo: z
+    .string()
+    .min(1, 'Project repository name cannot be empty')
+    .describe('The name of the new project repository'),
   nextActionSuggestion: z.string().describe('Suggestions for the next action').optional(),
 }) satisfies z.ZodType<TemplateSelection>;
 

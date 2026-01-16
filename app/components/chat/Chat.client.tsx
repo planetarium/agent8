@@ -1266,8 +1266,8 @@ export const ChatImpl = memo(
           await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
 
           logger.info('✅ Files mounted successfully');
-          return; // success
 
+          return; // success
         } catch (error) {
           if (isAbortError(error)) {
             throw error;
@@ -1300,7 +1300,7 @@ export const ChatImpl = memo(
           }
         }
       }
-    };  
+    };
 
     /**
      * Recovers the workbench when the container connection is lost.
