@@ -1114,26 +1114,7 @@ export const ChatImpl = memo(
 
       checkAborted();
 
-      let containerInstance = await workbench.container;
-
-      checkAborted();
-
-      try {
-        await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-      } catch (error) {
-        if (isAbortError(error)) {
-          throw error;
-        }
-
-        const recoverySuccess = await recoverWorkbench(accessToken, signal);
-
-        if (!recoverySuccess) {
-          throw new Error('Failed to recover workbench');
-        }
-
-        containerInstance = await workbench.container;
-        await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-      }
+      await mountWithRecovery(processedFileMap, accessToken, signal);
 
       checkAborted();
 
@@ -1261,6 +1242,67 @@ export const ChatImpl = memo(
     };
 
     /**
+     * Mounts files to the container with automatic recovery on failure.
+     * Attempts to recover the workbench connection if mount fails.
+     */
+    const mountWithRecovery = async (
+      fileMap: Record<string, any>,
+      accessToken: string | null,
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const MAX_MOUNT_ATTEMPTS = 2;
+
+      for (let attempt = 1; attempt <= MAX_MOUNT_ATTEMPTS; attempt++) {
+        try {
+          checkAborted();
+
+          const containerInstance = await workbench.container;
+          await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
+
+          logger.info('✅ Files mounted successfully');
+          return; // success
+
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+
+          if (!accessToken) {
+            throw new Error('Workbench recovery failed: access token not found');
+          }
+
+          logger.warn(`Mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
+
+          // not last attempt, try to recover
+          if (attempt < MAX_MOUNT_ATTEMPTS) {
+            checkAborted();
+
+            logger.info('Attempting workbench recovery...');
+
+            const recovered = await recoverWorkbench(accessToken, signal);
+
+            if (!recovered) {
+              throw new Error('Workbench recovery failed');
+            }
+
+            logger.info('Workbench recovered, retrying mount...');
+          } else {
+            // last attempt failed
+            throw new Error(`Failed to mount files after ${MAX_MOUNT_ATTEMPTS} attempts`, {
+              cause: error,
+            });
+          }
+        }
+      }
+    };  
+
+    /**
      * Recovers the workbench when the container connection is lost.
      * Returns true if recovery successful, false otherwise.
      */
@@ -1293,10 +1335,6 @@ export const ChatImpl = memo(
       }
 
       checkAborted();
-
-      if (!accessToken) {
-        return false;
-      }
 
       const REINIT_ATTEMPTS = 2;
 

@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { generateObject } from 'ai';
-import { STARTER_TEMPLATES, PROVIDER_LIST } from '~/utils/constants';
+import { STARTER_TEMPLATES, PROVIDER_LIST, FIXED_MODELS } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
 import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
@@ -15,17 +15,6 @@ const logger = createScopedLogger('api.startcall');
 
 const MAX_RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 500;
-
-const FALLBACK_MODELS = [
-  {
-    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
-    model: 'gemini-2.5-flash',
-  },
-  {
-    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
-    model: 'gemini-3-flash-preview',
-  },
-];
 
 const starterTemplateSelectionPrompt = (templates: Template[]) => `
 You are an experienced developer who helps people choose the best starter template for their projects.
@@ -106,7 +95,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
       { signal: request.signal },
     );
 
-    if(!response.ok){
+    if (!response.ok){
       throw new Error(`Failed to fetch templates from GitHub`);
     }
 
@@ -118,14 +107,15 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
   }
 
   try {
-    // Track which provider/model was used for credit consumption
-    let usedProvider = FALLBACK_MODELS[0].provider;
-    let usedModel = FALLBACK_MODELS[0].model;
+    // track which provider/model was used for credit consumption
+    let usedProvider = FIXED_MODELS.SELECT_STARTER_TEMPLATES[0].provider;
+    let usedModel = FIXED_MODELS.SELECT_STARTER_TEMPLATES[0].model;
 
     const result = await retry(
       async (attempt) => {
-        // Select model based on attempt number
-        const { provider: currentProvider, model: currentModel } = FALLBACK_MODELS[attempt];
+        const modelIndex = Math.min(attempt, FIXED_MODELS.SELECT_STARTER_TEMPLATES.length - 1);
+        // select model based on attempt number
+        const { provider: currentProvider, model: currentModel } = FIXED_MODELS.SELECT_STARTER_TEMPLATES[modelIndex];
 
         usedProvider = currentProvider;
         usedModel = currentModel;
@@ -220,14 +210,12 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
 
     return Response.json(response);
   } catch (error) {
-    if(isAbortError(error)) {
+    if (isAbortError(error)) {
       throw new Response('Aborted', {
         status: 499,
         statusText: 'Client Closed Request',
       });
     }
-
-    logger.error('All retry attempts failed', error);
 
     if (isApiKeyError(error)) {
       throw new Response('Invalid or missing API key', {
@@ -235,6 +223,8 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
         statusText: 'Unauthorized',
       });
     }
+
+    logger.error('All retry attempts failed', error);
 
     // Include the actual error message in the body
     const errorMessage = error instanceof Error ? error.message : String(error);
