@@ -1114,6 +1114,10 @@ export const ChatImpl = memo(
 
       checkAborted();
 
+      if(!accessToken) {
+        throw new Error('Cannot mount files: Access token is missing');
+      }
+
       await mountWithRecovery(processedFileMap, accessToken, signal);
 
       checkAborted();
@@ -1247,58 +1251,59 @@ export const ChatImpl = memo(
      */
     const mountWithRecovery = async (
       fileMap: Record<string, any>,
-      accessToken: string | null,
+      accessToken: string,
       signal: AbortSignal,
     ): Promise<void> => {
-      const checkAborted = () => {
-        if (signal.aborted) {
-          throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
-        }
-      };
-
-      const MAX_MOUNT_ATTEMPTS = 2;
-
-      for (let attempt = 1; attempt <= MAX_MOUNT_ATTEMPTS; attempt++) {
-        try {
-          checkAborted();
-
-          const containerInstance = await workbench.container;
-          await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
-
-          logger.info('✅ Files mounted successfully');
-
-          return; // success
-        } catch (error) {
-          if (isAbortError(error)) {
-            throw error;
+      try{
+        const checkAborted = () => {
+          if (signal.aborted) {
+            throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
           }
+        };
 
-          if (!accessToken) {
-            throw new Error('Workbench recovery failed: access token not found');
-          }
+        const MAX_MOUNT_ATTEMPTS = 2;
 
-          logger.warn(`Mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
-
-          // not last attempt, try to recover
-          if (attempt < MAX_MOUNT_ATTEMPTS) {
+        for (let attempt = 1; attempt <= MAX_MOUNT_ATTEMPTS; attempt++) {
+          try {
             checkAborted();
 
-            logger.info('Attempting workbench recovery...');
+            const containerInstance = await workbench.container;
+            await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
 
-            const recovered = await recoverWorkbench(accessToken, signal);
+            logger.info('✅ Files mounted successfully');
 
-            if (!recovered) {
-              throw new Error('Workbench recovery failed');
+            return; // success
+          } catch (error) {
+            if (isAbortError(error)) {
+              throw error;
             }
 
-            logger.info('Workbench recovered, retrying mount...');
-          } else {
-            // last attempt failed
-            throw new Error(`Failed to mount files after ${MAX_MOUNT_ATTEMPTS} attempts`, {
-              cause: error,
-            });
-          }
+            logger.warn(`Workbench mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
+
+            // not last attempt, try to recover
+            if (attempt < MAX_MOUNT_ATTEMPTS) {
+              checkAborted();
+
+              const recovered = await recoverWorkbench(accessToken, signal);
+              if (!recovered) {
+                logger.warn('Workbench recovery failed, try to next attempt');
+              } else {
+                logger.info('Workbench recovered successfully, retrying mount...');
+              }
+            } else {
+              // last attempt failed
+              throw new Error(`Workbench recovery failed`, {
+                cause: error,
+              });
+            }
+          } 
         }
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+
+        throw new Error(`Failed to mount files: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
 
