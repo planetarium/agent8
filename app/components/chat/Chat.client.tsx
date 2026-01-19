@@ -988,241 +988,239 @@ export const ChatImpl = memo(
         }
       };
 
-      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
       if (!accessToken) {
         throw new Error('Access token is missing');
       }
 
       const templateSelectionStartTime = performance.now();
+      let userIsActivated = false;
+      let userWalletAddress = null;
+      let starterTemplateResp: any;
 
-      // Set progress annotation for analyzing request
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'in-progress',
-          order: 1,
-          message: 'Analyzing your request...',
-        },
-      ]);
+      try {
+        // Set progress annotation for analyzing request
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'in-progress',
+            order: 1,
+            message: 'Analyzing your request...',
+          },
+        ]);
 
-      checkAborted();
-      addDebugLog('Start:selectStarterTemplate');
+        checkAborted();
+        addDebugLog('Start:verifyV8AccessToken');
 
-      const { template, title, projectRepo } = await selectStarterTemplate({
-        message: messageContent,
-        signal,
-      });
+        const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+        userIsActivated = user.isActivated;
+        userWalletAddress = user.walletAddress;
 
-      addDebugLog('Complete:selectStarterTemplate');
-      checkAborted();
-
-      if (!template) {
-        throw new Error('Not Found Template');
-      }
-
-      // Update progress annotation for selecting template
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'complete',
-          order: 1,
-          message: 'Request analyzed',
-        },
-        {
-          type: 'progress',
-          label: 'template',
-          status: 'in-progress',
-          order: 2,
-          message: 'Setting up base project...',
-        },
-      ]);
-
-      checkAborted();
-      addDebugLog('Start:fetchTemplateFromAPI');
-
-      const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, signal).catch((e) => {
+        addDebugLog('Complete:verifyV8AccessToken');
         checkAborted();
 
-        if (shouldShowErrorPage(e)) {
-          throw e;
+        addDebugLog('Start:selectStarterTemplate');
+        starterTemplateResp = await selectStarterTemplate({
+          message: messageContent,
+          signal,
+        });
+
+        addDebugLog('Complete:selectStarterTemplate');
+        checkAborted();
+
+        if (!starterTemplateResp || !starterTemplateResp.template) {
+          throw new Error('Failed select starter template');
         }
-
-        if (e.message.includes('rate limit')) {
-          toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
-        } else {
-          toast.warning('Failed to import starter template\nRetry again after a few minutes.');
-          logger.error('Failed to fetch template from API:', e);
-        }
-      });
-
-      addDebugLog('Complete:fetchTemplateFromAPI');
-      checkAborted();
-
-      const projectPath = temResp?.project?.path;
-      const projectName = temResp?.project?.name;
-      const templateCommitId = temResp?.commit?.id;
-      workbench.showWorkbench.set(true);
-
-      if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
-        addDebugLog('Not Found Template Data');
-        throw new Error('Not Found Template Data');
+      } finally {
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'complete',
+            order: 1,
+            message: 'Request analyzed',
+          },
+        ]);
       }
 
-      if (accessToken) {
-        try {
+      try {
+        // Update progress annotation for selecting template
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'in-progress',
+            order: 2,
+            message: 'Setting up base project...',
+          },
+        ]);
+
+        checkAborted();
+        addDebugLog('Start:fetchTemplateFromAPI');
+
+        const temResp = await fetchTemplateFromAPI(
+          starterTemplateResp.template!,
+          starterTemplateResp.title,
+          starterTemplateResp.projectRepo,
+          signal,
+        ).catch((e) => {
           checkAborted();
-          addDebugLog('Start:verifyV8AccessToken');
 
-          const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+          if (shouldShowErrorPage(e)) {
+            throw e;
+          }
 
-          addDebugLog('Complete:verifyV8AccessToken');
-          checkAborted();
+          if (e.message.includes('rate limit')) {
+            toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+          } else {
+            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            logger.error('Failed to fetch template from API:', e);
+          }
+        });
 
-          if (user.isActivated && user.walletAddress) {
+        addDebugLog('Complete:fetchTemplateFromAPI');
+        checkAborted();
+
+        const projectPath = temResp?.project?.path;
+        const projectName = temResp?.project?.name;
+        const templateCommitId = temResp?.commit?.id;
+        workbench.showWorkbench.set(true);
+
+        if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+          addDebugLog('Not Found Template Data');
+          throw new Error('Not Found Template Data');
+        }
+
+        if (userIsActivated && userWalletAddress) {
+          try {
             temResp.fileMap['.env'] = {
               type: 'file',
-              content: getEnvContent(user.walletAddress),
+              content: getEnvContent(userWalletAddress),
               isBinary: false,
             };
+          } catch (error) {
+            logger.warn('Failed to generate .env for first message:', error);
           }
-        } catch (error) {
-          if (isAbortError(error)) {
-            throw error;
-          }
-
-          if (getErrorStatus(error) === 401) {
-            logger.error('Authentication failed during .env generation:', error);
-            throw error;
-          }
-
-          logger.warn('Failed to generate .env for first message:', error);
-          addDebugLog('Failed to generate .env for first message');
         }
+
+        checkAborted();
+
+        const processedFileMap = Object.entries(temResp.fileMap).reduce(
+          (acc, [key, value]) => {
+            acc[WORK_DIR + '/' + key] = value;
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
+        workbench.files.set(processedFileMap);
+
+        checkAborted();
+
+        await mountWithRecovery(processedFileMap, accessToken, signal);
+
+        checkAborted();
+
+        if (isEnabledGitbasePersistence) {
+          if (!projectPath || !projectName || !templateCommitId) {
+            throw new Error('Cannot create project');
+          }
+
+          let branchName = 'develop';
+
+          if (enabledTaskMode) {
+            checkAborted();
+            addDebugLog('Start:createTaskBranch');
+
+            const { success, message, data } = await createTaskBranch(projectPath, signal);
+            addDebugLog('Complete:createTaskBranch');
+            checkAborted();
+
+            if (!success) {
+              addDebugLog('Failed to create task branch');
+              processError(message, templateSelectionStartTime, {
+                context: 'createTaskBranch - starter template',
+              });
+
+              return;
+            }
+
+            branchName = data.branchName;
+          }
+
+          repoStore.set({
+            name: projectName,
+            path: projectPath,
+            title: starterTemplateResp.title,
+            taskBranch: branchName,
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(projectPath);
+
+          changeChatUrl(projectPath, { replace: true });
+        } else {
+          repoStore.set({
+            name: starterTemplateResp.projectRepo,
+            path: starterTemplateResp.projectRepo,
+            title: starterTemplateResp.title,
+            taskBranch: 'develop',
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(starterTemplateResp.projectRepo);
+
+          changeChatUrl(starterTemplateResp.projectRepo, { replace: true });
+        }
+
+        const firstChatModel =
+          model === 'auto'
+            ? starterTemplateResp.template.name.includes('3d')
+              ? FIXED_MODELS.FIRST_3D_CHAT
+              : FIXED_MODELS.FIRST_2D_CHAT
+            : {
+                model,
+                provider,
+              };
+
+        const starterPrompt = starterTemplateResp.template.name.includes('3d')
+          ? get3DStarterPrompt()
+          : get2DStarterPrompt();
+
+        // Clear progress annotations after a short delay
+        setTimeout(() => {
+          setCustomProgressAnnotations([]);
+        }, 1000);
+        checkAborted();
+
+        setMessages([
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            parts: [
+              {
+                type: 'text',
+                text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                  currentAttachmentList,
+                )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+              },
+            ],
+          },
+        ]);
+        checkAborted();
+      } finally {
+        // Complete template selection
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'complete',
+            order: 2,
+            message: 'Template selected',
+          },
+        ]);
       }
-
-      checkAborted();
-
-      const processedFileMap = Object.entries(temResp.fileMap).reduce(
-        (acc, [key, value]) => {
-          acc[WORK_DIR + '/' + key] = value;
-          return acc;
-        },
-        {} as Record<string, any>,
-      );
-      workbench.files.set(processedFileMap);
-
-      checkAborted();
-
-      await mountWithRecovery(processedFileMap, accessToken, signal);
-
-      checkAborted();
-
-      if (isEnabledGitbasePersistence) {
-        if (!projectPath || !projectName || !templateCommitId) {
-          throw new Error('Cannot create project');
-        }
-
-        let branchName = 'develop';
-
-        if (enabledTaskMode) {
-          checkAborted();
-          addDebugLog('Start:createTaskBranch');
-
-          const { success, message, data } = await createTaskBranch(projectPath, signal);
-          addDebugLog('Complete:createTaskBranch');
-          checkAborted();
-
-          if (!success) {
-            addDebugLog('Failed to create task branch');
-            processError(message, templateSelectionStartTime, {
-              context: 'createTaskBranch - starter template',
-            });
-
-            return;
-          }
-
-          branchName = data.branchName;
-        }
-
-        repoStore.set({
-          name: projectName,
-          path: projectPath,
-          title,
-          taskBranch: branchName,
-        });
-
-        // Record prompt activity for first request
-        sendActivityPrompt(projectPath);
-
-        changeChatUrl(projectPath, { replace: true });
-      } else {
-        repoStore.set({
-          name: projectRepo,
-          path: projectRepo,
-          title,
-          taskBranch: 'develop',
-        });
-
-        // Record prompt activity for first request
-        sendActivityPrompt(projectRepo);
-
-        changeChatUrl(projectRepo, { replace: true });
-      }
-
-      const firstChatModel =
-        model === 'auto'
-          ? template.name.includes('3d')
-            ? FIXED_MODELS.FIRST_3D_CHAT
-            : FIXED_MODELS.FIRST_2D_CHAT
-          : {
-              model,
-              provider,
-            };
-
-      const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
-
-      // Complete template selection
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'complete',
-          order: 1,
-          message: 'Request analyzed',
-        },
-        {
-          type: 'progress',
-          label: 'template',
-          status: 'complete',
-          order: 2,
-          message: 'Template selected',
-        },
-      ]);
-
-      // Clear progress annotations after a short delay
-      setTimeout(() => {
-        setCustomProgressAnnotations([]);
-      }, 1000);
-      checkAborted();
-
-      setMessages([
-        {
-          id: `1-${new Date().getTime()}`,
-          role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-                currentAttachmentList,
-              )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
-            },
-          ],
-        },
-      ]);
-      checkAborted();
 
       regenerate();
 
@@ -1727,8 +1725,7 @@ export const ChatImpl = memo(
 
         if (wasFirstChat) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
-          const isMeaningful =
-            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
+          const isMeaningful = errorMessage.trim() && errorMessage !== 'Not Found Template Data';
 
           displayMessage = isMeaningful
             ? errorMessage
