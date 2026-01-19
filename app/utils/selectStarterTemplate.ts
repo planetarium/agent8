@@ -1,113 +1,33 @@
 import ignore from 'ignore';
 import { z } from 'zod';
-import type { Template } from '~/types/template';
-import { STARTER_TEMPLATES } from './constants';
+import type { TemplateSelectionResponse, TemplateSelection } from '~/types/template';
 import Cookies from 'js-cookie';
 import { extractZipTemplate } from './zipUtils';
 import type { FileMap } from '~/lib/stores/files';
 import { TEMPLATE_BASIC, TEMPLATE_MAP } from '~/constants/template';
 import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
-import { FetchError, isAbortError } from './errors';
+import { FetchError } from './errors';
 
-// Zod schema for template selection response
+// Zod schema for template selection - API 검증용
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
-  templateName: z.string().describe('The selected template name'),
-  title: z.string().describe('A proper title for the project').default('Untitled Project'),
-  projectRepo: z.string().describe('The name of the new project repository'),
+  templateName: z.string().min(1, 'Template name cannot be empty').describe('The selected template name'),
+  title: z
+    .string()
+    .min(1, 'Title cannot be empty')
+    .describe('A proper title for the project')
+    .default('Untitled Project'),
+  projectRepo: z
+    .string()
+    .min(1, 'Project repository name cannot be empty')
+    .describe('The name of the new project repository'),
   nextActionSuggestion: z.string().describe('Suggestions for the next action').optional(),
-});
-
-type TemplateSelection = z.infer<typeof TEMPLATE_SELECTION_SCHEMA>;
-
-const starterTemplateSelectionPrompt = (templates: Template[]) => `
-You are an experienced developer who helps people choose the best starter template for their projects.
-
-Available templates:
-${templates
-  .map(
-    (template) => `
-<template>
-  <name>${template.name}</name>
-  <label>${template.label}</label>
-  <description>${template.description}</description>
-  ${template.tags ? `<tags>${template.tags.join(', ')}</tags>` : ''}
-</template>
-`,
-  )
-  .join('\n')}
-
-Instructions:
-1. For trivial tasks and simple scripts, always recommend the basic-vite-react template
-2. For more complex projects, recommend templates from the provided list
-3. Consider both technical requirements and tags
-4. If no perfect match exists, recommend the closest option
-
-nextActionSuggestion guidelines:
-1. It's unacceptable for a project build to fail due to simple changes or code modifications. Please request the simplest next task.
-2. The requested task should not cause the program build to fail once the unit task is completed.
-3. To handle the first requested task, it is appropriate to have work at the level of modifying about one file.
-4. Think of it as a work unit when developing rather than an implementation unit in the game.
-
-Examples of good nextActionSuggestion:
-- GOOD: Changing the texture of the map specifically
-- GOOD: Placing trees on the map
-- BAD: Setting the surrounding environment of the 3d map (This can involve many tasks.)
-
-Selection examples:
-
-User: I need to build a 2d platformer game
-Expected response:
-{
-  "templateName": "basic-2d",
-  "title": "Simple 2d platformer game",
-  "projectRepo": "basic-2d-game",
-  "nextActionSuggestion": "Please change background image."
-}
-
-User: Make a simple 3d rpg game
-Expected response:
-{
-  "templateName": "basic-3d-quarterview",
-  "title": "Simple 3d rpg game",
-  "projectRepo": "basic-3d-rpg-game",
-  "nextActionSuggestion": "Add a floor texture and skybox."
-}
-
-Return your selection as a JSON object with these exact fields:
-- templateName: the selected template name (string)
-- title: a proper title for the project (string)
-- projectRepo: the name of the new project repository (string)
-- nextActionSuggestion: suggestions for the next action (string, empty if none)
-
-Important: Return ONLY the JSON object, no additional text or explanation.
-MOST IMPORTANT: YOU DONT HAVE TIME TO THINK JUST START RESPONDING BASED ON HUNCH
-`;
-
-let templates: Template[] = STARTER_TEMPLATES;
+}) satisfies z.ZodType<TemplateSelection>;
 
 export const selectStarterTemplate = async (options: { message: string; signal?: AbortSignal }) => {
   const { message, signal } = options;
 
-  try {
-    const branch = import.meta.env.VITE_USE_PRODUCTION_TEMPLATE === 'true' ? 'production' : 'main';
-    const response = await fetch(
-      `https://raw.githubusercontent.com/planetarium/agent8-templates/${branch}/templates.json`,
-      { signal },
-    );
-    templates = await response.json();
-  } catch (e) {
-    // Re-throw AbortError
-    if (isAbortError(e)) {
-      throw e;
-    }
-
-    console.log('Failed to fetch templates, using local fallback');
-    templates = STARTER_TEMPLATES;
-  }
-
   const requestBody = {
     message,
-    system: starterTemplateSelectionPrompt(templates),
   };
 
   const response = await fetch('/api/startcall', {
@@ -121,15 +41,14 @@ export const selectStarterTemplate = async (options: { message: string; signal?:
     throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'select_starter_template');
   }
 
-  // generateObject returns the structured object directly
-  const selectedTemplate = (await response.json()) as TemplateSelection;
+  const selectedTemplate = (await response.json()) as TemplateSelectionResponse;
 
   if (!selectedTemplate.templateName) {
     console.log('No template selected, using blank template');
     return {};
   }
 
-  const template: Template | undefined = templates.find((t) => t.name == selectedTemplate.templateName);
+  const template = selectedTemplate.template;
 
   if (template) {
     return {

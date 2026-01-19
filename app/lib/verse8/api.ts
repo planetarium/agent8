@@ -125,11 +125,7 @@ export const sendActivityPrompt = async (projectPath: string): Promise<boolean> 
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`Failed to record prompt activity: ${response.status}`);
-    }
-
-    return true;
+    return response.ok;
   } catch (error) {
     logger.error('Failed to record prompt activity', error);
     return false;
