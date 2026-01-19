@@ -398,3 +398,40 @@ body.resizing * {
     background-position: -200% 0;
   }
 }
+
+/* Code scrolling animation */
+.code-scroll-container {
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+}
+
+.code-scroll-content {
+  animation: scrollUp 5s linear infinite;
+}
+
+.code-line {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.code-segment {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+@keyframes scrollUp {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}

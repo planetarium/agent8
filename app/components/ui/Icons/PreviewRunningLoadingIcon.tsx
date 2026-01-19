@@ -275,7 +275,7 @@ function Component() {
         <Lottie animationData={starAnimationData} loop={true} />
       </div>
       <p
-        className="font-['Instrument_Sans:Medium',sans-serif] font-medium leading-[1.5] text-[16px] whitespace-nowrap text-shimmer absolute bottom-[16px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2"
+        className="font-primary font-medium leading-[1.5] text-[16px] whitespace-nowrap text-shimmer absolute bottom-[16px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2"
         style={{
           fontVariationSettings: "'wdth' 100",
         }}

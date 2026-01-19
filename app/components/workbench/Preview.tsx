@@ -708,16 +708,14 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
             <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
               <div className="flex-1 flex flex-col justify-center items-center gap-6 px-8">
                 <div className="relative">
-                  {isStreaming ? <CodeGenLoadingIcon size={256} /> : <PreviewRunningLoadingIcon size={256} />}
-                  <span
-                    className={`absolute left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave whitespace-nowrap ${isStreaming ? 'top-[calc(50%+48px)]' : 'bottom-6'}`}
-                  >
-                    {isStreaming
-                      ? 'Generating code'
-                      : workbenchState === 'preparing' || workbenchState === 'reconnecting'
-                        ? 'Preparing workbench'
-                        : ''}
-                  </span>
+                  {isStreaming ||
+                  (isSmallViewport &&
+                    mobilePreviewMode &&
+                    (workbenchState === 'preparing' || workbenchState === 'reconnecting')) ? (
+                    <CodeGenLoadingIcon size={256} />
+                  ) : (
+                    <PreviewRunningLoadingIcon size={256} />
+                  )}
                 </div>
 
                 <div className="flex flex-col items-center justify-start py-2 max-w-md">
