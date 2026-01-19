@@ -378,3 +378,23 @@
 body.resizing * {
   transition-duration: 0s !important;
 }
+
+/* Text shimmer effect */
+.text-shimmer {
+  color: #767d8c;
+  background-image: linear-gradient(90deg, #767d8c 0%, #767d8c 40%, #cbd5e0 50%, #767d8c 60%, #767d8c 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2.5s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

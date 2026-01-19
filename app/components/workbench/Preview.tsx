@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconButton } from '~/components/ui/IconButton';
 import {
@@ -24,7 +23,6 @@ import {
   PreviewRunningLoadingIcon,
   RightLineIcon,
 } from '~/components/ui/Icons';
-import { loadingAnimationData } from '~/utils/animationData';
 import { sendMessageToParent } from '~/utils/postMessage';
 import PreviewQrCode from '~/components/workbench/PreviewQrCode';
 import { gameCreationTips } from '~/constants/gameCreationTips';
@@ -711,11 +709,6 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
               <div className="flex-1 flex flex-col justify-center items-center gap-6 px-8">
                 <div className="relative">
                   {isStreaming ? <CodeGenLoadingIcon size={256} /> : <PreviewRunningLoadingIcon size={256} />}
-                  <div
-                    className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 ${isStreaming ? 'top-[calc(50%-16px)]' : 'top-1/2'}`}
-                  >
-                    <Lottie animationData={loadingAnimationData} loop={true} />
-                  </div>
                   <span
                     className={`absolute left-1/2 -translate-x-1/2 text-body-lg-medium text-subtle animate-text-color-wave whitespace-nowrap ${isStreaming ? 'top-[calc(50%+48px)]' : 'bottom-6'}`}
                   >
@@ -723,7 +716,7 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                       ? 'Generating code'
                       : workbenchState === 'preparing' || workbenchState === 'reconnecting'
                         ? 'Preparing workbench'
-                        : 'Running preview'}
+                        : ''}
                   </span>
                 </div>
 
