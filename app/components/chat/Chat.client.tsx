@@ -75,7 +75,7 @@ import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
 const logger = createScopedLogger('Chat');
 
 const MAX_COMMIT_RETRIES = 2;
-const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
+const WORKBENCH_CONNECTION_TIMEOUT_MS = 5000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
 
@@ -988,246 +988,239 @@ export const ChatImpl = memo(
         }
       };
 
-      const templateSelectionStartTime = performance.now();
-
-      // Set progress annotation for analyzing request
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'in-progress',
-          order: 1,
-          message: 'Analyzing your request...',
-        },
-      ]);
-
-      checkAborted();
-      addDebugLog('Start:selectStarterTemplate');
-
-      const { template, title, projectRepo } = await selectStarterTemplate({
-        message: messageContent,
-        signal,
-      });
-
-      addDebugLog('Complete:selectStarterTemplate');
-      checkAborted();
-
-      if (!template) {
-        throw new Error('Not Found Template');
-      }
-
-      // Update progress annotation for selecting template
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'complete',
-          order: 1,
-          message: 'Request analyzed',
-        },
-        {
-          type: 'progress',
-          label: 'template',
-          status: 'in-progress',
-          order: 2,
-          message: 'Setting up base project...',
-        },
-      ]);
-
-      checkAborted();
-      addDebugLog('Start:fetchTemplateFromAPI');
-
-      const temResp = await fetchTemplateFromAPI(template!, title, projectRepo, signal).catch((e) => {
-        checkAborted();
-
-        if (shouldShowErrorPage(e)) {
-          throw e;
-        }
-
-        if (e.message.includes('rate limit')) {
-          toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
-        } else {
-          toast.warning('Failed to import starter template\nRetry again after a few minutes.');
-        }
-      });
-
-      addDebugLog('Complete:fetchTemplateFromAPI');
-      checkAborted();
-
-      const projectPath = temResp?.project?.path;
-      const projectName = temResp?.project?.name;
-      const templateCommitId = temResp?.commit?.id;
-      workbench.showWorkbench.set(true);
-
-      if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
-        addDebugLog('Not Found Template Data');
-        throw new Error('Not Found Template Data');
-      }
-
-      // Inject .env into fileMap so Agent can read it in the first response
       const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
-      if (accessToken) {
-        try {
+      if (!accessToken) {
+        throw new Error('Access token is missing');
+      }
+
+      const templateSelectionStartTime = performance.now();
+      let userIsActivated = false;
+      let userWalletAddress = null;
+      let starterTemplateResp: any;
+
+      try {
+        // Set progress annotation for analyzing request
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'in-progress',
+            order: 1,
+            message: 'Analyzing your request...',
+          },
+        ]);
+
+        checkAborted();
+        addDebugLog('Start:verifyV8AccessToken');
+
+        const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+        userIsActivated = user.isActivated;
+        userWalletAddress = user.walletAddress;
+
+        addDebugLog('Complete:verifyV8AccessToken');
+        checkAborted();
+
+        addDebugLog('Start:selectStarterTemplate');
+        starterTemplateResp = await selectStarterTemplate({
+          message: messageContent,
+          signal,
+        });
+
+        addDebugLog('Complete:selectStarterTemplate');
+        checkAborted();
+
+        if (!starterTemplateResp || !starterTemplateResp.template) {
+          throw new Error('Failed select starter template');
+        }
+      } finally {
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'complete',
+            order: 1,
+            message: 'Request analyzed',
+          },
+        ]);
+      }
+
+      try {
+        // Update progress annotation for selecting template
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'in-progress',
+            order: 2,
+            message: 'Setting up base project...',
+          },
+        ]);
+
+        checkAborted();
+        addDebugLog('Start:fetchTemplateFromAPI');
+
+        const temResp = await fetchTemplateFromAPI(
+          starterTemplateResp.template!,
+          starterTemplateResp.title,
+          starterTemplateResp.projectRepo,
+          signal,
+        ).catch((e) => {
           checkAborted();
-          addDebugLog('Start:verifyV8AccessToken');
 
-          const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+          if (shouldShowErrorPage(e)) {
+            throw e;
+          }
 
-          addDebugLog('Complete:verifyV8AccessToken');
-          checkAborted();
+          if (e.message.includes('rate limit')) {
+            toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+          } else {
+            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            logger.error('Failed to fetch template from API:', e);
+          }
+        });
 
-          if (user.isActivated && user.walletAddress) {
+        addDebugLog('Complete:fetchTemplateFromAPI');
+        checkAborted();
+
+        const projectPath = temResp?.project?.path;
+        const projectName = temResp?.project?.name;
+        const templateCommitId = temResp?.commit?.id;
+        workbench.showWorkbench.set(true);
+
+        if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+          addDebugLog('Not Found Template Data');
+          throw new Error('Not Found Template Data');
+        }
+
+        if (userIsActivated && userWalletAddress) {
+          try {
             temResp.fileMap['.env'] = {
               type: 'file',
-              content: getEnvContent(user.walletAddress),
+              content: getEnvContent(userWalletAddress),
               isBinary: false,
             };
+          } catch (error) {
+            logger.warn('Failed to generate .env for first message:', error);
           }
-        } catch (error) {
-          if (isAbortError(error)) {
-            throw error;
-          }
-
-          if (getErrorStatus(error) === 401) {
-            logger.error('Authentication failed during .env generation:', error);
-            throw error;
-          }
-
-          logger.warn('Failed to generate .env for first message:', error);
-          addDebugLog('Failed to generate .env for first message');
         }
+
+        checkAborted();
+
+        const processedFileMap = Object.entries(temResp.fileMap).reduce(
+          (acc, [key, value]) => {
+            acc[WORK_DIR + '/' + key] = value;
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
+        workbench.files.set(processedFileMap);
+
+        checkAborted();
+
+        await mountWithRecovery(processedFileMap, accessToken, signal);
+
+        checkAborted();
+
+        if (isEnabledGitbasePersistence) {
+          if (!projectPath || !projectName || !templateCommitId) {
+            throw new Error('Cannot create project');
+          }
+
+          let branchName = 'develop';
+
+          if (enabledTaskMode) {
+            checkAborted();
+            addDebugLog('Start:createTaskBranch');
+
+            const { success, message, data } = await createTaskBranch(projectPath, signal);
+            addDebugLog('Complete:createTaskBranch');
+            checkAborted();
+
+            if (!success) {
+              addDebugLog('Failed to create task branch');
+              processError(message, templateSelectionStartTime, {
+                context: 'createTaskBranch - starter template',
+              });
+
+              return;
+            }
+
+            branchName = data.branchName;
+          }
+
+          repoStore.set({
+            name: projectName,
+            path: projectPath,
+            title: starterTemplateResp.title,
+            taskBranch: branchName,
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(projectPath);
+
+          changeChatUrl(projectPath, { replace: true });
+        } else {
+          repoStore.set({
+            name: starterTemplateResp.projectRepo,
+            path: starterTemplateResp.projectRepo,
+            title: starterTemplateResp.title,
+            taskBranch: 'develop',
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(starterTemplateResp.projectRepo);
+
+          changeChatUrl(starterTemplateResp.projectRepo, { replace: true });
+        }
+
+        const firstChatModel =
+          model === 'auto'
+            ? starterTemplateResp.template.name.includes('3d')
+              ? FIXED_MODELS.FIRST_3D_CHAT
+              : FIXED_MODELS.FIRST_2D_CHAT
+            : {
+                model,
+                provider,
+              };
+
+        const starterPrompt = starterTemplateResp.template.name.includes('3d')
+          ? get3DStarterPrompt()
+          : get2DStarterPrompt();
+
+        // Clear progress annotations after a short delay
+        setTimeout(() => {
+          setCustomProgressAnnotations([]);
+        }, 1000);
+        checkAborted();
+
+        setMessages([
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            parts: [
+              {
+                type: 'text',
+                text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                  currentAttachmentList,
+                )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+              },
+            ],
+          },
+        ]);
+        checkAborted();
+      } finally {
+        // Complete template selection
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'complete',
+            order: 2,
+            message: 'Template selected',
+          },
+        ]);
       }
-
-      checkAborted();
-
-      const processedFileMap = Object.entries(temResp.fileMap).reduce(
-        (acc, [key, value]) => {
-          acc[WORK_DIR + '/' + key] = value;
-          return acc;
-        },
-        {} as Record<string, any>,
-      );
-      workbench.files.set(processedFileMap);
-
-      checkAborted();
-
-      const containerInstance = await workbench.container;
-
-      checkAborted();
-      await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-
-      checkAborted();
-
-      if (isEnabledGitbasePersistence) {
-        if (!projectPath || !projectName || !templateCommitId) {
-          throw new Error('Cannot create project');
-        }
-
-        let branchName = 'develop';
-
-        if (enabledTaskMode) {
-          checkAborted();
-          addDebugLog('Start:createTaskBranch');
-
-          const { success, message, data } = await createTaskBranch(projectPath, signal);
-          addDebugLog('Complete:createTaskBranch');
-          checkAborted();
-
-          if (!success) {
-            addDebugLog('Failed to create task branch');
-            processError(message, templateSelectionStartTime, {
-              context: 'createTaskBranch - starter template',
-            });
-
-            return;
-          }
-
-          branchName = data.branchName;
-        }
-
-        repoStore.set({
-          name: projectName,
-          path: projectPath,
-          title,
-          taskBranch: branchName,
-        });
-
-        // Record prompt activity for first request
-        sendActivityPrompt(projectPath).catch((error) => {
-          logger.warn('Failed to record prompt activity:', error);
-          addDebugLog('Failed to record prompt activity - projectPath');
-        });
-
-        changeChatUrl(projectPath, { replace: true });
-      } else {
-        repoStore.set({
-          name: projectRepo,
-          path: projectRepo,
-          title,
-          taskBranch: 'develop',
-        });
-
-        // Record prompt activity for first request
-        sendActivityPrompt(projectRepo).catch((error) => {
-          logger.warn('Failed to record prompt activity:', error);
-          addDebugLog('Failed to record prompt activity - projectRepo');
-        });
-
-        changeChatUrl(projectRepo, { replace: true });
-      }
-
-      const firstChatModel =
-        model === 'auto'
-          ? template.name.includes('3d')
-            ? FIXED_MODELS.FIRST_3D_CHAT
-            : FIXED_MODELS.FIRST_2D_CHAT
-          : {
-              model,
-              provider,
-            };
-
-      const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
-
-      // Complete template selection
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'analyze',
-          status: 'complete',
-          order: 1,
-          message: 'Request analyzed',
-        },
-        {
-          type: 'progress',
-          label: 'template',
-          status: 'complete',
-          order: 2,
-          message: 'Template selected',
-        },
-      ]);
-
-      // Clear progress annotations after a short delay
-      setTimeout(() => {
-        setCustomProgressAnnotations([]);
-      }, 1000);
-      checkAborted();
-
-      setMessages([
-        {
-          id: `1-${new Date().getTime()}`,
-          role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-                currentAttachmentList,
-              )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
-            },
-          ],
-        },
-      ]);
-      checkAborted();
 
       regenerate();
 
@@ -1240,6 +1233,126 @@ export const ChatImpl = memo(
       resetEnhancer();
 
       textareaRef.current?.blur();
+    };
+
+    /**
+     * Mounts files to the container with automatic recovery on failure.
+     * Attempts to recover the workbench connection if mount fails.
+     */
+    const mountWithRecovery = async (
+      fileMap: Record<string, any>,
+      accessToken: string,
+      signal: AbortSignal,
+    ): Promise<void> => {
+      try {
+        const checkAborted = () => {
+          if (signal.aborted) {
+            throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
+          }
+        };
+
+        const MAX_MOUNT_ATTEMPTS = 2;
+
+        for (let attempt = 1; attempt <= MAX_MOUNT_ATTEMPTS; attempt++) {
+          try {
+            checkAborted();
+
+            const containerInstance = await workbench.container;
+            await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
+
+            logger.info('✅ Files mounted successfully');
+
+            return; // success
+          } catch (error) {
+            if (isAbortError(error)) {
+              throw error;
+            }
+
+            logger.warn(`Workbench mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
+
+            if (attempt >= MAX_MOUNT_ATTEMPTS) {
+              throw new Error(`Workbench recovery failed`);
+            }
+
+            addDebugLog(`mount recovery`);
+
+            checkAborted();
+
+            // not last attempt, try to recover
+            const recovered = await recoverWorkbench(accessToken, signal);
+
+            checkAborted();
+
+            if (!recovered) {
+              logger.warn('Workbench recovery failed, try to next attempt');
+            } else {
+              logger.info('Workbench recovered successfully, retrying mount...');
+            }
+          }
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+
+        throw new Error(`Failed to mount files: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    /**
+     * Recovers the workbench when the container connection is lost.
+     * Returns true if recovery successful, false otherwise.
+     */
+    const recoverWorkbench = async (accessToken: string, signal: AbortSignal): Promise<boolean> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Workbench recovery aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const workbenchConnectionState = workbench.connectionState.get();
+
+      if (workbenchConnectionState === 'connected') {
+        return true;
+      }
+
+      checkAborted();
+
+      try {
+        logger.info('🔌 Container connection lost, waiting for auto-reconnect...');
+        await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+        checkAborted();
+        logger.info('✅ Container connection restored');
+
+        return true;
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+      }
+
+      checkAborted();
+
+      const REINIT_ATTEMPTS = 2;
+
+      for (let i = 0; i < REINIT_ATTEMPTS; i++) {
+        try {
+          checkAborted();
+          logger.info(`Attempting container reinitialization (${i + 1}/${REINIT_ATTEMPTS})...`);
+          await workbench.reinitializeContainer(accessToken);
+          checkAborted();
+
+          return true;
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+
+          logger.warn(`Container reinitialization failed (attempt ${i + 1}/${REINIT_ATTEMPTS})`);
+        }
+      }
+
+      return false;
     };
 
     /**
@@ -1620,8 +1733,7 @@ export const ChatImpl = memo(
 
         if (wasFirstChat) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
-          const isMeaningful =
-            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
+          const isMeaningful = errorMessage.trim() && errorMessage !== 'Not Found Template Data';
 
           displayMessage = isMeaningful
             ? errorMessage

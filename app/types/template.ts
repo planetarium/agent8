@@ -7,3 +7,14 @@ export interface Template {
   tags?: string[];
   icon?: string;
 }
+
+export interface TemplateSelection {
+  templateName: string;
+  title: string;
+  projectRepo: string;
+  nextActionSuggestion?: string;
+}
+
+export interface TemplateSelectionResponse extends TemplateSelection {
+  template: Template | undefined;
+}
