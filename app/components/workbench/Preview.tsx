@@ -189,21 +189,92 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
     let cancelled = false;
     let attempts = 0;
 
+    const saveResponseToFile = (response: Response, data: any) => {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${timestamp}.json`;
+
+      // Create response data for debugging
+      const responseData = {
+        timestamp: new Date().toISOString(),
+        url: baseUrl,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        data,
+      };
+
+      // Save to localStorage for debugging (browser environment)
+      localStorage.setItem(`preview-response-${timestamp}`, JSON.stringify(responseData, null, 2));
+
+      // Also log to console
+      console.log('Preview response saved:', filename, responseData);
+
+      /*
+       * Create downloadable file for debugging (will overwrite existing files with same name)
+       * Since the problematic downloads are already happening, our debug files can also download
+       */
+
+      try {
+        const blob = new Blob([JSON.stringify(responseData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.warn('Failed to create debug download file:', error);
+      }
+    };
+
     const checkAndLoad = async () => {
       if (cancelled) {
         return;
       }
 
       try {
-        const res = await fetch(baseUrl, {
+        // First try HEAD request to check if server is responding
+        const headRes = await fetch(baseUrl, {
           method: 'HEAD',
           signal: abortController.signal,
         });
 
-        if (!cancelled && res.ok) {
-          setIframeUrl(baseUrl);
+        if (!cancelled && headRes.ok) {
+          // Server is responding, now check content with GET request
+          const getRes = await fetch(baseUrl, {
+            method: 'GET',
+            signal: abortController.signal,
+          });
 
-          return;
+          if (!cancelled) {
+            const text = await getRes.text();
+
+            // Save response for debugging
+            saveResponseToFile(getRes, text);
+
+            // Check if response contains proxy error
+            if (text.includes('Proxy error occurred')) {
+              console.log('Proxy error detected, retrying...', { attempt: attempts + 1, text: text.substring(0, 200) });
+
+              attempts++;
+
+              if (!cancelled && attempts < maxAttempts) {
+                timeoutId = setTimeout(checkAndLoad, retryDelay);
+                return;
+              } else if (!cancelled) {
+                // Maximum attempts reached, just load the URL
+                setIframeUrl(baseUrl);
+                return;
+              }
+            }
+
+            // No proxy error, content is ready
+            setIframeUrl(baseUrl);
+
+            return;
+          }
         }
       } catch (error) {
         // AbortError is expected when cleanup runs
@@ -211,7 +282,8 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
           return;
         }
 
-        // Container not ready
+        // Network error or other issues
+        console.log('Fetch error:', error);
       }
 
       attempts++;
