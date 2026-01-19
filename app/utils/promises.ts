@@ -25,7 +25,7 @@ export function withResolvers<T>(): PromiseWithResolvers<T> {
  * @returns The result of the successful operation
  * @throws The error from the last failed attempt
  */
-export async function retry<T>(
+export async function smartTry<T>(
   operation: (attempt: number) => Promise<T>,
   options?: {
     maxRetries?: number;

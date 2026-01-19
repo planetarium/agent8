@@ -988,8 +988,13 @@ export const ChatImpl = memo(
         }
       };
 
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+
+      if (!accessToken) {
+        throw new Error('Access token is missing');
+      }
+
       const templateSelectionStartTime = performance.now();
-      let accessToken = '';
 
       // Set progress annotation for analyzing request
       setCustomProgressAnnotations([
@@ -1065,9 +1070,6 @@ export const ChatImpl = memo(
         addDebugLog('Not Found Template Data');
         throw new Error('Not Found Template Data');
       }
-
-      // Inject .env into fileMap so Agent can read it in the first response
-      accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
 
       if (accessToken) {
         try {
@@ -1157,10 +1159,7 @@ export const ChatImpl = memo(
         });
 
         // Record prompt activity for first request
-        sendActivityPrompt(projectPath).catch((error) => {
-          logger.warn('Failed to record prompt activity:', error);
-          addDebugLog('Failed to record prompt activity - projectPath');
-        });
+        sendActivityPrompt(projectPath);
 
         changeChatUrl(projectPath, { replace: true });
       } else {
@@ -1172,10 +1171,7 @@ export const ChatImpl = memo(
         });
 
         // Record prompt activity for first request
-        sendActivityPrompt(projectRepo).catch((error) => {
-          logger.warn('Failed to record prompt activity:', error);
-          addDebugLog('Failed to record prompt activity - projectRepo');
-        });
+        sendActivityPrompt(projectRepo);
 
         changeChatUrl(projectRepo, { replace: true });
       }
@@ -1280,22 +1276,23 @@ export const ChatImpl = memo(
 
             logger.warn(`Workbench mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
 
+            if (attempt >= MAX_MOUNT_ATTEMPTS) {
+              throw new Error(`Workbench recovery failed`);
+            }
+
+            addDebugLog(`mount recovery`);
+
+            checkAborted();
+
             // not last attempt, try to recover
-            if (attempt < MAX_MOUNT_ATTEMPTS) {
-              checkAborted();
+            const recovered = await recoverWorkbench(accessToken, signal);
 
-              const recovered = await recoverWorkbench(accessToken, signal);
+            checkAborted();
 
-              if (!recovered) {
-                logger.warn('Workbench recovery failed, try to next attempt');
-              } else {
-                logger.info('Workbench recovered successfully, retrying mount...');
-              }
+            if (!recovered) {
+              logger.warn('Workbench recovery failed, try to next attempt');
             } else {
-              // last attempt failed
-              throw new Error(`Workbench recovery failed`, {
-                cause: error,
-              });
+              logger.info('Workbench recovered successfully, retrying mount...');
             }
           }
         }

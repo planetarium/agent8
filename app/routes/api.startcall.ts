@@ -6,7 +6,7 @@ import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/midd
 import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
 import type { TemplateSelectionResponse, Template } from '~/types/template';
 import { isAbortError, isApiKeyError } from '~/utils/errors';
-import { retry } from '~/utils/promises';
+import { smartTry } from '~/utils/promises';
 
 export const action = withV8AuthUser(startcallAction, { checkCredit: true });
 
@@ -109,7 +109,7 @@ async function startcallAction({ context, request }: ActionFunctionArgs) {
     let usedProvider = FIXED_MODELS.SELECT_STARTER_TEMPLATES[0].provider;
     let usedModel = FIXED_MODELS.SELECT_STARTER_TEMPLATES[0].model;
 
-    const result = await retry(
+    const result = await smartTry(
       async (attempt) => {
         const modelIndex = attempt % FIXED_MODELS.SELECT_STARTER_TEMPLATES.length;
 
