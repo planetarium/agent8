@@ -1231,7 +1231,7 @@ export class WorkbenchStore {
     }
 
     // Verify user
-    const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
+    const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken);
 
     if (!user.isActivated) {
       throw new Error('Account is not activated');

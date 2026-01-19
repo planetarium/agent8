@@ -56,7 +56,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       }
 
       const { userUid, email, walletAddress, isActivated } = await verifyV8AccessToken(
-        env.VITE_V8_API_ENDPOINT,
+        env.VITE_V8_AUTH_API_ENDPOINT,
         accessToken,
       );
 
