@@ -1114,7 +1114,7 @@ export const ChatImpl = memo(
 
       checkAborted();
 
-      if(!accessToken) {
+      if (!accessToken) {
         throw new Error('Cannot mount files: Access token is missing');
       }
 
@@ -1254,7 +1254,7 @@ export const ChatImpl = memo(
       accessToken: string,
       signal: AbortSignal,
     ): Promise<void> => {
-      try{
+      try {
         const checkAborted = () => {
           if (signal.aborted) {
             throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
@@ -1285,6 +1285,7 @@ export const ChatImpl = memo(
               checkAborted();
 
               const recovered = await recoverWorkbench(accessToken, signal);
+
               if (!recovered) {
                 logger.warn('Workbench recovery failed, try to next attempt');
               } else {
@@ -1296,7 +1297,7 @@ export const ChatImpl = memo(
                 cause: error,
               });
             }
-          } 
+          }
         }
       } catch (error) {
         if (isAbortError(error)) {
