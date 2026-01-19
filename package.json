@@ -135,6 +135,7 @@
     "jspdf": "^2.5.2",
     "jszip": "^3.10.1",
     "lottie-react": "^2.4.1",
+    "lucide-react": "^0.562.0",
     "mime": "^4.0.4",
     "nanostores": "^0.10.3",
     "nosleep.js": "^0.12.0",
