@@ -67,8 +67,8 @@ function AccessControlledChat() {
     if (accessToken) {
       const verifyToken = async () => {
         try {
-          const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
-          const userInfo = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
+          const v8AuthApiEndpoint = import.meta.env.VITE_V8_AUTH_API_ENDPOINT;
+          const userInfo = await verifyV8AccessToken(v8AuthApiEndpoint, accessToken);
 
           v8UserStore.set({ loading: false, user: userInfo });
           updateV8AccessToken(accessToken);

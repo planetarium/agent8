@@ -1014,7 +1014,7 @@ export const ChatImpl = memo(
         checkAborted();
         addDebugLog('Start:verifyV8AccessToken');
 
-        const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken, signal);
+        const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken, signal);
         userIsActivated = user.isActivated;
         userWalletAddress = user.walletAddress;
 

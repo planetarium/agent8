@@ -22,11 +22,11 @@ export const updateV8AccessToken = (v8AccessToken: string) => {
 };
 
 export const verifyV8AccessToken = async (
-  v8ApiEndpoint: string,
+  v8AuthApiEndpoint: string,
   accessToken: string,
   signal?: AbortSignal,
 ): Promise<V8User> => {
-  const response = await fetch(v8ApiEndpoint + '/v1/auth/verify', {
+  const response = await fetch(v8AuthApiEndpoint + '/v1/auth/verify', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
