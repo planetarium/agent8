@@ -233,7 +233,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 return (
                   <div
                     key={index}
-                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
+                    className="flex flex-col items-center justify-center gap-3 mt-3 py-2 px-[14px] self-stretch"
                   >
                     <div className="flex items-center gap-2 self-stretch overflow-hidden">
                       <span className="text-body-md-medium text-secondary shrink-0">Restored</span>
@@ -250,7 +250,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 return (
                   <div
                     key={index}
-                    className="flex flex-col items-center justify-center gap-3 mt-4 p-[14px] self-stretch"
+                    className="flex flex-col items-center justify-center gap-3 mt-3 py-2 px-[14px] self-stretch"
                   >
                     <div className="flex items-center gap-2 self-stretch">
                       <span className="text-body-md-medium text-secondary">Copied from</span>
@@ -315,7 +315,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             content={messageText}
                             annotations={annotations}
                             expanded={expandedMessages.has(index)}
-                            isSmallViewport={isSmallViewport}
                           />
                         )}
                       </div>

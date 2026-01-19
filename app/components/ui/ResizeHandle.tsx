@@ -8,6 +8,7 @@ interface ResizeHandleProps {
 export const ResizeHandle = ({ minChatWidth = 380, minWorkbenchWidth = 780 }: ResizeHandleProps) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const handleRef = useRef<HTMLDivElement | null>(null);
+  const hasUserResized = useRef<boolean>(false);
 
   const updateLayout = useCallback(
     (clientX: number) => {
@@ -20,9 +21,19 @@ export const ResizeHandle = ({ minChatWidth = 380, minWorkbenchWidth = 780 }: Re
     [minChatWidth, minWorkbenchWidth],
   );
 
+  const applyInitialRatio = useCallback(() => {
+    const windowWidth = window.innerWidth;
+    const maxChatWidth = windowWidth - minWorkbenchWidth;
+    const chatRatio = 1 / 3; // 1:2 ratio → chat gets 1/(1+2) of the width
+    const initialChatWidth = Math.max(minChatWidth, Math.min(maxChatWidth, windowWidth * chatRatio));
+
+    document.documentElement.style.setProperty('--chat-width', `${initialChatWidth}px`);
+  }, [minChatWidth, minWorkbenchWidth]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
+    hasUserResized.current = true;
   }, []);
 
   const handleMouseMove = useCallback(
@@ -40,14 +51,30 @@ export const ResizeHandle = ({ minChatWidth = 380, minWorkbenchWidth = 780 }: Re
     setIsDragging(false);
   }, []);
 
-  // Initialize layout on mount (ensure workbench minimum width)
+  /*
+   * Initialize layout on mount (ensure workbench minimum width)
+   * Target ratio: chat:workbench = 1:2
+   */
   useEffect(() => {
-    const windowWidth = window.innerWidth;
-    const maxChatWidth = windowWidth - minWorkbenchWidth;
-    const initialChatWidth = Math.max(minChatWidth, Math.min(maxChatWidth, windowWidth * 0.5));
+    applyInitialRatio();
+  }, [applyInitialRatio]);
 
-    document.documentElement.style.setProperty('--chat-width', `${initialChatWidth}px`);
-  }, [minChatWidth, minWorkbenchWidth]);
+  /*
+   * Handle window resize: maintain 1:2.4 ratio unless user manually resized
+   */
+  useEffect(() => {
+    const handleResize = () => {
+      if (!hasUserResized.current) {
+        applyInitialRatio();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [applyInitialRatio]);
 
   useEffect(() => {
     if (isDragging) {

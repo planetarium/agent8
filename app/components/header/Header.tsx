@@ -21,9 +21,10 @@ import { HeaderBookmarksButton } from './HeaderBookmarksButton.client';
 import { HeaderLegacyUiToggle } from './HeaderLegacyUiToggle.client';
 import { LegacyProjectBanner } from './LegacyProjectBanner';
 import WithTooltip from '~/components/ui/Tooltip';
-import { MoreIcon, PreviewIcon, ChatIcon } from '~/components/ui/Icons';
+import { MoreIcon, ChatIcon } from '~/components/ui/Icons';
 import CustomIconButton from '~/components/ui/CustomIconButton';
 import { Dropdown, DropdownItem } from '~/components/ui/Dropdown';
+import { AnimatedPreviewIcon } from './AnimatedPreviewIcon.client';
 
 export function Header() {
   const chat = useStore(chatStore);
@@ -188,7 +189,7 @@ export function Header() {
               transition: 'all 350ms cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
-            <PreviewIcon size={20} className="flex-shrink-0" />
+            <AnimatedPreviewIcon size={20} />
           </div>
         </div>
       )}

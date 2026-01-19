@@ -220,7 +220,7 @@
   --chat-max-width: 100%;
   --chat-max-width-before-start: 37.5rem;
   --chat-min-width: 380px;
-  --chat-width: 50%;
+  --chat-width: max(426px, 33.33%); /* Initial ratio: chat:workbench = 1:2, but never less than 426px */
   --workbench-width: calc(100% - var(--chat-width));
   --workbench-inner-width: var(--workbench-width);
   --workbench-left: var(--chat-width);
