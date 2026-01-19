@@ -1116,10 +1116,6 @@ export const ChatImpl = memo(
 
       checkAborted();
 
-      if (!accessToken) {
-        throw new Error('Cannot mount files: Access token is missing');
-      }
-
       await mountWithRecovery(processedFileMap, accessToken, signal);
 
       checkAborted();
