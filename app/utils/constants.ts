@@ -21,10 +21,16 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NA
 const DEFAULT_MODEL_NAME = 'gemini-3-pro-preview';
 
 export const FIXED_MODELS = {
-  SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
-  },
+  SELECT_STARTER_TEMPLATES: [
+    {
+      provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+      model: 'gemini-2.5-flash',
+    },
+    {
+      provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+      model: 'gemini-3-flash-preview',
+    },
+  ],
   PROMPT_ENHANCER_TEMPLATE: {
     model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
