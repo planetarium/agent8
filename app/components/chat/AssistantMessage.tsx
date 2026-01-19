@@ -10,7 +10,6 @@ interface AssistantMessageProps {
   content: string;
   annotations?: JSONValue[];
   expanded?: boolean;
-  isSmallViewport?: boolean;
 }
 
 function openArtifactInWorkbench(filePath: string) {
@@ -37,87 +36,82 @@ function normalizedFilePath(path: string) {
   return normalizedPath;
 }
 
-export const AssistantMessage = memo(
-  ({ content, annotations, expanded = false, isSmallViewport = false }: AssistantMessageProps) => {
-    const filteredAnnotations = (annotations?.filter(
-      (data: JSONValue) => data && typeof data === 'object' && Object.keys(data).includes('type'),
-    ) || []) as { type: string; value: any } & { [key: string]: any }[];
+export const AssistantMessage = memo(({ content, annotations, expanded = false }: AssistantMessageProps) => {
+  const filteredAnnotations = (annotations?.filter(
+    (data: JSONValue) => data && typeof data === 'object' && Object.keys(data).includes('type'),
+  ) || []) as { type: string; value: any } & { [key: string]: any }[];
 
-    // Find annotations once and reuse results to avoid duplicate find operations
-    const chatSummaryAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary');
-    const codeContextAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'codeContext');
+  // Find annotations once and reuse results to avoid duplicate find operations
+  const chatSummaryAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary');
+  const codeContextAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'codeContext');
 
-    const chatSummary: string | undefined = chatSummaryAnnotation?.summary;
-    const codeContext: string[] | undefined = codeContextAnnotation?.files;
+  const chatSummary: string | undefined = chatSummaryAnnotation?.summary;
+  const codeContext: string[] | undefined = codeContextAnnotation?.files;
 
-    // Remove bottom padding on mobile when collapsed
-    const containerPadding = isSmallViewport && !expanded ? '' : 'pb-[14px]';
-
-    return (
-      <div className={`overflow-hidden w-full ${containerPadding}`}>
-        <>
-          <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary">
-            {(codeContext || chatSummary) && (
-              <Popover side="right" align="start" trigger={<div className="i-ph:info" />}>
-                {chatSummary && (
-                  <div className="max-w-chat">
-                    <div className="summary max-h-96 flex flex-col">
-                      <h2 className="border border-bolt-elements-borderColor rounded-md p4">Summary</h2>
-                      <div style={{ zoom: 0.7 }} className="overflow-y-auto m4">
-                        <Markdown>{chatSummary}</Markdown>
+  return (
+    <div className="overflow-hidden w-full pb-[14px]">
+      <>
+        <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary">
+          {(codeContext || chatSummary) && (
+            <Popover side="right" align="start" trigger={<div className="i-ph:info" />}>
+              {chatSummary && (
+                <div className="max-w-chat">
+                  <div className="summary max-h-96 flex flex-col">
+                    <h2 className="border border-bolt-elements-borderColor rounded-md p4">Summary</h2>
+                    <div style={{ zoom: 0.7 }} className="overflow-y-auto m4">
+                      <Markdown>{chatSummary}</Markdown>
+                    </div>
+                  </div>
+                  {codeContext && (
+                    <div className="code-context flex flex-col p4 border border-bolt-elements-borderColor rounded-md">
+                      <h2>Context</h2>
+                      <div className="flex gap-4 mt-4 bolt" style={{ zoom: 0.6 }}>
+                        {codeContext.map((x, index) => {
+                          const normalized = normalizedFilePath(x);
+                          return (
+                            <React.Fragment key={normalized || index}>
+                              <code
+                                className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openArtifactInWorkbench(normalized);
+                                }}
+                              >
+                                {normalized}
+                              </code>
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     </div>
-                    {codeContext && (
-                      <div className="code-context flex flex-col p4 border border-bolt-elements-borderColor rounded-md">
-                        <h2>Context</h2>
-                        <div className="flex gap-4 mt-4 bolt" style={{ zoom: 0.6 }}>
-                          {codeContext.map((x, index) => {
-                            const normalized = normalizedFilePath(x);
-                            return (
-                              <React.Fragment key={normalized || index}>
-                                <code
-                                  className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    openArtifactInWorkbench(normalized);
-                                  }}
-                                >
-                                  {normalized}
-                                </code>
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="context"></div>
-              </Popover>
-            )}
-          </div>
-        </>
-        <div className="markdown-container text-body-md-regular-relaxed text-secondary" data-message-content>
-          <div
-            className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
-            style={
-              !expanded
-                ? {
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    position: 'relative',
-                  }
-                : {}
-            }
-          >
-            <Markdown html>{content}</Markdown>
-          </div>
+                  )}
+                </div>
+              )}
+              <div className="context"></div>
+            </Popover>
+          )}
+        </div>
+      </>
+      <div className="markdown-container text-body-md-regular-relaxed text-secondary" data-message-content>
+        <div
+          className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
+          style={
+            !expanded
+              ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  position: 'relative',
+                }
+              : {}
+          }
+        >
+          <Markdown html>{content}</Markdown>
         </div>
       </div>
-    );
-  },
-);
+    </div>
+  );
+});

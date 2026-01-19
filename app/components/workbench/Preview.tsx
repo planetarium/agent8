@@ -729,12 +729,16 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
                 <div className="flex flex-col items-center justify-start py-2 max-w-md">
                   <div className="flex flex-col justify-start items-center self-stretch">
-                    <span className="text-body-lg-regular text-subtle mb-2">Tip</span>
-                    <div className="min-h-[3.5rem] flex items-start justify-center">
+                    <span className={`${isSmallViewport ? 'text-body-sm' : 'text-body-lg-regular'} text-subtle mb-2`}>
+                      Tip
+                    </span>
+                    <div
+                      className={`${isSmallViewport ? 'min-h-[48px]' : 'min-h-[3.5rem]'} flex items-start justify-center`}
+                    >
                       <AnimatePresence mode="wait">
                         <motion.span
                           key={currentTipIndex}
-                          className="text-body-lg-regular text-secondary text-center leading-relaxed"
+                          className={`${isSmallViewport ? 'text-body-md-regular' : 'text-body-lg-regular'} text-secondary text-center leading-relaxed`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
