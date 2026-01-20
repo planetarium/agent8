@@ -241,7 +241,7 @@ function AccessControlledChat() {
       {!loadedContainer ? (
         <NotLoadedContainer />
       ) : (
-        <ClientOnly fallback={<BaseChat handleStopRef={handleStopRef} />}>
+        <ClientOnly fallback={<BaseChat />}>
           {() => {
             return (
               <Chat
