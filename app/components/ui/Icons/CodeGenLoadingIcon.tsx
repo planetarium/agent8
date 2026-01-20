@@ -1,67 +1,146 @@
 import { memo } from 'react';
+import Lottie from 'lottie-react';
+import { Code2 } from 'lucide-react';
+
+import svgPaths from '~/components/ui/Icons/paths/previewLoadingSvgPaths';
+import { starAnimationData } from '~/utils/animationData';
 
 interface CodeGenLoadingIconProps {
   size?: number;
   className?: string;
 }
 
-export const CodeGenLoadingIcon = memo(({ size = 256, className = '' }: CodeGenLoadingIconProps) => {
-  const aspectRatio = 256 / 172;
-  const calculatedHeight = size / aspectRatio;
+function CodeGenLoadingImage() {
+  const codeLines = [
+    [
+      { text: 'const', color: '#C792EA' },
+      { text: ' game = ', color: '#D6DEEB' },
+      { text: 'new', color: '#C792EA' },
+      { text: ' Game();', color: '#D6DEEB' },
+    ],
+    [
+      { text: 'function', color: '#C792EA' },
+      { text: ' ', color: '#D6DEEB' },
+      { text: 'update', color: '#82AAFF' },
+      { text: '() {', color: '#D6DEEB' },
+    ],
+    [
+      { text: '  player.', color: '#D6DEEB' },
+      { text: 'move', color: '#82AAFF' },
+      { text: '();', color: '#D6DEEB' },
+    ],
+    [
+      { text: '  ', color: '#D6DEEB' },
+      { text: 'checkCollision', color: '#82AAFF' },
+      { text: '();', color: '#D6DEEB' },
+    ],
+    [{ text: '}', color: '#D6DEEB' }],
+    [
+      { text: 'render', color: '#82AAFF' },
+      { text: '(scene);', color: '#D6DEEB' },
+    ],
+    [
+      { text: 'export default', color: '#C792EA' },
+      { text: ' app;', color: '#D6DEEB' },
+    ],
+    [
+      { text: 'import', color: '#C792EA' },
+      { text: ' { Engine } ', color: '#D6DEEB' },
+      { text: 'from', color: '#C792EA' },
+      { text: ' ', color: '#D6DEEB' },
+      { text: "'core'", color: '#C3E88D' },
+      { text: ';', color: '#D6DEEB' },
+    ],
+  ];
 
   return (
-    <svg
-      width={size}
-      height={calculatedHeight}
-      viewBox="0 0 256 172"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
+    <div className="absolute h-[172px] left-0 top-0 w-[256px] overflow-hidden z-0" data-name="Code Gen Loading Image">
+      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 256 172">
+        <g clipPath="url(#clip0_1_113)" id="Code Gen Loading Image">
+          <path d={svgPaths.p5c7a400} fill="var(--fill-0, #111315)" id="Vector" />
+          <g id="Mask group">
+            <mask
+              height="172"
+              id="mask0_1_113"
+              maskUnits="userSpaceOnUse"
+              style={{ maskType: 'luminance' }}
+              width="256"
+              x="0"
+              y="0"
+            >
+              <g id="Group">
+                <path d={svgPaths.p5c7a400} fill="var(--fill-0, white)" id="Vector_2" />
+              </g>
+            </mask>
+            <g mask="url(#mask0_1_113)">
+              <path d={svgPaths.p26c23e00} fill="var(--fill-0, white)" fillOpacity="0.12" id="Vector_3" />
+            </g>
+          </g>
+
+          <foreignObject x="15" y="12" width="226" height="118" opacity="0.6">
+            <div className="code-scroll-container">
+              <div className="code-scroll-content">
+                {[...codeLines, ...codeLines].map((line, index) => (
+                  <div key={index} className="code-line">
+                    {line.map((segment, segIndex) => (
+                      <span key={segIndex} className="code-segment" style={{ color: segment.color }}>
+                        {segment.text}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </foreignObject>
+        </g>
+        <defs>
+          <clipPath id="clip0_1_113">
+            <rect fill="white" height="172" width="256" />
+          </clipPath>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+
+function Component() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col h-[172px] items-center min-h-px min-w-px pb-0 px-0 relative z-10">
+      <div
+        className="absolute top-[50px] left-1/2 -translate-x-1/2 shrink-0 size-[48px]"
+        data-name="🟢 https://lottiefiles.com/animations/star-magic-WuyWHy4AEJ"
+        style={{
+          filter:
+            'drop-shadow(0 0 8px rgba(114, 231, 248, 0.6)) drop-shadow(0 0 12px rgba(114, 231, 248, 0.4)) brightness(1.3) contrast(1.2)',
+        }}
+      >
+        <Lottie animationData={starAnimationData} loop={true} />
+      </div>
+      <div className="flex items-center gap-2 absolute bottom-[16px] left-1/2 -translate-x-1/2 z-10">
+        <Code2 size={20} color="#767d8c" />
+        <p
+          className="font-primary font-medium leading-[1.5] text-[16px] whitespace-nowrap text-shimmer"
+          style={{
+            fontVariationSettings: "'wdth' 100",
+          }}
+        >
+          Building your game
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export const CodeGenLoadingIcon = memo(({ size = 256, className = '' }: CodeGenLoadingIconProps) => {
+  return (
+    <div
+      className={`content-stretch flex gap-[10px] items-center relative ${className}`}
+      style={{ width: size, height: (size * 172) / 256 }}
+      data-name="Code Gen Loading"
     >
-      <mask id="path-1-inside-1_8817_176026" fill="white">
-        <path d="M0 16C0 7.16344 7.16344 0 16 0H240C248.837 0 256 7.16344 256 16V156C256 164.837 248.837 172 240 172H16C7.16344 172 0 164.837 0 156V16Z" />
-      </mask>
-      <path
-        d="M0 16C0 7.16344 7.16344 0 16 0H240C248.837 0 256 7.16344 256 16V156C256 164.837 248.837 172 240 172H16C7.16344 172 0 164.837 0 156V16Z"
-        fill="#111315"
-      />
-      <path
-        d="M16 0V2H240V0V-2H16V0ZM256 16H254V156H256H258V16H256ZM240 172V170H16V172V174H240V172ZM0 156H2V16H0H-2V156H0ZM16 172V170C8.26801 170 2 163.732 2 156H0H-2C-2 165.941 6.05887 174 16 174V172ZM256 156H254C254 163.732 247.732 170 240 170V172V174C249.941 174 258 165.941 258 156H256ZM240 0V2C247.732 2 254 8.26801 254 16H256H258C258 6.05887 249.941 -2 240 -2V0ZM16 0V-2C6.05888 -2 -2 6.05887 -2 16H0H2C2 8.26801 8.26801 2 16 2V0Z"
-        fill="white"
-        fillOpacity="0.12"
-        mask="url(#path-1-inside-1_8817_176026)"
-      />
-      <path
-        d="M30 71C30 68.7909 31.7909 67 34 67H222C224.209 67 226 68.7909 226 71V75C226 77.2091 224.209 79 222 79H34C31.7909 79 30 77.2091 30 75V71Z"
-        fill="white"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M30 90C30 87.7909 31.7909 86 34 86H176C178.209 86 180 87.7909 180 90V94C180 96.2091 178.209 98 176 98H34C31.7909 98 30 96.2091 30 94V90Z"
-        fill="white"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M90 52.5C90 50.2909 91.7909 48.5 94 48.5H189C191.209 48.5 193 50.2909 193 52.5V56.5C193 58.7091 191.209 60.5 189 60.5H94C91.7909 60.5 90 58.7091 90 56.5V52.5Z"
-        fill="white"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M90 33C90 30.7909 91.7909 29 94 29H222C224.209 29 226 30.7909 226 33V37C226 39.2091 224.209 41 222 41H94C91.7909 41 90 39.2091 90 37V33Z"
-        fill="white"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M30 109C30 106.791 31.7909 105 34 105H222C224.209 105 226 106.791 226 109V113C226 115.209 224.209 117 222 117H34C31.7909 117 30 115.209 30 113V109Z"
-        fill="white"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M57.5494 25.9287C57.7728 25.036 58.6788 24.4929 59.5717 24.7161C60.4644 24.9396 61.0074 25.8456 60.7842 26.7384L52.4509 60.0718C52.2274 60.9645 51.3214 61.5076 50.4286 61.2844C49.5359 61.0609 48.9928 60.1549 49.216 59.2621L57.5494 25.9287ZM43.4055 33.4889C44.0563 32.8381 45.1106 32.8381 45.7614 33.4889C46.4123 34.1398 46.4123 35.194 45.7614 35.8449L38.6061 43.0002L45.7614 50.1556C46.4123 50.8065 46.4123 51.8607 45.7614 52.5116C45.1106 53.1624 44.0563 53.1624 43.4055 52.5116L35.0721 44.1782C34.4213 43.5274 34.4213 42.4731 35.0721 41.8223L43.4055 33.4889ZM64.2388 33.4889C64.8897 32.8381 65.9439 32.8381 66.5948 33.4889L74.9281 41.8223C75.579 42.4731 75.579 43.5274 74.9281 44.1782L66.5948 52.5116C65.9439 53.1624 64.8897 53.1624 64.2388 52.5116C63.5879 51.8607 63.5879 50.8065 64.2388 50.1556L71.3942 43.0002L64.2388 35.8449C63.5879 35.194 63.5879 34.1398 64.2388 33.4889Z"
-        fill="white"
-        fillOpacity="0.12"
-      />
-    </svg>
+      <CodeGenLoadingImage />
+      <Component />
+    </div>
   );
 });
 

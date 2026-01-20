@@ -1,82 +1,308 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
+import Lottie from 'lottie-react';
+import { IoPlay } from 'react-icons/io5';
+
+import svgPaths from '~/components/ui/Icons/paths/previewLoadingSvgPaths';
+import { starAnimationData } from '~/utils/animationData';
+
+// Isometric cube dimensions
+const CUBE_SIZE = 20;
+const ISO_WIDTH = CUBE_SIZE * Math.sqrt(3);
+const ISO_HEIGHT = CUBE_SIZE;
+
+// Color palettes
+const COLORS = {
+  white: {
+    top: '#111315',
+    left: '#111315',
+    right: '#111315',
+  },
+  cyan: {
+    top: '#72E7F8',
+    left: '#5ACCDD',
+    right: '#4AB8C8',
+  },
+  pink: {
+    top: '#111315',
+    left: '#111315',
+    right: '#111315',
+  },
+  blue: {
+    top: '#111315',
+    left: '#111315',
+    right: '#111315',
+  },
+  lime: {
+    top: '#111315',
+    left: '#111315',
+    right: '#111315',
+  },
+};
+
+interface IsoCubeProps {
+  x: number;
+  y: number;
+  z: number;
+  color: 'white' | 'cyan' | 'pink' | 'blue' | 'lime';
+}
+
+function IsoCube({ x, y, z, color }: IsoCubeProps) {
+  // Calculate isometric position
+  const pixelX = (x - y) * (ISO_WIDTH / 2);
+  const pixelY = (x + y) * (ISO_HEIGHT / 2) - z * ISO_HEIGHT;
+
+  const colors = COLORS[color] || COLORS.white; // Fallback to white if color is invalid
+
+  // Calculate distance from center (1.5, 1.5) for glow effect
+  const centerX = 1.5;
+  const centerY = 1.5;
+  const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+  const maxDistance = Math.sqrt(2 * Math.pow(2, 2)); // Max distance in 4x4 grid from center
+  const normalizedDistance = Math.min(distance / maxDistance, 1);
+
+  // Bright in center (0.9), dim at edges (0.15)
+  const opacity = 0.9 - normalizedDistance * 0.75;
+
+  return (
+    <g transform={`translate(${pixelX}, ${pixelY})`}>
+      {/* Top face */}
+      <path
+        d={`M 0,0 L ${ISO_WIDTH / 2},${-ISO_HEIGHT / 2} L ${ISO_WIDTH},0 L ${ISO_WIDTH / 2},${ISO_HEIGHT / 2} Z`}
+        fill={colors.top}
+        stroke={`rgba(255,255,255,${opacity})`}
+        strokeWidth="1"
+      />
+      {/* Left face */}
+      <path
+        d={`M 0,0 L ${ISO_WIDTH / 2},${ISO_HEIGHT / 2} L ${ISO_WIDTH / 2},${ISO_HEIGHT * 1.5} L 0,${ISO_HEIGHT} Z`}
+        fill={colors.left}
+        stroke={`rgba(255,255,255,${opacity})`}
+        strokeWidth="1"
+      />
+      {/* Right face */}
+      <path
+        d={`M ${ISO_WIDTH},0 L ${ISO_WIDTH / 2},${ISO_HEIGHT / 2} L ${ISO_WIDTH / 2},${ISO_HEIGHT * 1.5} L ${ISO_WIDTH},${ISO_HEIGHT} Z`}
+        fill={colors.right}
+        stroke={`rgba(255,255,255,${opacity})`}
+        strokeWidth="1"
+      />
+    </g>
+  );
+}
+
+function IsoCubeTower() {
+  const [cubes, setCubes] = useState<IsoCubeProps[]>([]);
+  const [cameraOffset, setCameraOffset] = useState(ISO_HEIGHT * 2);
+
+  useEffect(() => {
+    const colorOptions: Array<'white' | 'cyan' | 'pink' | 'blue' | 'lime'> = [
+      'white',
+      'white',
+      'white',
+      'white',
+      'white',
+      'white',
+      'white',
+      'white',
+      'white',
+      'cyan',
+    ];
+
+    // Generate random positions for 6 cubes in 4x4 grid
+    const generateRandomPositions = () => {
+      const positions: Array<{ x: number; y: number }> = [];
+
+      for (let x = 0; x < 4; x++) {
+        for (let y = 0; y < 4; y++) {
+          positions.push({ x, y });
+        }
+      }
+
+      // Shuffle and take first 6
+      return positions.sort(() => Math.random() - 0.5).slice(0, 6);
+    };
+
+    // Initialize with 2 layers already stacked
+    let currentLayer = 2;
+    let allCubes: IsoCubeProps[] = [];
+
+    // Create initial 2 layers
+    for (let z = 0; z < 2; z++) {
+      const positions = generateRandomPositions();
+      const layerCubes = positions.map((pos) => ({
+        x: pos.x,
+        y: pos.y,
+        z,
+        color: colorOptions[Math.floor(Math.random() * colorOptions.length)] as
+          | 'white'
+          | 'cyan'
+          | 'pink'
+          | 'blue'
+          | 'lime',
+      }));
+
+      allCubes = [...allCubes, ...layerCubes];
+    }
+
+    setCubes(allCubes);
+
+    // Timing constants
+    const LAYER_INTERVAL = 700; // milliseconds per layer
+
+    // Add new layer every LAYER_INTERVAL ms
+    const interval = setInterval(() => {
+      // Generate new layer positions
+      const currentPositions = generateRandomPositions();
+
+      // Add all cubes for this layer at once
+      const newLayerCubes = currentPositions.map((pos) => ({
+        x: pos.x,
+        y: pos.y,
+        z: currentLayer,
+        color: colorOptions[Math.floor(Math.random() * colorOptions.length)] as
+          | 'white'
+          | 'cyan'
+          | 'pink'
+          | 'blue'
+          | 'lime',
+      }));
+
+      allCubes = [...allCubes, ...newLayerCubes];
+
+      // Remove cubes that are too far below (optimization: keep only ~8 layers)
+      const minVisibleZ = currentLayer - 8;
+
+      allCubes = allCubes.filter((cube) => cube.z >= minVisibleZ);
+
+      setCubes(allCubes);
+
+      // Update camera position - CSS will handle smooth transition
+      setCameraOffset(ISO_HEIGHT * 2 + (currentLayer - 2) * ISO_HEIGHT);
+
+      // Move to next level
+      currentLayer++;
+    }, LAYER_INTERVAL);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
+
+  return (
+    <svg
+      className="absolute"
+      style={{
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '220px',
+        height: '200px',
+        opacity: 0.5,
+      }}
+      viewBox="-70 -50 180 150"
+    >
+      <g
+        style={{
+          transform: `translate(0px, ${cameraOffset}px)`,
+          transition: 'transform 700ms linear',
+        }}
+      >
+        {cubes.map((cube, index) => (
+          <IsoCube key={`${cube.x}-${cube.y}-${cube.z}-${index}`} {...cube} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+function CodeGenLoadingImage() {
+  return (
+    <div className="absolute h-[172px] left-0 top-0 w-[256px] overflow-hidden z-0" data-name="Code Gen Loading Image">
+      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 256 172">
+        <g clipPath="url(#clip0_1_113)" id="Code Gen Loading Image">
+          <path d={svgPaths.p5c7a400} fill="var(--fill-0, #111315)" id="Vector" />
+          <g id="Mask group">
+            <mask
+              height="172"
+              id="mask0_1_113"
+              maskUnits="userSpaceOnUse"
+              style={{ maskType: 'luminance' }}
+              width="256"
+              x="0"
+              y="0"
+            >
+              <g id="Group">
+                <path d={svgPaths.p5c7a400} fill="var(--fill-0, white)" id="Vector_2" />
+              </g>
+            </mask>
+            <g mask="url(#mask0_1_113)">
+              <path d={svgPaths.p26c23e00} fill="var(--fill-0, white)" fillOpacity="0.12" id="Vector_3" />
+            </g>
+          </g>
+
+          {/* Isometric cubes tower */}
+          <foreignObject x="2" y="8" width="252" height="122">
+            <div className="w-full h-full overflow-hidden rounded-[14px] relative">
+              <IsoCubeTower />
+              {/* Top gradient fade */}
+              <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-[#111315] to-transparent pointer-events-none z-10"></div>
+              {/* Bottom gradient fade */}
+              <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-[#111315] to-transparent pointer-events-none z-10"></div>
+            </div>
+          </foreignObject>
+        </g>
+        <defs>
+          <clipPath id="clip0_1_113">
+            <rect fill="white" height="172" width="256" />
+          </clipPath>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+
+function Component() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col h-[172px] items-center min-h-px min-w-px pb-0 px-0 relative z-10">
+      <div
+        className="absolute top-[50px] left-1/2 -translate-x-1/2 shrink-0 size-[48px]"
+        data-name="🟢 https://lottiefiles.com/animations/star-magic-WuyWHy4AEJ"
+        style={{
+          filter:
+            'drop-shadow(0 0 8px rgba(114, 231, 248, 0.6)) drop-shadow(0 0 12px rgba(114, 231, 248, 0.4)) brightness(1.3) contrast(1.2)',
+        }}
+      >
+        <Lottie animationData={starAnimationData} loop={true} />
+      </div>
+      <p
+        className="font-primary font-medium leading-[1.5] text-[16px] whitespace-nowrap text-shimmer absolute bottom-[16px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2"
+        style={{
+          fontVariationSettings: "'wdth' 100",
+        }}
+      >
+        <IoPlay className="size-4 fill-current" />
+        Running Preview
+      </p>
+    </div>
+  );
+}
+
+export const PreviewRunningLoadingIcon = memo(({ size = 256, className = '' }: PreviewRunningLoadingIconProps) => {
+  return (
+    <div
+      className={`content-stretch flex gap-[10px] items-center relative ${className}`}
+      style={{ width: size, height: (size * 172) / 256 }}
+      data-name="Preview Running Loading"
+    >
+      <CodeGenLoadingImage />
+      <Component />
+    </div>
+  );
+});
 
 interface PreviewRunningLoadingIconProps {
   size?: number;
   className?: string;
 }
-
-export const PreviewRunningLoadingIcon = memo(({ size = 256, className = '' }: PreviewRunningLoadingIconProps) => {
-  const aspectRatio = 256 / 172;
-  const calculatedHeight = size / aspectRatio;
-
-  return (
-    <svg
-      width={size}
-      height={calculatedHeight}
-      viewBox="0 0 256 172"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      xmlnsXlink="http://www.w3.org/1999/xlink"
-      className={className}
-    >
-      <mask id="path-1-inside-1_8817_176057" fill="white">
-        <path d="M12 12C12 5.37258 17.3726 0 24 0H244C250.627 0 256 5.37258 256 12V148C256 154.627 250.627 160 244 160H24C17.3726 160 12 154.627 12 148V12Z" />
-      </mask>
-      <path
-        d="M12 12C12 5.37258 17.3726 0 24 0H244C250.627 0 256 5.37258 256 12V148C256 154.627 250.627 160 244 160H24C17.3726 160 12 154.627 12 148V12Z"
-        fill="#111315"
-      />
-      <path
-        d="M24 0V2H244V0V-2H24V0ZM256 12H254V148H256H258V12H256ZM244 160V158H24V160V162H244V160ZM12 148H14V12H12H10V148H12ZM24 160V158C18.4772 158 14 153.523 14 148H12H10C10 155.732 16.268 162 24 162V160ZM256 148H254C254 153.523 249.523 158 244 158V160V162C251.732 162 258 155.732 258 148H256ZM244 0V2C249.523 2 254 6.47715 254 12H256H258C258 4.26801 251.732 -2 244 -2V0ZM24 0V-2C16.268 -2 10 4.26801 10 12H12H14C14 6.47715 18.4772 2 24 2V0Z"
-        fill="white"
-        fillOpacity="0.12"
-        mask="url(#path-1-inside-1_8817_176057)"
-      />
-      <path d="M14.5 36H253.5" stroke="white" strokeOpacity="0.12" strokeWidth="2" />
-      <rect x="110" y="74" width="48" height="48" fill="url(#pattern0_8817_176057)" />
-      <mask id="path-5-inside-2_8817_176057" fill="white">
-        <path d="M0 24C0 17.3726 5.37258 12 12 12H232C238.627 12 244 17.3726 244 24V160C244 166.627 238.627 172 232 172H12C5.37258 172 0 166.627 0 160V24Z" />
-      </mask>
-      <path
-        d="M0 24C0 17.3726 5.37258 12 12 12H232C238.627 12 244 17.3726 244 24V160C244 166.627 238.627 172 232 172H12C5.37258 172 0 166.627 0 160V24Z"
-        fill="#111315"
-      />
-      <path
-        d="M12 12V14H232V12V10H12V12ZM244 24H242V160H244H246V24H244ZM232 172V170H12V172V174H232V172ZM0 160H2V24H0H-2V160H0ZM12 172V170C6.47715 170 2 165.523 2 160H0H-2C-2 167.732 4.26801 174 12 174V172ZM244 160H242C242 165.523 237.523 170 232 170V172V174C239.732 174 246 167.732 246 160H244ZM232 12V14C237.523 14 242 18.4772 242 24H244H246C246 16.268 239.732 10 232 10V12ZM12 12V10C4.26801 10 -2 16.268 -2 24H0H2C2 18.4772 6.47715 14 12 14V12Z"
-        fill="white"
-        fillOpacity="0.12"
-        mask="url(#path-5-inside-2_8817_176057)"
-      />
-      <path d="M2.5 48H241.5" stroke="white" strokeOpacity="0.12" strokeWidth="2" />
-      <path
-        d="M206.5 28C206.5 25.7909 208.291 24 210.5 24H214.5C216.709 24 218.5 25.7909 218.5 28V32C218.5 34.2091 216.709 36 214.5 36H210.5C208.291 36 206.5 34.2091 206.5 32V28Z"
-        fill="white"
-        fillOpacity="0.12"
-      />
-      <path
-        d="M186.5 28C186.5 25.7909 188.291 24 190.5 24H194.5C196.709 24 198.5 25.7909 198.5 28V32C198.5 34.2091 196.709 36 194.5 36H190.5C188.291 36 186.5 34.2091 186.5 32V28Z"
-        fill="white"
-        fillOpacity="0.12"
-      />
-      <path
-        d="M166.5 28C166.5 25.7909 168.291 24 170.5 24H174.5C176.709 24 178.5 25.7909 178.5 28V32C178.5 34.2091 176.709 36 174.5 36H170.5C168.291 36 166.5 34.2091 166.5 32V28Z"
-        fill="white"
-        fillOpacity="0.12"
-      />
-      <defs>
-        <pattern id="pattern0_8817_176057" patternContentUnits="objectBoundingBox" width="1" height="1">
-          <use xlinkHref="#image0_8817_176057" transform="scale(0.00666667)" />
-        </pattern>
-        <image
-          id="image0_8817_176057"
-          width="150"
-          height="150"
-          preserveAspectRatio="none"
-          xlinkHref="data:image/png;base64,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"
-        />
-      </defs>
-    </svg>
-  );
-});
 
 PreviewRunningLoadingIcon.displayName = 'PreviewRunningLoadingIcon';
