@@ -207,9 +207,10 @@ async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: 
 interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  handleStopRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
+export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
   const {
@@ -376,6 +377,7 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
           setComponentError={setComponentError}
+          handleStopRef={handleStopRef}
         />
       )}
       <ToastContainer />
@@ -411,6 +413,7 @@ interface ChatProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
   setComponentError: (error: { message: string; status?: number; context?: string } | null) => void;
+  handleStopRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const ChatImpl = memo(
@@ -430,6 +433,7 @@ export const ChatImpl = memo(
     isAuthenticated,
     onAuthRequired,
     setComponentError,
+    handleStopRef,
   }: ChatProps) => {
     useShortcuts();
 
@@ -955,6 +959,19 @@ export const ChatImpl = memo(
         provider: provider.name,
       });
     };
+
+    // Assign abort function to handleStopRef if provided
+    useEffect(() => {
+      if (handleStopRef) {
+        handleStopRef.current = abort;
+      }
+
+      return () => {
+        if (handleStopRef) {
+          handleStopRef.current = null;
+        }
+      };
+    }, [handleStopRef, abort]);
 
     /**
      * Resets the first chat state when the first prompt is aborted.
