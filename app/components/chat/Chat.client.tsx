@@ -18,15 +18,15 @@ import {
   useWorkbenchActionAlert,
   useWorkbenchStore,
   useWorkbenchContainer,
+  useWorkbenchIsDeploying,
 } from '~/lib/hooks/useWorkbenchStore';
 import {
-  AUTO_SYNTAX_FIX_TAG_NAME,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
+  ERROR_NAMES,
   FIXED_MODELS,
   PROMPT_COOKIE_KEY,
   PROVIDER_LIST,
-  SHELL_COMMANDS,
   WORK_DIR,
 } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
@@ -34,6 +34,7 @@ import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { BaseChat, VIDEO_GUIDE_TABS, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
+import { ServiceOutagePage } from '~/components/ui/ServiceOutagePage';
 import Cookies from 'js-cookie';
 import { debounce } from '~/utils/debounce';
 import { useSettings } from '~/lib/hooks/useSettings';
@@ -72,172 +73,53 @@ import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
+import { logManager } from '~/lib/debug/LogManager';
+import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
 
 const logger = createScopedLogger('Chat');
 
 const MAX_COMMIT_RETRIES = 2;
-const WORKBENCH_CONNECTION_TIMEOUT_MS = 10000;
+const WORKBENCH_CONNECTION_TIMEOUT_MS = 5000;
 const WORKBENCH_INIT_DELAY_MS = 100; // 100ms is an empirically determined value that is sufficient for asynchronous initialization tasks to complete, while minimizing unnecessary delays
 const WORKBENCH_MESSAGE_IDLE_TIMEOUT_MS = 35000;
-const AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS = 60000;
+
+let prevDebugLog: string | null = null;
+let duplicatedDebugCount: number = 1;
+
+function clearDebugLog(): void {
+  logManager.clear();
+  prevDebugLog = null;
+  duplicatedDebugCount = 1;
+}
+
+function addDebugLog(value: string): void {
+  let log = value;
+
+  if (prevDebugLog === value) {
+    duplicatedDebugCount++;
+    log = `x${duplicatedDebugCount}`;
+  } else {
+    prevDebugLog = value;
+    duplicatedDebugCount = 1;
+  }
+
+  logManager.add(log);
+}
 
 function isServerError(data: unknown): data is ServerErrorData {
   return typeof data === 'object' && data !== null && 'type' in data && data.type === 'error' && 'message' in data;
 }
 
-interface SyntaxCheckResult {
-  success: boolean;
-  errorContent: string | null;
+/**
+ * Checks if the error requires showing a full error page (401/404).
+ * @returns true if error page should be shown, false otherwise
+ */
+function shouldShowErrorPage(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return status === 401 || status === 404;
 }
 
-async function runSyntaxCheck(workbench: WorkbenchStore): Promise<SyntaxCheckResult> {
-  const shell = workbench.boltTerminal;
-  await shell.ready;
-
-  // tsc run and save the result to .build_error.log (prevent interruption with noInterrupt flag)
-  const command = `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx tsc -b --noEmit > .build_error.log 2>&1`;
-  await shell.executeCommand(Date.now().toString(), command, undefined, { noInterrupt: true });
-
-  // wait for the command to complete
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  // read the .build_error.log file
-  try {
-    const container = await workbench.container;
-    const errorLog = (await container.fs.readFile('.build_error.log', 'utf-8')) as string;
-
-    // determine if there are errors
-    const hasError =
-      errorLog.trim().length > 0 &&
-      (errorLog.includes('error TS') || errorLog.includes('Error:') || errorLog.includes('failed'));
-
-    return {
-      success: !hasError,
-      errorContent: hasError ? errorLog : null,
-    };
-  } catch {
-    // if the file does not exist, consider it a success
-    return { success: true, errorContent: null };
-  } finally {
-    shell.executeCommand(Date.now().toString(), 'rm -f .build_error.log', undefined, { noInterrupt: true });
-  }
-}
-
-async function fixSyntaxErrors(
-  targetMessage: UIMessage,
-  errorContent: string,
-  files: Record<string, any>,
-  apiKeys: Record<string, string>,
-  promptId: string,
-  contextOptimization: boolean,
-  currentMessages: UIMessage[],
-  parseMessages: (messages: UIMessage[]) => void,
-): Promise<string | null> {
-  const fixMessage = `*TypeScript build errors detected. Please fix the following errors:*
-
-\`\`\`
-${errorContent}
-\`\`\`
-
-Analyze the errors above and resolve them.`;
-
-  try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', parts: [{ type: 'text', text: fixMessage }] }],
-        apiKeys,
-        files,
-        promptId,
-        contextOptimization,
-        isSyntaxFix: true,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      logger.error('Failed to call /api/chat for syntax fix');
-      return null;
-    }
-
-    // handle the stream response
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    // read the entire stream
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-    }
-
-    // extract the delta values from the text-delta events in the SSE stream
-    let fullContent = '';
-    const lines = buffer.split('\n');
-
-    for (const line of lines) {
-      if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-        try {
-          const data = JSON.parse(line.slice(6));
-
-          if (data.type === 'text-delta' && data.delta) {
-            fullContent += data.delta;
-          }
-        } catch {
-          // ignore JSON parsing errors
-        }
-      }
-    }
-
-    /*
-     * parse the syntax fix response using parseMessages
-     * append the syntax fix response to the message content and parse the entire thing again
-     */
-    if (fullContent.trim()) {
-      logger.info('[SyntaxFix] fullContent:', fullContent);
-
-      // combine the original content with the syntax fix response
-      const originalContent = extractTextContent(targetMessage);
-      const updatedContent = originalContent + fullContent;
-
-      // create the updated message
-      const updatedMessage: UIMessage = {
-        ...targetMessage,
-        parts: [{ type: 'text' as const, text: updatedContent }],
-      };
-
-      // create a temporary messages array (update the message or add it to the end)
-      const targetIndex = currentMessages.findIndex((m) => m.id === targetMessage.id);
-      let tempMessages: UIMessage[];
-
-      if (targetIndex !== -1) {
-        // if the message is already in the messages array, update it
-        tempMessages = currentMessages.map((m, i) => (i === targetIndex ? updatedMessage : m));
-      } else {
-        // if the message is not in the messages array, add it to the end
-        tempMessages = [...currentMessages, updatedMessage];
-      }
-
-      // parse the entire thing again using parseMessages (reset and parse, so new artifact/action is registered in workbench)
-      parseMessages(tempMessages);
-      logger.info('[SyntaxFix] Parsed fix response with messageId:', targetMessage.id);
-
-      return fullContent;
-    }
-
-    return null;
-  } catch (error) {
-    logger.error('Failed to fix syntax errors:', error);
-    return null;
-  }
-}
-
-async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string) {
+async function fetchTemplateFromAPI(template: Template, title?: string, projectRepo?: string, signal?: AbortSignal) {
   try {
     const params = new URLSearchParams();
     params.append('templateName', template.name);
@@ -252,10 +134,11 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
       params.append('projectRepo', projectRepo);
     }
 
-    const response = await fetch(`/api/select-template?${params.toString()}`);
+    const response = await fetch(`/api/select-template?${params.toString()}`, { signal });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch template: ${response.status}`);
+      const serverMessage = await response.text();
+      throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status, 'import_starter_template');
     }
 
     const result = (await response.json()) as {
@@ -266,7 +149,12 @@ async function fetchTemplateFromAPI(template: Template, title?: string, projectR
 
     return result;
   } catch (error) {
-    logger.error('Error fetching template from API:', error);
+    if (isAbortError(error)) {
+      logger.info('Template fetch aborted by user');
+    } else {
+      logger.error('Error fetching template from API:', error);
+    }
+
     throw error;
   }
 }
@@ -323,18 +211,36 @@ async function waitForWorkbenchConnection(workbench: WorkbenchStore, timeoutMs: 
 interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  handleStopRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {}) {
+export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
-  const { loaded, loading, chats, files, project, revertTo, hasMore, loadBefore, loadingBefore, error } =
-    useGitbaseChatHistory();
+  const {
+    loaded,
+    loading,
+    chats,
+    files,
+    project,
+    revertTo,
+    hasMore,
+    loadBefore,
+    loadingBefore,
+    error: gitbaseError,
+  } = useGitbaseChatHistory();
+
+  const [componentError, setComponentError] = useState<{
+    message: string;
+    status?: number;
+    context?: string;
+  } | null>(null);
 
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [ready, setReady] = useState(false);
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
+  const actionAlert = useWorkbenchActionAlert();
   const version = useVersionFeature();
 
   useEffect(() => {
@@ -422,16 +328,46 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
     }
   }, [loaded, files, project, workbench]);
 
-  const errorStatus = error && typeof error === 'object' ? (error as any).status : null;
+  const error = componentError || gitbaseError;
+  const errorStatus = getErrorStatus(error);
 
   // Check for 404 error (project not found or access denied)
   if (errorStatus === 404) {
     return <NotFoundPage />;
   }
 
+  const isMachineAPIError = actionAlert?.description?.includes('Machine API');
+
+  // Check for Machine API 401 error (unauthorized) from container initialization
+  const isMachineAPI401Error = isMachineAPIError && actionAlert?.status === 401;
+
   // Check for 401 error (unauthorized)
-  if (errorStatus === 401) {
+  if (errorStatus === 401 || isMachineAPI401Error) {
     return <UnauthorizedPage />;
+  }
+
+  // Check for Machine API 503 error (service unavailable) from container initialization
+  const isMachineAPI503Error = (() => {
+    if (!isMachineAPIError) {
+      return false;
+    }
+
+    if (actionAlert) {
+      if (actionAlert.status === 503) {
+        return true;
+      }
+
+      const parts = actionAlert.description.split(':');
+      const lastPart = parts[parts.length - 1]?.trim();
+
+      return lastPart === '503';
+    }
+
+    return false;
+  })();
+
+  if (isMachineAPI503Error) {
+    return <ServiceOutagePage />;
   }
 
   return (
@@ -448,6 +384,8 @@ export function Chat({ isAuthenticated, onAuthRequired }: ChatComponentProps = {
           loadingBefore={loadingBefore}
           isAuthenticated={isAuthenticated}
           onAuthRequired={onAuthRequired}
+          setComponentError={setComponentError}
+          handleStopRef={handleStopRef}
           version={version}
         />
       )}
@@ -480,6 +418,8 @@ interface ChatProps {
   loadingBefore: boolean;
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
+  setComponentError: (error: { message: string; status?: number; context?: string } | null) => void;
+  handleStopRef?: React.MutableRefObject<(() => void) | null>;
   version: ReturnType<typeof useVersionFeature>;
 }
 
@@ -495,6 +435,8 @@ export const ChatImpl = memo(
     loadingBefore,
     isAuthenticated,
     onAuthRequired,
+    setComponentError,
+    handleStopRef,
     version,
   }: ChatProps) => {
     useShortcuts();
@@ -506,18 +448,44 @@ export const ChatImpl = memo(
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
     const isPageUnloadingRef = useRef<boolean>(false);
+    const sendMessageAbortControllerRef = useRef<AbortController | null>(null);
 
-    // Helper function to report errors with automatic prompt and elapsed time injection
-    const reportError = (
+    /*
+     * Processes errors and routes them appropriately.
+     * For errors requiring full error page (401 Unauthorized, 404 Not Found),
+     * redirects to UnauthorizedPage or NotFoundPage.
+     * For other errors, reports via Toast and Slack.
+     */
+    const processError = (
       message: string,
       startTime: number,
       options?: Partial<Omit<HandleChatErrorOptions, 'elapsedTime'>>,
     ) => {
+      if (shouldShowErrorPage(options?.error)) {
+        const status = getErrorStatus(options?.error) || 400;
+
+        logger.warn(`Error requires full page redirect (${status}) - showing error page`);
+
+        setComponentError({
+          message: options?.error instanceof Error ? options.error.message : message,
+          status,
+          context: options?.context || 'unknown',
+        });
+
+        return;
+      }
+
+      const processlog = logManager.logs.join(',');
+
+      // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
         elapsedTime: getElapsedTime(startTime),
+        process: options?.process ?? processlog,
       });
+
+      return;
     };
 
     const runAndPreview = async (message: UIMessage) => {
@@ -593,22 +561,15 @@ export const ChatImpl = memo(
     const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
 
-    const setSyntaxProgress = useCallback((status: 'in-progress' | 'complete', message: string) => {
-      setCustomProgressAnnotations([
-        {
-          type: 'progress',
-          label: 'syntax',
-          status,
-          order: Number.MAX_SAFE_INTEGER,
-          message,
-        },
-      ]);
-    }, []);
-
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
-    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
+    const isDeploying = useWorkbenchIsDeploying();
+    const isDeployingRef = useRef(isDeploying);
+    useEffect(() => {
+      isDeployingRef.current = isDeploying;
+    }, [isDeploying]);
 
+    const { activeProviders, promptId, contextOptimizationEnabled } = useSettings();
     const [model, setModel] = useState(() => {
       const savedModel = Cookies.get('SelectedModel');
       return savedModel || DEFAULT_MODEL;
@@ -646,11 +607,23 @@ export const ChatImpl = memo(
     });
     const [chatData, setChatData] = useState<any[]>([]);
 
+    const clearProgressState = () => {
+      setCustomProgressAnnotations([]);
+      setChatData((prev) =>
+        prev.filter((x) => !(typeof x === 'object' && x !== null && (x as any).type === 'progress')),
+      );
+    };
+
     const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
+    const chatStateRef = useRef({ model, provider });
 
     useEffect(() => {
       bodyRef.current = { apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled };
     }, [apiKeys, files, promptId, contextOptimizationEnabled]);
+
+    useEffect(() => {
+      chatStateRef.current = { model, provider };
+    }, [model, provider]);
 
     const {
       messages,
@@ -664,6 +637,19 @@ export const ChatImpl = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
         body: () => bodyRef.current,
+
+        // Custom fetch to preserve HTTP status codes in errors
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const response = await fetch(input, init);
+
+          // If response is not ok, throw error with status code
+          if (!response.ok) {
+            const serverMessage = await response.text();
+            throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status);
+          }
+
+          return response;
+        },
       }),
       onData: (data) => {
         // Ignore empty data
@@ -674,13 +660,22 @@ export const ChatImpl = memo(
         // Extract the inner 'data' property if it exists
         const extractedData = data.data || data;
 
+        // Handle data-log (server-side logs)
+        if (data.type === 'data-log') {
+          if (extractedData && typeof extractedData === 'object' && 'message' in extractedData) {
+            addDebugLog(`data:${(extractedData as { message: string }).message}`);
+          }
+
+          return;
+        }
+
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
-          handleChatError(extractedData.message, {
+          processError(extractedData.reason, chatRequestStartTimeRef.current ?? 0, {
             error: extractedData.message,
-            context: `useChat onData callback, reason: ${extractedData.reason}, model: ${model}, provider: ${provider.name}`,
+            context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
-            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
+            metadata: extractedData.metadata,
           });
 
           return;
@@ -701,6 +696,9 @@ export const ChatImpl = memo(
           return;
         }
 
+        clearProgressState();
+        setFakeLoading(false);
+
         logger.error('Request failed\n\n', e, error);
         logStore.logError('Chat request failed', e, {
           component: 'Chat',
@@ -708,20 +706,33 @@ export const ChatImpl = memo(
           error: e.message,
         });
 
-        const reportProvider = model === 'auto' ? 'auto' : provider.name;
-        handleChatError(
+        const currentModel = chatStateRef.current.model;
+        const currentProvider = chatStateRef.current.provider;
+        const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
+
+        processError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+          chatRequestStartTimeRef.current ?? 0,
           {
             error: e,
-            context: 'useChat onError callback, model: ' + model + ', provider: ' + reportProvider,
+            context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
             prompt: lastUserPromptRef.current,
-            elapsedTime: getElapsedTime(chatRequestStartTimeRef.current),
           },
         );
-        setFakeLoading(false);
+
+        if (shouldShowErrorPage(e)) {
+          return;
+        }
       },
 
       onFinish: async ({ message }) => {
+        if (isDeployingRef.current) {
+          addDebugLog('onFinish: isDeploying, skipping');
+          return;
+        }
+
+        addDebugLog('onFinish');
+
         const usage =
           message.metadata &&
           typeof message.metadata === 'object' &&
@@ -741,61 +752,18 @@ export const ChatImpl = memo(
         });
 
         workbench.onMessageClose(message.id, async () => {
-          setSyntaxProgress('in-progress', 'Checking syntax');
-
-          // 1. run the syntax check
-          const syntaxResult = await runSyntaxCheck(workbench);
-
-          // final message (fix content may be added)
-          let finalMessage = message;
-
-          if (!syntaxResult.success && syntaxResult.errorContent) {
-            // start displaying the progress
-            setSyntaxProgress('in-progress', 'Analyzing errors');
-
-            // 2. try to fix the errors (1 time)
-            logger.info('[SyntaxFix] Attempting to fix TypeScript errors...');
-
-            const fixContent = await fixSyntaxErrors(
-              message,
-              syntaxResult.errorContent,
-              bodyRef.current.files,
-              bodyRef.current.apiKeys,
-              bodyRef.current.promptId,
-              bodyRef.current.contextOptimization,
-              messages,
-              parseMessages,
-            );
-
-            if (fixContent) {
-              // fix successful - wait for the new actions to complete
-              logger.info('[SyntaxFix] Fix actions registered, waiting for completion...');
-              await workbench.waitForMessageIdle(message.id, { timeoutMs: AUTO_SYNTAX_FIX_IDLE_TIMEOUT_MS });
-              logger.info('[SyntaxFix] Fix actions completed');
-
-              // add the fix content to the message wrapped in <autoSyntaxFix> tag
-              const originalContent = extractTextContent(message);
-              const updatedContent =
-                originalContent + `\n\n<${AUTO_SYNTAX_FIX_TAG_NAME}>\n${fixContent}\n</${AUTO_SYNTAX_FIX_TAG_NAME}>`;
-
-              // keep the non-text parts (data-prompt, etc.) from the original parts and update only the text
-              const nonTextParts = message.parts?.filter((part: any) => part.type !== 'text') || [];
-
-              finalMessage = {
-                ...message,
-                parts: [...nonTextParts, { type: 'text' as const, text: updatedContent }],
-              };
-            }
-          }
-
-          setCustomProgressAnnotations([]);
-          setFakeLoading(false);
-
-          // proceed with the original process (success/failure doesn't matter)
-          await runAndPreview(finalMessage);
+          addDebugLog('onMessageClose');
+          addDebugLog('Start:runAndPreview');
+          await runAndPreview(message);
+          addDebugLog('Complete:runAndPreview');
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          await handleCommit(finalMessage);
+          addDebugLog('Start:handleCommit');
+          await handleCommit(message);
+          addDebugLog('Complete:handleCommit');
         });
+
+        clearProgressState();
+        setFakeLoading(false);
 
         logger.debug('Finished streaming');
       },
@@ -845,10 +813,13 @@ export const ChatImpl = memo(
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
 
-    // Detect page reload/unload
+    // Detect page reload/unload and abort in-progress operations
     useEffect(() => {
       const handleBeforeUnload = () => {
         isPageUnloadingRef.current = true;
+
+        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
+        abortAllOperations();
       };
 
       window.addEventListener('beforeunload', handleBeforeUnload);
@@ -857,6 +828,46 @@ export const ChatImpl = memo(
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };
     }, []);
+
+    // Refs to hold latest function references for cleanup
+    const stopRef = useRef(stop);
+    const workbenchRef = useRef(workbench);
+
+    useEffect(() => {
+      stopRef.current = stop;
+      workbenchRef.current = workbench;
+    }, [stop, workbench]);
+
+    /**
+     * Aborts all in-progress operations (first chat preparation, streaming, workbench actions).
+     * Used by both user-initiated abort and component unmount cleanup.
+     */
+    const abortAllOperations = () => {
+      if (sendMessageAbortControllerRef.current) {
+        sendMessageAbortControllerRef.current.abort();
+        sendMessageAbortControllerRef.current = null;
+      }
+
+      stopRef.current();
+      workbenchRef.current.abortAllActions();
+    };
+
+    /*
+     * Cleanup on unmount - abort all in-progress operations
+     * useEffect(() => {
+     *   return () => {
+     *     abortAllOperations();
+     *   };
+     * }, []);
+     */
+
+    // Stop chat when deploy starts
+    useEffect(() => {
+      if (isDeploying && (isLoading || fakeLoading)) {
+        logger.info('Stop chat when deploy starts');
+        abort();
+      }
+    }, [isDeploying, fakeLoading]);
 
     useEffect(() => {
       if (!isLoading) {
@@ -915,12 +926,20 @@ export const ChatImpl = memo(
 
     useEffect(() => {
       if (Object.keys(files).length > 0 && !installNpm) {
+        const startTime = performance.now();
         setInstallNpm(true);
 
         const boltShell = workbench.boltTerminal;
-        boltShell.ready.then(async () => {
-          await workbench.setupDeployConfig(boltShell);
-        });
+        boltShell.ready
+          .then(async () => {
+            await workbench.setupDeployConfig(boltShell);
+          })
+          .catch((error) => {
+            processError(error instanceof Error ? error.message : 'Failed to setup deploy config', startTime, {
+              error: error instanceof Error ? error : String(error),
+              context: 'setupDeployConfig - useEffect',
+            });
+          });
       }
     }, [files, installNpm]);
 
@@ -969,10 +988,12 @@ export const ChatImpl = memo(
       }
 
       if (!commitSucceeded) {
-        reportError(`Code commit failed`, startTime, {
+        processError(`Code commit failed`, startTime, {
           error: lastError instanceof Error ? lastError : String(lastError),
           context: 'handleCommit',
         });
+
+        return;
       }
     };
 
@@ -985,11 +1006,11 @@ export const ChatImpl = memo(
     };
 
     const abort = () => {
-      stop();
+      abortAllOperations();
+
       setFakeLoading(false);
       setChatData([]);
       chatStore.setKey('aborted', true);
-      workbench.abortAllActions();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -997,6 +1018,509 @@ export const ChatImpl = memo(
         model,
         provider: provider.name,
       });
+    };
+
+    // Assign abort function to handleStopRef if provided
+    useEffect(() => {
+      if (handleStopRef) {
+        handleStopRef.current = abort;
+      }
+
+      return () => {
+        if (handleStopRef) {
+          handleStopRef.current = null;
+        }
+      };
+    }, [handleStopRef, abort]);
+
+    /**
+     * Resets the first chat state when the first prompt is aborted.
+     * Clears files, workbench, chat store, and repo store.
+     */
+    const resetFirstChatState = () => {
+      setChatStarted(false);
+      workbenchRef.current.resetFiles();
+      workbenchRef.current.showWorkbench.set(false);
+      chatStore.setKey('started', false);
+      repoStore.set({
+        name: '',
+        path: '',
+        title: '',
+        latestCommitHash: '',
+        createdAt: '',
+      });
+    };
+
+    /**
+     * Initializes the first chat session with template selection and project setup.
+     * This function can be aborted via AbortSignal.
+     */
+    const prepareFirstChat = async (
+      messageContent: string,
+      currentAttachmentList: ChatAttachment[],
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('First chat initialization aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
+
+      if (!accessToken) {
+        throw new Error('Access token is missing');
+      }
+
+      let userIsActivated = false;
+      let userWalletAddress = null;
+      let starterTemplateResp: any;
+
+      try {
+        // Set progress annotation for analyzing request
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'in-progress',
+            order: 1,
+            message: 'Analyzing your request...',
+          },
+        ]);
+
+        checkAborted();
+        addDebugLog('Start:verifyV8AccessToken');
+
+        const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken, signal);
+        userIsActivated = user.isActivated;
+        userWalletAddress = user.walletAddress;
+
+        addDebugLog('Complete:verifyV8AccessToken');
+        checkAborted();
+
+        addDebugLog('Start:selectStarterTemplate');
+        starterTemplateResp = await selectStarterTemplate({
+          message: messageContent,
+          signal,
+        });
+
+        addDebugLog('Complete:selectStarterTemplate');
+        checkAborted();
+
+        if (!starterTemplateResp || !starterTemplateResp.template) {
+          throw new Error('Failed select starter template');
+        }
+      } finally {
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'analyze',
+            status: 'complete',
+            order: 1,
+            message: 'Request analyzed',
+          },
+        ]);
+      }
+
+      try {
+        // Update progress annotation for selecting template
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'in-progress',
+            order: 2,
+            message: 'Setting up base project...',
+          },
+        ]);
+
+        checkAborted();
+        addDebugLog('Start:fetchTemplateFromAPI');
+
+        const temResp = await fetchTemplateFromAPI(
+          starterTemplateResp.template!,
+          starterTemplateResp.title,
+          starterTemplateResp.projectRepo,
+          signal,
+        ).catch((e) => {
+          checkAborted();
+
+          if (shouldShowErrorPage(e)) {
+            throw e;
+          }
+
+          if (e.message.includes('rate limit')) {
+            toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
+          } else {
+            toast.warning('Failed to import starter template\nRetry again after a few minutes.');
+            logger.error('Failed to fetch template from API:', e);
+          }
+        });
+
+        addDebugLog('Complete:fetchTemplateFromAPI');
+        checkAborted();
+
+        const projectPath = temResp?.project?.path;
+        const projectName = temResp?.project?.name;
+        const templateCommitId = temResp?.commit?.id;
+        workbench.showWorkbench.set(true);
+
+        if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
+          addDebugLog('Not Found Template Data');
+          throw new Error('Not Found Template Data');
+        }
+
+        if (userIsActivated && userWalletAddress) {
+          try {
+            temResp.fileMap['.env'] = {
+              type: 'file',
+              content: getEnvContent(userWalletAddress),
+              isBinary: false,
+            };
+          } catch (error) {
+            logger.warn('Failed to generate .env for first message:', error);
+          }
+        }
+
+        checkAborted();
+
+        const processedFileMap = Object.entries(temResp.fileMap).reduce(
+          (acc, [key, value]) => {
+            acc[WORK_DIR + '/' + key] = value;
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
+        workbench.files.set(processedFileMap);
+
+        checkAborted();
+
+        await mountWithRecovery(processedFileMap, accessToken, signal);
+
+        checkAborted();
+
+        if (isEnabledGitbasePersistence) {
+          if (!projectPath || !projectName || !templateCommitId) {
+            throw new Error('Cannot create project');
+          }
+
+          repoStore.set({
+            name: projectName,
+            path: projectPath,
+            title: starterTemplateResp.title,
+            latestCommitHash: '',
+            createdAt: '',
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(projectPath);
+
+          changeChatUrl(projectPath, { replace: true });
+        } else {
+          repoStore.set({
+            name: starterTemplateResp.projectRepo,
+            path: starterTemplateResp.projectRepo,
+            title: starterTemplateResp.title,
+            latestCommitHash: '',
+            createdAt: '',
+          });
+
+          // Record prompt activity for first request
+          sendActivityPrompt(starterTemplateResp.projectRepo);
+
+          changeChatUrl(starterTemplateResp.projectRepo, { replace: true });
+        }
+
+        const firstChatModel =
+          model === 'auto'
+            ? starterTemplateResp.template.name.includes('3d')
+              ? FIXED_MODELS.FIRST_3D_CHAT
+              : FIXED_MODELS.FIRST_2D_CHAT
+            : {
+                model,
+                provider,
+              };
+
+        const starterPrompt = starterTemplateResp.template.name.includes('3d')
+          ? get3DStarterPrompt()
+          : get2DStarterPrompt();
+
+        // Clear progress annotations after a short delay
+        setTimeout(() => {
+          setCustomProgressAnnotations([]);
+        }, 1000);
+        checkAborted();
+
+        setMessages([
+          {
+            id: `1-${new Date().getTime()}`,
+            role: 'user',
+            parts: [
+              {
+                type: 'text',
+                text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
+                  currentAttachmentList,
+                )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
+              },
+            ],
+          },
+        ]);
+        checkAborted();
+      } finally {
+        // Complete template selection
+        setCustomProgressAnnotations([
+          {
+            type: 'progress',
+            label: 'template',
+            status: 'complete',
+            order: 2,
+            message: 'Template selected',
+          },
+        ]);
+      }
+
+      regenerate();
+
+      setInput('');
+      Cookies.remove(PROMPT_COOKIE_KEY);
+
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
+
+      setAttachmentList([]);
+      resetEnhancer();
+
+      textareaRef.current?.blur();
+    };
+
+    /**
+     * Mounts files to the container with automatic recovery on failure.
+     * Attempts to recover the workbench connection if mount fails.
+     */
+    const mountWithRecovery = async (
+      fileMap: Record<string, any>,
+      accessToken: string,
+      signal: AbortSignal,
+    ): Promise<void> => {
+      try {
+        const checkAborted = () => {
+          if (signal.aborted) {
+            throw new DOMException('Mount operation aborted', ERROR_NAMES.ABORT);
+          }
+        };
+
+        const MAX_MOUNT_ATTEMPTS = 2;
+
+        for (let attempt = 1; attempt <= MAX_MOUNT_ATTEMPTS; attempt++) {
+          try {
+            checkAborted();
+
+            const containerInstance = await workbench.container;
+            await containerInstance.mount(convertFileMapToFileSystemTree(fileMap));
+
+            logger.info('✅ Files mounted successfully');
+
+            return; // success
+          } catch (error) {
+            if (isAbortError(error)) {
+              throw error;
+            }
+
+            logger.warn(`Workbench mount failed (attempt ${attempt}/${MAX_MOUNT_ATTEMPTS})`, error);
+
+            if (attempt >= MAX_MOUNT_ATTEMPTS) {
+              throw new Error(`Workbench recovery failed`);
+            }
+
+            addDebugLog(`mount recovery`);
+
+            checkAborted();
+
+            // not last attempt, try to recover
+            const recovered = await recoverWorkbench(accessToken, signal);
+
+            checkAborted();
+
+            if (!recovered) {
+              logger.warn('Workbench recovery failed, try to next attempt');
+            } else {
+              logger.info('Workbench recovered successfully, retrying mount...');
+            }
+          }
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+
+        throw new Error(`Failed to mount files: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    /**
+     * Recovers the workbench when the container connection is lost.
+     * Returns true if recovery successful, false otherwise.
+     */
+    const recoverWorkbench = async (accessToken: string, signal: AbortSignal): Promise<boolean> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Workbench recovery aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const workbenchConnectionState = workbench.connectionState.get();
+
+      if (workbenchConnectionState === 'connected') {
+        return true;
+      }
+
+      checkAborted();
+
+      try {
+        logger.info('🔌 Container connection lost, waiting for auto-reconnect...');
+        await waitForWorkbenchConnection(workbench, WORKBENCH_CONNECTION_TIMEOUT_MS);
+        checkAborted();
+        logger.info('✅ Container connection restored');
+
+        return true;
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+      }
+
+      checkAborted();
+
+      const REINIT_ATTEMPTS = 2;
+
+      for (let i = 0; i < REINIT_ATTEMPTS; i++) {
+        try {
+          checkAborted();
+          logger.info(`Attempting container reinitialization (${i + 1}/${REINIT_ATTEMPTS})...`);
+          await workbench.reinitializeContainer(accessToken);
+          checkAborted();
+
+          return true;
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+
+          logger.warn(`Container reinitialization failed (attempt ${i + 1}/${REINIT_ATTEMPTS})`);
+        }
+      }
+
+      return false;
+    };
+
+    /**
+     * Recovers files when chatStarted is true but files are empty.
+     * This is a defensive measure for edge cases like page refresh or container restart.
+     * Returns true if recovery successful, false otherwise.
+     */
+    const recoverFiles = async (signal: AbortSignal): Promise<boolean> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('File recovery aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const containerInstance = await workbench.container;
+      checkAborted();
+
+      const fileRecoveryStrategies = [
+        {
+          name: 'Workbench',
+          getFiles: () => workbench.files.get(),
+        },
+        {
+          name: 'Gitbase',
+          getFiles: async () => {
+            const projectPath = repoStore.get().path;
+
+            if (projectPath) {
+              return await fetchProjectFiles(projectPath);
+            }
+
+            return {};
+          },
+        },
+      ];
+
+      for (const strategy of fileRecoveryStrategies) {
+        try {
+          checkAborted();
+
+          const files = await strategy.getFiles();
+          checkAborted();
+
+          if (Object.keys(files).length > 0) {
+            checkAborted();
+            await containerInstance.mount(convertFileMapToFileSystemTree(files));
+            checkAborted();
+
+            return true;
+          }
+        } catch (error) {
+          if (isAbortError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      return false;
+    };
+
+    /**
+     * Generates descriptions for image attachments using AI.
+     * Updates the attachment objects with features and details.
+     */
+    const generateImageDescriptions = async (
+      messageContent: string,
+      imageAttachments: ChatAttachment[],
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Image description generation aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const urls = imageAttachments.map((item) => item.url);
+      checkAborted();
+
+      const descriptionResponse = await fetch('/api/image-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageContent,
+          imageUrls: urls,
+        }),
+        signal,
+      });
+      checkAborted();
+
+      if (!descriptionResponse.ok) {
+        const serverMessage = await descriptionResponse.text();
+        checkAborted();
+
+        throw new FetchError(
+          (serverMessage ?? 'unknown error').trim(),
+          descriptionResponse.status,
+          'generate_image_description',
+        );
+      }
+
+      const descriptions = await descriptionResponse.json();
+      checkAborted();
+
+      if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
+        for (let i = 0; i < imageAttachments.length; i++) {
+          imageAttachments[i].features = descriptions[i].features;
+          imageAttachments[i].details = descriptions[i].details;
+        }
+      }
     };
 
     useEffect(() => {
@@ -1025,9 +1549,6 @@ export const ChatImpl = memo(
       chatStore.setKey('started', true);
 
       setChatStarted(true);
-
-      // Send START_EDITING event to parent when chat starts
-      sendEventToParent('EVENT', { name: 'START_EDITING' });
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
@@ -1037,6 +1558,10 @@ export const ChatImpl = memo(
       } catch (error) {
         console.warn('Failed to enable Wake Lock on send:', error);
       }
+
+      // Clear logs from previous request
+      clearDebugLog();
+      addDebugLog('sendMessage');
 
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
@@ -1063,47 +1588,29 @@ export const ChatImpl = memo(
       lastUserPromptRef.current = messageContent;
 
       if (chatStarted && Object.keys(files).length === 0) {
+        sendMessageAbortControllerRef.current = new AbortController();
+
         const fileRecoveryStartTime = performance.now();
-        let recoverySuccessful = false;
-        const containerInstance = await workbench.container;
 
-        const fileRecoveryStrategies = [
-          {
-            name: 'Workbench',
-            getFiles: () => workbench.files.get(),
-            logSuccess: () => console.log('files recovery from workbench successful'),
-          },
-          {
-            name: 'Gitbase',
-            getFiles: async () => {
-              const projectPath = repoStore.get().path;
-              return projectPath ? await fetchProjectFiles(projectPath) : {};
-            },
-            logSuccess: () => console.log('files recovery from gitbase successful'),
-          },
-        ];
+        try {
+          const recovered = await recoverFiles(sendMessageAbortControllerRef.current.signal);
 
-        for (const strategy of fileRecoveryStrategies) {
-          try {
-            const files = await strategy.getFiles();
+          if (!recovered) {
+            processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+              context: 'sendMessage - files check',
+            });
 
-            if (Object.keys(files).length > 0) {
-              await containerInstance.mount(convertFileMapToFileSystemTree(files));
-              strategy.logSuccess();
-              recoverySuccessful = true;
-              break;
-            }
-          } catch (error) {
-            console.error(`${strategy.name} recovery failed:`, error);
+            return;
           }
-        }
+        } catch (error) {
+          if (isAbortError(error)) {
+            logger.info('File recovery aborted by user');
+            return;
+          }
 
-        if (!recoverySuccessful) {
-          reportError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
-            context: 'sendMessage - files check',
-          });
-
-          return;
+          throw error;
+        } finally {
+          sendMessageAbortControllerRef.current = null;
         }
       }
 
@@ -1114,272 +1621,69 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
+      workbench.currentView.set('code');
 
-      if (attachmentList.length > 0) {
+      const wasFirstChat = !chatStarted;
+      const startTime = performance.now();
+      const abortController = new AbortController();
+      const signal = abortController.signal;
+      sendMessageAbortControllerRef.current = abortController;
+
+      try {
+        const checkAborted = () => {
+          if (signal.aborted) {
+            throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
+          }
+        };
+
+        // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
           ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(item.ext),
         );
 
         if (imageAttachments.length > 0) {
-          setFakeLoading(true);
-
-          const urls = imageAttachments.map((item) => item.url);
-
           try {
-            const descriptionResponse = await fetch('/api/image-description', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                message: messageContent,
-                imageUrls: urls,
-              }),
-            });
-
-            if (descriptionResponse.ok) {
-              const descriptions = await descriptionResponse.json();
-
-              if (Array.isArray(descriptions) && imageAttachments.length === descriptions.length) {
-                for (let i = 0; i < imageAttachments.length; i++) {
-                  imageAttachments[i].features = descriptions[i].features;
-                  imageAttachments[i].details = descriptions[i].details;
-                }
-              }
-            }
+            addDebugLog('Start:generateImageDescriptions');
+            await generateImageDescriptions(messageContent, imageAttachments, signal);
+            addDebugLog('Complete:generateImageDescriptions');
           } catch (descError) {
-            logger.error('Error generating image description:', descError);
+            addDebugLog('Fail:generateImageDescriptions');
+
+            // AbortError should propagate to outer catch
+            if (isAbortError(descError)) {
+              throw descError;
+            }
+
+            // shouldShowErrorPage errors should propagate to outer catch (will be handled there)
+            if (shouldShowErrorPage(descError)) {
+              throw descError;
+            }
+
+            // Non-critical errors only: log and continue with default
+            processError(
+              descError instanceof Error ? descError.message : 'Image description failed',
+              chatRequestStartTimeRef.current ?? 0,
+              {
+                error: descError instanceof Error ? descError : String(descError),
+                context: 'image-description API',
+                skipToast: true,
+              },
+            );
             toast.warning('Could not generate image description, using default');
           }
         }
-      }
 
-      if (!chatStarted) {
-        const templateSelectionStartTime = performance.now();
-
-        try {
-          // Set progress annotation for analyzing request
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'in-progress',
-              order: 1,
-              message: 'Analyzing your request...',
-            },
-          ]);
-
-          const { template, title, projectRepo } = await selectStarterTemplate({
-            message: messageContent,
-          });
-
-          if (!template) {
-            throw new Error('Not Found Template');
-          }
-
-          // Update progress annotation for selecting template
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'complete',
-              order: 1,
-              message: 'Request analyzed',
-            },
-            {
-              type: 'progress',
-              label: 'template',
-              status: 'in-progress',
-              order: 2,
-              message: 'Setting up base project...',
-            },
-          ]);
-
-          const temResp = await fetchTemplateFromAPI(template!, title, projectRepo).catch((e) => {
-            if (e.message.includes('rate limit')) {
-              toast.warning('Rate limit exceeded. Skipping starter template\nRetry again after a few minutes.');
-            } else {
-              toast.warning('Failed to import starter template\nRetry again after a few minutes.');
-            }
-          });
-
-          const projectPath = temResp?.project?.path;
-          const projectName = temResp?.project?.name;
-          const templateCommitId = temResp?.commit?.id;
-          workbench.showWorkbench.set(true);
-
-          if (!temResp?.fileMap || Object.keys(temResp.fileMap).length === 0) {
-            throw new Error('Not Found Template Data');
-          }
-
-          // Inject .env into fileMap so Agent can read it in the first response
-          const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
-
-          if (accessToken) {
-            try {
-              const user = await verifyV8AccessToken(import.meta.env.VITE_V8_API_ENDPOINT, accessToken);
-
-              if (user.isActivated && user.walletAddress) {
-                temResp.fileMap['.env'] = {
-                  type: 'file',
-                  content: getEnvContent(user.walletAddress),
-                  isBinary: false,
-                };
-              }
-            } catch (error) {
-              logger.warn('Failed to generate .env for first message:', error);
-            }
-          }
-
-          const processedFileMap = Object.entries(temResp.fileMap).reduce(
-            (acc, [key, value]) => {
-              acc[WORK_DIR + '/' + key] = value;
-              return acc;
-            },
-            {} as Record<string, any>,
-          );
-          workbench.files.set(processedFileMap);
-
-          const containerInstance = await workbench.container;
-          await containerInstance.mount(convertFileMapToFileSystemTree(processedFileMap));
-
-          if (isEnabledGitbasePersistence) {
-            if (!projectPath || !projectName || !templateCommitId) {
-              throw new Error('Cannot create project');
-            }
-
-            repoStore.set({
-              name: projectName,
-              path: projectPath,
-              title,
-              latestCommitHash: '',
-              createdAt: '',
-            });
-
-            // Record prompt activity for first request
-            sendActivityPrompt(projectPath).catch((error) => {
-              logger.warn('Failed to record prompt activity:', error);
-            });
-
-            changeChatUrl(projectPath, { replace: true });
-          } else {
-            repoStore.set({
-              name: projectRepo,
-              path: projectRepo,
-              title,
-              latestCommitHash: '',
-              createdAt: '',
-            });
-
-            // Record prompt activity for first request
-            sendActivityPrompt(projectRepo).catch((error) => {
-              logger.warn('Failed to record prompt activity:', error);
-            });
-
-            changeChatUrl(projectRepo, { replace: true });
-          }
-
-          const firstChatModel =
-            model === 'auto'
-              ? template.name.includes('3d')
-                ? FIXED_MODELS.FIRST_3D_CHAT
-                : FIXED_MODELS.FIRST_2D_CHAT
-              : {
-                  model,
-                  provider,
-                };
-
-          const starterPrompt = template.name.includes('3d') ? get3DStarterPrompt() : get2DStarterPrompt();
-
-          // Complete template selection
-          setCustomProgressAnnotations([
-            {
-              type: 'progress',
-              label: 'analyze',
-              status: 'complete',
-              order: 1,
-              message: 'Request analyzed',
-            },
-            {
-              type: 'progress',
-              label: 'template',
-              status: 'complete',
-              order: 2,
-              message: 'Template selected',
-            },
-          ]);
-
-          // Clear progress annotations after a short delay
-          setTimeout(() => {
-            setCustomProgressAnnotations([]);
-          }, 1000);
-
-          setMessages([
-            {
-              id: `1-${new Date().getTime()}`,
-              role: 'user',
-              parts: [
-                {
-                  type: 'text',
-                  text: `[Model: ${firstChatModel.model}]\n\n[Provider: ${firstChatModel.provider.name}]\n\n[Attachments: ${JSON.stringify(
-                    attachmentList,
-                  )}]\n\n${messageContent}\n<think>${starterPrompt}</think>`,
-                },
-              ],
-            },
-          ]);
-          regenerate();
-
-          setInput('');
-          Cookies.remove(PROMPT_COOKIE_KEY);
-
-          sendEventToParent('EVENT', { name: 'START_EDITING' });
-
-          setAttachmentList([]);
-
-          resetEnhancer();
-
-          textareaRef.current?.blur();
-
-          return;
-        } catch (error) {
-          // Clear progress annotations on error
-          setCustomProgressAnnotations([]);
-
-          const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
-
-          // Check if error message has meaningful content
-          const isMeaningfulErrorMessage =
-            errorMessage.trim() && errorMessage !== 'Not Found Template' && errorMessage !== 'Not Found Template Data';
-
-          reportError(
-            isMeaningfulErrorMessage
-              ? errorMessage
-              : 'Failed to import starter template\nRetry again after a few minutes.',
-            templateSelectionStartTime,
-            {
-              error: error instanceof Error ? error : String(error),
-              context: 'starter template selection',
-              toastType: isMeaningfulErrorMessage ? 'error' : 'warning',
-            },
-          );
-
-          setChatStarted(false);
-          setFakeLoading(false);
+        if (wasFirstChat) {
+          addDebugLog('Start:prepareFirstChat');
+          await prepareFirstChat(messageContent, attachmentList, signal);
+          addDebugLog('Complete:prepareFirstChat');
 
           return;
         }
-      }
 
-      const sendMessageFinalStartTime = performance.now();
-      const projectPath = repoStore.get().path;
-
-      try {
         // Record prompt activity for subsequent requests
-        if (projectPath) {
-          sendActivityPrompt(projectPath).catch((error) => {
-            logger.warn('Failed to record prompt activity:', error);
-          });
+        if (repoStore.get().path) {
+          sendActivityPrompt(repoStore.get().path);
         }
 
         if (error != null) {
@@ -1388,8 +1692,13 @@ export const ChatImpl = memo(
 
         chatStore.setKey('aborted', false);
 
-        if (projectPath) {
-          const commit = await workbench.commitModifiedFiles();
+        if (repoStore.get().path) {
+          checkAborted();
+          addDebugLog('Start:commitModifiedFiles');
+
+          const commit = await workbench.commitModifiedFiles(signal);
+          checkAborted();
+          addDebugLog('Complete:commitModifiedFiles');
 
           if (commit) {
             setMessages((prev: UIMessage[]) => [
@@ -1409,6 +1718,8 @@ export const ChatImpl = memo(
         }
 
         // Send new message immediately - useChat will use the latest state
+        checkAborted();
+        addDebugLog('Start:sendChatMessage');
         sendChatMessage({
           role: 'user',
           parts: [
@@ -1420,7 +1731,7 @@ export const ChatImpl = memo(
             },
           ],
         });
-
+        addDebugLog('Complete:sendChatMessage');
         setInput('');
         Cookies.remove(PROMPT_COOKIE_KEY);
 
@@ -1430,14 +1741,53 @@ export const ChatImpl = memo(
 
         textareaRef.current?.blur();
       } catch (error) {
-        logger.error('Error sending message:', error);
+        addDebugLog('Fail:sendMessage');
 
-        if (error instanceof Error) {
-          reportError('Error:' + error?.message, sendMessageFinalStartTime, {
-            error,
-            context: 'sendMessage function',
-          });
+        // Clean up on any error
+        clearProgressState();
+        setFakeLoading(false);
+
+        // Reset first chat state for any error
+        if (wasFirstChat) {
+          resetFirstChatState();
         }
+
+        // AbortError is a normal cancellation - handle gracefully
+        if (isAbortError(error)) {
+          logger.info('Send message aborted by user');
+          return;
+        }
+
+        logger.error('Error in sendMessage:', error);
+
+        const errorObj = error instanceof Error ? error : String(error);
+        const context = wasFirstChat ? 'starter template selection' : 'sendMessage function';
+
+        let displayMessage: string;
+        let toastType: 'error' | 'warning' = 'error';
+
+        if (wasFirstChat) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to import starter template';
+          const isMeaningful = errorMessage.trim() && errorMessage !== 'Not Found Template Data';
+
+          displayMessage = isMeaningful
+            ? errorMessage
+            : 'Failed to import starter template\nRetry again after a few minutes.';
+
+          if (!isMeaningful) {
+            toastType = 'warning';
+          }
+        } else {
+          displayMessage = 'Error:' + (error instanceof Error ? error.message : String(error));
+        }
+
+        processError(displayMessage, startTime, {
+          error: errorObj,
+          context,
+          toastType,
+        });
+      } finally {
+        sendMessageAbortControllerRef.current = null;
       }
     };
 
@@ -1589,8 +1939,7 @@ export const ChatImpl = memo(
 
         toast.success(`Successfully imported ${source.type === 'github' ? 'repository' : 'project'}: ${source.title}`);
       } catch (error) {
-        logger.error(`Error importing ${source.type === 'github' ? 'repository' : 'project'}:`, error);
-        reportError(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`, startTime, {
+        processError(`Failed to import ${source.type === 'github' ? 'repository' : 'project'}`, startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleTemplateImport',
           prompt: undefined, // Prompt not required (not a chat request)
@@ -1615,22 +1964,20 @@ export const ChatImpl = memo(
       const commitHash = message.id.split('-').pop();
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
+        processError('No commit hash found', startTime, {
           context: 'handleFork - commit hash validation',
         });
 
         return;
       }
 
-      const nameWords = repo.name.split('-');
-
-      let newRepoName = '';
-
-      if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
-        newRepoName = nameWords.slice(0, -1).join('-');
-      } else {
-        newRepoName = nameWords.join('-');
-      }
+      const nameWords = repoStore
+        .get()
+        .name.split(/[^a-zA-Z0-9]+/)
+        .filter((word) => word.length > 0);
+      const lastWord = nameWords[nameWords.length - 1];
+      const cleanWords = Number.isInteger(Number(lastWord)) ? nameWords.slice(0, -1) : nameWords;
+      const newRepoName = (cleanWords.length > 0 ? cleanWords.join('-') : 'project').toLowerCase();
 
       // Show loading toast while forking
       const toastId = toast.loading('Creating a copy...');
@@ -1645,19 +1992,22 @@ export const ChatImpl = memo(
           toast.success('Fork created — now in your copy.');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          reportError('Failed to create copy', startTime, {
+          processError('Failed to create copy', startTime, {
             context: 'handleFork - fork result check',
           });
+
+          return;
         }
       } catch (error) {
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
 
-        reportError('Failed to create copy', startTime, {
+        processError('Failed to create copy', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleFork - catch block',
         });
-        logger.error('Error forking project:', error);
+
+        return;
       }
     };
 
@@ -1686,14 +2036,14 @@ export const ChatImpl = memo(
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
               } else {
-                reportError('No parent commit found', startTime, {
+                processError('No parent commit found', startTime, {
                   context: 'handleRetry - parent commit check',
                 });
 
                 return;
               }
             } catch (error) {
-              reportError('Failed to get commit data', startTime, {
+              processError('Failed to get commit data', startTime, {
                 error: error instanceof Error ? error : String(error),
                 context: 'handleRetry - getCommit',
               });
@@ -1705,7 +2055,7 @@ export const ChatImpl = memo(
       }
 
       if (!commitHash || !isCommitHash(commitHash)) {
-        reportError('No commit hash found', startTime, {
+        processError('No commit hash found', startTime, {
           context: 'handleRetry - commit hash validation',
         });
 
@@ -1723,7 +2073,7 @@ export const ChatImpl = memo(
         const commitHash = message.id?.split('-').pop();
 
         if (!commitHash || !isCommitHash(commitHash)) {
-          reportError('Invalid commit information', startTime, {
+          processError('Invalid commit information', startTime, {
             context: 'handleViewDiff - commit validation',
           });
 
@@ -1736,10 +2086,13 @@ export const ChatImpl = memo(
         workbench.diffCommitHash.set(commitHash);
       } catch (error) {
         console.error('Diff view error:', error);
-        reportError('Error displaying diff view', startTime, {
+
+        processError('Error displaying diff view', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleViewDiff - catch block',
         });
+
+        return;
       }
     };
 

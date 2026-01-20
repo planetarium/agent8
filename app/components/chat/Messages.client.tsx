@@ -415,7 +415,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                         onSaveVersion?.(message);
                                       }
                                     }}
-                                    disabled={isGenerating}
+                                    disabled={false}
                                   />
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
@@ -456,7 +456,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 navigator.clipboard.writeText(textToCopy);
                                 toast.success('Copied to clipboard');
                               }}
-                              disabled={isGenerating}
+                              disabled={false}
                             />
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
@@ -543,7 +543,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 size="sm"
                                 icon={<DiffIcon size={20} />}
                                 onClick={() => onViewDiff?.(message)}
-                                disabled={isGenerating}
+                                disabled={false}
                               />
                             </Tooltip.Trigger>
                             <Tooltip.Portal>
@@ -574,6 +574,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 variant="primary-text"
                                 size="sm"
                                 onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
+                                disabled={isGenerating}
                               >
                                 Restore
                               </CustomButton>

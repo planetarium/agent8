@@ -81,6 +81,11 @@ export function useWorkbenchConnectionState() {
   return useStore(workbenchStore.connectionState);
 }
 
+export function useWorkbenchIsDeploying() {
+  useStore(reinitCounterAtom);
+  return useStore(workbenchStore.isDeploying);
+}
+
 export function useWorkbenchIsRunningPreview() {
   return useStore(workbenchStore.isRunningPreview);
 }

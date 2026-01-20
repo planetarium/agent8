@@ -129,13 +129,18 @@ export class BoltShell {
 
     const state = this.executionState.get();
 
-    // previous command has noInterrupt flag set, wait until it completes
-    if (state?.active && state.noInterrupt && state.executionPrms) {
-      logger.debug('BoltShell: Waiting for noInterrupt command to complete...');
-      await state.executionPrms;
-    } else if (state?.active && state.abort) {
-      // only abort if noInterrupt flag is not set
-      state.abort();
+    if (state?.active) {
+      // previous command has noInterrupt flag set, wait until it completes
+      if (state.noInterrupt && state.executionPrms) {
+        logger.debug('BoltShell: Waiting for noInterrupt command to complete...');
+        await state.executionPrms;
+      } else {
+        if (state.abort) {
+          state.abort();
+        }
+
+        this.interruptCurrentCommand();
+      }
     }
 
     // Utilize advanced features from container API

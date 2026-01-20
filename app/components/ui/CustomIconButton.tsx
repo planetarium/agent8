@@ -42,7 +42,13 @@ const CustomIconButton = React.forwardRef<HTMLButtonElement, CustomIconButtonPro
     return (
       <button
         ref={ref}
-        className={classNames(baseStyles, sizeStyles[size], variantStyles[variant], className)}
+        className={classNames(
+          baseStyles,
+          sizeStyles[size],
+          variantStyles[variant],
+          disabled ? 'opacity-18 cursor-not-allowed' : undefined,
+          className,
+        )}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}
         {...props}

@@ -21,10 +21,16 @@ export const DEFAULT_PROVIDER = PROVIDER_LIST.find((p) => p.name === PROVIDER_NA
 const DEFAULT_MODEL_NAME = 'gemini-3-pro-preview';
 
 export const FIXED_MODELS = {
-  SELECT_STARTER_TEMPLATE: {
-    model: 'gemini-2.5-flash',
-    provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
-  },
+  SELECT_STARTER_TEMPLATES: [
+    {
+      provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+      model: 'gemini-2.5-flash',
+    },
+    {
+      provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
+      model: 'gemini-2.5-flash',
+    },
+  ],
   PROMPT_ENHANCER_TEMPLATE: {
     model: 'gemini-2.5-pro',
     provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
@@ -127,6 +133,11 @@ export const EXCLUSIVE_3D_DOC_TOOLS = [
   'read_vibe_starter_3d_rigidbody_player',
   'read_vibe_starter_3d_view_controllers',
 ];
+
+// Error names
+export const ERROR_NAMES = {
+  ABORT: 'AbortError',
+} as const;
 
 export const ATTACHMENT_EXTS = [
   '.png',

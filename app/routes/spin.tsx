@@ -58,8 +58,8 @@ export default function Spin() {
     if (accessToken) {
       const verifyToken = async () => {
         try {
-          const v8ApiEndpoint = import.meta.env.VITE_V8_API_ENDPOINT;
-          const userInfo = await verifyV8AccessToken(v8ApiEndpoint, accessToken);
+          const v8AuthApiEndpoint = import.meta.env.VITE_V8_AUTH_API_ENDPOINT;
+          const userInfo = await verifyV8AccessToken(v8AuthApiEndpoint, accessToken);
 
           v8UserStore.set({ loading: false, user: userInfo });
           updateV8AccessToken(accessToken);
@@ -203,7 +203,7 @@ export default function Spin() {
 
       // Generate new repository name with better uniqueness
       const nameWords = verseData.title.split(/[^a-zA-Z0-9]+/).filter((word) => word.length > 0);
-      let newRepoName = nameWords.join('-').toLowerCase();
+      let newRepoName = (nameWords.length > 0 ? nameWords.join('-') : 'project').toLowerCase();
 
       // Add timestamp and random suffix for better uniqueness
       const timestamp = Date.now().toString(36).slice(-6);

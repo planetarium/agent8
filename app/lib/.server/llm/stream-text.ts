@@ -69,12 +69,15 @@ export async function streamText(props: {
   tools?: Record<string, any>;
   abortSignal?: AbortSignal;
   toolResults?: ToolContent;
+  onDebugLog?: (message: string) => void;
 }) {
-  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults } = props;
+  const { messages, env: serverEnv, options, files, tools, abortSignal, toolResults, onDebugLog } = props;
   let currentModel = DEFAULT_MODEL;
   let currentProvider = DEFAULT_PROVIDER.name;
 
   const orchestration = createOrchestration();
+
+  onDebugLog?.('Processing tool results');
 
   // Populate orchestration.readSet from toolResults if provided (for retry scenarios)
   if (toolResults && Array.isArray(toolResults)) {
@@ -92,6 +95,8 @@ export async function streamText(props: {
       }
     }
   }
+
+  onDebugLog?.('Processing messages');
 
   const processedMessages = messages
     .map((message) => {
@@ -135,6 +140,8 @@ export async function streamText(props: {
       return true;
     });
 
+  onDebugLog?.('Selecting model');
+
   const provider = PROVIDER_LIST.find((p) => p.name === currentProvider) || DEFAULT_PROVIDER;
   const staticModels = LLMManager.getInstance().getStaticModelListFromProvider(provider);
   let modelDetails = staticModels.find((m) => m.name === currentModel);
@@ -163,6 +170,8 @@ export async function streamText(props: {
   }
 
   const dynamicMaxTokens = modelDetails && modelDetails.maxTokenAllowed ? modelDetails.maxTokenAllowed : MAX_TOKENS;
+
+  onDebugLog?.('Creating tools');
 
   const systemPrompt = getAgent8Prompt(WORK_DIR);
 
@@ -208,6 +217,8 @@ export async function streamText(props: {
   const performancePrompt = getPerformancePrompt(is3dProject(files));
   const vibeStarter3dSpecPrompt = await getVibeStarter3dSpecPrompt(files);
 
+  onDebugLog?.('Preparing prompts');
+
   /*
    * ============================================
    * Prompt Classification (by change frequency: low → high)
@@ -231,7 +242,7 @@ export async function streamText(props: {
   const dynamicPrompts = [getProjectMdPrompt(files)];
 
   // Compose system messages in order of change frequency (low → high)
-  const coreMessages: ModelMessage[] = [
+  let coreMessages: ModelMessage[] = [
     ...[...staticPrompts, ...projectTypePrompts, ...projectContextPrompts, ...dynamicPrompts].filter(Boolean).map(
       (content) =>
         ({
@@ -252,11 +263,24 @@ export async function streamText(props: {
   // Add recent model messages (converted from UI messages - includes assistant's text + user retry request)
   coreMessages.push(...convertToModelMessages(processedMessages).slice(-MESSAGE_COUNT_FOR_LLM));
 
+  // Filter out empty messages
+  coreMessages = coreMessages.filter((message) => {
+    if (Array.isArray(message.content)) {
+      return message.content.length > 0;
+    } else if (typeof message.content === 'string') {
+      return message.content.trim().length > 0;
+    }
+
+    return true;
+  });
+
   if (modelDetails.name.includes('anthropic')) {
     coreMessages[coreMessages.length - 1].providerOptions = {
       anthropic: { cacheControl: { type: 'ephemeral' } },
     };
   }
+
+  onDebugLog?.('Starting stream');
 
   const result = _streamText({
     model: provider.getModelInstance({

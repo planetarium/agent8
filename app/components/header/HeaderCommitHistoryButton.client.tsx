@@ -272,15 +272,11 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       return;
     }
 
-    const nameWords = repo.name.split('-');
-
-    let newRepoName = '';
-
-    if (nameWords && Number.isInteger(Number(nameWords[nameWords.length - 1]))) {
-      newRepoName = nameWords.slice(0, -1).join('-');
-    } else {
-      newRepoName = nameWords.join('-');
-    }
+    // Extract only alphanumeric characters to create a valid repository name
+    const nameWords = repo.name.split(/[^a-zA-Z0-9]+/).filter((word) => word.length > 0);
+    const lastWord = nameWords[nameWords.length - 1];
+    const cleanWords = Number.isInteger(Number(lastWord)) ? nameWords.slice(0, -1) : nameWords;
+    const newRepoName = (cleanWords.length > 0 ? cleanWords.join('-') : 'project').toLowerCase();
 
     // Close modal first
     setIsForkModalOpen(false);

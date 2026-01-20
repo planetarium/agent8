@@ -474,6 +474,15 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      // Bypass OPEN_ messages to parent window if it exists
+      if (event.data?.type && typeof event.data.type === 'string' && event.data.type.startsWith('OPEN_')) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(event.data, '*');
+        }
+
+        return;
+      }
+
       if (event.data?.type === 'iframe-error') {
         const { error } = event.data;
 

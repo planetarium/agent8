@@ -202,7 +202,7 @@ ${truncateMessage(
   return result;
 };
 
-export const commitUserChanged = async () => {
+export const commitUserChanged = async (signal?: AbortSignal) => {
   const modifiedFiles = workbenchStore.getModifiedFiles();
   const projectName = repoStore.get().name;
   const title = repoStore.get().title;
@@ -222,15 +222,19 @@ export const commitUserChanged = async () => {
       content: (file as any).content,
     }));
 
-  const response = await axios.post('/api/gitlab/commits', {
-    projectName,
-    isFirstCommit: false,
-    description: title,
-    files,
-    commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
-    baseCommit: revertTo,
-    branch: 'develop',
-  });
+  const response = await axios.post(
+    '/api/gitlab/commits',
+    {
+      projectName,
+      isFirstCommit: false,
+      description: title,
+      files,
+      commitMessage: `The user changed the files.\n${filesToArtifactsNoContent(files, `${Date.now()}`)}`,
+      baseCommit: revertTo,
+      branch: 'develop',
+    },
+    { signal },
+  );
 
   const result = response.data;
 
