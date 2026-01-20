@@ -3,8 +3,14 @@
  */
 export interface ServerErrorData {
   type: 'error';
-  reason: 'credit-consume' | 'stream-processing';
+  reason:
+    | 'credit-consume'
+    | 'stream-processing'
+    | 'stream-processing-continuation'
+    | 'transform-stream'
+    | 'llm-repeat-response';
   message: string;
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -13,5 +19,25 @@ export interface ServerErrorData {
  */
 export type DataErrorPayload = {
   type: 'data-error';
+  transient?: boolean;
   data: ServerErrorData;
+};
+
+export type DataLogPayload = {
+  type: 'data-log';
+  transient: boolean;
+  data: { message: string };
+};
+
+export type DataProgressPayload = {
+  type: 'data-progress';
+  transient: boolean;
+  data: {
+    type: 'progress';
+    status: 'in-progress' | 'complete' | 'failed';
+    order: number;
+    message: string;
+    label?: string;
+    percentage?: number;
+  };
 };

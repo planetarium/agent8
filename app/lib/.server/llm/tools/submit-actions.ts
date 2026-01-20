@@ -10,6 +10,7 @@ import {
 } from '~/lib/constants/tool-fields';
 import { createScopedLogger } from '~/utils/logger';
 import { normalizeContent } from '~/utils/stringUtils';
+import { canInlineAssetInPrompt } from '~/lib/utils';
 
 function needReadFile(fileMap: FileMap, path: string): boolean {
   const fullPath = getFullPath(path);
@@ -19,7 +20,12 @@ function needReadFile(fileMap: FileMap, path: string): boolean {
   }
 
   if (fullPath === `${WORK_DIR}/src/assets.json`) {
-    return false;
+    // If assets.json is small enough to include in the system prompt, no need to read
+    const content = getFileContents(fileMap, path);
+
+    if (canInlineAssetInPrompt(content)) {
+      return false;
+    }
   }
 
   return !!getFileContents(fileMap, path);

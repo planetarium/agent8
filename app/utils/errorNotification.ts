@@ -4,6 +4,7 @@ import { getErrorFilter } from '~/constants/errorFilters';
 
 const logger = createScopedLogger('ErrorNotificationUtil');
 
+const MAX_PROMPT_LENGTH = 200;
 interface ErrorNotificationOptions {
   message: string;
   error?: Error | string;
@@ -11,37 +12,51 @@ interface ErrorNotificationOptions {
   userId?: string;
   prompt?: string;
   elapsedTime?: number;
+  process?: string;
+  metadata?: Record<string, any>;
 }
 
 export async function sendErrorNotification(options: ErrorNotificationOptions): Promise<void> {
   try {
-    // Serialize error object completely to capture all properties
-    let errorDetails: string;
+    let errorObj = {};
+    let lastUserPrompt = options.prompt;
+
+    if (lastUserPrompt && lastUserPrompt.length > MAX_PROMPT_LENGTH) {
+      lastUserPrompt = `${lastUserPrompt.substring(0, MAX_PROMPT_LENGTH)}\n\n... (truncated)`;
+    }
 
     if (options.error instanceof Error) {
-      // Create a plain object with all Error properties for better serialization
-      const errorObj = {
+      errorObj = {
         name: options.error.name,
         message: options.error.message,
         stack: options.error.stack,
-        prompt: options.prompt,
-        elapsedTime: options.elapsedTime,
+        ...Object.getOwnPropertyNames(options.error).reduce(
+          (acc, key) => {
+            if (!['name', 'message', 'stack'].includes(key)) {
+              acc[key] = (options.error as any)[key];
+            }
 
-        // Include any custom properties that might exist on the error
-        ...Object.getOwnPropertyNames(options.error).reduce((acc, key) => {
-          if (!['name', 'message', 'stack', 'prompt', 'elapsedTime'].includes(key)) {
-            acc[key] = (options.error as any)[key];
-          }
-
-          return acc;
-        }, {} as any),
+            return acc;
+          },
+          {} as Record<string, any>,
+        ),
       };
-      errorDetails = JSON.stringify(errorObj, null, 2);
-    } else if (options.error) {
-      errorDetails = JSON.stringify(options.error, null, 2);
-    } else {
-      errorDetails = '';
+    } else if (typeof options.error === 'string') {
+      errorObj = {
+        message: options.error,
+      };
     }
+
+    // Create a plain object with all Error properties for better serialization
+    errorObj = {
+      ...errorObj,
+      prompt: lastUserPrompt,
+      elapsedTime: options.elapsedTime,
+      process: options.process,
+      metadata: options.metadata,
+    };
+
+    const errorDetails = JSON.stringify(errorObj, null, 2);
 
     const payload = {
       message: options.message,
@@ -79,6 +94,8 @@ export async function sendChatErrorWithToastMessage(
   functionContext?: string,
   prompt?: string,
   elapsedTime?: number,
+  process?: string,
+  metadata?: Record<string, any>,
 ): Promise<void> {
   const context = `Chat - ${functionContext || 'Unknown function'}`;
 
@@ -88,6 +105,8 @@ export async function sendChatErrorWithToastMessage(
     context,
     prompt,
     elapsedTime,
+    process,
+    metadata,
   });
 }
 
@@ -97,12 +116,25 @@ export interface HandleChatErrorOptions {
   prompt?: string;
   elapsedTime?: number;
   toastType?: 'error' | 'warning';
+  skipToast?: boolean;
   sendChatError?: boolean;
+  process?: string;
+  metadata?: Record<string, any>;
 }
 
 // Comprehensive error handler that handles both toast and Slack notification
 export function handleChatError(message: string, options?: HandleChatErrorOptions): void {
-  const { error, context, prompt, elapsedTime, toastType = 'error', sendChatError = true } = options ?? {};
+  const {
+    error,
+    context,
+    prompt,
+    elapsedTime,
+    toastType = 'error',
+    skipToast = false,
+    sendChatError = true,
+    process,
+    metadata,
+  } = options ?? {};
 
   // Check if error matches any filter
   const filter = getErrorFilter(error);
@@ -110,17 +142,21 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
   // Use replacement message if available, otherwise use original message
   const displayMessage = filter?.replacementMessage || message;
 
-  // Show toast notification
-  if (toastType === 'error') {
-    toast.error(displayMessage);
-  } else {
-    toast.warning(displayMessage);
+  if (!skipToast) {
+    // Show toast notification
+    if (toastType === 'error') {
+      toast.error(displayMessage);
+    } else {
+      toast.warning(displayMessage);
+    }
   }
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
   if (!filter && sendChatError) {
-    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime).catch((notificationError) => {
-      logger.error('Failed to send error notification for:', message, notificationError);
-    });
+    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime, process, metadata).catch(
+      (notificationError) => {
+        logger.error('Failed to send error notification for:', message, notificationError);
+      },
+    );
   }
 }

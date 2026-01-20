@@ -46,6 +46,8 @@ const BUFFER_CONFIG = {
   TRUNCATED_LOCAL_SIZE: 5000,
 };
 
+const STREAM_READ_IDLE_TIMEOUT_MS = 3000;
+
 const ROUTER_DOMAIN = 'agent8.verse8.net';
 const CONTAINER_AGENT_PROTOCOL = 'agent8-container-v1';
 const TERMINAL_REATTACH_PROMPT_DELAY_MS = 100;
@@ -1256,6 +1258,8 @@ export class RemoteContainer implements Container {
       return { result: null, newExitCode };
     };
 
+    let isWaitingForOscCode = false;
+
     const waitTillOscCode = async (waitCode: string) => {
       let fullOutput = '';
       let exitCode = 0;
@@ -1298,10 +1302,22 @@ export class RemoteContainer implements Container {
 
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
+      let streamReadTimeoutId: NodeJS.Timeout | null = null;
 
       try {
+        isWaitingForOscCode = true;
+
+        streamReadTimeoutId = setTimeout(() => {
+          currentTerminal?.input(':' + '\n');
+        }, STREAM_READ_IDLE_TIMEOUT_MS);
+
         while (true) {
           const { value, done } = await reader.read();
+
+          if (streamReadTimeoutId) {
+            clearTimeout(streamReadTimeoutId);
+            streamReadTimeoutId = null;
+          }
 
           if (done) {
             break;
@@ -1348,6 +1364,12 @@ export class RemoteContainer implements Container {
           }
         }
       } finally {
+        if (streamReadTimeoutId) {
+          clearTimeout(streamReadTimeoutId);
+          streamReadTimeoutId = null;
+        }
+
+        isWaitingForOscCode = false;
         reader.releaseLock();
       }
 
@@ -1380,6 +1402,11 @@ export class RemoteContainer implements Container {
         // Interrupt current execution
         currentTerminal.input('\x03');
 
+        // for dead lock prevention
+        if (isWaitingForOscCode) {
+          currentTerminal.input(':' + '\n');
+        }
+
         logger.debug(`[${sessionId}] waiting for prompt`, command);
 
         // Wait for prompt
@@ -1393,7 +1420,6 @@ export class RemoteContainer implements Container {
         logger.debug(`[${sessionId}] prompt received`, command);
 
         currentTerminal.input(command.trim() + '\n');
-
         logger.debug(`[${sessionId}] command executed`, command);
 
         // Wait for execution result

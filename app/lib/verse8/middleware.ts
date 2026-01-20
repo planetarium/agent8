@@ -3,6 +3,7 @@ import { consumeUserCredit, getUserCredit } from './credit';
 import { verifyV8AccessToken } from './userAuth';
 import { getUserAuthFromCookie } from '~/lib/api/cookies';
 import { createScopedLogger } from '~/utils/logger';
+import { getErrorStatus } from '~/utils/errors';
 
 const logger = createScopedLogger('middleware.withV8AuthUser');
 
@@ -55,7 +56,7 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       }
 
       const { userUid, email, walletAddress, isActivated } = await verifyV8AccessToken(
-        env.VITE_V8_API_ENDPOINT,
+        env.VITE_V8_AUTH_API_ENDPOINT,
         accessToken,
       );
 
@@ -115,7 +116,8 @@ export function withV8AuthUser(handler: any, options: V8AuthUserOptions = {}) {
       return response;
     } catch (error: any) {
       logger.error('V8 Auth Middleware Error', error);
-      return new Response(error.message, { status: 400 });
+
+      return new Response(error.message, { status: getErrorStatus(error) || 400 });
     }
   };
 }
