@@ -20,8 +20,8 @@ export function LegacyUiConfirmModal({ isOpen, onClose, onConfirm }: LegacyUiCon
         })}
       >
         <span className="text-body-md-medium text-tertiary self-stretch pb-4">
-          If you did not merge the work you were previously working on, you must merge it in the old UI. Old UI will be
-          removed soon, so please merge the old tasks.
+          If you did not confirm the work you were previously working on, you must confirm it in the old UI. Old UI will
+          be removed soon, so please confirm the old tasks.
         </span>
       </div>
       <BaseModal.Actions>

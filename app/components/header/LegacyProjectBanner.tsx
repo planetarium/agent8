@@ -78,15 +78,24 @@ export function LegacyProjectBanner({ chatStarted }: LegacyProjectBannerProps) {
         <div className="flex items-center gap-2 self-stretch">
           <WarningLinedIcon size={20} />
           <span className="text-heading-xs text-accent-orange">
-            Missing your work? Merge your tasks from the old version
+            Missing your work? Confirm your tasks from the old UI.
           </span>
         </div>
         <span className="text-body-sm text-secondary">
-          If you did not merge the work you were previously working on, you must merge it in the old UI.
+          If you did not confirm the work you were previously working on, you must confirm it in the old UI.
         </span>
       </div>
       <div className="flex justify-end items-center gap-2">
-        <CustomButton variant="secondary-ghost" size="md">
+        <CustomButton
+          variant="secondary-ghost"
+          size="md"
+          onClick={() =>
+            window.open(
+              'https://www.notion.so/planetarium/How-To-Recover-Your-Previous-Work-2eeed889905f80079ef9d23ddb121dd2?source=copy_link',
+              '_blank',
+            )
+          }
+        >
           <span className="text-heading-xs text-interactive-neutral">Learn more</span>
           <ExternalLinkIcon size={20} />
         </CustomButton>

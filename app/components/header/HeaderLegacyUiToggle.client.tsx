@@ -32,8 +32,8 @@ export function HeaderLegacyUiToggle({ asMenuItem = false, onClose }: HeaderLega
         <div className="flex flex-col items-start gap-2 w-full bg-transparent cursor-pointer" onClick={handleClick}>
           <span className="text-primary text-body-md-medium">Switch to Old UI</span>
           <span className="text-tertiary text-body-sm">
-            If you did not merge the work you were previously working on, you must merge it in the old UI. Old UI will
-            be removed soon, so please merge the old tasks.
+            If you did not confirm the work you were previously working on, you must confirm it in the old UI. Old UI
+            will be removed soon, so please confirm the old tasks.
           </span>
         </div>
         <LegacyUiConfirmModal isOpen={isModalOpen} onClose={handleModalClose} onConfirm={handleConfirm} />
