@@ -1,6 +1,6 @@
 import { json, type MetaFunction } from '@remix-run/cloudflare';
 import { useLoaderData } from '@remix-run/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import Cookies from 'js-cookie';
 
@@ -48,6 +48,7 @@ function AccessControlledChat() {
   const [isActivated, setIsActivated] = useState<boolean | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
   const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
+  const handleStopRef = useRef<(() => void) | null>(null);
 
   // Helper function to send postMessage to allowed parent origins
   const sendMessageToParent = (message: any) => {
@@ -138,6 +139,10 @@ function AccessControlledChat() {
             console.error('❌ _index.tsx: Failed to reinitialize container:', error);
           }
         } else {
+          if (handleStopRef.current) {
+            handleStopRef.current();
+          }
+
           // Handle logout when token is null/undefined
           localStorage.removeItem(V8_ACCESS_TOKEN_KEY);
           Cookies.remove(V8_ACCESS_TOKEN_KEY);
@@ -236,9 +241,15 @@ function AccessControlledChat() {
       {!loadedContainer ? (
         <NotLoadedContainer />
       ) : (
-        <ClientOnly fallback={<BaseChat />}>
+        <ClientOnly fallback={<BaseChat handleStopRef={handleStopRef} />}>
           {() => {
-            return <Chat isAuthenticated={isActivated === true} onAuthRequired={handleAuthRequired} />;
+            return (
+              <Chat
+                isAuthenticated={isActivated === true}
+                onAuthRequired={handleAuthRequired}
+                handleStopRef={handleStopRef}
+              />
+            );
           }}
         </ClientOnly>
       )}

@@ -103,6 +103,7 @@ interface BaseChatProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
   textareaExpanded?: boolean;
+  handleStopRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
