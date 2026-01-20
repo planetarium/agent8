@@ -607,6 +607,13 @@ export const ChatImpl = memo(
     });
     const [chatData, setChatData] = useState<any[]>([]);
 
+    const clearProgressState = () => {
+      setCustomProgressAnnotations([]);
+      setChatData((prev) =>
+        prev.filter((x) => !(typeof x === 'object' && x !== null && (x as any).type === 'progress')),
+      );
+    };
+
     const bodyRef = useRef({ apiKeys, files, promptId, contextOptimization: contextOptimizationEnabled });
     const chatStateRef = useRef({ model, provider });
 
@@ -689,6 +696,7 @@ export const ChatImpl = memo(
           return;
         }
 
+        clearProgressState();
         setFakeLoading(false);
 
         logger.error('Request failed\n\n', e, error);
@@ -754,6 +762,7 @@ export const ChatImpl = memo(
           addDebugLog('Complete:handleCommit');
         });
 
+        clearProgressState();
         setFakeLoading(false);
 
         logger.debug('Finished streaming');
@@ -1735,7 +1744,7 @@ export const ChatImpl = memo(
         addDebugLog('Fail:sendMessage');
 
         // Clean up on any error
-        setCustomProgressAnnotations([]);
+        clearProgressState();
         setFakeLoading(false);
 
         // Reset first chat state for any error
