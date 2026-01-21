@@ -75,6 +75,7 @@ import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
+import { isMobileOS } from '~/utils/mobile';
 
 const logger = createScopedLogger('Chat');
 
@@ -825,7 +826,7 @@ export const ChatImpl = memo(
       // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
       const handleVisibilityChange = () => {
         // Only abort on mobile devices to save battery/data
-        if (document.hidden && isStreaming && isSmallViewport) {
+        if (document.hidden && isStreaming && isMobileOS()) {
           logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
           abortAllOperations();
         }
@@ -838,7 +839,7 @@ export const ChatImpl = memo(
         window.removeEventListener('beforeunload', handleBeforeUnload);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
-    }, [status, isLoading, fakeLoading, loading, isSmallViewport]);
+    }, [status, isLoading, fakeLoading, loading]);
 
     // Refs to hold latest function references for cleanup
     const stopRef = useRef(stop);
