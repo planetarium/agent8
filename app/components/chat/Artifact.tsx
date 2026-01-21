@@ -56,7 +56,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
   }, [actions]);
 
   return (
-    <div className="flex flex-col overflow-hidden w-full">
+    <div className="flex flex-col overflow-hidden w-full mt-3">
       {/* Header hidden as per design request */}
       <AnimatePresence>
         {showActions && actions.length > 0 && (

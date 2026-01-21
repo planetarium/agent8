@@ -905,6 +905,18 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 }}
               </ClientOnly>
 
+              {/* Blurred background overlay for floating area */}
+              {chatStarted && !isSmallViewport && (
+                <div
+                  className="fixed left-0 bottom-0 h-10 w-[calc(var(--chat-width)-28px)] z-[1] pointer-events-none transition-all duration-300"
+                  style={{
+                    background: 'rgba(var(--color-bg-primary), 0.6)',
+                    backdropFilter: 'blur(4px)',
+                    WebkitBackdropFilter: 'blur(4px)',
+                  }}
+                />
+              )}
+
               <div
                 className={classNames(
                   'flex flex-col gap-3 w-full mx-auto z-prompt transition-[bottom,max-width,padding] duration-300 ease-out',
