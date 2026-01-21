@@ -5,6 +5,10 @@ compatibility_date = "2024-11-11"
 pages_build_output_dir = "./build/client"
 send_metrics = false
 
+[[kv_namespaces]]
+binding = "TURNSTILE_CACHE"
+id = "400f86e60c0744d8b23f9c962e7ff5ca"
+
 [[queues.producers]]
 binding = "ACCESS_LOG_QUEUE"
 queue = "access-log-queue"

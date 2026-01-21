@@ -2,9 +2,10 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { streamText as _streamText } from 'ai';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withTurnstile } from '~/lib/turnstile/middleware';
 import { FIXED_MODELS } from '~/utils/constants';
 
-export const action = withV8AuthUser(enhancerAction, { checkCredit: true });
+export const action = withTurnstile(withV8AuthUser(enhancerAction, { checkCredit: true }));
 
 const logger = createScopedLogger('api.enhancher');
 
