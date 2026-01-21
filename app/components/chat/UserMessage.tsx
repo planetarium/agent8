@@ -110,7 +110,7 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
       </div>
 
       {/* Show All / Hide button */}
-      {isOverflowing && (
+      {(isOverflowing || textContent.includes('Fix this terminal error')) && (
         <div className="flex justify-end pt-2">
           <button
             onClick={handleToggleExpand}
