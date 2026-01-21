@@ -325,9 +325,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           className={classNames(
                             'relative flex items-center justify-between p-[14px] w-[calc(100%+28px)] mx-[-14px] bg-primary rounded-b-[23px] rounded-bl-none',
                             {
-                              'border-t border-tertiary':
-                                messageText.trim() !== '' &&
-                                !(isSmallViewport && isLast && isGenerating && !expandedMessages.has(index)),
+                              'border-t border-tertiary': messageText.trim() !== '',
                             },
                           )}
                         >
