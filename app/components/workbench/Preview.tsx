@@ -89,6 +89,9 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
   const activePreview = previews[activePreviewIndex];
 
   const onRun = useCallback(async () => {
+    setUrl('');
+    setIframeUrl(undefined);
+
     await workbenchStore.runPreview();
   }, []);
 

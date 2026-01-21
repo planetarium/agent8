@@ -822,12 +822,23 @@ export const ChatImpl = memo(
         abortAllOperations();
       };
 
+      // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
+      const handleVisibilityChange = () => {
+        // Only abort on mobile devices to save battery/data
+        if (document.hidden && isStreaming && isSmallViewport) {
+          logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
+          abortAllOperations();
+        }
+      };
+
       window.addEventListener('beforeunload', handleBeforeUnload);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
-    }, []);
+    }, [status, isLoading, fakeLoading, loading, isSmallViewport]);
 
     // Refs to hold latest function references for cleanup
     const stopRef = useRef(stop);
@@ -1549,6 +1560,9 @@ export const ChatImpl = memo(
       chatStore.setKey('started', true);
 
       setChatStarted(true);
+
+      // Send START_EDITING event to parent when chat starts
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
@@ -1621,7 +1635,7 @@ export const ChatImpl = memo(
 
       setFakeLoading(true);
       runAnimation();
-      workbench.currentView.set('code');
+      workbench.currentView.set('preview');
 
       const wasFirstChat = !chatStarted;
       const startTime = performance.now();
@@ -1958,7 +1972,7 @@ export const ChatImpl = memo(
       const startTime = performance.now();
       const repo = repoStore.get();
 
-      workbench.currentView.set('code');
+      workbench.currentView.set('preview');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
@@ -2015,7 +2029,7 @@ export const ChatImpl = memo(
       const startTime = performance.now();
       const projectPath = repoStore.get().path;
 
-      workbench.currentView.set('code');
+      workbench.currentView.set('preview');
 
       // Use prevMessage if provided, otherwise find the previous message
       let commitHash: string | undefined;
