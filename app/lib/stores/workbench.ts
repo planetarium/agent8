@@ -108,6 +108,7 @@ export class WorkbenchStore {
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
+  shouldResetPreviewUrls: WritableAtom<boolean> = import.meta.hot?.data.shouldResetPreviewUrls ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -143,6 +144,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
       import.meta.hot.data.isDeploying = this.isDeploying;
+      import.meta.hot.data.shouldResetPreviewUrls = this.shouldResetPreviewUrls;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -1238,6 +1240,14 @@ export class WorkbenchStore {
     const verseId = await this.setupEnvFile(user, options.reset);
 
     return { user, verseId };
+  }
+
+  // Reset preview URLs to prevent download prompts on mobile
+  resetPreviewUrls() {
+    this.shouldResetPreviewUrls.set(true);
+
+    // Immediately reset to false so it can be triggered again
+    setTimeout(() => this.shouldResetPreviewUrls.set(false), 0);
   }
 
   async runPreview() {

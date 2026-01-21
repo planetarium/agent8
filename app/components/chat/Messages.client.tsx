@@ -585,6 +585,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 variant="primary-text"
                                 size="sm"
                                 onClick={() => {
+                                  // Reset preview URLs to prevent download prompts on mobile
+                                  workbenchStore.resetPreviewUrls();
+
                                   workbenchStore.runPreview();
 
                                   // On mobile, immediately show preview screen
