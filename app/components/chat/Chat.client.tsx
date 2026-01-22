@@ -72,6 +72,7 @@ import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth'
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
 import { runInNextTick } from '~/utils/async';
+import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
 
 const logger = createScopedLogger('Chat');
 
@@ -622,9 +623,17 @@ export const ChatImpl = memo(
         api: '/api/chat',
         body: () => bodyRef.current,
 
-        // Custom fetch to preserve HTTP status codes in errors
+        // Custom fetch to add Turnstile token and preserve HTTP status codes
         fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-          const response = await fetch(input, init);
+          const turnstileHeaders = await getTurnstileHeaders();
+
+          const response = await fetch(input, {
+            ...init,
+            headers: {
+              ...init?.headers,
+              ...turnstileHeaders,
+            },
+          });
 
           // If response is not ok, throw error with status code
           if (!response.ok) {
@@ -1472,10 +1481,13 @@ export const ChatImpl = memo(
       const urls = imageAttachments.map((item) => item.url);
       checkAborted();
 
+      const turnstileHeaders = await getTurnstileHeaders();
+
       const descriptionResponse = await fetch('/api/image-description', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...turnstileHeaders,
         },
         body: JSON.stringify({
           message: messageContent,
@@ -1547,12 +1559,16 @@ export const ChatImpl = memo(
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
+
         return;
       }
 
       if (lastSendMessageTime.current && Date.now() - lastSendMessageTime.current < 1000) {
         return;
       }
+
+      // Clear turnstile token cache for new user action - will get fresh token for this session
+      clearTurnstileTokenCache();
 
       lastSendMessageTime.current = Date.now();
 

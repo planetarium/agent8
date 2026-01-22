@@ -10,6 +10,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ClientOnly } from 'remix-utils/client-only';
 import { initCaptureService } from './utils/captureService';
+import { TurnstileProvider } from './components/turnstile/TurnstileProvider';
 
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
 import globalStyles from './styles/index.scss?url';
@@ -94,6 +95,8 @@ export const Head = createHead(() => (
     <script dangerouslySetInnerHTML={{ __html: inlineThemeCode }} />
     <script dangerouslySetInnerHTML={{ __html: gtmCode }} />
     <script dangerouslySetInnerHTML={{ __html: hotjarCode }} />
+    {/* Cloudflare Turnstile Script */}
+    <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js" />
   </>
 ));
 
@@ -103,6 +106,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }, [theme]);
+
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
   return (
     <>
@@ -114,7 +119,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           style={{ display: 'none', visibility: 'hidden' }}
         ></iframe>
       </noscript>
-      <ClientOnly>{() => <DndProvider backend={HTML5Backend}>{children}</DndProvider>}</ClientOnly>
+      <ClientOnly>
+        {() => (
+          <DndProvider backend={HTML5Backend}>
+            {turnstileSiteKey ? <TurnstileProvider siteKey={turnstileSiteKey}>{children}</TurnstileProvider> : children}
+          </DndProvider>
+        )}
+      </ClientOnly>
       <ScrollRestoration />
       <Scripts />
     </>
