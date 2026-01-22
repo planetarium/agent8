@@ -2,10 +2,17 @@ export const TURNSTILE_TOKEN_HEADER = 'X-Turnstile-Token';
 
 let getTokenFn: (() => Promise<string>) | null = null;
 
-// Client-side token cache
+/**
+ * Client-side token cache.
+ * TTL is derived from server's VITE_TURNSTILE_CACHE_TTL, minus 5 seconds buffer
+ * to ensure client cache expires before server cache (avoids edge case rejections).
+ */
+const DEFAULT_CACHE_TTL_SECONDS = 300;
+const SERVER_CACHE_TTL_SECONDS = parseInt(import.meta.env.VITE_TURNSTILE_CACHE_TTL, 10) || DEFAULT_CACHE_TTL_SECONDS;
+const CLIENT_CACHE_TTL_MS = (SERVER_CACHE_TTL_SECONDS - 5) * 1000;
+
 let cachedToken: string | null = null;
 let tokenExpiresAt: number = 0;
-const CLIENT_CACHE_TTL_MS = 55_000; // 55s (slightly shorter than server's 60s)
 
 export function setTurnstileTokenGetter(fn: () => Promise<string>) {
   getTokenFn = fn;

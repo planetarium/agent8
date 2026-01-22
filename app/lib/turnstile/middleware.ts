@@ -3,7 +3,7 @@ import { verifyTurnstileToken } from './verify';
 import { getCachedVerification, setCachedVerification } from './cache';
 import { TURNSTILE_TOKEN_HEADER } from './client';
 
-const DEFAULT_CACHE_TTL_SECONDS = 60;
+const DEFAULT_CACHE_TTL_SECONDS = 300;
 
 function getRemoteIp(request: Request): string {
   return (
@@ -70,7 +70,7 @@ export function withTurnstile(handler: (args: ActionFunctionArgs) => Promise<Res
     let cacheStatus = 'no-kv';
 
     if (env.TURNSTILE_CACHE) {
-      const cacheTtl = parseInt(env.TURNSTILE_CACHE_TTL, 10) || DEFAULT_CACHE_TTL_SECONDS;
+      const cacheTtl = parseInt(env.VITE_TURNSTILE_CACHE_TTL, 10) || DEFAULT_CACHE_TTL_SECONDS;
       const result = await setCachedVerification(env.TURNSTILE_CACHE, token, remoteIp, cacheTtl);
       cacheStatus = result.success ? 'new' : `error:${result.error}`;
     }

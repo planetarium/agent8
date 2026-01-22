@@ -42,5 +42,5 @@ interface Env {
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_ENABLED: string;
   TURNSTILE_CACHE: KVNamespace;
-  TURNSTILE_CACHE_TTL: string;
+  VITE_TURNSTILE_CACHE_TTL: string;
 }
