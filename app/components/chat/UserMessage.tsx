@@ -19,6 +19,9 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
   const textContent = stripMetadata(content);
   const attachments = content ? extractAttachments(content) : [];
 
+  // Check if this is a terminal error message
+  const isTerminalError = textContent.includes(TERMINAL_ERROR_TEXT);
+
   const textRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false);
@@ -106,14 +109,14 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
             <div
               ref={textRef}
               className={
-                !expanded && (isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT))
+                !expanded && (isOverflowing || isTerminalError)
                   ? hasCodeBlock
                     ? 'overflow-hidden'
                     : 'line-clamp-3'
                   : ''
               }
               style={
-                !expanded && (isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT)) && hasCodeBlock
+                !expanded && (isOverflowing || isTerminalError) && hasCodeBlock
                   ? { maxHeight: `${MAX_COLLAPSED_HEIGHT}px`, overflow: 'hidden' }
                   : undefined
               }
@@ -128,7 +131,7 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
       </div>
 
       {/* Show All / Hide button */}
-      {(isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT)) && (
+      {(isOverflowing || isTerminalError) && (
         <div className="flex justify-end pt-2">
           <button
             onClick={handleToggleExpand}
