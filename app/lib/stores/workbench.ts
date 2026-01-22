@@ -5,6 +5,7 @@ import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/mes
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { ERROR_NAMES, SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { chatStore } from '~/lib/stores/chat';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
@@ -1250,7 +1251,13 @@ export class WorkbenchStore {
     setTimeout(() => this.shouldResetPreviewUrls.set(false), 0);
   }
 
-  async runPreview() {
+  async runPreview(options: { force?: boolean } = {}) {
+    // Don't run preview if response was aborted (unless forced)
+    if (!options.force && chatStore.get().aborted) {
+      logger.info('Preview cancelled: response was aborted');
+      return;
+    }
+
     this.isRunningPreview.set(true);
 
     const shell = this.boltTerminal;
