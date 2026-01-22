@@ -18,6 +18,7 @@ import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { ModelViewer } from '~/components/ui/ModelViewer';
 import { sendActivityUploadAsset } from '~/lib/verse8/api';
+import { getTurnstileHeaders } from '~/lib/turnstile/client';
 
 // Helper function for deep equality check of arrays
 const areArraysEqual = <T,>(arr1: T[], arr2: T[]): boolean => {
@@ -1235,10 +1236,13 @@ export const ResourcePanel = memo(({ files }: ResourcePanelProps) => {
 
         const imageUrls = imageUploads.map(({ result }) => result?.url).filter(Boolean);
 
+        const turnstileHeaders = await getTurnstileHeaders();
+
         const descriptionResponse = await fetch('/api/image-description', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...turnstileHeaders,
           },
           body: JSON.stringify({
             imageUrls,

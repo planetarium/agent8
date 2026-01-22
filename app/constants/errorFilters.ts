@@ -51,7 +51,13 @@ export const ERROR_FILTERS: ErrorFilter[] = [
     pattern: 'llm-repeat-response',
     reason: 'LLM repeat response error',
     caseSensitive: false,
-    replacementMessage: 'The LLM is repeating itself. Please try again.',
+    replacementMessage: 'The AI is repeating itself. Please try again.',
+  },
+  {
+    pattern: 'stream-processing',
+    reason: 'Stream processing failed',
+    caseSensitive: false,
+    replacementMessage: 'AI model connection was lost. Please try again.',
   },
 ];
 

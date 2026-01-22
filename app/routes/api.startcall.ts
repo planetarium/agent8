@@ -3,12 +3,13 @@ import { generateObject } from 'ai';
 import { STARTER_TEMPLATES, FIXED_MODELS } from '~/utils/constants';
 import { createScopedLogger } from '~/utils/logger';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withTurnstile } from '~/lib/turnstile/middleware';
 import { TEMPLATE_SELECTION_SCHEMA } from '~/utils/selectStarterTemplate';
 import type { TemplateSelectionResponse, Template } from '~/types/template';
 import { isAbortError, isApiKeyError } from '~/utils/errors';
 import { smartTry } from '~/utils/promises';
 
-export const action = withV8AuthUser(startcallAction, { checkCredit: true });
+export const action = withTurnstile(withV8AuthUser(startcallAction, { checkCredit: true }));
 
 const logger = createScopedLogger('api.startcall');
 

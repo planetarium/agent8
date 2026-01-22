@@ -6,6 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { getMCPConfigFromCookie } from '~/lib/api/cookies';
 import { createToolSet } from '~/lib/modules/mcp/toolset';
 import { withV8AuthUser, type ContextUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withTurnstile } from '~/lib/turnstile/middleware';
 import { extractPropertiesFromMessage } from '~/lib/.server/llm/utils';
 import { extractTextContent } from '~/utils/message';
 import { ERROR_NAMES, TOOL_NAMES } from '~/utils/constants';
@@ -104,7 +105,7 @@ function toBoltSubmitActionsXML(
   return createBoltArtifactXML(artifactId, undefined, xmlContent);
 }
 
-export const action = withV8AuthUser(chatAction, { checkCredit: true });
+export const action = withTurnstile(withV8AuthUser(chatAction, { checkCredit: true }));
 
 const IGNORE_TOOL_TYPES = ['tool-input-start', 'tool-input-delta', 'tool-input-end'];
 const SUBMIT_ACTIONS_TOOLS = [
