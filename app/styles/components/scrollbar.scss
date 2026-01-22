@@ -45,6 +45,17 @@
   background: rgba(255, 255, 255, 0.4);
 }
 
+/* 작은 화면에서 스크롤바 숨김 (데스크탑 스몰뷰포트 + 안드로이드) */
+@media (max-width: 1003px) {
+  .chat-container {
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .chat-container::-webkit-scrollbar {
+    display: none; /* Webkit 브라우저 (Chrome, Safari, Edge 등) */
+  }
+}
+
 /* 다크 테마 스크롤바 스타일 */
 html[data-theme='dark'] {
   ::-webkit-scrollbar-thumb {
