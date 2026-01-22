@@ -71,6 +71,8 @@ import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
+import { runInNextTick } from '~/utils/async';
+import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
 
 const logger = createScopedLogger('Chat');
 
@@ -621,9 +623,17 @@ export const ChatImpl = memo(
         api: '/api/chat',
         body: () => bodyRef.current,
 
-        // Custom fetch to preserve HTTP status codes in errors
+        // Custom fetch to add Turnstile token and preserve HTTP status codes
         fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-          const response = await fetch(input, init);
+          const turnstileHeaders = await getTurnstileHeaders();
+
+          const response = await fetch(input, {
+            ...init,
+            headers: {
+              ...init?.headers,
+              ...turnstileHeaders,
+            },
+          });
 
           // If response is not ok, throw error with status code
           if (!response.ok) {
@@ -655,7 +665,7 @@ export const ChatImpl = memo(
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
           processError(extractedData.reason, chatRequestStartTimeRef.current ?? 0, {
-            error: extractedData.message,
+            error: extractedData.reason,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
             metadata: extractedData.metadata,
@@ -682,30 +692,33 @@ export const ChatImpl = memo(
         clearProgressState();
         setFakeLoading(false);
 
-        logger.error('Request failed\n\n', e, error);
-        logStore.logError('Chat request failed', e, {
-          component: 'Chat',
-          action: 'request',
-          error: e.message,
-        });
-
-        const currentModel = chatStateRef.current.model;
-        const currentProvider = chatStateRef.current.provider;
-        const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
-
-        processError(
-          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-          chatRequestStartTimeRef.current ?? 0,
-          {
-            error: e,
-            context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
-            prompt: lastUserPromptRef.current,
-          },
-        );
-
-        if (shouldShowErrorPage(e)) {
+        if (isAbortError(e)) {
           return;
         }
+
+        // Delay to next tick to prevent execution during iframe removal
+        runInNextTick(() => {
+          logger.error('Request failed\n\n', e, error);
+          logStore.logError('Chat request failed', e, {
+            component: 'Chat',
+            action: 'request',
+            error: e.message,
+          });
+
+          const currentModel = chatStateRef.current.model;
+          const currentProvider = chatStateRef.current.provider;
+          const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
+
+          processError(
+            'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+            chatRequestStartTimeRef.current ?? 0,
+            {
+              error: e,
+              context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
+              prompt: lastUserPromptRef.current,
+            },
+          );
+        });
       },
 
       onFinish: async ({ message }) => {
@@ -806,10 +819,21 @@ export const ChatImpl = memo(
         abortAllOperations();
       };
 
+      const handleUnload = () => {
+        if (isPageUnloadingRef.current) {
+          return;
+        }
+
+        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
+        abortAllOperations();
+      };
+
       window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener('unload', handleUnload);
 
       return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.removeEventListener('unload', handleUnload);
       };
     }, []);
 
@@ -1457,10 +1481,13 @@ export const ChatImpl = memo(
       const urls = imageAttachments.map((item) => item.url);
       checkAborted();
 
+      const turnstileHeaders = await getTurnstileHeaders();
+
       const descriptionResponse = await fetch('/api/image-description', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...turnstileHeaders,
         },
         body: JSON.stringify({
           message: messageContent,
@@ -1532,12 +1559,16 @@ export const ChatImpl = memo(
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
+
         return;
       }
 
       if (lastSendMessageTime.current && Date.now() - lastSendMessageTime.current < 1000) {
         return;
       }
+
+      // Clear turnstile token cache for new user action - will get fresh token for this session
+      clearTurnstileTokenCache();
 
       lastSendMessageTime.current = Date.now();
 
