@@ -6,6 +6,11 @@ export const WORK_DIR_NAME = 'project';
 export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const AUTO_SYNTAX_FIX_TAG_NAME = 'autoSyntaxFix';
+
+// Message annotations
+export const ABORTED_ANNOTATION = 'aborted';
+export const HIDDEN_ANNOTATION = 'hidden';
+export const RESTORE_MESSAGE_ANNOTATION = 'restore-message';
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;

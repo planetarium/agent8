@@ -17,6 +17,7 @@ import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
+import { ABORTED_ANNOTATION, HIDDEN_ANNOTATION, RESTORE_MESSAGE_ANNOTATION } from '~/utils/constants';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -104,9 +105,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       loadingBefore,
       loadBefore,
     } = props;
-
-    // Check if response was stopped by user
-    const isStopped = isAborted;
 
     // Check if response is being generated (same condition as "Generating Response" UI)
     const isGenerating = progressAnnotations.some((p) => p.label === 'response' && p.status === 'in-progress');
@@ -208,13 +206,13 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const { role, id: messageId } = message;
               const messageText = extractAllTextContent(message);
               const messageMetadata = message.metadata as any;
-              const isHidden = messageMetadata?.annotations?.includes('hidden');
-              const isRestoreMessage = messageMetadata?.annotations?.includes('restore-message');
+              const isHidden = messageMetadata?.annotations?.includes(HIDDEN_ANNOTATION);
+              const isRestoreMessage = messageMetadata?.annotations?.includes(RESTORE_MESSAGE_ANNOTATION);
               const isForkMessage = messageText.startsWith('Fork from');
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
-              const isMessageAborted = messageMetadata?.annotations?.includes('aborted');
+              const isMessageAborted = messageMetadata?.annotations?.includes(ABORTED_ANNOTATION);
 
               /*
                * Only consider it the first assistant message if there are no more messages to load
@@ -355,7 +353,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   />
                                 </div>
                               </>
-                            ) : isLast && !isStopped ? (
+                            ) : isLast && !isAborted ? (
                               <span
                                 className="text-heading-xs"
                                 style={{

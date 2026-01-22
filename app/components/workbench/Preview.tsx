@@ -93,7 +93,7 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
     setUrl('');
     setIframeUrl(undefined);
 
-    await workbenchStore.runPreview();
+    await workbenchStore.runPreview({ force: true });
   }, []);
 
   // Reset preview URLs when requested (prevents mobile download prompts)
