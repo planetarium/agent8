@@ -43,7 +43,7 @@ import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
-import { ABORTED_ANNOTATION } from '~/utils/constants';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 import { streamingState, shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
 import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
@@ -737,7 +737,7 @@ export const ChatImpl = memo(
         }
 
         // Skip processing if message was aborted (already handled by abort function)
-        if ((message.metadata as any)?.annotations?.includes(ABORTED_ANNOTATION)) {
+        if ((message.metadata as any)?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED)) {
           addDebugLog('onFinish: message was aborted, skipping');
           return;
         }
@@ -921,7 +921,7 @@ export const ChatImpl = memo(
             ],
             metadata: {
               createdAt: new Date(),
-              annotations: ['restore-message'],
+              annotations: [MESSAGE_ANNOTATIONS.RESTORE_MESSAGE],
             },
           };
 
@@ -1058,7 +1058,7 @@ export const ChatImpl = memo(
                     ...msg,
                     metadata: {
                       ...(msg.metadata as any),
-                      annotations: [...((msg.metadata as any)?.annotations || []), ABORTED_ANNOTATION],
+                      annotations: [...((msg.metadata as any)?.annotations || []), MESSAGE_ANNOTATIONS.ABORTED],
                     },
                   }
                 : msg,
@@ -1072,7 +1072,7 @@ export const ChatImpl = memo(
           role: 'assistant',
           parts: [{ type: 'text', text: '' }],
           metadata: {
-            annotations: [ABORTED_ANNOTATION],
+            annotations: [MESSAGE_ANNOTATIONS.ABORTED],
           },
         };
 

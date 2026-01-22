@@ -17,7 +17,7 @@ import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
-import { ABORTED_ANNOTATION, HIDDEN_ANNOTATION, RESTORE_MESSAGE_ANNOTATION } from '~/utils/constants';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -206,13 +206,13 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const { role, id: messageId } = message;
               const messageText = extractAllTextContent(message);
               const messageMetadata = message.metadata as any;
-              const isHidden = messageMetadata?.annotations?.includes(HIDDEN_ANNOTATION);
-              const isRestoreMessage = messageMetadata?.annotations?.includes(RESTORE_MESSAGE_ANNOTATION);
+              const isHidden = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.HIDDEN);
+              const isRestoreMessage = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.RESTORE_MESSAGE);
               const isForkMessage = messageText.startsWith('Fork from');
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
-              const isMessageAborted = messageMetadata?.annotations?.includes(ABORTED_ANNOTATION);
+              const isMessageAborted = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED);
 
               /*
                * Only consider it the first assistant message if there are no more messages to load
@@ -223,7 +223,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 !hasMore &&
                 messages.slice(0, index).filter((m) => {
                   const meta = m.metadata as any;
-                  const isHiddenMsg = meta?.annotations?.includes('hidden');
+                  const isHiddenMsg = meta?.annotations?.includes(MESSAGE_ANNOTATIONS.HIDDEN);
 
                   return m.role === 'assistant' && !isHiddenMsg;
                 }).length === 0;
