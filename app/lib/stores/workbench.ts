@@ -5,6 +5,7 @@ import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/mes
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { ERROR_NAMES, SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { chatStore } from '~/lib/stores/chat';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
@@ -108,6 +109,7 @@ export class WorkbenchStore {
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
+  shouldResetPreviewUrls: WritableAtom<boolean> = import.meta.hot?.data.shouldResetPreviewUrls ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -143,6 +145,7 @@ export class WorkbenchStore {
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
       import.meta.hot.data.isDeploying = this.isDeploying;
+      import.meta.hot.data.shouldResetPreviewUrls = this.shouldResetPreviewUrls;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -1240,7 +1243,21 @@ export class WorkbenchStore {
     return { user, verseId };
   }
 
-  async runPreview() {
+  // Reset preview URLs to prevent download prompts on mobile
+  resetPreviewUrls() {
+    this.shouldResetPreviewUrls.set(true);
+
+    // Immediately reset to false so it can be triggered again
+    setTimeout(() => this.shouldResetPreviewUrls.set(false), 0);
+  }
+
+  async runPreview(options: { force?: boolean } = {}) {
+    // Don't run preview if response was aborted (unless forced)
+    if (!options.force && chatStore.get().aborted) {
+      logger.info('Preview cancelled: response was aborted');
+      return;
+    }
+
     this.isRunningPreview.set(true);
 
     const shell = this.boltTerminal;

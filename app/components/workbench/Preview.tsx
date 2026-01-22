@@ -7,10 +7,10 @@ import {
   useWorkbenchConnectionState,
   useWorkbenchIsRunningPreview,
   useWorkbenchMobilePreviewMode,
+  useWorkbenchStore,
 } from '~/lib/hooks/useWorkbenchStore';
 import useViewport from '~/lib/hooks';
 import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
-import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { PortDropdown } from './PortDropdown';
 import { shouldIgnoreError } from '~/utils/errorFilters';
@@ -87,13 +87,26 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
   const mobilePreviewMode = useWorkbenchMobilePreviewMode();
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const activePreview = previews[activePreviewIndex];
+  const workbenchStore = useWorkbenchStore();
 
   const onRun = useCallback(async () => {
     setUrl('');
     setIframeUrl(undefined);
 
-    await workbenchStore.runPreview();
+    await workbenchStore.runPreview({ force: true });
   }, []);
+
+  // Reset preview URLs when requested (prevents mobile download prompts)
+  useEffect(() => {
+    const unsubscribe = workbenchStore.shouldResetPreviewUrls.subscribe((shouldReset) => {
+      if (shouldReset) {
+        setUrl('');
+        setIframeUrl(undefined);
+      }
+    });
+
+    return unsubscribe;
+  }, [workbenchStore]);
 
   // Reset loading state when preview becomes available
   useEffect(() => {

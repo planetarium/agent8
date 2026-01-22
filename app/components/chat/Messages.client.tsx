@@ -17,6 +17,7 @@ import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -43,6 +44,7 @@ interface MessagesProps {
   id?: string;
   className?: string;
   isStreaming?: boolean;
+  isAborted?: boolean;
   messages?: UIMessage[];
   annotations?: JSONValue[];
   progressAnnotations?: ProgressAnnotation[];
@@ -89,6 +91,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
     const {
       id,
       isStreaming = false,
+      isAborted = false,
       messages = [],
       annotations = [],
       progressAnnotations = [],
@@ -203,12 +206,13 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const { role, id: messageId } = message;
               const messageText = extractAllTextContent(message);
               const messageMetadata = message.metadata as any;
-              const isHidden = messageMetadata?.annotations?.includes('hidden');
-              const isRestoreMessage = messageMetadata?.annotations?.includes('restore-message');
+              const isHidden = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.HIDDEN);
+              const isRestoreMessage = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.RESTORE_MESSAGE);
               const isForkMessage = messageText.startsWith('Fork from');
               const isUserMessage = role === 'user';
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
+              const isMessageAborted = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED);
 
               /*
                * Only consider it the first assistant message if there are no more messages to load
@@ -219,7 +223,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                 !hasMore &&
                 messages.slice(0, index).filter((m) => {
                   const meta = m.metadata as any;
-                  const isHiddenMsg = meta?.annotations?.includes('hidden');
+                  const isHiddenMsg = meta?.annotations?.includes(MESSAGE_ANNOTATIONS.HIDDEN);
 
                   return m.role === 'assistant' && !isHiddenMsg;
                 }).length === 0;
@@ -262,6 +266,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
               return (
                 <Fragment key={index}>
+                  {/* Loading state - only for last message being generated */}
                   {!isUserMessage && messageText.trim() === '' && isLast && isGenerating ? (
                     <div className="flex flex-col justify-start items-start gap-3 p-[14px] self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -271,6 +276,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                         <div className="flex-1 min-w-0">
                           <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
                         </div>
+                      </div>
+                    </div>
+                  ) : !isUserMessage && messageText.trim() === '' && isMessageAborted ? (
+                    <div className="flex flex-col justify-start items-start gap-0 self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+                      <div className="relative flex items-center justify-between p-[14px] w-full bg-primary rounded-[23px] rounded-bl-none">
+                        <span className="text-heading-xs text-subtle">Response Stopped</span>
                       </div>
                     </div>
                   ) : (
@@ -342,7 +353,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   />
                                 </div>
                               </>
-                            ) : isLast ? (
+                            ) : isLast && !isAborted ? (
                               <span
                                 className="text-heading-xs"
                                 style={{
@@ -356,22 +367,26 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 Response Generated
                               </span>
                             ) : (
-                              <span className="text-heading-xs text-subtle">Response Generated</span>
+                              <span className="text-heading-xs text-subtle">
+                                {isMessageAborted ? 'Response Stopped' : 'Response Generated'}
+                              </span>
                             )}
                           </div>
-                          {/* Show All/Hide button: always visible */}
-                          <button
-                            onClick={(e) => toggleExpanded(index, e)}
-                            className="flex text-interactive-neutral text-heading-2xs bg-primary gap-0.5 items-center"
-                          >
-                            {expandedMessages.has(index) ? 'Hide' : 'Show All'}
-                            <ChevronRightIcon
-                              width={16}
-                              height={16}
-                              fill="currentColor"
-                              className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
-                            />
-                          </button>
+                          {/* Show All/Hide button: only visible when message has content */}
+                          {messageText.trim() !== '' && (
+                            <button
+                              onClick={(e) => toggleExpanded(index, e)}
+                              className="flex text-interactive-neutral text-heading-2xs bg-primary gap-0.5 items-center"
+                            >
+                              {expandedMessages.has(index) ? 'Hide' : 'Show All'}
+                              <ChevronRightIcon
+                                width={16}
+                                height={16}
+                                fill="currentColor"
+                                className={`${expandedMessages.has(index) ? '-rotate-90' : ''}`}
+                              />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -380,8 +395,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                   {isEnabledGitbasePersistence && !isUserMessage && !(isLast && isGenerating) && (
                     <div className="flex justify-between items-center px-2 mt-0.5">
                       <div className="flex items-start gap-3">
-                        {/* Show Bookmark button for assistant messages with commit hash */}
-                        {role === 'assistant' &&
+                        {/* Show Bookmark button for assistant messages with commit hash (only if message has content and not aborted) */}
+                        {messageText.trim() !== '' &&
+                          !isMessageAborted &&
+                          role === 'assistant' &&
                           messageId &&
                           (() => {
                             const commitHash = getCommitHashFromMessageId(messageId);
@@ -467,8 +484,10 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             </Tooltip.Content>
                           </Tooltip.Portal>
                         </Tooltip.Root>
-                        {/* Show Restore button for assistant messages with commit hash (except last message) */}
-                        {messageId &&
+                        {/* Show Restore button for assistant messages with commit hash (except last message, only if message has content and not aborted) */}
+                        {messageText.trim() !== '' &&
+                          !isMessageAborted &&
+                          messageId &&
                           isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           role === 'assistant' &&
                           !isLast && (
@@ -505,59 +524,68 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               </Tooltip.Portal>
                             </Tooltip.Root>
                           )}
-                        {/* Show Retry button only for the last message */}
-                        {index > 0 && messages[index - 1]?.role === 'user' && isLast && (
-                          <Tooltip.Root delayDuration={100}>
-                            <Tooltip.Trigger asChild>
-                              <CustomIconButton
-                                variant="secondary-transparent"
-                                size="sm"
-                                icon={<RefreshIcon size={20} />}
-                                onClick={() => {
-                                  const prevUserMessage = messages[index - 1];
-                                  const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
-                                  onRetry?.(prevUserMessage, prevPrevMessage);
-                                }}
-                                disabled={isGenerating}
-                              />
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                side="bottom"
-                              >
-                                Retry
-                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        )}
-                        {/* Show View Diff button after Retry (if Retry exists) or after Revert (if no Retry) */}
-                        {!isFirstAssistantMessage && !isSmallViewport && (
-                          <Tooltip.Root delayDuration={100}>
-                            <Tooltip.Trigger asChild>
-                              <CustomIconButton
-                                variant="secondary-transparent"
-                                size="sm"
-                                icon={<DiffIcon size={20} />}
-                                onClick={() => onViewDiff?.(message)}
-                                disabled={false}
-                              />
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
-                                side="bottom"
-                              >
-                                View diff
-                                <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        )}
+                        {/* Show Retry button only for the last message (only if message has content and not aborted) */}
+                        {messageText.trim() !== '' &&
+                          !isMessageAborted &&
+                          index > 0 &&
+                          messages[index - 1]?.role === 'user' &&
+                          isLast && (
+                            <Tooltip.Root delayDuration={100}>
+                              <Tooltip.Trigger asChild>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<RefreshIcon size={20} />}
+                                  onClick={() => {
+                                    const prevUserMessage = messages[index - 1];
+                                    const prevPrevMessage = index > 1 ? messages[index - 2] : undefined;
+                                    onRetry?.(prevUserMessage, prevPrevMessage);
+                                  }}
+                                  disabled={isGenerating}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                  side="bottom"
+                                >
+                                  Retry
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
+                        {/* Show View Diff button after Retry (if Retry exists) or after Revert (if no Retry, only if message has content and not aborted) */}
+                        {messageText.trim() !== '' &&
+                          !isMessageAborted &&
+                          !isFirstAssistantMessage &&
+                          !isSmallViewport && (
+                            <Tooltip.Root delayDuration={100}>
+                              <Tooltip.Trigger asChild>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<DiffIcon size={20} />}
+                                  onClick={() => onViewDiff?.(message)}
+                                  disabled={false}
+                                />
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content
+                                  className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+                                  side="bottom"
+                                >
+                                  View diff
+                                  <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)]" />
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          )}
                       </div>
                       <div className="flex items-center">
-                        {messageId &&
+                        {messageText.trim() !== '' &&
+                          !isMessageAborted &&
+                          messageId &&
                           isCommitHash(getCommitHashFromMessageId(messageId)) &&
                           (() => {
                             const commitHash = getCommitHashFromMessageId(messageId);
@@ -578,13 +606,16 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                               </CustomButton>
                             ) : null;
                           })()}
-                        {isLast && (
+                        {messageText.trim() !== '' && !isMessageAborted && isLast && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
                               <CustomButton
                                 variant="primary-text"
                                 size="sm"
                                 onClick={() => {
+                                  // Reset preview URLs to prevent download prompts on mobile
+                                  workbenchStore.resetPreviewUrls();
+
                                   workbenchStore.runPreview();
 
                                   // On mobile, immediately show preview screen
@@ -626,6 +657,15 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               <div className="flex-1 min-w-0">
                 <LoadingMessage isSmallViewport={isSmallViewport} currentMessageIndex={currentMessageIndex} />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Show "Response Stopped" UI when aborted before any AI response */}
+        {!isStreaming && isAborted && (messages.length === 0 || messages[messages.length - 1]?.role === 'user') && (
+          <div className="flex flex-col justify-start items-start gap-0 self-stretch rounded-[24px_24px_24px_0] border border-tertiary bg-primary backdrop-blur-[4px] mt-3">
+            <div className="relative flex items-center justify-between p-[14px] w-full bg-primary rounded-[23px] rounded-bl-none">
+              <span className="text-heading-xs text-subtle">Response Stopped</span>
             </div>
           </div>
         )}

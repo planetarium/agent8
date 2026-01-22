@@ -43,6 +43,7 @@ import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 import { streamingState, shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
 import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
@@ -75,6 +76,7 @@ import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
+import { isMobileOS } from '~/utils/mobile';
 
 const logger = createScopedLogger('Chat');
 
@@ -507,8 +509,8 @@ export const ChatImpl = memo(
 
         workbench.currentView.set('preview');
 
-        // On mobile, show preview screen immediately
-        if (isSmallViewport) {
+        // On mobile, show preview screen immediately (only if not aborted)
+        if (isSmallViewport && !chatStore.get().aborted) {
           workbench.mobilePreviewMode.set(true);
         }
 
@@ -529,8 +531,11 @@ export const ChatImpl = memo(
         break;
       }
 
-      // On mobile, show preview screen immediately (before waiting for preview to complete)
-      if (isSmallViewport) {
+      /*
+       * On mobile, show preview screen immediately (before waiting for preview to complete)
+       * Don't switch to preview if response was aborted
+       */
+      if (isSmallViewport && !chatStore.get().aborted) {
         workbench.mobilePreviewMode.set(true);
       }
 
@@ -731,6 +736,12 @@ export const ChatImpl = memo(
           return;
         }
 
+        // Skip processing if message was aborted (already handled by abort function)
+        if ((message.metadata as any)?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED)) {
+          addDebugLog('onFinish: message was aborted, skipping');
+          return;
+        }
+
         addDebugLog('onFinish');
 
         const usage =
@@ -825,7 +836,7 @@ export const ChatImpl = memo(
       // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
       const handleVisibilityChange = () => {
         // Only abort on mobile devices to save battery/data
-        if (document.hidden && isStreaming && isSmallViewport) {
+        if (document.hidden && isStreaming && isMobileOS()) {
           logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
           abortAllOperations();
         }
@@ -838,7 +849,7 @@ export const ChatImpl = memo(
         window.removeEventListener('beforeunload', handleBeforeUnload);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
-    }, [status, isLoading, fakeLoading, loading, isSmallViewport]);
+    }, [status, isLoading, fakeLoading, loading]);
 
     // Refs to hold latest function references for cleanup
     const stopRef = useRef(stop);
@@ -910,12 +921,23 @@ export const ChatImpl = memo(
             ],
             metadata: {
               createdAt: new Date(),
-              annotations: ['restore-message'],
+              annotations: [MESSAGE_ANNOTATIONS.RESTORE_MESSAGE],
             },
           };
 
           // Add restore message to current messages directly
           setMessages((prev) => [...prev, restoreMessage]);
+
+          // Reset aborted state when restoring to a new state
+          chatStore.setKey('aborted', false);
+
+          // Auto-run preview after restore (force execution even if aborted)
+          setTimeout(() => {
+            workbench.runPreview({ force: true }).catch((error) => {
+              logger.error('Auto preview after restore failed:', error);
+            });
+          }, 1000); // Small delay to ensure files are loaded
+
           clearRestoreEvent();
         }
       });
@@ -1022,6 +1044,40 @@ export const ChatImpl = memo(
       setFakeLoading(false);
       setChatData([]);
       chatStore.setKey('aborted', true);
+
+      // Check if there's an ongoing AI response (last message is assistant)
+      setMessages((prev) => {
+        if (prev.length > 0) {
+          const lastMessage = prev[prev.length - 1];
+
+          if (lastMessage.role === 'assistant') {
+            // Add 'aborted' annotation to the ongoing AI response
+            return prev.map((msg) =>
+              msg.id === lastMessage.id
+                ? {
+                    ...msg,
+                    metadata: {
+                      ...(msg.metadata as any),
+                      annotations: [...((msg.metadata as any)?.annotations || []), MESSAGE_ANNOTATIONS.ABORTED],
+                    },
+                  }
+                : msg,
+            );
+          }
+        }
+
+        // If no ongoing AI response, create a new empty AI message with 'aborted' annotation
+        const abortedMessage: UIMessage = {
+          id: `assistant-aborted-${Date.now()}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: '' }],
+          metadata: {
+            annotations: [MESSAGE_ANNOTATIONS.ABORTED],
+          },
+        };
+
+        return [...prev, abortedMessage];
+      });
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -2111,6 +2167,7 @@ export const ChatImpl = memo(
     };
 
     const isStreaming = isLoading || fakeLoading || loading;
+    const isAborted = chatStore.get().aborted;
 
     // Get Wake Lock controls (disableWakeLock is handled automatically by the hook)
     const { enableWakeLock } = useWakeLock(isStreaming);
@@ -2124,6 +2181,7 @@ export const ChatImpl = memo(
           showChat={showChat}
           chatStarted={chatStarted}
           isStreaming={isStreaming}
+          isAborted={isAborted}
           onStreamingChange={(streaming) => {
             streamingState.set(streaming);
 

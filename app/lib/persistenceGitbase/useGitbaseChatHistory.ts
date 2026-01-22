@@ -14,6 +14,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
 import type { RestoreHistoryEntry } from '~/lib/persistenceGitbase/gitlabService';
 import { restoreEventStore } from '~/lib/stores/restore';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
 
@@ -233,7 +234,7 @@ export function useGitbaseChatHistory() {
                   ],
                   metadata: {
                     createdAt: new Date(entry.restoredAt),
-                    annotations: ['restore-message'],
+                    annotations: [MESSAGE_ANNOTATIONS.RESTORE_MESSAGE],
                   },
                 };
               });
@@ -253,7 +254,7 @@ export function useGitbaseChatHistory() {
             // Get existing restore message IDs to avoid duplicates
             const existingRestoreIds = new Set(
               prevChats
-                .filter((msg) => (msg.metadata as any)?.annotations?.includes('restore-message'))
+                .filter((msg) => (msg.metadata as any)?.annotations?.includes(MESSAGE_ANNOTATIONS.RESTORE_MESSAGE))
                 .map((msg) => msg.id),
             );
 
@@ -596,7 +597,7 @@ const parseCommitMessages = (commits: Commit[]): UIMessage[] => {
         ],
         metadata: {
           createdAt: new Date(commit.created_at),
-          annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
+          annotations: isInitialCommit(commit.message) ? [MESSAGE_ANNOTATIONS.HIDDEN] : [],
         },
       });
     }
