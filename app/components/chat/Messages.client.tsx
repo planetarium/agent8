@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useState, useEffect } from 'react';
+import { Fragment, forwardRef, useState, useEffect, useCallback } from 'react';
 import type { ForwardedRef } from 'react';
 import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,7 @@ import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
-import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
+import { MESSAGE_ANNOTATIONS, TERMINAL_ERROR_TEXT } from '~/utils/constants';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -144,6 +144,20 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
       }
     }, [lastAssistantIndex]);
 
+    const handleTerminalErrorToggle = useCallback((messageIndex: number) => {
+      setExpandedMessages((prev) => {
+        const newSet = new Set(prev);
+
+        if (newSet.has(messageIndex)) {
+          newSet.delete(messageIndex);
+        } else {
+          newSet.add(messageIndex);
+        }
+
+        return newSet;
+      });
+    }, []);
+
     const toggleExpanded = (index: number, event: React.MouseEvent) => {
       const isExpanding = !expandedMessages.has(index);
 
@@ -213,6 +227,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
               const isMessageAborted = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED);
+              const isTerminalError = messageText.includes(TERMINAL_ERROR_TEXT);
 
               /*
                * Only consider it the first assistant message if there are no more messages to load
@@ -320,7 +335,12 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                             ) : null;
                           })()}
                         {isUserMessage ? (
-                          <UserMessage content={messageText} isLast={isLast} />
+                          <UserMessage
+                            content={messageText}
+                            isLast={isLast}
+                            expanded={isTerminalError ? expandedMessages.has(index) : undefined}
+                            onToggleExpand={isTerminalError ? () => handleTerminalErrorToggle(index) : undefined}
+                          />
                         ) : (
                           <AssistantMessage
                             content={messageText}

@@ -14,6 +14,9 @@ export const MESSAGE_ANNOTATIONS = {
   RESTORE_MESSAGE: 'restore-message',
 } as const;
 
+// Terminal error messages
+export const TERMINAL_ERROR_TEXT = 'Fix this terminal error';
+
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
