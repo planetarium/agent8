@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ProviderInfo } from '~/types/model';
 import { createScopedLogger } from '~/utils/logger';
+import { getTurnstileHeaders } from '~/lib/turnstile/client';
 
 const logger = createScopedLogger('usePromptEnhancement');
 
@@ -33,8 +34,14 @@ export function usePromptEnhancer() {
       requestBody.apiKeys = apiKeys;
     }
 
+    const turnstileHeaders = await getTurnstileHeaders();
+
     const response = await fetch('/api/enhancer', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...turnstileHeaders,
+      },
       body: JSON.stringify(requestBody),
     });
 
