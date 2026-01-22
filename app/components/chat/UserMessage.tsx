@@ -3,7 +3,7 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import { useRef, useState, useEffect } from 'react';
-import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX } from '~/utils/constants';
+import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX, TERMINAL_ERROR_TEXT } from '~/utils/constants';
 import { Markdown } from './Markdown';
 import FilePreview from './FilePreview';
 import { ChevronRightIcon } from '~/components/ui/Icons';
@@ -11,48 +11,58 @@ import { ChevronRightIcon } from '~/components/ui/Icons';
 interface UserMessageProps {
   content: string;
   isLast?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-export function UserMessage({ content, isLast = false }: UserMessageProps) {
+export function UserMessage({ content, isLast = false, expanded: externalExpanded, onToggleExpand }: UserMessageProps) {
   const textContent = stripMetadata(content);
   const attachments = content ? extractAttachments(content) : [];
 
   const textRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false);
-  const [expanded, setExpanded] = useState<boolean>(isLast);
+  const [internalExpanded, setInternalExpanded] = useState<boolean>(isLast);
+  const expanded = externalExpanded !== undefined ? externalExpanded : internalExpanded;
+  const isControlled = externalExpanded !== undefined;
 
-  // Collapse when this message is no longer the last one
+  // Collapse when this message is no longer the last one (only for uncontrolled components)
   useEffect(() => {
-    if (!isLast) {
-      setExpanded(false);
+    if (!isControlled && !isLast) {
+      setInternalExpanded(false);
     }
-  }, [isLast]);
+  }, [isLast, isControlled]);
 
   // Handle expand/collapse with upward expansion (keep bottom fixed)
   const handleToggleExpand = () => {
-    if (!expanded && containerRef.current) {
-      // Get scroll container (chat container)
-      const scrollContainer = containerRef.current.closest('.chat-container');
+    if (isControlled && onToggleExpand) {
+      // External toggle function provided (e.g., for terminal errors)
+      onToggleExpand();
+    } else if (!isControlled) {
+      // Internal toggle logic
+      if (!expanded && containerRef.current) {
+        // Get scroll container (chat container)
+        const scrollContainer = containerRef.current.closest('.chat-container');
 
-      if (scrollContainer) {
-        const prevHeight = containerRef.current.offsetHeight;
+        if (scrollContainer) {
+          const prevHeight = containerRef.current.offsetHeight;
 
-        setExpanded(true);
+          setInternalExpanded(true);
 
-        // After state update, adjust scroll position
-        requestAnimationFrame(() => {
-          if (containerRef.current) {
-            const newHeight = containerRef.current.offsetHeight;
-            const heightDiff = newHeight - prevHeight;
-            scrollContainer.scrollTop += heightDiff;
-          }
-        });
+          // After state update, adjust scroll position
+          requestAnimationFrame(() => {
+            if (containerRef.current) {
+              const newHeight = containerRef.current.offsetHeight;
+              const heightDiff = newHeight - prevHeight;
+              scrollContainer.scrollTop += heightDiff;
+            }
+          });
+        } else {
+          setInternalExpanded(true);
+        }
       } else {
-        setExpanded(true);
+        setInternalExpanded(false);
       }
-    } else {
-      setExpanded(false);
     }
   };
 
@@ -95,9 +105,17 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
           <div>
             <div
               ref={textRef}
-              className={!expanded && isOverflowing ? (hasCodeBlock ? 'overflow-hidden' : 'line-clamp-3') : ''}
+              className={
+                !expanded && (isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT))
+                  ? hasCodeBlock
+                    ? 'overflow-hidden'
+                    : 'line-clamp-3'
+                  : ''
+              }
               style={
-                !expanded && isOverflowing && hasCodeBlock ? { maxHeight: `${MAX_COLLAPSED_HEIGHT}px` } : undefined
+                !expanded && (isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT)) && hasCodeBlock
+                  ? { maxHeight: `${MAX_COLLAPSED_HEIGHT}px`, overflow: 'hidden' }
+                  : undefined
               }
             >
               <Markdown html>{textContent}</Markdown>
@@ -110,7 +128,7 @@ export function UserMessage({ content, isLast = false }: UserMessageProps) {
       </div>
 
       {/* Show All / Hide button */}
-      {(isOverflowing || textContent.includes('Fix this terminal error')) && (
+      {(isOverflowing || textContent.includes(TERMINAL_ERROR_TEXT)) && (
         <div className="flex justify-end pt-2">
           <button
             onClick={handleToggleExpand}
