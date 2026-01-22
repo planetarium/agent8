@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from '@remix-run/cloudflare';
-import { verifyTurnstileToken } from './verify';
+import { verifyTurnstileToken, TURNSTILE_ERROR_CODES } from './verify';
 import { getCachedVerification, setCachedVerification } from './cache';
 import { TURNSTILE_TOKEN_HEADER } from './client';
 
@@ -56,7 +56,7 @@ export function withTurnstile(handler: (args: ActionFunctionArgs) => Promise<Res
     const verifyResult = await verifyTurnstileToken(token, env.TURNSTILE_SECRET_KEY, remoteIp);
 
     if (!verifyResult.success) {
-      const message = verifyResult['error-codes']?.includes('timeout-or-duplicate')
+      const message = verifyResult['error-codes']?.includes(TURNSTILE_ERROR_CODES.TIMEOUT_OR_DUPLICATE)
         ? 'Verification token expired or already used'
         : 'Bot verification failed';
 

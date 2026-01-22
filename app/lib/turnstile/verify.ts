@@ -4,6 +4,18 @@ const logger = createScopedLogger('turnstile.verify');
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
+/**
+ * Error codes for Turnstile verification.
+ * TIMEOUT_OR_DUPLICATE: Cloudflare - token expired or already used
+ * API_ERROR: Internal - Cloudflare API request failed
+ * INTERNAL_ERROR: Internal - unexpected error during verification
+ */
+export const TURNSTILE_ERROR_CODES = {
+  TIMEOUT_OR_DUPLICATE: 'timeout-or-duplicate',
+  API_ERROR: 'api-error',
+  INTERNAL_ERROR: 'internal-error',
+} as const;
+
 export interface TurnstileVerifyResponse {
   success: boolean;
   'error-codes'?: string[];
@@ -32,7 +44,7 @@ export async function verifyTurnstileToken(
 
     if (!response.ok) {
       logger.error(`Turnstile API error: ${response.status}`);
-      return { success: false, 'error-codes': ['api-error'] };
+      return { success: false, 'error-codes': [TURNSTILE_ERROR_CODES.API_ERROR] };
     }
 
     const result = await response.json<TurnstileVerifyResponse>();
@@ -44,6 +56,6 @@ export async function verifyTurnstileToken(
     return result;
   } catch (error) {
     logger.error('Turnstile verification error:', error);
-    return { success: false, 'error-codes': ['internal-error'] };
+    return { success: false, 'error-codes': [TURNSTILE_ERROR_CODES.INTERNAL_ERROR] };
   }
 }
