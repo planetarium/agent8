@@ -17,23 +17,25 @@ export function UnauthorizedPage({
   showBackButton = false,
 }: UnauthorizedPageProps) {
   const [hasEmail, setHasEmail] = useState<boolean | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const checkUserEmail = async () => {
-      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || Cookies.get(V8_ACCESS_TOKEN_KEY);
-
-      if (!accessToken) {
-        setHasEmail(null);
-        return;
-      }
-
       try {
-        const v8AuthApiEndpoint = import.meta.env.VITE_V8_AUTH_API_ENDPOINT;
-        const userInfo = await verifyV8AccessToken(v8AuthApiEndpoint, accessToken);
-        setHasEmail(!!userInfo.email);
+        const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || Cookies.get(V8_ACCESS_TOKEN_KEY);
+
+        if (!accessToken) {
+          setHasEmail(null);
+        } else {
+          const v8AuthApiEndpoint = import.meta.env.VITE_V8_AUTH_API_ENDPOINT;
+          const userInfo = await verifyV8AccessToken(v8AuthApiEndpoint, accessToken);
+          setHasEmail(!!userInfo.email);
+        }
       } catch (error) {
         logger.warn('Failed to verify access token');
         setHasEmail(null);
+      } finally {
+        setIsInitialized(true);
       }
     };
 
@@ -57,6 +59,24 @@ export function UnauthorizedPage({
       );
     }
   }, []);
+
+  // Loading screen UI
+  const loadingContent = (
+    <div className="flex items-center justify-center min-h-screen bg-bolt-elements-background-depth-1">
+      <div className="relative">
+        {/* Background decoration */}
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-gradient-to-tl from-gray-400/10 to-transparent rounded-full blur-2xl" />
+        </div>
+
+        {/* Circular progress bar */}
+        <div className="w-16 h-16 rounded-full bg-bolt-elements-background-depth-2 flex items-center justify-center shadow-lg opacity-60">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin opacity-80" />
+        </div>
+      </div>
+    </div>
+  );
 
   // Email missing case UI
   const emailMissingContent = (
@@ -187,5 +207,8 @@ export function UnauthorizedPage({
     </div>
   );
 
+  if (!isInitialized) {
+    return loadingContent;
+  }
   return hasEmail === false ? emailMissingContent : tokenIssueContent;
 }
