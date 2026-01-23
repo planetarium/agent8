@@ -72,6 +72,7 @@ import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth'
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
 import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
+import { runInNextTick } from '~/utils/async';
 
 const logger = createScopedLogger('Chat');
 
@@ -444,6 +445,7 @@ export const ChatImpl = memo(
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
     const isPageUnloadingRef = useRef<boolean>(false);
+    const isPageTearingDownRef = useRef<boolean>(false);
     const sendMessageAbortControllerRef = useRef<AbortController | null>(null);
 
     /*
@@ -681,13 +683,18 @@ export const ChatImpl = memo(
         });
       },
       onError: (e) => {
+        clearProgressState();
+        setFakeLoading(false);
+
         if (isPageUnloadingRef.current) {
           logger.debug('Skipping error notification, page is unloading');
           return;
         }
 
-        clearProgressState();
-        setFakeLoading(false);
+        if (isPageTearingDownRef.current) {
+          logger.debug('Skipping error notification, page is tearing down');
+          return;
+        }
 
         if (isAbortError(e)) {
           return;
@@ -718,17 +725,18 @@ export const ChatImpl = memo(
         };
 
         if (isNetworkError(e)) {
-          /*
-           * [Delay] 200ms delay to allow the browser to complete cleanup tasks when removing iframe
-           * During this time, we expect the unload event to fire and set isPageUnloadingRef to true
-           */
-          setTimeout(() => {
+          // Delay to next tick to prevent execution during iframe removal
+          runInNextTick(() => {
             if (isPageUnloadingRef.current) {
               return;
             }
 
+            if (isPageTearingDownRef.current) {
+              return;
+            }
+
             logAndProcessError();
-          }, 200);
+          });
         } else {
           logAndProcessError();
         }
@@ -847,12 +855,28 @@ export const ChatImpl = memo(
         abortAllOperations();
       };
 
+      const handlePageHide = () => {
+        addDebugLog('pagehide');
+
+        isPageTearingDownRef.current = true;
+      };
+
+      const handlePageShow = () => {
+        addDebugLog('pageshow');
+
+        isPageTearingDownRef.current = false;
+      };
+
       window.addEventListener('beforeunload', handleBeforeUnload);
       window.addEventListener('unload', handleUnload);
+      window.addEventListener('pagehide', handlePageHide);
+      window.addEventListener('pageshow', handlePageShow);
 
       return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
         window.removeEventListener('unload', handleUnload);
+        window.removeEventListener('pagehide', handlePageHide);
+        window.removeEventListener('pageshow', handlePageShow);
       };
     }, []);
 
@@ -880,15 +904,6 @@ export const ChatImpl = memo(
       stopRef.current();
       workbenchRef.current.abortAllActions();
     };
-
-    /*
-     * Cleanup on unmount - abort all in-progress operations
-     * useEffect(() => {
-     *   return () => {
-     *     abortAllOperations();
-     *   };
-     * }, []);
-     */
 
     // Stop chat when deploy starts
     useEffect(() => {
