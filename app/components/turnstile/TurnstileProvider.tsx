@@ -11,9 +11,26 @@ export class TurnstileCancelledError extends Error {
 }
 
 export class TurnstileFailedError extends Error {
-  constructor() {
-    super('Turnstile verification failed');
+  constructor(
+    message = 'Turnstile verification failed',
+    readonly errorCode?: string,
+  ) {
+    super(message);
     this.name = 'TurnstileFailedError';
+  }
+}
+
+export class TurnstileTimeoutError extends Error {
+  constructor() {
+    super('Turnstile verification timed out');
+    this.name = 'TurnstileTimeoutError';
+  }
+}
+
+export class TurnstileUnsupportedError extends Error {
+  constructor() {
+    super('Turnstile is not supported in this browser');
+    this.name = 'TurnstileUnsupportedError';
   }
 }
 
@@ -28,6 +45,7 @@ interface TurnstileProviderProps {
 }
 
 const MAX_RETRY_COUNT = 30; // 3s timeout (100ms * 30)
+const CHALLENGE_TIMEOUT_MS = 15000; // 15s max for entire challenge including retries
 
 export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,8 +53,18 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
   const resolverRef = useRef<ResolverRef | null>(null);
   const widgetIdRef = useRef<string | undefined>(undefined);
   const pendingRequestRef = useRef<Promise<string> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearChallengeTimeout = useCallback(() => {
+    if (challengeTimeoutRef.current) {
+      clearTimeout(challengeTimeoutRef.current);
+      challengeTimeoutRef.current = null;
+    }
+  }, []);
 
   const cleanup = useCallback(() => {
+    clearChallengeTimeout();
+
     if (widgetIdRef.current && window.turnstile) {
       try {
         window.turnstile.remove(widgetIdRef.current);
@@ -46,16 +74,17 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     }
 
     widgetIdRef.current = undefined;
-  }, []);
+  }, [clearChallengeTimeout]);
 
   const finish = useCallback(
     (token: string | null) => {
+      clearChallengeTimeout();
       setIsModalOpen(false);
       resolverRef.current?.resolve(token);
       resolverRef.current = null;
       cleanup();
     },
-    [cleanup],
+    [clearChallengeTimeout, cleanup],
   );
 
   const cancel = useCallback(() => {
@@ -65,12 +94,34 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     cleanup();
   }, [cleanup]);
 
-  const fail = useCallback(() => {
+  const fail = useCallback(
+    (errorCode?: string) => {
+      setIsModalOpen(false);
+
+      const message = errorCode ? `Turnstile verification failed (${errorCode})` : 'Turnstile verification failed';
+      console.error('[Turnstile]', message);
+
+      resolverRef.current?.reject(new TurnstileFailedError(message, errorCode));
+      resolverRef.current = null;
+      cleanup();
+    },
+    [cleanup],
+  );
+
+  const timeout = useCallback(() => {
     setIsModalOpen(false);
-    resolverRef.current?.reject(new TurnstileFailedError());
+    console.error('[Turnstile] Verification timed out');
+    resolverRef.current?.reject(new TurnstileTimeoutError());
     resolverRef.current = null;
     cleanup();
   }, [cleanup]);
+
+  const unsupported = useCallback(() => {
+    setIsModalOpen(false);
+    console.warn('[Turnstile] Browser not supported, proceeding without verification');
+    resolverRef.current?.resolve(null);
+    resolverRef.current = null;
+  }, []);
 
   const getToken = useCallback((): Promise<string> => {
     // Reuse pending request to avoid concurrent widget issues
@@ -85,7 +136,6 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
         return;
       }
 
-      cleanup();
       resolverRef.current = {
         resolve: (token) => {
           pendingRequestRef.current = null;
@@ -101,6 +151,24 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
           reject(error);
         },
       };
+
+      // Start 15s timeout for entire challenge
+      clearChallengeTimeout();
+      challengeTimeoutRef.current = setTimeout(() => {
+        console.error('[Turnstile] Challenge timeout after 15s');
+        timeout();
+      }, CHALLENGE_TIMEOUT_MS);
+
+      // Always remove existing widget and render fresh (avoids interaction-only bug with reset)
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {
+          // Already removed
+        }
+
+        widgetIdRef.current = undefined;
+      }
 
       let retryCount = 0;
 
@@ -123,25 +191,39 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
             theme: 'dark',
             size: 'normal',
             appearance: 'interaction-only',
-            retry: 'never',
+            retry: 'auto',
+            'retry-interval': 3000,
             callback: (token: string) => finish(token),
-            'error-callback': () => {
-              fail();
+            'error-callback': (errorCode: string) => {
+              console.warn('[Turnstile] Challenge error:', errorCode, '- will auto-retry');
+
+              return false;
+            },
+            'timeout-callback': () => {
+              timeout();
 
               return true;
             },
+            'unsupported-callback': () => {
+              unsupported();
+            },
             'before-interactive-callback': () => setIsModalOpen(true),
+            'after-interactive-callback': () => setIsModalOpen(false),
             'expired-callback': () => {
+              // Token expired - cleanup widget, next getToken() will render fresh
               if (widgetIdRef.current && window.turnstile) {
                 try {
-                  window.turnstile.reset(widgetIdRef.current);
+                  window.turnstile.remove(widgetIdRef.current);
                 } catch {
-                  // Widget already removed
+                  // Already removed
                 }
+
+                widgetIdRef.current = undefined;
               }
             },
           });
-        } catch {
+        } catch (e) {
+          console.error('[Turnstile] Render error:', e);
           fail();
         }
       };
@@ -152,11 +234,18 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     pendingRequestRef.current = tokenPromise;
 
     return tokenPromise;
-  }, [siteKey, cleanup, finish, fail]);
+  }, [siteKey, finish, fail, timeout, unsupported, clearChallengeTimeout]);
 
   useEffect(() => {
     setTurnstileTokenGetter(getToken);
   }, [getToken]);
+
+  // Cleanup widget on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {

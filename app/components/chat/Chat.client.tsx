@@ -71,7 +71,6 @@ import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
-import { runInNextFrame } from '~/utils/async';
 import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
 
 const logger = createScopedLogger('Chat');
@@ -719,14 +718,17 @@ export const ChatImpl = memo(
         };
 
         if (isNetworkError(e)) {
-          // Delay to next tick to prevent execution during iframe removal
-          runInNextFrame(() => {
+          /*
+           * [Delay] 200ms delay to allow the browser to complete cleanup tasks when removing iframe
+           * During this time, we expect the unload event to fire and set isPageUnloadingRef to true
+           */
+          setTimeout(() => {
             if (isPageUnloadingRef.current) {
               return;
             }
 
             logAndProcessError();
-          });
+          }, 200);
         } else {
           logAndProcessError();
         }
@@ -936,7 +938,8 @@ export const ChatImpl = memo(
           })
           .catch((error) => {
             const isAborted = isAbortError(error) || sendMessageAbortControllerRef.current?.signal?.aborted;
-            if(isAborted) {
+
+            if (isAborted) {
               logger.info('Setup deploy config aborted by user');
               return;
             }
