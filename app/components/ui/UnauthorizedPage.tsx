@@ -32,7 +32,7 @@ export function UnauthorizedPage({
           setHasEmail(!!userInfo.email);
         }
       } catch (error) {
-        logger.warn('Failed to verify access token');
+        logger.warn('Failed to verify access token', error);
         setHasEmail(null);
       } finally {
         setIsInitialized(true);
@@ -210,5 +210,6 @@ export function UnauthorizedPage({
   if (!isInitialized) {
     return loadingContent;
   }
+
   return hasEmail === false ? emailMissingContent : tokenIssueContent;
 }
