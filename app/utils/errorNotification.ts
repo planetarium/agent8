@@ -152,7 +152,7 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
   }
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
-  if (!filter && sendChatError) {
+  if (!filter?.skipReport && sendChatError) {
     sendChatErrorWithToastMessage(displayMessage, error, context, prompt, elapsedTime, process, metadata).catch(
       (notificationError) => {
         logger.error('Failed to send error notification for:', displayMessage, notificationError);
