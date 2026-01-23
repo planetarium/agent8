@@ -158,7 +158,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
 
   try {
     const mcpConfig = getMCPConfigFromCookie(cookieHeader);
+    checkAborted();
+
     const mcpToolset = await createToolSet(mcpConfig, (context.user as ContextUser)?.accessToken);
+    checkAborted();
+
     const mcpTools = mcpToolset.tools;
     logger.debug(`mcpConfig: ${JSON.stringify(mcpConfig)}`);
 
@@ -739,6 +743,11 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
       stream: messageStream,
     });
   } catch (error: any) {
+    if (isAbortError(error)) {
+      logger.info('Request aborted by client before streaming');
+      throw new Response('Aborted', { status: 499, statusText: 'Client Closed Request' });
+    }
+
     logger.error(error);
 
     if (error.message?.includes('API key')) {
