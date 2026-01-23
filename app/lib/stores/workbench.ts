@@ -1222,26 +1222,39 @@ export class WorkbenchStore {
     return result;
   }
 
-  async setupDeployConfig(shell: BoltShell, options: { reset: boolean } = { reset: false }) {
+  async setupDeployConfig(shell: BoltShell, signal?: AbortSignal, options: { reset: boolean } = { reset: false }) {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        throw new DOMException('Setup deploy config aborted by user', ERROR_NAMES.ABORT);
+      }
+    };
+
+    checkAborted();
     // Get access token
     const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
+    checkAborted();
     if (!accessToken) {
       throw new Error('No access token found');
     }
 
+    checkAborted();
     // Verify user
     const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken);
-
+    
+    checkAborted();
     if (!user.isActivated) {
       throw new Error('Account is not activated');
     }
 
+    checkAborted();
     // Setup environment
     await this.injectTokenEnvironment(shell, accessToken);
 
+    checkAborted();
     const verseId = await this.setupEnvFile(user, options.reset);
 
+    checkAborted();
     return { user, verseId };
   }
 
