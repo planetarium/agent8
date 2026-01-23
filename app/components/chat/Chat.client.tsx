@@ -936,7 +936,8 @@ export const ChatImpl = memo(
           })
           .catch((error) => {
             const isAborted = isAbortError(error) || sendMessageAbortControllerRef.current?.signal?.aborted;
-            if(isAborted) {
+
+            if (isAborted) {
               logger.info('Setup deploy config aborted by user');
               return;
             }

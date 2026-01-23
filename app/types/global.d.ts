@@ -3,7 +3,9 @@ interface TurnstileRenderOptions {
   sitekey: string;
   callback?: (token: string) => void;
   'expired-callback'?: () => void;
-  'error-callback'?: () => boolean | void;
+  'error-callback'?: (errorCode: string) => boolean | void;
+  'timeout-callback'?: () => boolean | void;
+  'unsupported-callback'?: () => void;
   'before-interactive-callback'?: () => void;
   'after-interactive-callback'?: () => void;
   theme?: 'light' | 'dark' | 'auto';

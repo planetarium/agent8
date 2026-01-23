@@ -1230,6 +1230,7 @@ export class WorkbenchStore {
     };
 
     checkAborted();
+
     // Get access token
     const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
@@ -1238,22 +1239,27 @@ export class WorkbenchStore {
     }
 
     checkAborted();
+
     // Verify user
     const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken);
-    
+
     checkAborted();
+
     if (!user.isActivated) {
       throw new Error('Account is not activated');
     }
 
     checkAborted();
+
     // Setup environment
     await this.injectTokenEnvironment(shell, accessToken);
 
     checkAborted();
+
     const verseId = await this.setupEnvFile(user, options.reset);
 
     checkAborted();
+
     return { user, verseId };
   }
 
