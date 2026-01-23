@@ -70,8 +70,8 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
-import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
-import { runInNextTick } from '~/utils/async';
+import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
+import { runInNextFrame } from '~/utils/async';
 import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
 
 const logger = createScopedLogger('Chat');
@@ -472,14 +472,12 @@ export const ChatImpl = memo(
         return;
       }
 
-      const processlog = logManager.logs.join(',');
-
       // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
         elapsedTime: getElapsedTime(startTime),
-        process: options?.process ?? processlog,
+        process: options?.process ?? logManager.logs.join(','),
       });
 
       return;
@@ -696,18 +694,17 @@ export const ChatImpl = memo(
           return;
         }
 
-        // Delay to next tick to prevent execution during iframe removal
-        runInNextTick(() => {
+        const currentModel = chatStateRef.current.model;
+        const currentProvider = chatStateRef.current.provider;
+        const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
+        const processlog = logManager.logs.join(',');
+        const logAndProcessError = () => {
           logger.error('Request failed\n\n', e, error);
           logStore.logError('Chat request failed', e, {
             component: 'Chat',
             action: 'request',
             error: e.message,
           });
-
-          const currentModel = chatStateRef.current.model;
-          const currentProvider = chatStateRef.current.provider;
-          const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
 
           processError(
             'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
@@ -716,9 +713,23 @@ export const ChatImpl = memo(
               error: e,
               context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
               prompt: lastUserPromptRef.current,
+              process: processlog,
             },
           );
-        });
+        };
+
+        if (isNetworkError(e)) {
+          // Delay to next tick to prevent execution during iframe removal
+          runInNextFrame(() => {
+            if (isPageUnloadingRef.current) {
+              return;
+            }
+
+            logAndProcessError();
+          });
+        } else {
+          logAndProcessError();
+        }
       },
 
       onFinish: async ({ message }) => {
@@ -813,6 +824,8 @@ export const ChatImpl = memo(
     // Detect page reload/unload and abort in-progress operations
     useEffect(() => {
       const handleBeforeUnload = () => {
+        addDebugLog('beforeunload');
+
         isPageUnloadingRef.current = true;
 
         // Abort all in-progress operations (sendMessage, streaming, workbench actions)
@@ -823,6 +836,10 @@ export const ChatImpl = memo(
         if (isPageUnloadingRef.current) {
           return;
         }
+
+        addDebugLog('unload');
+
+        isPageUnloadingRef.current = true;
 
         // Abort all in-progress operations (sendMessage, streaming, workbench actions)
         abortAllOperations();
@@ -851,6 +868,8 @@ export const ChatImpl = memo(
      * Used by both user-initiated abort and component unmount cleanup.
      */
     const abortAllOperations = () => {
+      addDebugLog('abortAllOperations');
+
       if (sendMessageAbortControllerRef.current) {
         sendMessageAbortControllerRef.current.abort();
         sendMessageAbortControllerRef.current = null;
