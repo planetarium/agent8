@@ -11,9 +11,26 @@ export class TurnstileCancelledError extends Error {
 }
 
 export class TurnstileFailedError extends Error {
-  constructor() {
-    super('Turnstile verification failed');
+  constructor(
+    message = 'Turnstile verification failed',
+    readonly errorCode?: string,
+  ) {
+    super(message);
     this.name = 'TurnstileFailedError';
+  }
+}
+
+export class TurnstileTimeoutError extends Error {
+  constructor() {
+    super('Turnstile verification timed out');
+    this.name = 'TurnstileTimeoutError';
+  }
+}
+
+export class TurnstileUnsupportedError extends Error {
+  constructor() {
+    super('Turnstile is not supported in this browser');
+    this.name = 'TurnstileUnsupportedError';
   }
 }
 
@@ -63,12 +80,34 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     cleanup();
   }, [cleanup]);
 
-  const fail = useCallback(() => {
+  const fail = useCallback(
+    (errorCode?: string) => {
+      setIsModalOpen(false);
+
+      const message = errorCode ? `Turnstile verification failed (${errorCode})` : 'Turnstile verification failed';
+      console.error('[Turnstile]', message);
+
+      resolverRef.current?.reject(new TurnstileFailedError(message, errorCode));
+      resolverRef.current = null;
+      cleanup();
+    },
+    [cleanup],
+  );
+
+  const timeout = useCallback(() => {
     setIsModalOpen(false);
-    resolverRef.current?.reject(new TurnstileFailedError());
+    console.error('[Turnstile] Verification timed out');
+    resolverRef.current?.reject(new TurnstileTimeoutError());
     resolverRef.current = null;
     cleanup();
   }, [cleanup]);
+
+  const unsupported = useCallback(() => {
+    setIsModalOpen(false);
+    console.warn('[Turnstile] Browser not supported, proceeding without verification');
+    resolverRef.current?.resolve(null);
+    resolverRef.current = null;
+  }, []);
 
   const getToken = useCallback((): Promise<string> => {
     // Reuse pending request to avoid concurrent widget issues
@@ -132,14 +171,24 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
             theme: 'dark',
             size: 'normal',
             appearance: 'interaction-only',
-            retry: 'never',
+            retry: 'auto',
+            'retry-interval': 3000,
             callback: (token: string) => finish(token),
-            'error-callback': () => {
-              fail();
+            'error-callback': (errorCode: string) => {
+              fail(errorCode);
 
               return true;
             },
+            'timeout-callback': () => {
+              timeout();
+
+              return true;
+            },
+            'unsupported-callback': () => {
+              unsupported();
+            },
             'before-interactive-callback': () => setIsModalOpen(true),
+            'after-interactive-callback': () => setIsModalOpen(false),
             'expired-callback': () => {
               if (widgetIdRef.current && window.turnstile) {
                 try {
@@ -150,7 +199,8 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
               }
             },
           });
-        } catch {
+        } catch (e) {
+          console.error('[Turnstile] Render error:', e);
           fail();
         }
       };
@@ -161,7 +211,7 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     pendingRequestRef.current = tokenPromise;
 
     return tokenPromise;
-  }, [siteKey, finish, fail]);
+  }, [siteKey, finish, fail, timeout, unsupported]);
 
   useEffect(() => {
     setTurnstileTokenGetter(getToken);
