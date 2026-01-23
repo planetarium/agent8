@@ -12,6 +12,7 @@ import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
+import { VERSE8_BASE_URL } from '~/utils/constants';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -56,7 +57,7 @@ function AccessControlledChat() {
       const allowedOriginsEnv = import.meta.env.VITE_ALLOWED_PARENT_ORIGINS;
       const allowedOrigins = allowedOriginsEnv
         ? allowedOriginsEnv.split(',').map((origin: string) => origin.trim())
-        : ['https://verse8.io']; // fallback
+        : [VERSE8_BASE_URL]; // fallback
       const parentOrigin = document.referrer ? new URL(document.referrer).origin : null;
       const targetOrigin = parentOrigin && allowedOrigins.includes(parentOrigin) ? parentOrigin : allowedOrigins[0];
 
