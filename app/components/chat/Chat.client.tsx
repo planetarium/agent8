@@ -909,12 +909,19 @@ export const ChatImpl = memo(
         const startTime = performance.now();
         setInstallNpm(true);
 
+        const signal = sendMessageAbortControllerRef.current?.signal;
         const boltShell = workbench.boltTerminal;
         boltShell.ready
           .then(async () => {
-            await workbench.setupDeployConfig(boltShell);
+            await workbench.setupDeployConfig(boltShell, signal);
           })
           .catch((error) => {
+            const isAborted = isAbortError(error) || sendMessageAbortControllerRef.current?.signal?.aborted;
+            if(isAborted) {
+              logger.info('Setup deploy config aborted by user');
+              return;
+            }
+
             processError(error instanceof Error ? error.message : 'Failed to setup deploy config', startTime, {
               error: error instanceof Error ? error : String(error),
               context: 'setupDeployConfig - useEffect',
