@@ -1233,7 +1233,6 @@ export class WorkbenchStore {
     // Get access token
     const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
 
-    checkAborted();
     if (!accessToken) {
       throw new Error('No access token found');
     }
