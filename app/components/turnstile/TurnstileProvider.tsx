@@ -48,15 +48,13 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     widgetIdRef.current = undefined;
   }, []);
 
-  const finish = useCallback(
-    (token: string | null) => {
-      setIsModalOpen(false);
-      resolverRef.current?.resolve(token);
-      resolverRef.current = null;
-      cleanup();
-    },
-    [cleanup],
-  );
+  const finish = useCallback((token: string | null) => {
+    setIsModalOpen(false);
+    resolverRef.current?.resolve(token);
+    resolverRef.current = null;
+
+    // Don't cleanup widget here - keep it for reset() on next token request
+  }, []);
 
   const cancel = useCallback(() => {
     setIsModalOpen(false);
@@ -85,7 +83,6 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
         return;
       }
 
-      cleanup();
       resolverRef.current = {
         resolve: (token) => {
           pendingRequestRef.current = null;
@@ -101,6 +98,18 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
           reject(error);
         },
       };
+
+      // Try to reset existing widget first (avoids re-render and multiple CF requests)
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.reset(widgetIdRef.current);
+
+          return; // reset triggers callback with new token
+        } catch {
+          // Widget invalid, will render new one below
+          widgetIdRef.current = undefined;
+        }
+      }
 
       let retryCount = 0;
 
@@ -152,11 +161,18 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     pendingRequestRef.current = tokenPromise;
 
     return tokenPromise;
-  }, [siteKey, cleanup, finish, fail]);
+  }, [siteKey, finish, fail]);
 
   useEffect(() => {
     setTurnstileTokenGetter(getToken);
   }, [getToken]);
+
+  // Cleanup widget on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
