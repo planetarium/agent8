@@ -14,6 +14,54 @@ export class FetchError extends Error {
   }
 }
 
+export class SkipToastError extends FetchError {
+  constructor(
+    message: string,
+    public status: number,
+    public context?: string,
+  ) {
+    super(message, status, context);
+    this.name = 'SkipToastError';
+  }
+}
+
+export class DeployError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeployError';
+  }
+}
+
+/**
+ * Error thrown when LLM repeats a previous response (tool-input-start detected)
+ */
+export class LLMRepeatResponseError extends Error {
+  constructor(message: string = 'llm-repeat-response') {
+    super(message);
+    this.name = 'LLMRepeatResponseError';
+  }
+}
+
+export class StatusCodeError extends Error {
+  constructor(
+    message: string = 'Status code error',
+    public status: number,
+  ) {
+    super(message);
+    this.name = 'StatusCodeError';
+  }
+}
+
+export class MachineAPIError extends StatusCodeError {
+  constructor(
+    message: string = 'Machine API error',
+    public status: number,
+  ) {
+    super(message, status);
+    this.name = 'MachineAPIError';
+  }
+}
+
 /**
  * Helper function to check if an error is an abort/cancel error
  * Supports: DOMException (fetch), CanceledError (axios)
@@ -61,50 +109,28 @@ export function getErrorStatus(error: unknown): number | null {
   return null;
 }
 
-export class SkipToastError extends FetchError {
-  constructor(
-    message: string,
-    public status: number,
-    public context?: string,
-  ) {
-    super(message, status, context);
-    this.name = 'SkipToastError';
-  }
-}
-
-export class DeployError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DeployError';
-  }
-}
-
 /**
- * Error thrown when LLM repeats a previous response (tool-input-start detected)
+ * Checks if the error is a network connectivity issue (offline, DNS failure, connection interrupted, etc.).
+ * Does not include HTTP errors (404, 500).
  */
-export class LLMRepeatResponseError extends Error {
-  constructor(message: string = 'llm-repeat-response') {
-    super(message);
-    this.name = 'LLMRepeatResponseError';
+export function isNetworkError(error: unknown): boolean {
+  // 1. Return false if not an Error object
+  if (!(error instanceof Error)) {
+    return false;
   }
-}
 
-export class StatusCodeError extends Error {
-  constructor(
-    message: string = 'Status code error',
-    public status: number,
-  ) {
-    super(message);
-    this.name = 'StatusCodeError';
+  // 2. Network errors from fetch are typically TypeError
+  if (error.name !== 'TypeError') {
+    return false;
   }
-}
 
-export class MachineAPIError extends StatusCodeError {
-  constructor(
-    message: string = 'Machine API error',
-    public status: number,
-  ) {
-    super(message, status);
-    this.name = 'MachineAPIError';
-  }
+  // 3. Check message patterns (considering browser compatibility)
+  const message = error.message.toLowerCase();
+
+  return (
+    message === 'network error' || // Chrome (SSE interruption, etc.)
+    message === 'failed to fetch' || // Chrome (general fetch failure)
+    message.includes('networkrequest') || // Some Safari versions
+    message.includes('network error') // Firefox, etc.
+  );
 }
