@@ -160,6 +160,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
 
     const toggleExpanded = (index: number, event: React.MouseEvent) => {
       const isExpanding = !expandedMessages.has(index);
+      const isLast = index === messages.length - 1;
 
       if (isExpanding) {
         // Get the message container element
@@ -182,12 +183,25 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
           setExpandedMessages((prev) => new Set(prev).add(index));
         }
       } else {
+        // Hide message
         setExpandedMessages((prev) => {
           const newSet = new Set(prev);
           newSet.delete(index);
 
           return newSet;
         });
+
+        // For the last message, scroll to bottom to prevent UI from disappearing
+        if (isLast) {
+          const button = event.currentTarget as HTMLElement;
+          const scrollContainer = button.closest('.chat-container') as HTMLElement;
+
+          if (scrollContainer) {
+            requestAnimationFrame(() => {
+              scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            });
+          }
+        }
       }
     };
 
