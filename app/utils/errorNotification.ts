@@ -47,9 +47,14 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       };
     }
 
+    const now = new Date();
+    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+
     // Create a plain object with all Error properties for better serialization
     errorObj = {
       ...errorObj,
+      version: '1',
+      time: timeString,
       prompt: lastUserPrompt,
       elapsedTime: options.elapsedTime,
       process: options.process,
