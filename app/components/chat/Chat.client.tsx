@@ -72,7 +72,6 @@ import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth'
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
 import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
-import { runInNextTick } from '~/utils/async';
 
 const logger = createScopedLogger('Chat');
 
@@ -444,9 +443,46 @@ export const ChatImpl = memo(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
-    const isPageUnloadingRef = useRef<boolean>(false);
+    const teardownAbortControllerRef = useRef<AbortController | null>(null);
     const isPageTearingDownRef = useRef<boolean>(false);
+    const pendingErrorReportTimerRef = useRef<number | null>(null);
+    const pendingErrorReportTokenRef = useRef(0);
     const sendMessageAbortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      teardownAbortControllerRef.current = new AbortController();
+
+      const cancelPendingErrorReport = () => {
+        if (pendingErrorReportTimerRef.current != null) {
+          clearTimeout(pendingErrorReportTimerRef.current);
+          pendingErrorReportTimerRef.current = null;
+        }
+
+        pendingErrorReportTokenRef.current++;
+      };
+
+      const markTeardown = () => {
+        if (isPageTearingDownRef.current) {
+          return;
+        }
+
+        isPageTearingDownRef.current = true;
+        cancelPendingErrorReport();
+        teardownAbortControllerRef.current?.abort();
+        abortAllOperations();
+      };
+
+      window.addEventListener('pagehide', markTeardown, true);
+      window.addEventListener('beforeunload', markTeardown, true);
+      window.addEventListener('unload', markTeardown, true);
+
+      return () => {
+        markTeardown();
+        window.removeEventListener('pagehide', markTeardown, true);
+        window.removeEventListener('beforeunload', markTeardown, true);
+        window.removeEventListener('unload', markTeardown, true);
+      };
+    }, []);
 
     /*
      * Processes errors and routes them appropriately.
@@ -634,7 +670,6 @@ export const ChatImpl = memo(
             },
           });
 
-          // If response is not ok, throw error with status code
           if (!response.ok) {
             const serverMessage = await response.text();
             throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status);
@@ -686,11 +721,6 @@ export const ChatImpl = memo(
         clearProgressState();
         setFakeLoading(false);
 
-        if (isPageUnloadingRef.current) {
-          logger.debug('Skipping error notification, page is unloading');
-          return;
-        }
-
         if (isPageTearingDownRef.current) {
           logger.debug('Skipping error notification, page is tearing down');
           return;
@@ -725,18 +755,29 @@ export const ChatImpl = memo(
         };
 
         if (isNetworkError(e)) {
-          // Delay to next tick to prevent execution during iframe removal
-          runInNextTick(() => {
-            if (isPageUnloadingRef.current) {
-              return;
+          const scheduleSlackReport = (send: () => void) => {
+            const token = ++pendingErrorReportTokenRef.current;
+
+            if (pendingErrorReportTimerRef.current != null) {
+              clearTimeout(pendingErrorReportTimerRef.current);
             }
 
-            if (isPageTearingDownRef.current) {
-              return;
-            }
+            pendingErrorReportTimerRef.current = window.setTimeout(() => {
+              pendingErrorReportTimerRef.current = null;
 
-            logAndProcessError();
-          });
+              if (isPageTearingDownRef.current) {
+                return;
+              }
+
+              if (token !== pendingErrorReportTokenRef.current) {
+                return;
+              }
+
+              send();
+            }, 150);
+          };
+
+          scheduleSlackReport(logAndProcessError);
         } else {
           logAndProcessError();
         }
@@ -831,55 +872,6 @@ export const ChatImpl = memo(
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
 
-    // Detect page reload/unload and abort in-progress operations
-    useEffect(() => {
-      const handleBeforeUnload = () => {
-        addDebugLog('beforeunload');
-
-        isPageUnloadingRef.current = true;
-
-        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
-        abortAllOperations();
-      };
-
-      const handleUnload = () => {
-        if (isPageUnloadingRef.current) {
-          return;
-        }
-
-        addDebugLog('unload');
-
-        isPageUnloadingRef.current = true;
-
-        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
-        abortAllOperations();
-      };
-
-      const handlePageHide = () => {
-        addDebugLog('pagehide');
-
-        isPageTearingDownRef.current = true;
-      };
-
-      const handlePageShow = () => {
-        addDebugLog('pageshow');
-
-        isPageTearingDownRef.current = false;
-      };
-
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      window.addEventListener('unload', handleUnload);
-      window.addEventListener('pagehide', handlePageHide);
-      window.addEventListener('pageshow', handlePageShow);
-
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        window.removeEventListener('unload', handleUnload);
-        window.removeEventListener('pagehide', handlePageHide);
-        window.removeEventListener('pageshow', handlePageShow);
-      };
-    }, []);
-
     // Refs to hold latest function references for cleanup
     const stopRef = useRef(stop);
     const workbenchRef = useRef(workbench);
@@ -897,7 +889,10 @@ export const ChatImpl = memo(
       addDebugLog('abortAllOperations');
 
       if (sendMessageAbortControllerRef.current) {
-        sendMessageAbortControllerRef.current.abort();
+        if (!sendMessageAbortControllerRef.current.signal.aborted) {
+          sendMessageAbortControllerRef.current.abort();
+        }
+
         sendMessageAbortControllerRef.current = null;
       }
 
@@ -1611,71 +1606,61 @@ export const ChatImpl = memo(
         return;
       }
 
-      // Clear turnstile token cache for new user action - will get fresh token for this session
-      clearTurnstileTokenCache();
+      const inFlight =
+        isLoading ||
+        (sendMessageAbortControllerRef.current != null && !sendMessageAbortControllerRef.current.signal.aborted);
 
-      lastSendMessageTime.current = Date.now();
-
-      // Clear chat data at the start of new message
-      setChatData([]);
-
-      const messageContent = messageInput || input;
-
-      if (!messageContent?.trim()) {
+      if (inFlight) {
+        abort();
         return;
       }
 
+      const requestController = new AbortController();
+      sendMessageAbortControllerRef.current = requestController;
+
+      const signal = requestController.signal;
+
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const wasFirstChat = !chatStarted;
       chatRequestStartTimeRef.current = performance.now();
-      lastUserPromptRef.current = messageContent;
+      lastSendMessageTime.current = Date.now();
 
-      if (chatStarted && Object.keys(files).length === 0) {
-        sendMessageAbortControllerRef.current = new AbortController();
+      try {
+        // Clear turnstile token cache for new user action - will get fresh token for this session
+        clearTurnstileTokenCache();
 
-        const fileRecoveryStartTime = performance.now();
+        // Clear chat data at the start of new message
+        setChatData([]);
 
-        try {
-          const recovered = await recoverFiles(sendMessageAbortControllerRef.current.signal);
+        const messageContent = messageInput || input;
+
+        // TODO: 테스트 해보자.
+        if (!messageContent?.trim()) {
+          return;
+        }
+
+        lastUserPromptRef.current = messageContent;
+
+        if (chatStarted && Object.keys(files).length === 0) {
+          const recovered = await recoverFiles(signal);
 
           if (!recovered) {
-            processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+            processError('Files are not loaded. Please try again later.', chatRequestStartTimeRef.current, {
               context: 'sendMessage - files check',
             });
 
             return;
           }
-        } catch (error) {
-          if (isAbortError(error)) {
-            logger.info('File recovery aborted by user');
-            return;
-          }
-
-          throw error;
-        } finally {
-          sendMessageAbortControllerRef.current = null;
         }
-      }
 
-      if (isLoading) {
-        abort();
-        return;
-      }
-
-      setFakeLoading(true);
-      runAnimation();
-      workbench.currentView.set('code');
-
-      const wasFirstChat = !chatStarted;
-      const startTime = performance.now();
-      const abortController = new AbortController();
-      const signal = abortController.signal;
-      sendMessageAbortControllerRef.current = abortController;
-
-      try {
-        const checkAborted = () => {
-          if (signal.aborted) {
-            throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
-          }
-        };
+        setFakeLoading(true);
+        runAnimation();
+        workbench.currentView.set('code');
 
         // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
@@ -1847,13 +1832,15 @@ export const ChatImpl = memo(
           displayMessage = 'Error:' + (error instanceof Error ? error.message : String(error));
         }
 
-        processError(displayMessage, startTime, {
+        processError(displayMessage, chatRequestStartTimeRef.current, {
           error: errorObj,
           context,
           toastType,
         });
       } finally {
-        sendMessageAbortControllerRef.current = null;
+        if (sendMessageAbortControllerRef.current === requestController) {
+          sendMessageAbortControllerRef.current = null;
+        }
       }
     };
 
