@@ -78,7 +78,6 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
   const randomTip = gameCreationTips[currentTipIndex];
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const hasSelectedPreview = useRef(false);
   const previews = useWorkbenchPreviews();
   const selectedView = useWorkbenchCurrentView();
@@ -246,26 +245,6 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
       }, 300);
     }
   }, [selectedView, reloadPreview]);
-
-  const toggleFullscreen = async () => {
-    if (!isFullscreen && containerRef.current) {
-      await containerRef.current.requestFullscreen();
-    } else if (document.fullscreenElement) {
-      await document.exitFullscreen();
-    }
-  };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
 
   const toggleDeviceMode = () => {
     setIsDeviceModeOn((prev) => !prev);
@@ -480,11 +459,6 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
             <div className="flex items-center gap-2">
               <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
               <IconButton
-                icon={isFullscreen ? 'i-ph:arrows-in' : 'i-ph:arrows-out'}
-                onClick={toggleFullscreen}
-                title={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
-              />
-              <IconButton
                 icon="i-ph:arrow-square-out"
                 onClick={() => openInNewWindow(isDeviceModeOn ? selectedDeviceSize : WINDOW_SIZES[0])}
                 title="Open Preview in New Window"
@@ -586,12 +560,6 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                   </>
                 )}
               </div>
-
-              <IconButton
-                icon={isFullscreen ? 'i-ph:arrows-in' : 'i-ph:arrows-out'}
-                onClick={toggleFullscreen}
-                title={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
-              />
 
               <IconButton
                 icon="i-ph:arrow-square-out"

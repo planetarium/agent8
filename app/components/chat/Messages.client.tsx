@@ -603,29 +603,6 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           )}
                       </div>
                       <div className="flex items-center">
-                        {messageText.trim() !== '' &&
-                          !isMessageAborted &&
-                          messageId &&
-                          isCommitHash(getCommitHashFromMessageId(messageId)) &&
-                          (() => {
-                            const commitHash = getCommitHashFromMessageId(messageId);
-                            const savedTitle = savedVersions?.get(commitHash);
-
-                            /*
-                             * If saved version exists and not the last message, show Restore button
-                             * If last message, it's the current version so no need to restore
-                             */
-                            return savedTitle && !isLast ? (
-                              <CustomButton
-                                variant="primary-text"
-                                size="sm"
-                                onClick={() => onRestoreVersion?.(commitHash, savedTitle)}
-                                disabled={isGenerating}
-                              >
-                                Restore
-                              </CustomButton>
-                            ) : null;
-                          })()}
                         {messageText.trim() !== '' && !isMessageAborted && isLast && (
                           <Tooltip.Root delayDuration={100}>
                             <Tooltip.Trigger asChild>
