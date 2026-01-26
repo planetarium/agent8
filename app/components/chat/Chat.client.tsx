@@ -838,7 +838,7 @@ export const ChatImpl = memo(
         // Only abort on mobile devices to save battery/data
         if (document.hidden && isStreaming && isMobileOS()) {
           logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
-          abortAllOperations();
+          abort();
         }
       };
 
