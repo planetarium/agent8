@@ -395,6 +395,13 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
     }
   }, [diffEnabled, selectedView]);
 
+  // Auto-switch to preview tab when connection is lost
+  useEffect(() => {
+    if (showWorkbench && (workbenchState === 'disconnected' || workbenchState === 'failed')) {
+      setSelectedView('preview');
+    }
+  }, [showWorkbench, isSmallViewport, workbenchState]);
+
   useEffect(() => {
     workbench.setDocuments(files);
   }, [files]);
@@ -461,44 +468,6 @@ export const Workbench = memo(({ chatStarted, isStreaming, actionRunner }: Works
   return (
     chatStarted && (
       <WorkbenchWrapper {...wrapperProps}>
-        {showWorkbench && !isSmallViewport && (workbenchState === 'disconnected' || workbenchState === 'failed') && (
-          <div className="fixed top-[calc(var(--header-height)+0.5rem)] bottom-4 w-[var(--workbench-inner-width)] mr-4 z-10 left-[var(--workbench-left)] transition-[left,width] duration-200 bolt-ease-cubic-bezier">
-            <div className="absolute inset-0 pr-7">
-              <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-                <div className="absolute inset-0 z-50 bg-bolt-elements-background-depth-2 bg-opacity-75 flex items-center justify-center">
-                  <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 shadow-lg">
-                    {connectionState === 'reconnecting' ? (
-                      <>
-                        <div className="w-5 h-5 mx-auto mb-2 border-2 border-bolt-elements-button-primary-background border-t-transparent rounded-full animate-spin" />
-                        <div className="text-sm text-bolt-elements-textPrimary">Reconnecting to Server...</div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-6 h-6 mb-2 mx-auto text-red-400">
-                          <div className="i-ph:wifi-slash" />
-                        </div>
-                        <div className="text-sm text-bolt-elements-textPrimary">Server Disconnected</div>
-                        <button
-                          onClick={async () => {
-                            /*
-                             * FIXME: After stabilizing reconnecting, we can replace this with a proper reconnecting mechanism.
-                             * See also: https://github.com/planetarium/agent8/issues/269
-                             */
-                            window.location.reload();
-                          }}
-                          className="px-3 py-1.5 text-sm rounded bg-accent-500 hover:bg-accent-600 text-white transition-colors mx-auto block"
-                        >
-                          Reconnect
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {showWorkbench && !isSmallViewport && (workbenchState === 'preparing' || workbenchState === 'reconnecting') && (
           <WorkbenchSkeleton isSmallViewport={isSmallViewport} variant="preparing" />
         )}

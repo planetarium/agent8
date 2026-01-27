@@ -47,7 +47,7 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
     };
 
     const sizes = {
-      sm: 'text-heading-xs min-h-[32px] max-h-[32px] px-[10px] py-[6px] gap-[4px] rounded',
+      sm: 'text-heading-xs min-h-[36px] max-h-[36px] px-[12px] py-[8px] gap-[4px] rounded',
       md: 'text-heading-xs min-h-[40px] max-h-[40px] px-[14px] py-[10px] gap-[6px] rounded',
       lg: 'text-heading-sm min-h-[48px] max-h-[48px] px-[16px] py-[12px] gap-[8px] rounded',
     };

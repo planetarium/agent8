@@ -18,6 +18,7 @@ import type { ActionAlert } from '~/types/actions';
 import CustomButton from '~/components/ui/CustomButton';
 import {
   CodeGenLoadingIcon,
+  ConnectionLostIcon,
   NoPreviewAvailableIcon,
   PlayIcon,
   PreviewRunningLoadingIcon,
@@ -716,6 +717,33 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                   </CustomButton>
                 </div>
               )}
+            </div>
+          ) : workbenchState === 'disconnected' || workbenchState === 'failed' ? (
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col w-full h-full justify-center gap-5 items-center">
+                <div className="relative">
+                  <ConnectionLostIcon size={256} />
+                  <span className="absolute left-1/2 bottom-[28px] -translate-x-1/2 text-body-lg-medium text-subtle text-center whitespace-nowrap">
+                    Session disconnected
+                  </span>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-4 self-stretch">
+                  <CustomButton
+                    variant="primary-filled"
+                    size="sm"
+                    onClick={async () => {
+                      /*
+                       * FIXME: After stabilizing reconnecting, we can replace this with a proper reconnecting mechanism.
+                       * See also: https://github.com/planetarium/agent8/issues/269
+                       */
+                      window.location.reload();
+                    }}
+                  >
+                    Reconnect
+                  </CustomButton>
+                </div>
+              </div>
+              <div className="h-20" />
             </div>
           ) : (
             <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
