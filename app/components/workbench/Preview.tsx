@@ -18,6 +18,7 @@ import type { ActionAlert } from '~/types/actions';
 import CustomButton from '~/components/ui/CustomButton';
 import {
   CodeGenLoadingIcon,
+  ConnectionLostIcon,
   NoPreviewAvailableIcon,
   PlayIcon,
   PreviewRunningLoadingIcon,
@@ -87,6 +88,14 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const activePreview = previews[activePreviewIndex];
   const workbenchStore = useWorkbenchStore();
+  const mobilePreviewModeRef = useRef(mobilePreviewMode);
+  const isSmallViewportRef = useRef(isSmallViewport);
+
+  // Keep refs updated
+  useEffect(() => {
+    mobilePreviewModeRef.current = mobilePreviewMode;
+    isSmallViewportRef.current = isSmallViewport;
+  }, [mobilePreviewMode, isSmallViewport]);
 
   const onRun = useCallback(async () => {
     setUrl('');
@@ -238,13 +247,52 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
     }
   }, []);
 
+  // Track previous isStreaming state to detect when streaming ends
+  const prevIsStreamingRef = useRef(isStreaming);
+  const reloadTimeoutRef = useRef<NodeJS.Timeout>();
+  const RELOAD_DELAY_MS = 300;
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (selectedView === 'preview') {
-      setTimeout(() => {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+
+      reloadTimeoutRef.current = setTimeout(() => {
         reloadPreview();
-      }, 300);
+        reloadTimeoutRef.current = undefined;
+      }, RELOAD_DELAY_MS);
     }
   }, [selectedView, reloadPreview]);
+
+  // Reload preview when streaming ends (isStreaming: true → false)
+  useEffect(() => {
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
+
+    // If streaming just ended and we're on the preview tab, reload the preview
+    if (wasStreaming && !isStreaming && selectedView === 'preview') {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+
+      reloadTimeoutRef.current = setTimeout(() => {
+        reloadPreview();
+        reloadTimeoutRef.current = undefined;
+      }, RELOAD_DELAY_MS);
+    }
+  }, [isStreaming, selectedView, reloadPreview]);
 
   const toggleDeviceMode = () => {
     setIsDeviceModeOn((prev) => !prev);
@@ -384,6 +432,11 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
           if (!shouldIgnoreError(alert)) {
             workbenchStore.alert.set(alert);
+
+            // Switch to Chat tab on mobile when preview error occurs
+            if (isSmallViewportRef.current && mobilePreviewModeRef.current) {
+              workbenchStore.mobilePreviewMode.set(false);
+            }
           }
         }
       }
@@ -703,6 +756,33 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                   </CustomButton>
                 </div>
               )}
+            </div>
+          ) : workbenchState === 'disconnected' || workbenchState === 'failed' ? (
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col w-full h-full justify-center gap-5 items-center">
+                <div className="relative">
+                  <ConnectionLostIcon size={256} />
+                  <span className="absolute left-1/2 bottom-[28px] -translate-x-1/2 text-body-lg-medium text-subtle text-center whitespace-nowrap">
+                    Session disconnected
+                  </span>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-4 self-stretch">
+                  <CustomButton
+                    variant="primary-filled"
+                    size="sm"
+                    onClick={async () => {
+                      /*
+                       * FIXME: After stabilizing reconnecting, we can replace this with a proper reconnecting mechanism.
+                       * See also: https://github.com/planetarium/agent8/issues/269
+                       */
+                      window.location.reload();
+                    }}
+                  >
+                    Reconnect
+                  </CustomButton>
+                </div>
+              </div>
+              <div className="h-20" />
             </div>
           ) : (
             <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">

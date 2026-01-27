@@ -3,7 +3,7 @@
  * Preventing TS checks with files presented in the video for a better presentation.
  */
 import { useRef, useState, useEffect } from 'react';
-import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX, TERMINAL_ERROR_TEXT } from '~/utils/constants';
+import { MODEL_REGEX, PROVIDER_REGEX, ATTACHMENTS_REGEX, DEV_TAG_REGEX, ERROR_MESSAGES } from '~/utils/constants';
 import { Markdown } from './Markdown';
 import FilePreview from './FilePreview';
 import { ChevronRightIcon } from '~/components/ui/Icons';
@@ -19,8 +19,10 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
   const textContent = stripMetadata(content);
   const attachments = content ? extractAttachments(content) : [];
 
-  // Check if this is a terminal error message
-  const isTerminalError = textContent.includes(TERMINAL_ERROR_TEXT);
+  // Check if this is a terminal or preview error message
+  const isTerminalError = textContent.includes(ERROR_MESSAGES.TERMINAL);
+  const isPreviewError = textContent.includes(ERROR_MESSAGES.PREVIEW);
+  const isErrorMessage = isTerminalError || isPreviewError;
 
   const textRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,14 +111,14 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
             <div
               ref={textRef}
               className={
-                !expanded && (isOverflowing || isTerminalError)
+                !expanded && (isOverflowing || isErrorMessage)
                   ? hasCodeBlock
                     ? 'overflow-hidden'
                     : 'line-clamp-3'
                   : ''
               }
               style={
-                !expanded && (isOverflowing || isTerminalError) && hasCodeBlock
+                !expanded && (isOverflowing || isErrorMessage) && hasCodeBlock
                   ? { maxHeight: `${MAX_COLLAPSED_HEIGHT}px`, overflow: 'hidden' }
                   : undefined
               }
@@ -131,7 +133,7 @@ export function UserMessage({ content, isLast = false, expanded: externalExpande
       </div>
 
       {/* Show All / Hide button */}
-      {(isOverflowing || isTerminalError) && (
+      {(isOverflowing || isErrorMessage) && (
         <div className="flex justify-end pt-2">
           <button
             onClick={handleToggleExpand}

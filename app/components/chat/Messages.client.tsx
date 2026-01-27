@@ -17,7 +17,7 @@ import { classNames } from '~/utils/classNames';
 import { extractAllTextContent } from '~/utils/message';
 import { loadingAnimationData } from '~/utils/animationData';
 import { getCommitHashFromMessageId } from '~/utils/messageUtils';
-import { MESSAGE_ANNOTATIONS, TERMINAL_ERROR_TEXT } from '~/utils/constants';
+import { MESSAGE_ANNOTATIONS, ERROR_MESSAGES } from '~/utils/constants';
 
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage } from './UserMessage';
@@ -241,7 +241,9 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
               const isLast = index === messages.length - 1;
               const isMergeMessage = messageText.includes('Merge task');
               const isMessageAborted = messageMetadata?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED);
-              const isTerminalError = messageText.includes(TERMINAL_ERROR_TEXT);
+              const isTerminalError = messageText.includes(ERROR_MESSAGES.TERMINAL);
+              const isPreviewError = messageText.includes(ERROR_MESSAGES.PREVIEW);
+              const isErrorMessage = isTerminalError || isPreviewError;
 
               /*
                * Only consider it the first assistant message if there are no more messages to load
@@ -352,8 +354,8 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                           <UserMessage
                             content={messageText}
                             isLast={isLast}
-                            expanded={isTerminalError ? expandedMessages.has(index) : undefined}
-                            onToggleExpand={isTerminalError ? () => handleTerminalErrorToggle(index) : undefined}
+                            expanded={isErrorMessage ? expandedMessages.has(index) : undefined}
+                            onToggleExpand={isErrorMessage ? () => handleTerminalErrorToggle(index) : undefined}
                           />
                         ) : (
                           <AssistantMessage

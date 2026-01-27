@@ -14,8 +14,11 @@ export const MESSAGE_ANNOTATIONS = {
   RESTORE_MESSAGE: 'restore-message',
 } as const;
 
-// Terminal error messages
-export const TERMINAL_ERROR_TEXT = 'Fix this terminal error';
+// Error messages
+export const ERROR_MESSAGES = {
+  TERMINAL: 'Fix this terminal error',
+  PREVIEW: 'Fix this preview error',
+} as const;
 
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
