@@ -63,7 +63,9 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, version }: ForkConfirmMo
       </BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
-        <BaseModal.ConfirmButton onClick={onConfirm}>Create copy</BaseModal.ConfirmButton>
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-bookmarks-fork-confirm">
+          Create copy
+        </BaseModal.ConfirmButton>
       </BaseModal.Actions>
     </BaseModal>
   );
@@ -314,7 +316,12 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
       ) : (
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
-            <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
+            <CustomButton
+              variant="secondary-outlined"
+              size="md"
+              onClick={() => handleOpenChange(true)}
+              data-track="editor-bookmarks"
+            >
               <BookmarkLineIcon width={20} height={20} />
               Bookmarks
             </CustomButton>
@@ -478,6 +485,7 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
                               variant="secondary-ghost"
                               size="md"
                               onClick={() => handleForkClick(version)}
+                              data-track="editor-bookmarks-fork"
                             >
                               <span>Create a Copy</span>
                             </CustomButton>
@@ -487,6 +495,7 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
                               size="md"
                               onClick={() => handleRestoreClick(version)}
                               disabled={version.commitHash === repo.latestCommitHash}
+                              data-track="editor-bookmarks-restore"
                             >
                               <RestoreIcon size={20} />
                               <span className="text-interactive-primary">Restore</span>
@@ -552,6 +561,7 @@ export function HeaderBookmarksButton({ asMenuItem = false, onClose }: HeaderBoo
         isOpen={isRestoreModalOpen}
         onClose={() => setIsRestoreModalOpen(false)}
         onConfirm={handleRestoreConfirm}
+        data-track="editor-bookmarks-restore-confirm"
       />
 
       {/* Delete Confirmation Modal */}

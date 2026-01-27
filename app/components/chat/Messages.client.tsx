@@ -467,6 +467,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                       }
                                     }}
                                     disabled={false}
+                                    data-track="editor-response-bookmark"
                                   />
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
@@ -508,6 +509,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                 toast.success('Copied to clipboard');
                               }}
                               disabled={false}
+                              data-track="editor-response-copy"
                             />
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
@@ -547,6 +549,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                     onRestoreVersion?.(commitHash, userMessageText);
                                   }}
                                   disabled={isGenerating}
+                                  data-track="editor-response-restore"
                                 />
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
@@ -578,6 +581,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                     onRetry?.(prevUserMessage, prevPrevMessage);
                                   }}
                                   disabled={isGenerating}
+                                  data-track="editor-response-retry"
                                 />
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
@@ -604,6 +608,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                   icon={<DiffIcon size={20} />}
                                   onClick={() => onViewDiff?.(message)}
                                   disabled={false}
+                                  data-track="editor-response-diff"
                                 />
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
@@ -636,6 +641,7 @@ export const Messages = forwardRef<HTMLDivElement, MessagesProps>(
                                     workbenchStore.mobilePreviewMode.set(true);
                                   }
                                 }}
+                                data-track="editor-response-runpreview"
                               >
                                 <PlayIcon color="currentColor" size={20} />
                                 Preview

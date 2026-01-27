@@ -38,10 +38,6 @@ export function Header() {
   const [isDesktopDropdownOpen, setIsDesktopDropdownOpen] = useState<boolean>(false);
   const isPreviewMode = useStore(workbenchStore.mobilePreviewMode);
 
-  const togglePreviewMode = () => {
-    workbenchStore.mobilePreviewMode.set(!isPreviewMode);
-  };
-
   const closeDropdown = (): void => setIsDropdownOpen(false);
   const closeDesktopDropdown = (): void => setIsDesktopDropdownOpen(false);
 
@@ -97,12 +93,12 @@ export function Header() {
                       open={isDesktopDropdownOpen}
                       onOpenChange={setIsDesktopDropdownOpen}
                     >
-                      <DropdownItem size="compact">
+                      <DropdownItem size="compact" data-track="editor-gitaccess">
                         <ClientOnly>
                           {() => <HeaderGitCloneButton asMenuItem onClose={closeDesktopDropdown} />}
                         </ClientOnly>
                       </DropdownItem>
-                      <DropdownItem size="compact">
+                      <DropdownItem size="compact" data-track="editor-switcholdui">
                         <ClientOnly>
                           {() => <HeaderLegacyUiToggle asMenuItem onClose={closeDesktopDropdown} />}
                         </ClientOnly>
@@ -129,21 +125,21 @@ export function Header() {
                   >
                     {repo.path && (
                       <>
-                        <DropdownItem>
+                        <DropdownItem data-track="editor-sharecode">
                           <ClientOnly>{() => <HeaderVisibilityButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                         <DropdownItem>
                           <ClientOnly>{() => <ChatDescription asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
-                        <DropdownItem>
+                        <DropdownItem data-track="editor-bookmarks">
                           <ClientOnly>{() => <HeaderBookmarksButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
-                        <DropdownItem>
+                        <DropdownItem data-track="editor-commits">
                           <ClientOnly>
                             {() => <HeaderCommitHistoryButton asMenuItem onClose={closeDropdown} />}
                           </ClientOnly>
                         </DropdownItem>
-                        <DropdownItem>
+                        <DropdownItem data-track="editor-gitaccess">
                           <ClientOnly>{() => <HeaderGitCloneButton asMenuItem onClose={closeDropdown} />}</ClientOnly>
                         </DropdownItem>
                       </>
@@ -160,34 +156,37 @@ export function Header() {
       {/* Floating pill UI - visible on small viewport after chat started */}
       {chat.started && isSmallViewport && (
         <div
-          className="fixed right-2 z-5 inline-flex items-center rounded-full border border-tertiary bg-interactive-neutral cursor-pointer"
+          className="fixed right-2 z-5 inline-flex items-center rounded-full border border-tertiary bg-interactive-neutral"
           style={{
             top: 'calc(var(--header-height) + 8px)',
             boxShadow: '0 4px 8px 0 rgba(0, 0, 0, 0.28), 0 0 4px 0 rgba(0, 0, 0, 0.24)',
           }}
-          onClick={togglePreviewMode}
         >
           {/* Left side - Chat button, active when isPreviewMode is false */}
           <div
-            className={classNames('flex h-[44px] items-center rounded-full', {
+            className={classNames('flex h-[44px] items-center rounded-full cursor-pointer', {
               'w-[52px] px-4 py-3 gap-2 bg-interactive-neutral-subtle': !isPreviewMode,
               'w-[44px] pt-3 pb-3 pl-4 pr-2 gap-[10px]': isPreviewMode,
             })}
             style={{
               transition: 'all 350ms cubic-bezier(0.4, 0, 0.2, 1)',
             }}
+            onClick={() => workbenchStore.mobilePreviewMode.set(false)}
+            data-track="editor-switch-chat"
           >
             <ChatIcon size={20} className="flex-shrink-0" />
           </div>
           {/* Right side - Preview button */}
           <div
-            className={classNames('flex h-[44px] items-center gap-2 rounded-full', {
+            className={classNames('flex h-[44px] items-center gap-2 rounded-full cursor-pointer', {
               'w-[52px] px-4 py-3 bg-interactive-neutral-subtle': isPreviewMode,
               'w-[44px] pt-3 pb-3 pl-2 pr-4 bg-transparent': !isPreviewMode,
             })}
             style={{
               transition: 'all 350ms cubic-bezier(0.4, 0, 0.2, 1)',
             }}
+            onClick={() => workbenchStore.mobilePreviewMode.set(true)}
+            data-track="editor-switch-preview"
           >
             <AnimatedPreviewIcon size={20} />
           </div>

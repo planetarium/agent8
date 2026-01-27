@@ -57,14 +57,17 @@ const sliderOptions = [
   {
     value: 'preview' as WorkbenchViewType,
     text: 'Preview',
+    dataTrack: 'editor-workbench-preview',
   },
   {
     value: 'resource' as WorkbenchViewType,
     text: 'Resource',
+    dataTrack: 'editor-workbench-resource',
   },
   {
     value: 'code' as WorkbenchViewType,
     text: 'Code',
+    dataTrack: 'editor-workbench-code',
   },
   {
     value: 'diff' as WorkbenchViewType,

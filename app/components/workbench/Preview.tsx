@@ -517,7 +517,13 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                 title="Open Preview in New Window"
               />
             </div>
-            <CustomButton variant="secondary" size="md" onClick={onRun} disabled={connectionState !== 'connected'}>
+            <CustomButton
+              variant="secondary"
+              size="md"
+              onClick={onRun}
+              disabled={connectionState !== 'connected'}
+              data-track="editor-workbench-runpreview"
+            >
               <PlayIcon color="currentColor" size={20} />
               Run
             </CustomButton>
@@ -626,6 +632,7 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                 size="md"
                 onClick={onRun}
                 disabled={connectionState !== 'connected'}
+                data-track="editor-workbench-runpreview"
               >
                 <PlayIcon color="currentColor" size={20} />
                 Run Preview
@@ -750,6 +757,7 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
                     onClick={() => {
                       sendMessageToParent({ type: 'NAVIGATE', path: '/explore' });
                     }}
+                    data-track="editor-workbench-playgames"
                   >
                     Play Games
                     <RightLineIcon color="currentColor" size={20} />

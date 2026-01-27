@@ -57,6 +57,7 @@ export function HeaderDeployButton() {
         size="md"
         onClick={handleDeploy}
         disabled={isDeploying}
+        data-track="editor-deploy"
       />
     );
   }

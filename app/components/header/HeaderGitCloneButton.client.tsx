@@ -271,6 +271,7 @@ export function HeaderGitCloneButton({ asMenuItem = false, onClose }: HeaderGitC
             <button
               className="relative flex h-10 justify-center items-center gap-1.5 py-[10px] px-[14px] rounded-[4px] bg-transparent focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
               onClick={() => setIsModalOpen(true)}
+              data-track="editor-gitaccess"
             >
               <div className="text-white">
                 <CodeIcon width={20} height={20} />

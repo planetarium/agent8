@@ -99,7 +99,12 @@ export function LegacyProjectBanner({ chatStarted }: LegacyProjectBannerProps) {
           <span className="text-heading-xs text-interactive-neutral">Learn more</span>
           <ExternalLinkIcon size={20} />
         </CustomButton>
-        <CustomButton variant="primary-ghost" size="md" onClick={handleSwitchToLegacyClick}>
+        <CustomButton
+          variant="primary-ghost"
+          size="md"
+          onClick={handleSwitchToLegacyClick}
+          data-track="editor-switcholdui"
+        >
           <span className="text-heading-xs text-interactive-primary">Switch to Old UI</span>
         </CustomButton>
       </div>

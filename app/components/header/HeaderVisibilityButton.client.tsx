@@ -122,6 +122,7 @@ export function HeaderVisibilityButton({ asMenuItem = false, onClose }: HeaderVi
               size="md"
               onClick={() => setIsModalOpen(true)}
               disabled={isLoading || isInitialLoading}
+              data-track="editor-sharecode"
             >
               {isLoading || isInitialLoading ? (
                 <>
