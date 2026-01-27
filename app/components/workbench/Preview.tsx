@@ -87,6 +87,14 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const activePreview = previews[activePreviewIndex];
   const workbenchStore = useWorkbenchStore();
+  const mobilePreviewModeRef = useRef(mobilePreviewMode);
+  const isSmallViewportRef = useRef(isSmallViewport);
+
+  // Keep refs updated
+  useEffect(() => {
+    mobilePreviewModeRef.current = mobilePreviewMode;
+    isSmallViewportRef.current = isSmallViewport;
+  }, [mobilePreviewMode, isSmallViewport]);
 
   const onRun = useCallback(async () => {
     setUrl('');
@@ -384,6 +392,11 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
           if (!shouldIgnoreError(alert)) {
             workbenchStore.alert.set(alert);
+
+            // Switch to Chat tab on mobile when preview error occurs
+            if (isSmallViewportRef.current && mobilePreviewModeRef.current) {
+              workbenchStore.mobilePreviewMode.set(false);
+            }
           }
         }
       }
