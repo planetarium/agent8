@@ -715,6 +715,11 @@ export const ChatImpl = memo(
         const currentProvider = chatStateRef.current.provider;
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
 
+        // Mark as aborted only for network errors
+        if (e.message?.toLowerCase().includes('network error')) {
+          markMessageAsAborted();
+        }
+
         processError(
           'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
           chatRequestStartTimeRef.current ?? 0,
@@ -1038,14 +1043,7 @@ export const ChatImpl = memo(
       }
     };
 
-    const abort = () => {
-      abortAllOperations();
-
-      setFakeLoading(false);
-      setChatData([]);
-      chatStore.setKey('aborted', true);
-
-      // Check if there's an ongoing AI response (last message is assistant)
+    const markMessageAsAborted = useCallback(() => {
       setMessages((prev) => {
         if (prev.length > 0) {
           const lastMessage = prev[prev.length - 1];
@@ -1078,6 +1076,16 @@ export const ChatImpl = memo(
 
         return [...prev, abortedMessage];
       });
+    }, []);
+
+    const abort = () => {
+      abortAllOperations();
+
+      setFakeLoading(false);
+      setChatData([]);
+      chatStore.setKey('aborted', true);
+
+      markMessageAsAborted();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
