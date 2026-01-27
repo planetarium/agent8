@@ -249,13 +249,26 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
   // Track previous isStreaming state to detect when streaming ends
   const prevIsStreamingRef = useRef(isStreaming);
+  const reloadTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (selectedView === 'preview') {
-      setTimeout(() => {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+
+      reloadTimeoutRef.current = setTimeout(() => {
         reloadPreview();
+        reloadTimeoutRef.current = undefined;
       }, 300);
     }
+
+    return () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+    };
   }, [selectedView, reloadPreview]);
 
   // Reload preview when streaming ends (isStreaming: true → false)
@@ -265,10 +278,22 @@ export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewPro
 
     // If streaming just ended and we're on the preview tab, reload the preview
     if (wasStreaming && !isStreaming && selectedView === 'preview') {
-      setTimeout(() => {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+
+      reloadTimeoutRef.current = setTimeout(() => {
         reloadPreview();
+        reloadTimeoutRef.current = undefined;
       }, 300);
     }
+
+    return () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+    };
   }, [isStreaming, selectedView, reloadPreview]);
 
   const toggleDeviceMode = () => {
