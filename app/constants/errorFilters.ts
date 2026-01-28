@@ -26,6 +26,9 @@ export interface ErrorFilter {
 
   /** Optional replacement message to show to users instead of the original error */
   replacementMessage?: string;
+
+  /** Optional flag to skip reporting to Slack (default: undefined) */
+  skipReport?: boolean;
 }
 
 /**
@@ -39,19 +42,34 @@ export const ERROR_FILTERS: ErrorFilter[] = [
     pattern: 'User location is not supported for the API use.',
     reason: 'Google Generative AI API error',
     caseSensitive: false,
+    skipReport: true,
     replacementMessage: 'The selected model is not available in your current location.',
   },
   {
     pattern: 'Insufficient credit',
     reason: 'Verse8 API error',
     caseSensitive: false,
+    skipReport: true,
     replacementMessage: "You don't have enough credit",
   },
   {
     pattern: 'llm-repeat-response',
     reason: 'LLM repeat response error',
     caseSensitive: false,
-    replacementMessage: 'The LLM is repeating itself. Please try again.',
+    replacementMessage: 'The AI is repeating itself. Please try again.',
+  },
+  {
+    pattern: 'stream-processing',
+    reason: 'Stream processing failed',
+    caseSensitive: false,
+    replacementMessage: 'AI model connection was lost. Please try again.',
+  },
+  {
+    pattern: 'turnstile',
+    reason: 'Turnstile verification error',
+    caseSensitive: false,
+    replacementMessage: 'Security verification failed.',
+    skipReport: true,
   },
 ];
 

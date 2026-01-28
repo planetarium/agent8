@@ -75,7 +75,8 @@ import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
 import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { logManager } from '~/lib/debug/LogManager';
-import { FetchError, getErrorStatus, isAbortError } from '~/utils/errors';
+import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
+import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
 import { isMobileOS } from '~/utils/mobile';
 
 const logger = createScopedLogger('Chat');
@@ -449,8 +450,46 @@ export const ChatImpl = memo(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
-    const isPageUnloadingRef = useRef<boolean>(false);
+    const teardownAbortControllerRef = useRef<AbortController | null>(null);
+    const isPageTearingDownRef = useRef<boolean>(false);
+    const pendingErrorReportTimerRef = useRef<number | null>(null);
+    const pendingErrorReportTokenRef = useRef(0);
     const sendMessageAbortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      teardownAbortControllerRef.current = new AbortController();
+
+      const cancelPendingErrorReport = () => {
+        if (pendingErrorReportTimerRef.current != null) {
+          clearTimeout(pendingErrorReportTimerRef.current);
+          pendingErrorReportTimerRef.current = null;
+        }
+
+        pendingErrorReportTokenRef.current++;
+      };
+
+      const markTeardown = () => {
+        if (isPageTearingDownRef.current) {
+          return;
+        }
+
+        isPageTearingDownRef.current = true;
+        cancelPendingErrorReport();
+        teardownAbortControllerRef.current?.abort();
+        abortAllOperations();
+      };
+
+      window.addEventListener('pagehide', markTeardown, true);
+      window.addEventListener('beforeunload', markTeardown, true);
+      window.addEventListener('unload', markTeardown, true);
+
+      return () => {
+        markTeardown();
+        window.removeEventListener('pagehide', markTeardown, true);
+        window.removeEventListener('beforeunload', markTeardown, true);
+        window.removeEventListener('unload', markTeardown, true);
+      };
+    }, []);
 
     /*
      * Processes errors and routes them appropriately.
@@ -477,14 +516,12 @@ export const ChatImpl = memo(
         return;
       }
 
-      const processlog = logManager.logs.join(',');
-
       // Other errors: handle within component
       handleChatError(message, {
         prompt: lastUserPromptRef.current,
         ...options,
         elapsedTime: getElapsedTime(startTime),
-        process: options?.process ?? processlog,
+        process: options?.process ?? logManager.logs.join(','),
       });
 
       return;
@@ -643,11 +680,18 @@ export const ChatImpl = memo(
         api: '/api/chat',
         body: () => bodyRef.current,
 
-        // Custom fetch to preserve HTTP status codes in errors
+        // Custom fetch to add Turnstile token and preserve HTTP status codes
         fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-          const response = await fetch(input, init);
+          const turnstileHeaders = await getTurnstileHeaders();
 
-          // If response is not ok, throw error with status code
+          const response = await fetch(input, {
+            ...init,
+            headers: {
+              ...init?.headers,
+              ...turnstileHeaders,
+            },
+          });
+
           if (!response.ok) {
             const serverMessage = await response.text();
             throw new FetchError((serverMessage ?? 'unknown error').trim(), response.status);
@@ -677,7 +721,7 @@ export const ChatImpl = memo(
         // Handle server-side errors (data-error with reason and message)
         if (data.type === 'data-error' && isServerError(extractedData)) {
           processError(extractedData.reason, chatRequestStartTimeRef.current ?? 0, {
-            error: extractedData.message,
+            error: extractedData.reason,
             context: `useChat onData callback, model: ${model}, provider: ${provider.name}`,
             prompt: lastUserPromptRef.current,
             metadata: extractedData.metadata,
@@ -696,42 +740,68 @@ export const ChatImpl = memo(
         });
       },
       onError: (e) => {
-        if (isPageUnloadingRef.current) {
-          logger.debug('Skipping error notification, page is unloading');
-          return;
-        }
-
         clearProgressState();
         setFakeLoading(false);
 
-        logger.error('Request failed\n\n', e, error);
-        logStore.logError('Chat request failed', e, {
-          component: 'Chat',
-          action: 'request',
-          error: e.message,
-        });
+        if (isPageTearingDownRef.current) {
+          logger.debug('Skipping error notification, page is tearing down');
+          return;
+        }
+
+        if (isAbortError(e)) {
+          return;
+        }
 
         const currentModel = chatStateRef.current.model;
         const currentProvider = chatStateRef.current.provider;
         const reportProvider = currentModel === 'auto' ? 'auto' : currentProvider.name;
+        const processlog = logManager.logs.join(',');
+        const logAndProcessError = () => {
+          logger.error('Request failed\n\n', e, error);
+          logStore.logError('Chat request failed', e, {
+            component: 'Chat',
+            action: 'request',
+            error: e.message,
+          });
 
-        // Mark as aborted only for network errors
-        if (e.message?.toLowerCase().includes('network error')) {
-          markMessageAsAborted();
-        }
+          processError(
+            'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
+            chatRequestStartTimeRef.current ?? 0,
+            {
+              error: e,
+              context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
+              prompt: lastUserPromptRef.current,
+              process: processlog,
+            },
+          );
+        };
 
-        processError(
-          'There was an error processing your request: ' + (e.message ? e.message : 'No details were returned'),
-          chatRequestStartTimeRef.current ?? 0,
-          {
-            error: e,
-            context: 'useChat onError callback, model: ' + currentModel + ', provider: ' + reportProvider,
-            prompt: lastUserPromptRef.current,
-          },
-        );
+        if (isNetworkError(e)) {
+          const scheduleSlackReport = (send: () => void) => {
+            const token = ++pendingErrorReportTokenRef.current;
 
-        if (shouldShowErrorPage(e)) {
-          return;
+            if (pendingErrorReportTimerRef.current != null) {
+              clearTimeout(pendingErrorReportTimerRef.current);
+            }
+
+            pendingErrorReportTimerRef.current = window.setTimeout(() => {
+              pendingErrorReportTimerRef.current = null;
+
+              if (isPageTearingDownRef.current) {
+                return;
+              }
+
+              if (token !== pendingErrorReportTokenRef.current) {
+                return;
+              }
+
+              send();
+            }, 150);
+          };
+
+          scheduleSlackReport(logAndProcessError);
+        } else {
+          logAndProcessError();
         }
       },
 
@@ -829,33 +899,6 @@ export const ChatImpl = memo(
       chatStore.setKey('started', initialMessages.length > 0);
     }, []);
 
-    // Detect page reload/unload and abort in-progress operations
-    useEffect(() => {
-      const handleBeforeUnload = () => {
-        isPageUnloadingRef.current = true;
-
-        // Abort all in-progress operations (sendMessage, streaming, workbench actions)
-        abortAllOperations();
-      };
-
-      // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
-      const handleVisibilityChange = () => {
-        // Only abort on mobile devices to save battery/data
-        if (document.hidden && isStreaming && isMobileOS()) {
-          logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
-          abort();
-        }
-      };
-
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }, [status, isLoading, fakeLoading, loading]);
-
     // Refs to hold latest function references for cleanup
     const stopRef = useRef(stop);
     const workbenchRef = useRef(workbench);
@@ -870,23 +913,19 @@ export const ChatImpl = memo(
      * Used by both user-initiated abort and component unmount cleanup.
      */
     const abortAllOperations = () => {
+      addDebugLog('abortAllOperations');
+
       if (sendMessageAbortControllerRef.current) {
-        sendMessageAbortControllerRef.current.abort();
+        if (!sendMessageAbortControllerRef.current.signal.aborted) {
+          sendMessageAbortControllerRef.current.abort();
+        }
+
         sendMessageAbortControllerRef.current = null;
       }
 
       stopRef.current();
       workbenchRef.current.abortAllActions();
     };
-
-    /*
-     * Cleanup on unmount - abort all in-progress operations
-     * useEffect(() => {
-     *   return () => {
-     *     abortAllOperations();
-     *   };
-     * }, []);
-     */
 
     // Stop chat when deploy starts
     useEffect(() => {
@@ -967,12 +1006,20 @@ export const ChatImpl = memo(
         const startTime = performance.now();
         setInstallNpm(true);
 
+        const signal = sendMessageAbortControllerRef.current?.signal;
         const boltShell = workbench.boltTerminal;
         boltShell.ready
           .then(async () => {
-            await workbench.setupDeployConfig(boltShell);
+            await workbench.setupDeployConfig(boltShell, signal);
           })
           .catch((error) => {
+            const isAborted = isAbortError(error) || sendMessageAbortControllerRef.current?.signal?.aborted;
+
+            if (isAborted) {
+              logger.info('Setup deploy config aborted by user');
+              return;
+            }
+
             processError(error instanceof Error ? error.message : 'Failed to setup deploy config', startTime, {
               error: error instanceof Error ? error : String(error),
               context: 'setupDeployConfig - useEffect',
@@ -1563,10 +1610,13 @@ export const ChatImpl = memo(
       const urls = imageAttachments.map((item) => item.url);
       checkAborted();
 
+      const turnstileHeaders = await getTurnstileHeaders();
+
       const descriptionResponse = await fetch('/api/image-description', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...turnstileHeaders,
         },
         body: JSON.stringify({
           message: messageContent,
@@ -1644,6 +1694,7 @@ export const ChatImpl = memo(
       // Auth check - notify parent and return if not authenticated
       if (!isAuthenticated) {
         onAuthRequired?.();
+
         return;
       }
 
@@ -1651,68 +1702,61 @@ export const ChatImpl = memo(
         return;
       }
 
-      lastSendMessageTime.current = Date.now();
+      const inFlight =
+        isLoading ||
+        (sendMessageAbortControllerRef.current != null && !sendMessageAbortControllerRef.current.signal.aborted);
 
-      // Clear chat data at the start of new message
-      setChatData([]);
-
-      const messageContent = messageInput || input;
-
-      if (!messageContent?.trim()) {
+      if (inFlight) {
+        abort();
         return;
       }
 
+      const requestController = new AbortController();
+      sendMessageAbortControllerRef.current = requestController;
+
+      const signal = requestController.signal;
+
+      const checkAborted = () => {
+        if (signal.aborted) {
+          throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
+        }
+      };
+
+      const wasFirstChat = !chatStarted;
       chatRequestStartTimeRef.current = performance.now();
-      lastUserPromptRef.current = messageContent;
+      lastSendMessageTime.current = Date.now();
 
-      if (chatStarted && Object.keys(files).length === 0) {
-        sendMessageAbortControllerRef.current = new AbortController();
+      try {
+        // Clear turnstile token cache for new user action - will get fresh token for this session
+        clearTurnstileTokenCache();
 
-        const fileRecoveryStartTime = performance.now();
+        // Clear chat data at the start of new message
+        setChatData([]);
 
-        try {
-          const recovered = await recoverFiles(sendMessageAbortControllerRef.current.signal);
+        const messageContent = messageInput || input;
+
+        // TODO: 테스트 해보자.
+        if (!messageContent?.trim()) {
+          return;
+        }
+
+        lastUserPromptRef.current = messageContent;
+
+        if (chatStarted && Object.keys(files).length === 0) {
+          const recovered = await recoverFiles(signal);
 
           if (!recovered) {
-            processError('Files are not loaded. Please try again later.', fileRecoveryStartTime, {
+            processError('Files are not loaded. Please try again later.', chatRequestStartTimeRef.current, {
               context: 'sendMessage - files check',
             });
 
             return;
           }
-        } catch (error) {
-          if (isAbortError(error)) {
-            logger.info('File recovery aborted by user');
-            return;
-          }
-
-          throw error;
-        } finally {
-          sendMessageAbortControllerRef.current = null;
         }
-      }
 
-      if (isLoading) {
-        abort();
-        return;
-      }
-
-      setFakeLoading(true);
-      runAnimation();
-      workbench.currentView.set('preview');
-
-      const wasFirstChat = !chatStarted;
-      const startTime = performance.now();
-      const abortController = new AbortController();
-      const signal = abortController.signal;
-      sendMessageAbortControllerRef.current = abortController;
-
-      try {
-        const checkAborted = () => {
-          if (signal.aborted) {
-            throw new DOMException('Send message aborted', ERROR_NAMES.ABORT);
-          }
-        };
+        setFakeLoading(true);
+        runAnimation();
+        workbench.currentView.set('preview');
 
         // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
@@ -1859,13 +1903,15 @@ export const ChatImpl = memo(
           displayMessage = 'Error:' + (error instanceof Error ? error.message : String(error));
         }
 
-        processError(displayMessage, startTime, {
+        processError(displayMessage, chatRequestStartTimeRef.current, {
           error: errorObj,
           context,
           toastType,
         });
       } finally {
-        sendMessageAbortControllerRef.current = null;
+        if (sendMessageAbortControllerRef.current === requestController) {
+          sendMessageAbortControllerRef.current = null;
+        }
       }
     };
 
@@ -2179,6 +2225,24 @@ export const ChatImpl = memo(
 
     // Get Wake Lock controls (disableWakeLock is handled automatically by the hook)
     const { enableWakeLock } = useWakeLock(isStreaming);
+
+    // Detect page reload/unload and abort in-progress operations
+    useEffect(() => {
+      // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
+      const handleVisibilityChange = () => {
+        // Only abort on mobile devices to save battery/data
+        if (document.hidden && isStreaming && isMobileOS()) {
+          logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
+          abort();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }, [status, isLoading, fakeLoading, loading]);
 
     return (
       <>

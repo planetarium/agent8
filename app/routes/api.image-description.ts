@@ -2,8 +2,9 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { generateText, type LanguageModelUsage } from 'ai';
 import { FIXED_MODELS } from '~/utils/constants';
 import { withV8AuthUser, type ContextConsumeUserCredit } from '~/lib/verse8/middleware';
+import { withTurnstile } from '~/lib/turnstile/middleware';
 
-export const action = withV8AuthUser(imageDescriptionAction, { checkCredit: true });
+export const action = withTurnstile(withV8AuthUser(imageDescriptionAction, { checkCredit: true }));
 
 export async function generateImageDescription(
   imageUrls: string[],
