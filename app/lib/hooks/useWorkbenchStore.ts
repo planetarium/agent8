@@ -32,6 +32,11 @@ export function useWorkbenchShowWorkbench() {
   return useStore(workbenchStore.showWorkbench);
 }
 
+export function useWorkbenchMobilePreviewMode() {
+  useStore(reinitCounterAtom);
+  return useStore(workbenchStore.mobilePreviewMode);
+}
+
 export function useWorkbenchCurrentView() {
   useStore(reinitCounterAtom);
   return useStore(workbenchStore.currentView);
@@ -79,6 +84,10 @@ export function useWorkbenchConnectionState() {
 export function useWorkbenchIsDeploying() {
   useStore(reinitCounterAtom);
   return useStore(workbenchStore.isDeploying);
+}
+
+export function useWorkbenchIsRunningPreview() {
+  return useStore(workbenchStore.isRunningPreview);
 }
 
 export function useWorkbenchContainer() {

@@ -9,6 +9,9 @@ import { useAnimate } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
+import useViewport from '~/lib/hooks';
+import { useWakeLock } from '~/lib/hooks/useWakeLock';
+import { CHAT_MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
 import { chatStore } from '~/lib/stores/chat';
 import {
   useWorkbenchFiles,
@@ -28,7 +31,7 @@ import {
 } from '~/utils/constants';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
-import { BaseChat, type ChatAttachment } from './BaseChat';
+import { BaseChat, VIDEO_GUIDE_TABS, type ChatAttachment } from './BaseChat';
 import { NotFoundPage } from '~/components/ui/NotFoundPage';
 import { UnauthorizedPage } from '~/components/ui/UnauthorizedPage';
 import { ServiceOutagePage } from '~/components/ui/ServiceOutagePage';
@@ -40,19 +43,20 @@ import { useSearchParams } from '@remix-run/react';
 import { createSampler } from '~/utils/sampler';
 import { selectStarterTemplate, getZipTemplates } from '~/utils/selectStarterTemplate';
 import { logStore } from '~/lib/stores/logs';
-import { streamingState } from '~/lib/stores/streaming';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
+import { streamingState, shouldPlaySoundOnPreviewReady } from '~/lib/stores/streaming';
+import { restoreEventStore, clearRestoreEvent } from '~/lib/stores/restore';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import type { Template } from '~/types/template';
 import { playCompletionSound } from '~/utils/sound';
 import {
   commitChanges,
-  createTaskBranch,
   fetchProjectFiles,
   forkProject,
   getCommit,
   isEnabledGitbasePersistence,
 } from '~/lib/persistenceGitbase/api.client';
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { sendActivityPrompt } from '~/lib/verse8/api';
 import type { FileMap } from '~/lib/.server/llm/constants';
 import { useGitbaseChatHistory } from '~/lib/persistenceGitbase/useGitbaseChatHistory';
@@ -65,6 +69,7 @@ import type { ProgressAnnotation } from '~/types/context';
 import { handleChatError, type HandleChatErrorOptions } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
 import ToastContainer from '~/components/ui/ToastContainer';
+import { useVersionFeature } from '~/lib/hooks/useVersionFeature';
 import type { WorkbenchStore } from '~/lib/stores/workbench';
 import type { ServerErrorData } from '~/types/stream-events';
 import { getEnvContent } from '~/utils/envUtils';
@@ -72,6 +77,7 @@ import { V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth'
 import { logManager } from '~/lib/debug/LogManager';
 import { FetchError, getErrorStatus, isAbortError, isNetworkError } from '~/utils/errors';
 import { getTurnstileHeaders, clearTurnstileTokenCache } from '~/lib/turnstile/client';
+import { isMobileOS } from '~/utils/mobile';
 
 const logger = createScopedLogger('Chat');
 
@@ -220,10 +226,6 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
     chats,
     files,
     project,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
     revertTo,
     hasMore,
     loadBefore,
@@ -242,14 +244,17 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
   const title = repoStore.get().title;
   const workbench = useWorkbenchStore();
   const actionAlert = useWorkbenchActionAlert();
+  const version = useVersionFeature();
 
   useEffect(() => {
-    if (repoStore.get().path) {
+    const projectPath = repoStore.get().path;
+
+    if (projectPath) {
       sendEventToParent('EVENT', { name: 'START_EDITING' });
     }
 
     const timeoutId = setTimeout(() => {
-      changeChatUrl(repoStore.get().path, { replace: true, searchParams: {}, ignoreChangeEvent: true });
+      changeChatUrl(projectPath, { replace: true, searchParams: {}, ignoreChangeEvent: true });
     }, 100);
 
     return () => clearTimeout(timeoutId);
@@ -261,12 +266,22 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
     }
   }, [initialMessages, loaded]);
 
+  // Handle chats loading
+  useEffect(() => {
+    if (loaded && chats.length > 0) {
+      setInitialMessages(chats);
+    } else if (loaded && chats.length === 0) {
+      /*
+       * Only clear when loaded=true but no chats (new project)
+       * Don't clear when loaded=false to prevent UI flicker during restore
+       */
+      setInitialMessages([]);
+    }
+  }, [loaded, chats]);
+
+  // Handle files mounting
   useEffect(() => {
     if (loaded) {
-      if (chats.length > 0) {
-        setInitialMessages(chats);
-      }
-
       if (Object.keys(files).length > 0) {
         workbench.container.then(async (containerInstance) => {
           try {
@@ -310,12 +325,11 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
         repoStore.set({
           ...repoStore.get(),
           title: project.description.split('\n')[0],
+          createdAt: project.created_at || '',
         });
       }
-    } else {
-      setInitialMessages([]);
     }
-  }, [loaded, files, chats, project, workbench]);
+  }, [loaded, files, project, workbench]);
 
   const error = componentError || gitbaseError;
   const errorStatus = getErrorStatus(error);
@@ -367,10 +381,6 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
           description={title}
           initialMessages={initialMessages}
           setInitialMessages={setInitialMessages}
-          enabledTaskMode={enabledTaskMode}
-          setEnabledTaskMode={setEnabledTaskMode}
-          taskBranches={taskBranches}
-          reloadTaskBranches={reloadTaskBranches}
           revertTo={revertTo}
           hasMore={hasMore}
           loadBefore={loadBefore}
@@ -379,8 +389,10 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
           onAuthRequired={onAuthRequired}
           setComponentError={setComponentError}
           handleStopRef={handleStopRef}
+          version={version}
         />
       )}
+      {version.modals}
       <ToastContainer />
     </>
   );
@@ -403,11 +415,7 @@ interface ChatProps {
   initialMessages: UIMessage[];
   setInitialMessages: (messages: UIMessage[]) => void;
   description?: string;
-  taskBranches: any[];
-  enabledTaskMode: boolean;
-  setEnabledTaskMode: (enabled: boolean) => void;
-  reloadTaskBranches: (projectPath: string) => Promise<void>;
-  revertTo: (hash: string) => void;
+  revertTo: (hash: string) => Promise<void>;
   hasMore: boolean;
   loadBefore: () => Promise<void>;
   loadingBefore: boolean;
@@ -415,6 +423,7 @@ interface ChatProps {
   onAuthRequired?: () => void;
   setComponentError: (error: { message: string; status?: number; context?: string } | null) => void;
   handleStopRef?: React.MutableRefObject<(() => void) | null>;
+  version: ReturnType<typeof useVersionFeature>;
 }
 
 export const ChatImpl = memo(
@@ -423,10 +432,6 @@ export const ChatImpl = memo(
     description,
     initialMessages,
     setInitialMessages,
-    taskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
-    reloadTaskBranches,
     revertTo,
     hasMore,
     loadBefore,
@@ -435,11 +440,13 @@ export const ChatImpl = memo(
     onAuthRequired,
     setComponentError,
     handleStopRef,
+    version,
   }: ChatProps) => {
     useShortcuts();
 
     const workbench = useWorkbenchStore();
     const container = useWorkbenchContainer();
+    const isSmallViewport = useViewport(CHAT_MOBILE_BREAKPOINT);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatRequestStartTimeRef = useRef<number>(undefined);
     const lastUserPromptRef = useRef<string>(undefined);
@@ -531,8 +538,18 @@ export const ChatImpl = memo(
       const previews = workbench.previews.get();
 
       if (!isServerUpdated && !isPackageJsonUpdated && previews.find((p: any) => p.ready)) {
-        playCompletionSound();
+        // Play sound only if streaming just completed (flag is set)
+        if (shouldPlaySoundOnPreviewReady.get()) {
+          playCompletionSound();
+          shouldPlaySoundOnPreviewReady.set(false);
+        }
+
         workbench.currentView.set('preview');
+
+        // On mobile, show preview screen immediately (only if not aborted)
+        if (isSmallViewport && !chatStore.get().aborted) {
+          workbench.mobilePreviewMode.set(true);
+        }
 
         return;
       }
@@ -549,6 +566,14 @@ export const ChatImpl = memo(
         }
 
         break;
+      }
+
+      /*
+       * On mobile, show preview screen immediately (before waiting for preview to complete)
+       * Don't switch to preview if response was aborted
+       */
+      if (isSmallViewport && !chatStore.get().aborted) {
+        workbench.mobilePreviewMode.set(true);
       }
 
       await workbench.runPreview();
@@ -578,7 +603,6 @@ export const ChatImpl = memo(
     const [installNpm, setInstallNpm] = useState<boolean>(false);
     const [customProgressAnnotations, setCustomProgressAnnotations] = useState<ProgressAnnotation[]>([]);
 
-    const [textareaExpanded, setTextareaExpanded] = useState<boolean>(false);
     const files = useWorkbenchFiles();
     const actionAlert = useWorkbenchActionAlert();
     const isDeploying = useWorkbenchIsDeploying();
@@ -619,9 +643,7 @@ export const ChatImpl = memo(
       }
 
       const result =
-        initialMessages.length > 0
-          ? Cookies.get(PROMPT_COOKIE_KEY) || ''
-          : 'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+        initialMessages.length > 0 ? Cookies.get(PROMPT_COOKIE_KEY) || '' : VIDEO_GUIDE_TABS.mobile.list.story.prompt;
 
       return result;
     });
@@ -789,6 +811,12 @@ export const ChatImpl = memo(
           return;
         }
 
+        // Skip processing if message was aborted (already handled by abort function)
+        if ((message.metadata as any)?.annotations?.includes(MESSAGE_ANNOTATIONS.ABORTED)) {
+          addDebugLog('onFinish: message was aborted, skipping');
+          return;
+        }
+
         addDebugLog('onFinish');
 
         const usage =
@@ -836,8 +864,7 @@ export const ChatImpl = memo(
 
       // Process if prompt exists in URL
       if (prompt && !promptProcessed.current) {
-        const defaultPrompt =
-          'Create a top-down action game with a character controlled by WASD keys and mouse clicks.';
+        const defaultPrompt = VIDEO_GUIDE_TABS.mobile.list.story.prompt;
 
         // Apply URL prompt only if input is empty or matches default prompt
         if (!input || input === defaultPrompt) {
@@ -923,6 +950,45 @@ export const ChatImpl = memo(
       }
     }, [initialMessages]);
 
+    // Handle restore events - add restore message directly to messages (bypass initialMessages)
+    useEffect(() => {
+      const unsubscribe = restoreEventStore.subscribe((event) => {
+        if (event) {
+          const restoreMessage: UIMessage = {
+            id: `restore-${event.commitHash}-${event.timestamp}`,
+            role: 'assistant',
+            parts: [
+              {
+                type: 'text',
+                text: `${event.commitTitle}`,
+              },
+            ],
+            metadata: {
+              createdAt: new Date(),
+              annotations: [MESSAGE_ANNOTATIONS.RESTORE_MESSAGE],
+            },
+          };
+
+          // Add restore message to current messages directly
+          setMessages((prev) => [...prev, restoreMessage]);
+
+          // Reset aborted state when restoring to a new state
+          chatStore.setKey('aborted', false);
+
+          // Auto-run preview after restore (force execution even if aborted)
+          setTimeout(() => {
+            workbench.runPreview({ force: true }).catch((error) => {
+              logger.error('Auto preview after restore failed:', error);
+            });
+          }, 1000); // Small delay to ensure files are loaded
+
+          clearRestoreEvent();
+        }
+      });
+
+      return () => unsubscribe();
+    }, [setMessages]);
+
     useEffect(() => {
       processSampledMessages({
         messages,
@@ -987,7 +1053,14 @@ export const ChatImpl = memo(
 
           await commitChanges(message, (commitHash) => {
             setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, id: commitHash } : m)));
-            reloadTaskBranches(repoStore.get().path);
+
+            // Clear revertTo parameter after successful commit to prevent reverting to old state
+            const url = new URL(window.location.href);
+
+            if (url.searchParams.has('revertTo')) {
+              url.searchParams.delete('revertTo');
+              window.history.replaceState(null, '', url.pathname + url.search);
+            }
           });
 
           logger.info('✅ Commit succeeded');
@@ -1017,12 +1090,49 @@ export const ChatImpl = memo(
       }
     };
 
+    const markMessageAsAborted = useCallback(() => {
+      setMessages((prev) => {
+        if (prev.length > 0) {
+          const lastMessage = prev[prev.length - 1];
+
+          if (lastMessage.role === 'assistant') {
+            // Add 'aborted' annotation to the ongoing AI response
+            return prev.map((msg) =>
+              msg.id === lastMessage.id
+                ? {
+                    ...msg,
+                    metadata: {
+                      ...(msg.metadata as any),
+                      annotations: [...((msg.metadata as any)?.annotations || []), MESSAGE_ANNOTATIONS.ABORTED],
+                    },
+                  }
+                : msg,
+            );
+          }
+        }
+
+        // If no ongoing AI response, create a new empty AI message with 'aborted' annotation
+        const abortedMessage: UIMessage = {
+          id: `assistant-aborted-${Date.now()}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: '' }],
+          metadata: {
+            annotations: [MESSAGE_ANNOTATIONS.ABORTED],
+          },
+        };
+
+        return [...prev, abortedMessage];
+      });
+    }, []);
+
     const abort = () => {
       abortAllOperations();
 
       setFakeLoading(false);
       setChatData([]);
       chatStore.setKey('aborted', true);
+
+      markMessageAsAborted();
 
       logStore.logProvider('Chat response aborted', {
         component: 'Chat',
@@ -1058,7 +1168,8 @@ export const ChatImpl = memo(
         name: '',
         path: '',
         title: '',
-        taskBranch: DEFAULT_TASK_BRANCH,
+        latestCommitHash: '',
+        createdAt: '',
       });
     };
 
@@ -1083,7 +1194,6 @@ export const ChatImpl = memo(
         throw new Error('Access token is missing');
       }
 
-      const templateSelectionStartTime = performance.now();
       let userIsActivated = false;
       let userWalletAddress = null;
       let starterTemplateResp: any;
@@ -1216,33 +1326,12 @@ export const ChatImpl = memo(
             throw new Error('Cannot create project');
           }
 
-          let branchName = 'develop';
-
-          if (enabledTaskMode) {
-            checkAborted();
-            addDebugLog('Start:createTaskBranch');
-
-            const { success, message, data } = await createTaskBranch(projectPath, signal);
-            addDebugLog('Complete:createTaskBranch');
-            checkAborted();
-
-            if (!success) {
-              addDebugLog('Failed to create task branch');
-              processError(message, templateSelectionStartTime, {
-                context: 'createTaskBranch - starter template',
-              });
-
-              return;
-            }
-
-            branchName = data.branchName;
-          }
-
           repoStore.set({
             name: projectName,
             path: projectPath,
             title: starterTemplateResp.title,
-            taskBranch: branchName,
+            latestCommitHash: '',
+            createdAt: '',
           });
 
           // Record prompt activity for first request
@@ -1254,7 +1343,8 @@ export const ChatImpl = memo(
             name: starterTemplateResp.projectRepo,
             path: starterTemplateResp.projectRepo,
             title: starterTemplateResp.title,
-            taskBranch: 'develop',
+            latestCommitHash: '',
+            createdAt: '',
           });
 
           // Record prompt activity for first request
@@ -1568,10 +1658,6 @@ export const ChatImpl = memo(
 
         textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
         textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-
-        // Check if textarea is expanded beyond minimum height
-        const isExpanded = scrollHeight > 40; // TEXTAREA_MIN_HEIGHT = 40
-        setTextareaExpanded(isExpanded);
       }
     }, [input, textareaRef]);
 
@@ -1588,9 +1674,19 @@ export const ChatImpl = memo(
       chatStore.setKey('started', true);
 
       setChatStarted(true);
+
+      // Send START_EDITING event to parent when chat starts
+      sendEventToParent('EVENT', { name: 'START_EDITING' });
     };
 
     const sendMessage = async (_event: React.UIEvent, messageInput?: string) => {
+      // Enable Wake Lock immediately on user gesture (button click)
+      try {
+        await enableWakeLock();
+      } catch (error) {
+        console.warn('Failed to enable Wake Lock on send:', error);
+      }
+
       // Clear logs from previous request
       clearDebugLog();
       addDebugLog('sendMessage');
@@ -1660,7 +1756,7 @@ export const ChatImpl = memo(
 
         setFakeLoading(true);
         runAnimation();
-        workbench.currentView.set('code');
+        workbench.currentView.set('preview');
 
         // Generate image descriptions if needed
         const imageAttachments = attachmentList.filter((item) =>
@@ -1740,31 +1836,6 @@ export const ChatImpl = memo(
                 ],
               },
             ]);
-          }
-
-          if (enabledTaskMode && repoStore.get().taskBranch === DEFAULT_TASK_BRANCH) {
-            const createTaskBranchStartTime = performance.now();
-            checkAborted();
-            addDebugLog('Start:createTaskBranch');
-
-            const { success, message, data } = await createTaskBranch(repoStore.get().path, signal);
-            checkAborted();
-            addDebugLog('Complete:createTaskBranch');
-
-            if (!success) {
-              processError(message, createTaskBranchStartTime, {
-                context: 'createTaskBranch - subsequent message',
-              });
-
-              return;
-            }
-
-            repoStore.set({
-              ...repoStore.get(),
-              taskBranch: data.branchName,
-            });
-
-            setMessages(() => []);
           }
         }
 
@@ -1908,7 +1979,7 @@ export const ChatImpl = memo(
     useEffect(() => {
       if (!chatStarted && initialMessages.length === 0) {
         Cookies.remove(PROMPT_COOKIE_KEY);
-        setInput('Create a top-down action game with a character controlled by WASD keys and mouse clicks.');
+        setInput(VIDEO_GUIDE_TABS.mobile.list.story.prompt);
       }
     }, [chatStarted, initialMessages.length, setInput]);
 
@@ -1949,7 +2020,8 @@ export const ChatImpl = memo(
             name: source.title,
             path: '',
             title: source.title,
-            taskBranch: DEFAULT_TASK_BRANCH,
+            latestCommitHash: '',
+            createdAt: '',
           });
 
           // GitLab persistence가 비활성화된 경우에만 즉시 URL 변경
@@ -2008,8 +2080,9 @@ export const ChatImpl = memo(
 
     const handleFork = async (message: UIMessage) => {
       const startTime = performance.now();
+      const repo = repoStore.get();
 
-      workbench.currentView.set('code');
+      workbench.currentView.set('preview');
       await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
 
       const commitHash = message.id.split('-').pop();
@@ -2030,19 +2103,20 @@ export const ChatImpl = memo(
       const cleanWords = Number.isInteger(Number(lastWord)) ? nameWords.slice(0, -1) : nameWords;
       const newRepoName = (cleanWords.length > 0 ? cleanWords.join('-') : 'project').toLowerCase();
 
-      const toastId = toast.loading('Forking project...');
+      // Show loading toast while forking
+      const toastId = toast.loading('Creating a copy...');
 
       try {
-        const forkedProject = await forkProject(repoStore.get().path, newRepoName, commitHash, repoStore.get().title);
+        const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title);
 
         // Dismiss the loading toast
         toast.dismiss(toastId);
 
         if (forkedProject && forkedProject.success) {
-          toast.success('Forked project successfully');
+          toast.success('Fork created — now in your copy.');
           window.location.href = '/chat/' + forkedProject.project.path;
         } else {
-          processError('Failed to fork project', startTime, {
+          processError('Failed to create copy', startTime, {
             context: 'handleFork - fork result check',
           });
 
@@ -2052,7 +2126,7 @@ export const ChatImpl = memo(
         // Dismiss the loading toast and show error
         toast.dismiss(toastId);
 
-        processError('Failed to fork project', startTime, {
+        processError('Failed to create copy', startTime, {
           error: error instanceof Error ? error : String(error),
           context: 'handleFork - catch block',
         });
@@ -2061,29 +2135,11 @@ export const ChatImpl = memo(
       }
     };
 
-    const handleRevert = async (message: UIMessage) => {
-      const startTime = performance.now();
-
-      workbench.currentView.set('code');
-      await new Promise((resolve) => setTimeout(resolve, 300)); // wait for the files to be loaded
-
-      const commitHash = message.id.split('-').pop();
-
-      if (!commitHash || !isCommitHash(commitHash)) {
-        processError('No commit hash found', startTime, {
-          context: 'handleRevert - commit hash validation',
-        });
-
-        return;
-      }
-
-      revertTo(commitHash);
-    };
-
     const handleRetry = async (message: UIMessage, prevMessage?: UIMessage) => {
       const startTime = performance.now();
+      const projectPath = repoStore.get().path;
 
-      workbench.currentView.set('code');
+      workbench.currentView.set('preview');
 
       // Use prevMessage if provided, otherwise find the previous message
       let commitHash: string | undefined;
@@ -2099,7 +2155,7 @@ export const ChatImpl = memo(
 
           if (nextCommitHash && isCommitHash(nextCommitHash)) {
             try {
-              const { data } = await getCommit(repoStore.get().path, nextCommitHash);
+              const { data } = await getCommit(projectPath, nextCommitHash);
 
               if (data.commit.parent_ids.length > 0) {
                 commitHash = data.commit.parent_ids[0];
@@ -2130,7 +2186,7 @@ export const ChatImpl = memo(
         return;
       }
 
-      revertTo(commitHash);
+      await revertTo(commitHash);
       setInput(stripMetadata(extractTextContent(message)));
     };
 
@@ -2165,89 +2221,117 @@ export const ChatImpl = memo(
     };
 
     const isStreaming = isLoading || fakeLoading || loading;
+    const isAborted = chatStore.get().aborted;
+
+    // Get Wake Lock controls (disableWakeLock is handled automatically by the hook)
+    const { enableWakeLock } = useWakeLock(isStreaming);
+
+    // Detect page reload/unload and abort in-progress operations
+    useEffect(() => {
+      // Abort LLM requests when browser tab becomes hidden (background) - Mobile only
+      const handleVisibilityChange = () => {
+        // Only abort on mobile devices to save battery/data
+        if (document.hidden && isStreaming && isMobileOS()) {
+          logger.info('Mobile tab hidden, aborting streaming request to prevent credit waste');
+          abort();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }, [status, isLoading, fakeLoading, loading]);
 
     return (
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isStreaming}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        enabledTaskMode={enabledTaskMode}
-        setEnabledTaskMode={setEnabledTaskMode}
-        taskBranches={taskBranches}
-        reloadTaskBranches={reloadTaskBranches}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
-        messageRef={messageRef}
-        scrollRef={scrollRef}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        handleRetry={handleRetry}
-        handleFork={handleFork}
-        handleRevert={handleRevert}
-        onViewDiff={handleViewDiff}
-        description={description}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
+      <>
+        <BaseChat
+          ref={animationScope}
+          textareaRef={textareaRef}
+          input={input}
+          showChat={showChat}
+          chatStarted={chatStarted}
+          isStreaming={isStreaming}
+          isAborted={isAborted}
+          onStreamingChange={(streaming) => {
+            streamingState.set(streaming);
+
+            // Set flag to play sound when preview becomes ready (only when streaming starts)
+            if (streaming) {
+              shouldPlaySoundOnPreviewReady.set(true);
+            }
+          }}
+          enhancingPrompt={enhancingPrompt}
+          promptEnhanced={promptEnhanced}
+          sendMessage={sendMessage}
+          model={model}
+          setModel={handleModelChange}
+          provider={provider}
+          setProvider={handleProviderChange}
+          providerList={activeProviders}
+          messageRef={messageRef}
+          scrollRef={scrollRef}
+          handleInputChange={(e) => {
+            onTextareaChange(e);
+            debouncedCachePrompt(e);
+          }}
+          handleStop={abort}
+          handleRetry={handleRetry}
+          handleFork={handleFork}
+          handleSaveVersion={version.openSave}
+          handleDeleteVersion={version.openDelete}
+          handleRestoreVersion={version.openRestore}
+          savedVersions={version.savedVersions}
+          onViewDiff={handleViewDiff}
+          description={description}
+          messages={messages.map((message, i) => {
+            if (message.role === 'user') {
+              return message;
+            }
+
+            const parsedContent = parsedMessages[i];
+
+            if (parsedContent) {
+              return {
+                ...message,
+                parts: [
+                  {
+                    type: 'text' as const,
+                    text: parsedContent,
+                  },
+                ],
+              } satisfies UIMessage;
+            }
+
             return message;
-          }
-
-          const parsedContent = parsedMessages[i];
-
-          if (parsedContent) {
-            return {
-              ...message,
-              parts: [
-                {
-                  type: 'text' as const,
-                  text: parsedContent,
-                },
-              ],
-            } satisfies UIMessage;
-          }
-
-          return message;
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
-        attachmentList={attachmentList}
-        setAttachmentList={setAttachmentList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbench.clearAlert()}
-        data={chatData}
-        onProjectZipImport={handleProjectZipImport}
-        hasMore={hasMore}
-        loadBefore={loadBefore}
-        loadingBefore={loadingBefore}
-        customProgressAnnotations={customProgressAnnotations}
-        isAuthenticated={isAuthenticated}
-        onAuthRequired={onAuthRequired}
-        textareaExpanded={textareaExpanded}
-      />
+          })}
+          enhancePrompt={() => {
+            enhancePrompt(
+              input,
+              (input) => {
+                setInput(input);
+                scrollTextArea();
+              },
+              model,
+              provider,
+              apiKeys,
+            );
+          }}
+          attachmentList={attachmentList}
+          setAttachmentList={setAttachmentList}
+          actionAlert={actionAlert}
+          clearAlert={() => workbench.clearAlert()}
+          data={chatData}
+          onProjectZipImport={handleProjectZipImport}
+          hasMore={hasMore}
+          loadBefore={loadBefore}
+          loadingBefore={loadingBefore}
+          customProgressAnnotations={customProgressAnnotations}
+          isAuthenticated={isAuthenticated}
+          onAuthRequired={onAuthRequired}
+        />
+      </>
     );
   },
 );

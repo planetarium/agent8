@@ -156,6 +156,7 @@ async function commitsAction({ context, request }: ActionFunctionArgs) {
           name: project.name,
           path: project.path_with_namespace,
           description: project.description,
+          created_at: project.created_at,
         },
         user: {
           id: gitlabUser.id,

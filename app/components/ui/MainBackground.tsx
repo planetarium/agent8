@@ -4,9 +4,17 @@ interface MainBackgroundProps {
   className?: string;
   zIndex?: number;
   isMobileView?: boolean;
+  opacity?: number;
+  chatStarted?: boolean;
 }
 
-const MainBackground: React.FC<MainBackgroundProps> = ({ className = '', zIndex = 10, isMobileView = false }) => {
+const MainBackground: React.FC<MainBackgroundProps> = ({
+  className = '',
+  zIndex = 10,
+  isMobileView = false,
+  opacity = 0.8,
+  chatStarted = false,
+}) => {
   return (
     <div className={`fixed inset-0 pointer-events-none overflow-hidden ${className}`} style={{ zIndex }}>
       {isMobileView ? (
@@ -21,9 +29,9 @@ const MainBackground: React.FC<MainBackgroundProps> = ({ className = '', zIndex 
             transform: 'translateX(-50%)',
             width: '820px',
             height: '820px',
-            opacity: 0.8,
+            opacity,
             aspectRatio: '1/1',
-            animation: 'slideDown 1s ease-in-out',
+            animation: chatStarted ? 'slideDownChatStarted 1s ease-in-out' : 'slideDown 1s ease-in-out',
           }}
         />
       ) : (
@@ -43,7 +51,7 @@ const MainBackground: React.FC<MainBackgroundProps> = ({ className = '', zIndex 
             height="936"
             xmlns="http://www.w3.org/2000/svg"
           >
-            <g opacity="0.8" filter="url(#filter0_n_3813_62001)">
+            <g opacity={opacity} filter="url(#filter0_n_3813_62001)">
               <circle cx="280" r="936" fill="url(#paint0_radial_3813_62001)" />
             </g>
             <defs>

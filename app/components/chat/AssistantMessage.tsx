@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { Markdown } from './Markdown';
 import type { JSONValue } from 'ai';
 import Popover from '~/components/ui/Popover';
@@ -9,8 +9,7 @@ import React from 'react';
 interface AssistantMessageProps {
   content: string;
   annotations?: JSONValue[];
-  metadata?: unknown;
-  forceExpanded?: boolean;
+  expanded?: boolean;
 }
 
 function openArtifactInWorkbench(filePath: string) {
@@ -37,13 +36,7 @@ function normalizedFilePath(path: string) {
   return normalizedPath;
 }
 
-export const AssistantMessage = memo(({ content, annotations, metadata, forceExpanded }: AssistantMessageProps) => {
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    setExpanded(forceExpanded || false);
-  }, [forceExpanded]);
-
+export const AssistantMessage = memo(({ content, annotations, expanded = false }: AssistantMessageProps) => {
   const filteredAnnotations = (annotations?.filter(
     (data: JSONValue) => data && typeof data === 'object' && Object.keys(data).includes('type'),
   ) || []) as { type: string; value: any } & { [key: string]: any }[];
@@ -51,25 +44,14 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
   // Find annotations once and reuse results to avoid duplicate find operations
   const chatSummaryAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'chatSummary');
   const codeContextAnnotation = filteredAnnotations.find((annotation) => annotation.type === 'codeContext');
-  const usageMetadata =
-    metadata && typeof metadata === 'object' && 'type' in metadata && metadata.type === 'usage' ? metadata : null;
 
   const chatSummary: string | undefined = chatSummaryAnnotation?.summary;
   const codeContext: string[] | undefined = codeContextAnnotation?.files;
-  const usage: {
-    completionTokens: number;
-    promptTokens: number;
-    totalTokens: number;
-  } = (usageMetadata as any)?.value;
-
-  const toggleExpanded = () => {
-    setExpanded(!expanded);
-  };
 
   return (
-    <div className="overflow-hidden w-full">
+    <div className="overflow-hidden w-full pb-[14px]">
       <>
-        <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary mb-2">
+        <div className="flex gap-2 items-center text-sm text-bolt-elements-textSecondary">
           {(codeContext || chatSummary) && (
             <Popover side="right" align="start" trigger={<div className="i-ph:info" />}>
               {chatSummary && (
@@ -109,21 +91,16 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
               <div className="context"></div>
             </Popover>
           )}
-          {usage && (
-            <div>
-              Tokens: {usage.totalTokens} (prompt: {usage.promptTokens}, completion: {usage.completionTokens})
-            </div>
-          )}
         </div>
       </>
-      <div className="markdown-container">
+      <div className="markdown-container text-body-md-regular-relaxed text-secondary" data-message-content>
         <div
           className={expanded ? 'markdown-content' : 'markdown-content-collapsed'}
           style={
             !expanded
               ? {
                   display: '-webkit-box',
-                  WebkitLineClamp: 1,
+                  WebkitLineClamp: 3,
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -134,25 +111,6 @@ export const AssistantMessage = memo(({ content, annotations, metadata, forceExp
         >
           <Markdown html>{content}</Markdown>
         </div>
-        {!forceExpanded && (
-          <>
-            {!expanded ? (
-              <button
-                onClick={toggleExpanded}
-                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
-              >
-                Read more
-              </button>
-            ) : (
-              <button
-                onClick={toggleExpanded}
-                className="text-bolt-elements-textSecondary bg-transparent text-sm hover:underline"
-              >
-                Collapse
-              </button>
-            )}
-          </>
-        )}
       </div>
     </div>
   );

@@ -1,67 +1,134 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useRef, useEffect } from 'react';
 import { classNames } from '~/utils/classNames';
 
 interface DropdownProps {
   trigger: ReactNode;
   children: ReactNode;
   align?: 'start' | 'center' | 'end';
-  sideOffset?: number;
+  size?: 'default' | 'compact';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface DropdownItemProps {
   children: ReactNode;
-  onSelect?: () => void;
+  onClick?: () => void;
   className?: string;
   disabled?: boolean;
+  size?: 'default' | 'compact';
+  'data-track'?: string;
 }
 
-export const DropdownItem = ({ children, onSelect, className, disabled }: DropdownItemProps) => (
-  <DropdownMenu.Item
+export const DropdownItem = ({
+  children,
+  onClick,
+  className,
+  disabled,
+  size = 'default',
+  'data-track': dataTrack,
+}: DropdownItemProps) => (
+  <div
     className={classNames(
-      'relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
-      'text-bolt-elements-textPrimary',
-      (!disabled && 'hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary cursor-pointer') ||
-        '',
-      (disabled && 'text-bolt-elements-textSecondary') || '',
-      'transition-colors ',
-      'outline-none',
+      'flex items-center gap-4 self-stretch',
+      'bg-interactive-neutral text-primary',
+      'transition-colors outline-none',
+      {
+        'py-[14px] px-5': size === 'default',
+        'py-3 px-4': size === 'compact',
+        'hover:bg-interactive-neutral-hovered cursor-pointer': !disabled,
+        'text-tertiary': !!disabled,
+      },
       className,
     )}
-    onSelect={!disabled ? onSelect : undefined}
-    disabled={disabled}
+    onClick={!disabled ? onClick : undefined}
+    data-track={dataTrack}
   >
     {children}
-  </DropdownMenu.Item>
+  </div>
 );
 
-export const DropdownSeparator = () => <DropdownMenu.Separator className="h-px bg-bolt-elements-borderColor my-1" />;
+export const DropdownSeparator = () => <div className="h-px bg-bolt-elements-borderColor my-1" />;
 
-export const Dropdown = ({ trigger, children, align = 'end', sideOffset = 5 }: DropdownProps) => {
+export const Dropdown = ({ trigger, children, align = 'end', size = 'default', open, onOpenChange }: DropdownProps) => {
+  const [internalOpen, setInternalOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Controlled or uncontrolled
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+
+      /*
+       * Check if click is inside a modal overlay (fixed positioned with high z-index)
+       * Modals use createPortal and have fixed positioning with z-50
+       */
+      const closestFixed = target.closest('.fixed');
+
+      if (closestFixed) {
+        const zIndex = window.getComputedStyle(closestFixed).zIndex;
+
+        // Don't close dropdown if clicking inside a modal (z-index >= 50)
+        if (zIndex && parseInt(zIndex) >= 50) {
+          return;
+        }
+      }
+
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, setIsOpen]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, setIsOpen]);
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+    <div className="relative" ref={dropdownRef}>
+      <div onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
+      {isOpen && (
+        <div
           className={classNames(
-            'min-w-[220px] rounded-lg p-2',
-            'bg-bolt-elements-background-depth-2',
-            'border border-bolt-elements-borderColor',
-            'shadow-lg',
-            'animate-in fade-in-80 zoom-in-95',
-            'data-[side=bottom]:slide-in-from-top-2',
-            'data-[side=left]:slide-in-from-right-2',
-            'data-[side=right]:slide-in-from-left-2',
-            'data-[side=top]:slide-in-from-bottom-2',
-            'z-[1000]',
+            'absolute top-full mt-1 flex flex-col items-start rounded-lg border border-tertiary bg-interactive-neutral z-[1000] overflow-hidden',
+            {
+              'py-2  w-[260px]': size === 'default',
+              'py-0.5 w-[300px]': size === 'compact',
+              'right-0': align === 'end',
+              'left-0': align === 'start',
+              'left-1/2 -translate-x-1/2': align === 'center',
+            },
           )}
-          sideOffset={sideOffset}
-          align={align}
+          style={{
+            boxShadow: '0 8px 16px 0 rgba(0, 0, 0, 0.32), 0 0 8px 0 rgba(0, 0, 0, 0.28)',
+          }}
         >
           {children}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+        </div>
+      )}
+    </div>
   );
 };

@@ -1,14 +1,19 @@
 import { useStore } from '@nanostores/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { computed } from 'nanostores';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { createHighlighter, type BundledLanguage, type BundledTheme, type HighlighterGeneric } from 'shiki';
+import Lottie from 'lottie-react';
+
 import type { ActionState } from '~/lib/runtime/action-runner';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { useWorkbenchArtifacts } from '~/lib/hooks/useWorkbenchStore';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
 import { WORK_DIR } from '~/utils/constants';
+import { checkCircleAnimationData } from '~/utils/animationData';
+
+import { FileIcon } from '~/components/ui/Icons';
 
 const highlighterOptions = {
   langs: ['shell'],
@@ -28,9 +33,7 @@ interface ArtifactProps {
 }
 
 export const Artifact = memo(({ artifactId }: ArtifactProps) => {
-  const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
-  const [allActionFinished, setAllActionFinished] = useState(false);
 
   const artifacts = useWorkbenchArtifacts();
   const artifact = artifacts[artifactId];
@@ -46,80 +49,17 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
     }),
   );
 
-  const toggleActions = () => {
-    userToggledActions.current = true;
-    setShowActions(!showActions);
-  };
-
   useEffect(() => {
-    if (actions.length && !showActions && !userToggledActions.current) {
+    if (actions.length && !showActions) {
       setShowActions(true);
-    }
-
-    if (actions.length !== 0 && artifact.type === 'bundled') {
-      const finished = !actions.find((action) => action.status !== 'complete');
-
-      if (allActionFinished !== finished) {
-        setAllActionFinished(finished);
-      }
     }
   }, [actions]);
 
-  const withHeader = artifact.title || actions.length > 1;
-
-  const header = (
-    <div className="flex">
-      <button
-        className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
-        onClick={() => {
-          const showWorkbench = workbenchStore.showWorkbench.get();
-          workbenchStore.showWorkbench.set(!showWorkbench);
-        }}
-      >
-        {artifact.type == 'bundled' && (
-          <>
-            <div className="p-4">
-              {allActionFinished ? (
-                <div className={'i-ph:files-light'} style={{ fontSize: '2rem' }}></div>
-              ) : (
-                <div className={'i-svg-spinners:90-ring-with-bg'} style={{ fontSize: '2rem' }}></div>
-              )}
-            </div>
-            <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-          </>
-        )}
-        <div className="px-5 p-3.5 w-full text-left">
-          <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
-          <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
-        </div>
-      </button>
-      <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-      <AnimatePresence>
-        {actions.length && artifact.type !== 'bundled' && (
-          <motion.button
-            initial={{ width: 0 }}
-            animate={{ width: 'auto' }}
-            exit={{ width: 0 }}
-            transition={{ duration: 0.15, ease: cubicEasingFn }}
-            className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
-            onClick={toggleActions}
-          >
-            <div className="p-4">
-              <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-            </div>
-          </motion.button>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-
   return (
-    <div
-      className={`${withHeader ? 'artifact' : 'single-action-artifact'} border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150`}
-    >
-      {withHeader && header}
+    <div className="flex flex-col overflow-hidden w-full mt-3">
+      {/* Header hidden as per design request */}
       <AnimatePresence>
-        {artifact.type !== 'bundled' && showActions && actions.length > 0 && (
+        {showActions && actions.length > 0 && (
           <motion.div
             className="actions"
             initial={{ height: 0 }}
@@ -127,9 +67,7 @@ export const Artifact = memo(({ artifactId }: ArtifactProps) => {
             exit={{ height: '0px' }}
             transition={{ duration: 0.15 }}
           >
-            {withHeader && <div className="bg-bolt-elements-artifacts-borderColor h-[1px]" />}
-
-            <div className={`${withHeader ? 'p-5' : 'p-3'} text-left bg-bolt-elements-actions-background`}>
+            <div className="text-left">
               <ActionList actions={actions} />
             </div>
           </motion.div>
@@ -194,8 +132,8 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                 ease: cubicEasingFn,
               }}
             >
-              <div className="flex items-center gap-1.5 text-sm">
-                <div className={classNames('text-lg', getIconColor(action.status))}>
+              <div className="flex items-center gap-2">
+                <div className={classNames('text-[20px]', getIconColor(action.status))}>
                   {status === 'running' ? (
                     <>
                       {type !== 'start' ? (
@@ -207,34 +145,48 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                   ) : status === 'pending' ? (
                     <div className="i-ph:circle-duotone"></div>
                   ) : status === 'complete' ? (
-                    <div className="i-ph:check"></div>
+                    <div style={{ width: '20px', height: '20px' }}>
+                      <Lottie animationData={checkCircleAnimationData} loop={false} />
+                    </div>
                   ) : status === 'failed' || status === 'aborted' ? (
                     <div className="i-ph:x"></div>
                   ) : null}
                 </div>
                 {type === 'file' ? (
-                  <div>
-                    Create{' '}
-                    <code
-                      className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
-                      onClick={() => openArtifactInWorkbench(action.filePath)}
-                    >
-                      {action.filePath}
-                    </code>
+                  <div className="flex items-center gap-1 flex-[1_0_0]">
+                    <span className="text-body-sm text-tertiary">Create</span>
+                    <div className="flex items-center gap-0.5">
+                      <FileIcon />
+                      <code
+                        className={classNames(
+                          'text-body-sm hover:underline cursor-pointer',
+                          status === 'running' ? 'animate-text-accent-wave' : 'text-accent-primary',
+                        )}
+                        onClick={() => openArtifactInWorkbench(action.filePath)}
+                      >
+                        {action.filePath}
+                      </code>
+                    </div>
                   </div>
                 ) : type === 'modify' ? (
-                  <div>
-                    Modify{' '}
-                    <code
-                      className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md text-bolt-elements-item-contentAccent hover:underline cursor-pointer"
-                      onClick={() => openArtifactInWorkbench(action.filePath)}
-                    >
-                      {action.filePath}
-                    </code>
+                  <div className="flex items-center gap-1 flex-[1_0_0]">
+                    <span className="text-body-sm text-tertiary">Modify</span>
+                    <div className="flex items-center gap-0.5">
+                      <FileIcon />
+                      <code
+                        className={classNames(
+                          'text-body-sm hover:underline cursor-pointer',
+                          status === 'running' ? 'animate-text-accent-wave' : 'text-accent-primary',
+                        )}
+                        onClick={() => openArtifactInWorkbench(action.filePath)}
+                      >
+                        {action.filePath}
+                      </code>
+                    </div>
                   </div>
                 ) : type === 'shell' ? (
                   <div className="flex items-center w-full min-h-[28px]">
-                    <span className="flex-1">Run command</span>
+                    <span className="flex-1 text-body-sm text-tertiary">Run command</span>
                   </div>
                 ) : type === 'start' ? (
                   <a
@@ -244,7 +196,7 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                     }}
                     className="flex items-center w-full min-h-[28px]"
                   >
-                    <span className="flex-1">Start Application</span>
+                    <span className="flex-1 text-body-sm text-tertiary">Start Application</span>
                   </a>
                 ) : null}
               </div>
@@ -270,7 +222,7 @@ function getIconColor(status: ActionState['status']) {
       return 'text-bolt-elements-textTertiary';
     }
     case 'running': {
-      return 'text-bolt-elements-loader-progress';
+      return 'text-white';
     }
     case 'complete': {
       return 'text-bolt-elements-icon-success';

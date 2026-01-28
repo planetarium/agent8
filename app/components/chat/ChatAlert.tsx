@@ -86,6 +86,7 @@ export default function ChatAlert({ autoFixChance, alert, clearAlert, postMessag
               <button
                 onClick={() => handleAskBolt(false)}
                 className="flex min-h-[40px] max-h-[40px] px-[var(--spacing-14,14px)] py-[var(--spacing-10,10px)] justify-center items-center gap-[var(--spacing-6,6px)] rounded-[var(--border-radius-4,4px)] border border-[var(--color-border-interactive-neutral,rgba(255,255,255,0.18))] bg-[var(--color-bg-interactive-primary,#1A92A4)]"
+                data-track="editor-fixerror"
               >
                 <img src="/icons/Wrench.svg" alt="Fix" width="20" height="20" />
                 <span className="text-[var(--color-text-interactive-on-primary,#F3F5F8)] font-feature-stylistic font-primary text-[14px] font-semibold leading-[142.9%]">

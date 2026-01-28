@@ -79,6 +79,12 @@
 
 .promptInputActive {
   border-radius: var(--border-radius-16, 16px);
+  border: 1px solid var(--color-border-tertiary, rgba(255, 255, 255, 0.12));
+  background: var(--color-bg-primary, #111315);
+  box-shadow: 0 0 4px 0 rgba(26, 220, 217, 0.08), 0 0 12px 4px rgba(148, 250, 239, 0.12);
+}
+
+.promptInputActiveSmallViewport {
   background: var(--color-bg-primary, #111315);
   /* Elevation/Light/2 */
   box-shadow:

@@ -5,6 +5,7 @@ import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/mes
 import type { Container } from '~/lib/container/interfaces';
 import { ContainerFactory } from '~/lib/container/factory';
 import { ERROR_NAMES, SHELL_COMMANDS, WORK_DIR, WORK_DIR_NAME } from '~/utils/constants';
+import { chatStore } from '~/lib/stores/chat';
 import { cleanStackTrace } from '~/utils/stacktrace';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import { createScopedLogger } from '~/utils/logger';
@@ -94,7 +95,8 @@ export class WorkbenchStore {
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
   showWorkbench: WritableAtom<boolean> = import.meta.hot?.data.showWorkbench ?? atom(false);
-  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('code');
+  mobilePreviewMode: WritableAtom<boolean> = import.meta.hot?.data.mobilePreviewMode ?? atom(false);
+  currentView: WritableAtom<WorkbenchViewType> = import.meta.hot?.data.currentView ?? atom('preview');
   unsavedFiles: WritableAtom<Set<string>> = atom(
     ensureUnsavedFilesSet(import.meta.hot?.data.unsavedFiles?.get?.() ?? import.meta.hot?.data.unsavedFiles),
   );
@@ -106,6 +108,8 @@ export class WorkbenchStore {
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
   isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
+  isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
+  shouldResetPreviewUrls: WritableAtom<boolean> = import.meta.hot?.data.shouldResetPreviewUrls ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
   #messageToArtifactIds: Map<string, string[]> = new Map();
@@ -134,12 +138,14 @@ export class WorkbenchStore {
       import.meta.hot.data.artifacts = this.artifacts;
       import.meta.hot.data.unsavedFiles = this.unsavedFiles;
       import.meta.hot.data.showWorkbench = this.showWorkbench;
+      import.meta.hot.data.mobilePreviewMode = this.mobilePreviewMode;
       import.meta.hot.data.currentView = this.currentView;
       import.meta.hot.data.actionAlert = this.actionAlert;
       import.meta.hot.data.diffCommitHash = this.diffCommitHash;
       import.meta.hot.data.diffEnabled = this.diffEnabled;
       import.meta.hot.data.connectionState = this.connectionState;
       import.meta.hot.data.isDeploying = this.isDeploying;
+      import.meta.hot.data.shouldResetPreviewUrls = this.shouldResetPreviewUrls;
 
       if (import.meta.hot.data.workbenchContainer) {
         this.#currentContainer = import.meta.hot.data.workbenchContainer;
@@ -905,10 +911,6 @@ export class WorkbenchStore {
         this.setSelectedFile(fullPath);
       }
 
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
-      }
-
       const doc = this.#editorStore.documents.get()[fullPath];
 
       if (!doc) {
@@ -928,10 +930,6 @@ export class WorkbenchStore {
 
       if (this.selectedFile.value !== fullPath) {
         this.setSelectedFile(fullPath);
-      }
-
-      if (this.currentView.value !== 'code') {
-        this.currentView.set('code');
       }
 
       await artifact.runner.runAction(data);
@@ -1263,8 +1261,22 @@ export class WorkbenchStore {
     return { user, verseId };
   }
 
-  async runPreview() {
-    this.currentView.set('code');
+  // Reset preview URLs to prevent download prompts on mobile
+  resetPreviewUrls() {
+    this.shouldResetPreviewUrls.set(true);
+
+    // Immediately reset to false so it can be triggered again
+    setTimeout(() => this.shouldResetPreviewUrls.set(false), 0);
+  }
+
+  async runPreview(options: { force?: boolean } = {}) {
+    // Don't run preview if response was aborted (unless forced)
+    if (!options.force && chatStore.get().aborted) {
+      logger.info('Preview cancelled: response was aborted');
+      return;
+    }
+
+    this.isRunningPreview.set(true);
 
     const shell = this.boltTerminal;
     await shell.ready;
@@ -1355,16 +1367,7 @@ export class WorkbenchStore {
         throw new Error();
       }
 
-      const taskBranch = repoStore.get().taskBranch;
-      let lastCommitHash = '';
-
-      try {
-        lastCommitHash = await getLastCommitHash(repoStore.get().path, taskBranch || 'develop');
-      } catch (error) {
-        failedReason = 'task not found';
-        throw error;
-      }
-
+      const lastCommitHash = await getLastCommitHash(repoStore.get().path, 'develop');
       const { tags } = await getTags(repoStore.get().path);
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
