@@ -1,0 +1,192 @@
+import React from 'react';
+import { createPortal } from 'react-dom';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+import { classNames } from '~/utils/classNames';
+import { CloseIcon } from '~/components/ui/Icons';
+import CustomButton from '~/components/ui/CustomButton';
+
+export interface BaseModalProps {
+  isOpen: boolean;
+  isHiddenTitleSection?: boolean;
+  onClose: () => void;
+  title?: string;
+  modalClassName?: string;
+  children?: React.ReactNode;
+}
+
+interface ActionsProps {
+  children: React.ReactNode;
+  gap?: 'gap-2' | 'gap-3';
+  layout?: 'horizontal' | 'stacked';
+}
+
+interface CancelButtonProps {
+  children?: React.ReactNode;
+  onClick?: () => void;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+interface ConfirmButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  type?: 'button' | 'submit';
+  size?: 'sm' | 'md' | 'lg';
+  'data-track'?: string;
+}
+
+// Actions container component
+function Actions({ children, gap = 'gap-2', layout = 'horizontal' }: ActionsProps) {
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+
+  return (
+    <div className="flex flex-col items-start gap-[10px] self-stretch">
+      <div
+        className={classNames('flex items-center self-stretch justify-end', gap, {
+          'flex-col-reverse': isSmallViewport && layout === 'stacked',
+        })}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Cancel button component
+function CancelButton({ children = 'Cancel', onClick, size = 'md' }: CancelButtonProps) {
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+
+  return (
+    <CustomButton
+      className={isSmallViewport ? 'w-full' : ''}
+      variant="secondary-ghost"
+      size={size}
+      type="button"
+      onClick={onClick}
+    >
+      {children}
+    </CustomButton>
+  );
+}
+
+// Confirm button component
+function ConfirmButton({
+  children,
+  onClick,
+  disabled,
+  type = 'button',
+  size = 'md',
+  'data-track': dataTrack,
+}: ConfirmButtonProps) {
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+
+  return (
+    <CustomButton
+      className={isSmallViewport ? 'w-full' : ''}
+      variant="primary-filled"
+      size={size}
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      data-track={dataTrack}
+    >
+      {children}
+    </CustomButton>
+  );
+}
+
+// Destructive button component (for delete actions)
+function DestructiveButton({
+  children,
+  onClick,
+  disabled,
+  type = 'button',
+  size = 'md',
+  'data-track': dataTrack,
+}: ConfirmButtonProps) {
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+
+  return (
+    <CustomButton
+      className={isSmallViewport ? 'w-full' : ''}
+      variant="destructive-filled"
+      size={size}
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      data-track={dataTrack}
+    >
+      {children}
+    </CustomButton>
+  );
+}
+
+// Description component for modal content
+interface DescriptionProps {
+  children: React.ReactNode;
+}
+
+function Description({ children }: DescriptionProps) {
+  return (
+    <div className="flex flex-col items-start pb-4 self-stretch">
+      <span className="text-body-md-medium text-tertiary">{children}</span>
+    </div>
+  );
+}
+
+// Main BaseModal component
+export function BaseModal({ isOpen, isHiddenTitleSection, modalClassName, onClose, title, children }: BaseModalProps) {
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className={classNames('fixed inset-0 z-50', {
+        'bg-black bg-opacity-50 flex items-center justify-center': !isSmallViewport,
+        'bg-[rgba(0,0,0,0.60)] flex items-end': isSmallViewport,
+      })}
+      onClick={onClose}
+    >
+      <div
+        className={classNames(
+          'flex flex-col items-start bg-primary',
+          {
+            'gap-3 border border-[rgba(255,255,255,0.22)] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)] w-[500px] p-8 rounded-2xl':
+              !isSmallViewport,
+            'gap-4 py-7 px-5 w-full rounded-t-2xl rounded-b-none shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]':
+              isSmallViewport,
+          },
+          modalClassName,
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        {!isHiddenTitleSection && (
+          <div className="flex items-center gap-2 self-stretch">
+            <span className="text-primary text-heading-md flex-[1_0_0]">{title}</span>
+            <button onClick={onClose} className="bg-transparent p-2 justify-center items-center gap-1.5">
+              <CloseIcon width={20} height={20} />
+            </button>
+          </div>
+        )}
+
+        {/* Content & Actions */}
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// Attach sub-components
+BaseModal.Actions = Actions;
+BaseModal.Description = Description;
+BaseModal.CancelButton = CancelButton;
+BaseModal.ConfirmButton = ConfirmButton;
+BaseModal.DestructiveButton = DestructiveButton;
+
+export default BaseModal;

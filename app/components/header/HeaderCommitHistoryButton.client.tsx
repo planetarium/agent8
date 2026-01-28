@@ -1,15 +1,27 @@
-import { useState } from 'react';
-import { useStore } from '@nanostores/react';
-import { repoStore } from '~/lib/stores/repo';
-import { Dialog, DialogTitle } from '~/components/ui/Dialog';
-import { DialogRoot } from '~/components/ui/Dialog';
-import { Button } from '~/components/ui/Button';
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { forkProject } from '~/lib/persistenceGitbase/api.client';
-import { isCommitHash } from '~/lib/persistenceGitbase/utils';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
+import { useStore } from '@nanostores/react';
+import * as Tooltip from '@radix-ui/react-tooltip';
+
+import { repoStore } from '~/lib/stores/repo';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+import { forkProject, fetchProjectFiles, setRestorePoint } from '~/lib/persistenceGitbase/api.client';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { handleChatError } from '~/utils/errorNotification';
 import { getElapsedTime } from '~/utils/performance';
+import { classNames } from '~/utils/classNames';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
+import { triggerRestoreEvent } from '~/lib/stores/restore';
+import { V8_ACCESS_TOKEN_KEY } from '~/lib/verse8/userAuth';
+
+import { Button } from '~/components/ui/Button';
+import CustomIconButton from '~/components/ui/CustomIconButton';
+import CustomButton from '~/components/ui/CustomButton';
+import { BaseModal } from '~/components/ui/BaseModal';
+import { HistoryIcon, CloseIcon, OutLinkIcon, RestoreIcon, ChevronRightIcon } from '~/components/ui/Icons';
 
 interface Commit {
   id: string;
@@ -42,72 +54,153 @@ interface CommitResponse {
   message?: string;
 }
 
-export function HeaderCommitHistoryButton() {
+// Restore Confirmation Modal Component
+interface RestoreConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  commit: Commit | null;
+}
+
+function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConfirmModalProps) {
+  if (!commit) {
+    return null;
+  }
+
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Restore this version?">
+      <BaseModal.Description>
+        This will replace the current project code with this version. Chat history will remain.
+      </BaseModal.Description>
+      <BaseModal.Actions>
+        <BaseModal.CancelButton onClick={onClose} />
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-commits-restore-confirm">
+          <RestoreIcon size={20} color="#f3f5f8" />
+          Restore
+        </BaseModal.ConfirmButton>
+      </BaseModal.Actions>
+    </BaseModal>
+  );
+}
+
+// Fork Confirmation Modal Component
+interface ForkConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  commit: Commit | null;
+}
+
+function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmModalProps) {
+  if (!commit) {
+    return null;
+  }
+
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="Create a copy of this version?">
+      <BaseModal.Description>
+        This creates a new project from this version. Chat history won&apos;t be copied to the new project.
+      </BaseModal.Description>
+      <BaseModal.Actions>
+        <BaseModal.CancelButton onClick={onClose} />
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-commits-fork-confirm">
+          Create copy
+        </BaseModal.ConfirmButton>
+      </BaseModal.Actions>
+    </BaseModal>
+  );
+}
+
+interface HeaderCommitHistoryButtonProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: HeaderCommitHistoryButtonProps) {
   const repo = useStore(repoStore);
-  const [isOpen, setIsOpen] = useState(false);
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
   const [commits, setCommits] = useState<Commit[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [showGradient, setShowGradient] = useState<boolean>(true);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
+  const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
+  const [isForkModalOpen, setIsForkModalOpen] = useState<boolean>(false);
+  const [selectedCommitForFork, setSelectedCommitForFork] = useState<Commit | null>(null);
 
-  const perPage = 50;
+  const COMMITS_PER_PAGE = 50;
 
-  const fetchCommits = async (page: number = 1, append: boolean = false) => {
-    if (!repo.path) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params = new URLSearchParams({
-        projectPath: repo.path,
-        all: 'true',
-        page: page.toString(),
-        perPage: perPage.toString(),
-      });
-
-      const response = await fetch(`/api/gitlab/commits?${params}`);
-      const data: CommitResponse = await response.json();
-
-      if (data.success && data.data) {
-        const filteredCommits = data.data.commits.filter((commit) => !commit.message.startsWith('Merge branch'));
-        const reversedCommits = [...filteredCommits].reverse();
-
-        if (append) {
-          setCommits((prev) => [...prev, ...reversedCommits]);
-        } else {
-          setCommits(reversedCommits);
-        }
-
-        setHasMore(data.data.pagination.hasMore);
-        setCurrentPage(page);
-
-        console.log('Pagination info:', {
-          hasMore: data.data.pagination.hasMore,
-          currentPage: page,
-          totalPages: data.data.pagination.totalPages,
-          total: data.data.pagination.total,
-        });
-      } else {
-        setError(data.message || 'Failed to fetch commits');
+  const fetchCommits = useCallback(
+    async (page: number = 1, append: boolean = false) => {
+      if (!repo.path) {
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams({
+          projectPath: repo.path,
+          page: page.toString(),
+          perPage: COMMITS_PER_PAGE.toString(),
+          all: 'true',
+        });
+
+        const response = await fetch(`/api/gitlab/commits?${params}`);
+        const data: CommitResponse = await response.json();
+
+        if (data.success && data.data) {
+          const filteredCommits = data.data.commits
+            .filter((commit) => !commit.message.startsWith('Merge branch'))
+            .sort((a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime()); // 최신순 정렬
+
+          if (append) {
+            setCommits((prev) => {
+              const combined = [...prev, ...filteredCommits];
+
+              // 전체 목록도 시간순으로 재정렬 (페이지네이션 시 섞일 수 있음)
+              return combined.sort(
+                (a, b) => new Date(b.committed_date).getTime() - new Date(a.committed_date).getTime(),
+              );
+            });
+          } else {
+            setCommits(filteredCommits);
+          }
+
+          setHasMore(data.data.pagination.hasMore);
+          setCurrentPage(page);
+        } else {
+          setError(data.message || 'Failed to fetch commits');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repo.path],
+  );
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
 
-    if (open && commits.length === 0) {
-      fetchCommits(1);
+    if (open) {
+      setShowGradient(true); // Reset gradient visibility when opening
+    } else {
+      onClose?.();
     }
   };
+
+  // Fetch commits when modal opens
+  useEffect(() => {
+    if (isOpen && repo.path) {
+      fetchCommits(1);
+    }
+  }, [isOpen, repo.path, fetchCommits]);
 
   const handleLoadMore = () => {
     if (hasMore && !loading) {
@@ -115,15 +208,34 @@ export function HeaderCommitHistoryButton() {
     }
   };
 
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+
+    // Check if user is near the bottom (within 100px)
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+    setShowGradient(!isNearBottom);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
+    const formatted = date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+      timeZone: 'UTC',
+    });
+    const time = date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
+      timeZone: 'UTC',
     });
+
+    return `${formatted} UTC ${time}`;
   };
 
   const getGitlabCommitUrl = (commitId: string) => {
@@ -134,11 +246,21 @@ export function HeaderCommitHistoryButton() {
     return `https://gitlab.verse8.io/${repo.path}/-/commit/${commitId}`;
   };
 
-  const handleFork = async (commit: Commit) => {
-    const startTime = performance.now();
-    const commitHash = commit.id;
+  // Open fork confirmation modal
+  const handleForkClick = (commit: Commit) => {
+    setSelectedCommitForFork(commit);
+    setIsForkModalOpen(true);
+  };
 
-    const commitInfo = commit.title || commit.message.split('\n')[0];
+  // Actual fork logic after confirmation
+  const handleForkConfirm = async () => {
+    if (!selectedCommitForFork) {
+      return;
+    }
+
+    const startTime = performance.now();
+    const commitHash = selectedCommitForFork.id;
+    const commitInfo = selectedCommitForFork.title || selectedCommitForFork.message.split('\n')[0];
 
     if (!commitHash || !isCommitHash(commitHash)) {
       handleChatError('No commit hash found', {
@@ -146,6 +268,8 @@ export function HeaderCommitHistoryButton() {
         prompt: commitInfo || undefined,
         elapsedTime: getElapsedTime(startTime),
       });
+
+      setIsForkModalOpen(false);
 
       return;
     }
@@ -156,19 +280,25 @@ export function HeaderCommitHistoryButton() {
     const cleanWords = Number.isInteger(Number(lastWord)) ? nameWords.slice(0, -1) : nameWords;
     const newRepoName = (cleanWords.length > 0 ? cleanWords.join('-') : 'project').toLowerCase();
 
-    const toastId = toast.loading('Forking project...');
+    // Close modal first
+    setIsForkModalOpen(false);
+
+    // Show loading toast while forking
+    const toastId = toast.loading('Creating a copy...');
 
     try {
-      const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title);
+      const forkedProject = await forkProject(repo.path, newRepoName, commitHash, repo.title, {
+        resetEnv: true,
+      });
 
       // Dismiss the loading toast
       toast.dismiss(toastId);
 
       if (forkedProject && forkedProject.success) {
-        toast.success('Forked project successfully');
+        toast.success('Copy created — now in your copy.');
         window.location.href = '/chat/' + forkedProject.project.path;
       } else {
-        handleChatError('Failed to fork project', {
+        handleChatError('Failed to create copy', {
           context: 'handleFork - fork result check',
           prompt: commitInfo || undefined,
           elapsedTime: getElapsedTime(startTime),
@@ -178,9 +308,99 @@ export function HeaderCommitHistoryButton() {
       // Dismiss the loading toast and show error
       toast.dismiss(toastId);
 
-      handleChatError('Failed to fork project', {
+      handleChatError('Failed to create copy', {
         error: error instanceof Error ? error : String(error),
         context: 'handleFork - catch block',
+        prompt: commitInfo || undefined,
+        elapsedTime: getElapsedTime(startTime),
+      });
+    }
+  };
+
+  // Open restore confirmation modal
+  const handleRestoreClick = (commit: Commit) => {
+    setSelectedCommit(commit);
+    setIsRestoreModalOpen(true);
+  };
+
+  // Actual restore logic after confirmation
+  const handleRestoreConfirm = async () => {
+    if (!selectedCommit) {
+      return;
+    }
+
+    // Close modals immediately to prevent duplicate clicks
+    const commitToRestore = selectedCommit;
+    setIsRestoreModalOpen(false);
+    setIsOpen(false);
+
+    const startTime = performance.now();
+    const commitHash = commitToRestore.id;
+    const commitInfo = commitToRestore.title || commitToRestore.message.split('\n')[0];
+
+    if (!commitHash || !isCommitHash(commitHash)) {
+      handleChatError('No commit hash found', {
+        context: 'handleRestore - commit hash validation',
+        prompt: commitInfo || undefined,
+        elapsedTime: getElapsedTime(startTime),
+      });
+      return;
+    }
+
+    const toastId = toast.loading('Restoring project...');
+
+    try {
+      // Fetch files from the specific commit
+      const files = await fetchProjectFiles(repo.path, commitHash);
+
+      if (!files || Object.keys(files).length === 0) {
+        throw new Error('No files found in commit');
+      }
+
+      // Reinitialize container to restart terminal
+      const accessToken = localStorage.getItem(V8_ACCESS_TOKEN_KEY) || '';
+      await workbenchStore.reinitializeContainer(accessToken);
+
+      // Get container instance after reinitialization
+      const containerInstance = await workbenchStore.container;
+
+      // Remove existing directories to ensure clean state
+      try {
+        await containerInstance.fs.rm('/src', { recursive: true, force: true });
+        await containerInstance.fs.rm('/PROJECT', { recursive: true, force: true });
+      } catch {
+        // Ignore error if directories don't exist
+      }
+
+      // Mount the files from the commit
+      await containerInstance.mount(convertFileMapToFileSystemTree(files));
+      workbenchStore.resetAllFileModifications();
+
+      // Run preview to start dev server with restored files
+      await workbenchStore.runPreview();
+
+      // Save restore point to GitLab
+      try {
+        await setRestorePoint(repo.path, commitHash, commitToRestore.title);
+      } catch (err) {
+        console.warn('Failed to save restore point to GitLab:', err);
+
+        // Continue even if saving fails
+      }
+
+      // Update URL with revertTo parameter to ensure commits are based on this version
+      window.history.replaceState(null, '', `/chat/${repo.path}?revertTo=${commitHash}`);
+
+      // Trigger restore event to add message to chat
+      triggerRestoreEvent(commitHash, commitToRestore.title);
+
+      toast.dismiss(toastId);
+      toast.success('Project restored successfully');
+    } catch (error) {
+      toast.dismiss(toastId);
+      handleChatError('Failed to restore project', {
+        error: error instanceof Error ? error : String(error),
+        context: 'handleRestore - restore process',
         prompt: commitInfo || undefined,
         elapsedTime: getElapsedTime(startTime),
       });
@@ -192,133 +412,307 @@ export function HeaderCommitHistoryButton() {
   }
 
   return (
-    <DialogRoot open={isOpen} onOpenChange={handleOpenChange}>
-      <RadixDialog.Trigger asChild>
-        <button className="text-bolt-elements-textSecondary bg-transparent hover:text-bolt-elements-textPrimary transition-colors text-sm font-medium flex items-center gap-2">
-          <span className="i-ph:git-branch-duotone" />
-          <span>History</span>
-        </button>
-      </RadixDialog.Trigger>
-      <Dialog
-        className="max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col bg-zinc-900 border-zinc-700 z-[100]"
-        onClose={() => setIsOpen(false)}
-      >
-        <div className="p-6 border-b border-zinc-700 bg-gradient-to-r from-zinc-800 to-zinc-900">
-          <DialogTitle className="text-xl font-bold text-zinc-100 flex items-center gap-3">
-            <div className="i-ph:git-branch-duotone text-zinc-400" />
-            Commit History
-            <span className="text-sm font-normal text-zinc-400">({repo.path})</span>
-          </DialogTitle>
+    <>
+      {asMenuItem ? (
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => handleOpenChange(true)}
+        >
+          <HistoryIcon width={20} height={20} />
+          <span>Commit History (Gitlab)</span>
         </div>
+      ) : (
+        <Tooltip.Root>
+          <Tooltip.Trigger asChild>
+            <CustomButton
+              variant="secondary-outlined"
+              size="md"
+              onClick={() => handleOpenChange(true)}
+              data-track="editor-commits"
+            >
+              <HistoryIcon width={20} height={20} />
+              Commits
+            </CustomButton>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+              sideOffset={5}
+              side="bottom"
+              align="end"
+              alignOffset={0}
+            >
+              View commits to fork or restore
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-40px]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      )}
 
-        <div className="flex-1 overflow-y-auto p-6 max-h-[50vh] bg-zinc-900" style={{ scrollbarWidth: 'thin' }}>
-          {loading && commits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-zinc-600 border-t-zinc-400 mb-4"></div>
-              <div className="text-zinc-400 text-sm">Loading commits...</div>
-            </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <div className="i-ph:warning-circle-duotone text-red-400 text-4xl mb-4 mx-auto" />
-              <div className="text-red-400 mb-4 font-medium">Error: {error}</div>
-              <Button
-                onClick={() => fetchCommits(1)}
-                variant="secondary"
-                size="sm"
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-600"
-              >
-                <div className="i-ph:arrow-clockwise mr-2" />
-                Retry
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {commits.map((commit, index) => (
-                <div
-                  key={`${commit.id}-${index}`}
-                  className="bg-gradient-to-r from-zinc-800 to-zinc-850 border border-zinc-700 rounded-xl p-5 hover:from-zinc-750 hover:to-zinc-800 hover:border-zinc-600 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-zinc-100 leading-relaxed break-words text-base">
-                          {commit.title || commit.message.split('\n')[0]}
-                        </div>
-                      </div>
-                      <a
-                        href={getGitlabCommitUrl(commit.id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 text-zinc-400 hover:text-zinc-400 hover:bg-zinc-700 rounded-lg transition-all duration-200 flex-shrink-0 group"
-                        title="View in GitLab"
-                      >
-                        <div className="i-ph:arrow-square-out text-base group-hover:scale-110 transition-transform" />
-                      </a>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleFork(commit)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-300 bg-zinc-700 hover:text-zinc-200 hover:bg-zinc-600 rounded transition-all duration-200"
-                          title="Fork from this commit"
-                        >
-                          <div className="i-ph:git-fork text-sm" />
-                          Fork
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-zinc-400">
-                        <div className="i-ph:clock text-zinc-500" />
-                        {formatDate(commit.committed_date)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {(hasMore || commits.length > 0) && (
-                <div className="text-center py-6">
-                  <Button
-                    onClick={handleLoadMore}
-                    disabled={loading || !hasMore}
-                    variant="secondary"
-                    size="sm"
-                    className={`min-w-[140px] transition-all duration-200 ${
-                      hasMore
-                        ? 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white border-zinc-500 shadow-lg hover:shadow-xl'
-                        : 'bg-zinc-700 text-zinc-400 border-zinc-600 cursor-not-allowed'
-                    }`}
+      {isOpen &&
+        createPortal(
+          <div
+            className={`fixed inset-0 flex items-center justify-center z-50 ${isSmallViewport ? 'bg-primary' : 'bg-[rgba(0,0,0,0.60)] backdrop-blur-[4px]'}`}
+            onClick={() => setIsOpen(false)}
+          >
+            <div
+              className={`overflow-hidden flex flex-col items-start bg-primary gap-3 ${
+                isSmallViewport
+                  ? 'w-full h-full px-4'
+                  : 'max-w-[800px] w-full border border-secondary rounded-2xl elevation-light-3 p-8'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {!isSmallViewport ? (
+                <header className="flex items-center gap-2 self-stretch">
+                  <h1 className="text-heading-md text-primary flex-[1_0_0]">Commit History</h1>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="flex p-2 justify-center items-center gap-1.5 bg-transparent"
                   >
-                    {loading ? (
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-zinc-400 border-t-white"></div>
-                        Loading...
-                      </div>
-                    ) : hasMore ? (
-                      <div className="flex items-center gap-2">
-                        <div className="i-ph:arrow-down" />
-                        Load More
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <div className="i-ph:check-circle" />
-                        All Loaded
-                      </div>
-                    )}
-                  </Button>
+                    <CloseIcon width={20} height={20} />
+                  </button>
+                </header>
+              ) : (
+                <div className="flex items-center justify-center gap-[10px] pt-3 pb-1 self-stretch">
+                  <CustomIconButton
+                    variant="secondary-transparent"
+                    size="md"
+                    icon={<ChevronRightIcon className="rotate-180" width={20} height={20} />}
+                    onClick={() => setIsOpen(false)}
+                  />
+                  <h1 className="text-heading-xs text-primary flex-[1_0_0]">Commit History</h1>
                 </div>
               )}
 
-              {commits.length === 0 && !loading && (
-                <div className="text-center py-16">
-                  <div className="i-ph:git-branch-duotone text-zinc-600 text-6xl mb-4 mx-auto" />
-                  <div className="text-zinc-400 text-lg font-medium mb-2">No commits found</div>
-                  <div className="text-zinc-500 text-sm">This repository doesn't have any commits yet.</div>
+              <div className="flex flex-col items-start gap-1 self-stretch">
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Create a Copy
+                  </span>{' '}
+                  creates a new project from the selected version. Chat history won&apos;t be copied to the new project.
+                </span>
+                <span
+                  className={classNames('text-tertiary', {
+                    'text-body-sm': isSmallViewport,
+                    'text-body-md-regular': !isSmallViewport,
+                  })}
+                >
+                  <span
+                    className={classNames('text-secondary', {
+                      'text-heading-2xs': isSmallViewport,
+                      'text-heading-xs': !isSmallViewport,
+                    })}
+                  >
+                    Restore
+                  </span>{' '}
+                  reverts the current project to the selected version. Changes after that version may be lost, but your
+                  chat history will remain.
+                </span>
+              </div>
+
+              <div className={`relative self-stretch ${isSmallViewport ? 'flex-[1_0_0] overflow-hidden min-h-0' : ''}`}>
+                <div
+                  className={`flex flex-col items-start gap-3 overflow-y-auto self-stretch ${isSmallViewport ? 'h-full' : 'h-[600px]'}`}
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(255, 255, 255, 0.2) transparent',
+                  }}
+                  onScroll={handleScroll}
+                >
+                  {loading && commits.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full w-full">
+                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-zinc-600 border-t-zinc-400 mb-4"></div>
+                      <div className="text-zinc-400 text-sm">Loading commits...</div>
+                    </div>
+                  ) : error ? (
+                    <div className="flex flex-col items-center justify-center h-full w-full">
+                      <div className="i-ph:warning-circle-duotone text-red-400 text-4xl mb-4" />
+                      <div className="text-red-400 mb-4 font-medium">Error: {error}</div>
+                      <Button
+                        onClick={() => fetchCommits(1)}
+                        variant="secondary"
+                        size="sm"
+                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-600"
+                      >
+                        <div className="i-ph:arrow-clockwise mr-2" />
+                        Retry
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {commits.map((commit, index) => (
+                        <div
+                          key={`${commit.id}-${index}`}
+                          className="flex flex-col items-center justify-center gap-3 p-3 self-stretch rounded-lg border border-interactive-neutral"
+                        >
+                          <div
+                            className={classNames('flex gap-2 self-stretch', {
+                              'items-center': !isSmallViewport,
+                              'items-start': isSmallViewport,
+                            })}
+                          >
+                            {isSmallViewport ? (
+                              <>
+                                <div className="flex flex-col items-start gap-2 flex-[1_0_0]">
+                                  <span className="text-body-lg-medium text-secondary self-stretch">
+                                    {commit.title || commit.message.split('\n')[0]}
+                                  </span>
+                                  <span
+                                    className={classNames('text-tertiary', {
+                                      'text-body-sm': isSmallViewport,
+                                      'text-body-md-medium': !isSmallViewport,
+                                    })}
+                                  >
+                                    {formatDate(commit.committed_date)}
+                                  </span>
+                                </div>
+                                <CustomIconButton
+                                  variant="secondary-transparent"
+                                  size="sm"
+                                  icon={<OutLinkIcon size={20} />}
+                                  onClick={() => window.open(getGitlabCommitUrl(commit.id), '_blank')}
+                                />
+                              </>
+                            ) : (
+                              <span className="text-body-lg-medium text-secondary flex-[1_0_0] line-clamp-1 overflow-hidden text-ellipsis">
+                                {commit.title || commit.message.split('\n')[0]}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={classNames('flex items-center self-stretch', {
+                              'justify-between': !isSmallViewport,
+                              'justify-center': isSmallViewport,
+                            })}
+                          >
+                            {!isSmallViewport && (
+                              <span className="text-body-md-medium text-tertiary">
+                                {formatDate(commit.committed_date)}
+                              </span>
+                            )}
+                            <div
+                              className={classNames('flex items-center', {
+                                'self-stretch gap-3': !isSmallViewport,
+                                'flex-[1_0_0] gap-2': isSmallViewport,
+                              })}
+                            >
+                              {!isSmallViewport && (
+                                <CustomButton variant="secondary-text" size="md" asChild>
+                                  <a
+                                    href={getGitlabCommitUrl(commit.id)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="View in GitLab"
+                                    data-track="editor-commits-gitlab"
+                                  >
+                                    <span>Gitlab</span>
+                                    <OutLinkIcon size={20} />
+                                  </a>
+                                </CustomButton>
+                              )}
+                              <CustomButton
+                                className={isSmallViewport ? 'flex-[1_0_0]' : ''}
+                                variant="secondary-ghost"
+                                size="md"
+                                onClick={() => handleForkClick(commit)}
+                                data-track="editor-commits-fork"
+                              >
+                                <span>Create a Copy</span>
+                              </CustomButton>
+                              <CustomButton
+                                className={isSmallViewport ? 'flex-[1_0_0]' : ''}
+                                variant="secondary-ghost"
+                                size="md"
+                                onClick={() => handleRestoreClick(commit)}
+                                disabled={index === 0}
+                                data-track="editor-commits-restore"
+                              >
+                                <RestoreIcon size={20} />
+                                <span className="text-interactive-primary">Restore</span>
+                              </CustomButton>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {(hasMore || loading) && (
+                        <div className="flex justify-center py-6 w-full">
+                          <Button
+                            onClick={handleLoadMore}
+                            disabled={loading || !hasMore}
+                            variant="secondary"
+                            size="sm"
+                            className="min-w-[140px] transition-all duration-200 bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white border-zinc-500 shadow-lg hover:shadow-xl"
+                          >
+                            {loading ? (
+                              <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-zinc-400 border-t-white"></div>
+                                Loading...
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="i-ph:arrow-down" />
+                                Load More
+                              </div>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+
+                      {commits.length === 0 && !loading && (
+                        <div className="flex flex-col items-center justify-center h-full w-full">
+                          <div className="i-ph:git-branch-duotone text-zinc-600 text-6xl mb-4" />
+                          <div className="text-zinc-400 text-lg font-medium mb-2">No commits found</div>
+                          <div className="text-zinc-500 text-sm">This repository doesn't have any commits yet.</div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
+
+                {/* Gradient overlay when there are 7+ commits and not scrolled to bottom */}
+                {commits.length >= 7 && showGradient && (
+                  <div
+                    className="absolute left-0 right-0 bottom-0 pointer-events-none"
+                    style={{
+                      height: '80px',
+                      background:
+                        'linear-gradient(0deg, rgb(17, 19, 21) 0%, rgba(17, 19, 21, 0.98) 4.7%, rgba(17, 19, 21, 0.96) 8.9%, rgba(17, 19, 21, 0.93) 12.8%, rgba(17, 19, 21, 0.90) 16.56%, rgba(17, 19, 21, 0.86) 20.37%, rgba(17, 19, 21, 0.82) 24.4%, rgba(17, 19, 21, 0.77) 28.83%, rgba(17, 19, 21, 0.71) 33.84%, rgba(17, 19, 21, 0.65) 39.6%, rgba(17, 19, 21, 0.57) 46.3%, rgba(17, 19, 21, 0.48) 54.1%, rgba(17, 19, 21, 0.38) 63.2%, rgba(17, 19, 21, 0.27) 73.76%, rgba(17, 19, 21, 0.14) 85.97%, rgba(17, 19, 21, 0.00) 100%)',
+                    }}
+                  />
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      </Dialog>
-    </DialogRoot>
+          </div>,
+          document.body,
+        )}
+
+      {/* Fork Confirmation Modal */}
+      <ForkConfirmModal
+        isOpen={isForkModalOpen}
+        onClose={() => setIsForkModalOpen(false)}
+        onConfirm={handleForkConfirm}
+        commit={selectedCommitForFork}
+      />
+
+      {/* Restore Confirmation Modal */}
+      <RestoreConfirmModal
+        isOpen={isRestoreModalOpen}
+        onClose={() => setIsRestoreModalOpen(false)}
+        onConfirm={handleRestoreConfirm}
+        commit={selectedCommit}
+      />
+    </>
   );
 }

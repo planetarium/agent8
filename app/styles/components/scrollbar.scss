@@ -18,27 +18,42 @@
 }
 
 .chat-container {
-  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .chat-container::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
 }
 
 .chat-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 5px;
-  margin: 4px;
+  background: transparent;
 }
 
 .chat-container::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 5px;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.2s ease;
 }
 
-.chat-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+.chat-container:hover::-webkit-scrollbar-thumb,
+.chat-container.scrolling::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-container:hover::-webkit-scrollbar-thumb:hover,
+.chat-container.scrolling::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* 작은 화면에서 스크롤바 숨김 (데스크탑 스몰뷰포트 + 안드로이드) */
+@media (max-width: 1003px) {
+  .chat-container {
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .chat-container::-webkit-scrollbar {
+    display: none; /* Webkit 브라우저 (Chrome, Safari, Edge 등) */
+  }
 }
 
 /* 다크 테마 스크롤바 스타일 */
@@ -51,16 +66,17 @@ html[data-theme='dark'] {
     background: #555;
   }
 
-  .chat-container::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
   .chat-container::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(30, 30, 30, 0.8);
+    background: transparent;
   }
 
-  .chat-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+  .chat-container:hover::-webkit-scrollbar-thumb,
+  .chat-container.scrolling::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .chat-container:hover::-webkit-scrollbar-thumb:hover,
+  .chat-container.scrolling::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
   }
 }

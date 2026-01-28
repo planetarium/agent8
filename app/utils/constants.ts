@@ -6,6 +6,20 @@ export const WORK_DIR_NAME = 'project';
 export const WORK_DIR = `/home/${WORK_DIR_NAME}`;
 export const MODIFICATIONS_TAG_NAME = 'bolt_file_modifications';
 export const AUTO_SYNTAX_FIX_TAG_NAME = 'autoSyntaxFix';
+
+// Message annotations
+export const MESSAGE_ANNOTATIONS = {
+  ABORTED: 'aborted',
+  HIDDEN: 'hidden',
+  RESTORE_MESSAGE: 'restore-message',
+} as const;
+
+// Error messages
+export const ERROR_MESSAGES = {
+  TERMINAL: 'Fix this terminal error',
+  PREVIEW: 'Fix this preview error',
+} as const;
+
 export const MODEL_REGEX = /^\[Model: (.*?)\]\n\n/;
 export const PROVIDER_REGEX = /\[Provider: (.*?)\]\n\n/;
 export const ATTACHMENTS_REGEX = /\[Attachments: (.*?)\]\n\n/;
@@ -28,7 +42,7 @@ export const FIXED_MODELS = {
     },
     {
       provider: PROVIDER_LIST.find((p) => p.name === PROVIDER_NAMES.GOOGLE_VERTEX_AI)!,
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
     },
   ],
   PROMPT_ENHANCER_TEMPLATE: {

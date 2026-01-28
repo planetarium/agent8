@@ -1,27 +1,41 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '@nanostores/react';
 import { createPortal } from 'react-dom';
+import { useStore } from '@nanostores/react';
 import { toast } from 'react-toastify';
+import axios from 'axios';
+import * as Tooltip from '@radix-ui/react-tooltip';
+
 import { classNames } from '~/utils/classNames';
 import { repoStore } from '~/lib/stores/repo';
-import axios from 'axios';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+
+import CustomButton from '~/components/ui/CustomButton';
 import { Switch } from '~/components/ui/Switch';
-import { ShareFillIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
-import { useMobileView } from '~/lib/hooks/useMobileView';
-import * as Tooltip from '@radix-ui/react-tooltip';
+import { ShareLineIcon, CloseIcon, GlobalIcon, LinkIcon } from '~/components/ui/Icons';
 
 type VisibilityType = 'public' | 'private';
 
-export function HeaderVisibilityButton() {
+interface HeaderVisibilityButtonProps {
+  asMenuItem?: boolean;
+  onClose?: () => void;
+}
+
+export function HeaderVisibilityButton({ asMenuItem = false, onClose }: HeaderVisibilityButtonProps) {
   const repo = useStore(repoStore);
-  const isMobileView = useMobileView();
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   const [visibility, setVisibility] = useState<VisibilityType>('private');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [currentUrl, setCurrentUrl] = useState('');
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    onClose?.();
+  };
 
   // Load current visibility on mount and set current URL
   useEffect(() => {
@@ -92,55 +106,65 @@ export function HeaderVisibilityButton() {
 
   return (
     <>
-      <Tooltip.Root delayDuration={100}>
-        <Tooltip.Trigger asChild>
-          <button
-            className="relative flex h-10 justify-center items-center gap-2 py-3 px-4 rounded-[4px] border border-white/12 bg-interactive-neutral hover:bg-interactive-neutral-hovered active:bg-interactive-neutral-pressed hover:border-interactive-neutral-hovered active:border-interactive-neutral-pressed focus:outline-none focus-visible:after:content-[''] focus-visible:after:absolute focus-visible:after:inset-[-3px] focus-visible:after:rounded-[4px] focus-visible:after:border focus-visible:after:border-[#1A92A4] focus-visible:after:pointer-events-none"
-            disabled={isLoading || isInitialLoading}
-            onClick={() => setIsModalOpen(true)}
-          >
-            {isLoading || isInitialLoading ? (
-              <>
-                <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm font-semibold leading-[142.9%] text-interactive-on-primary">Loading...</span>
-              </>
-            ) : (
-              <>
-                <ShareFillIcon width={20} height={20} />
-                <span className="text-sm font-semibold leading-[142.9%] text-interactive-on-primary hover:text-[#FCFCFD] active:text-[#FFFFFF]">
-                  Share Code
-                </span>
-              </>
-            )}
-          </button>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] font-primary text-[12px] font-medium leading-[150%]"
-            sideOffset={5}
-            side="bottom"
-            align="end"
-            alignOffset={0}
-          >
-            Set your code visibility and share the link
-            <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-45px]" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      {asMenuItem ? (
+        <div
+          className="flex items-center gap-4 w-full bg-transparent text-primary text-body-md-medium cursor-pointer"
+          onClick={() => setIsModalOpen(true)}
+        >
+          <ShareLineIcon width={20} height={20} />
+          <span>Share Code</span>
+        </div>
+      ) : (
+        <Tooltip.Root delayDuration={100}>
+          <Tooltip.Trigger asChild>
+            <CustomButton
+              variant="secondary-outlined"
+              size="md"
+              onClick={() => setIsModalOpen(true)}
+              disabled={isLoading || isInitialLoading}
+              data-track="editor-sharecode"
+            >
+              {isLoading || isInitialLoading ? (
+                <>
+                  <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <ShareLineIcon width={20} height={20} />
+                  Share
+                </>
+              )}
+            </CustomButton>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="inline-flex items-start rounded-radius-8 bg-[var(--color-bg-inverse,#F3F5F8)] text-[var(--color-text-inverse,#111315)] p-[9.6px] shadow-md z-[9999] text-body-md-medium"
+              sideOffset={5}
+              side="bottom"
+              align="end"
+              alignOffset={0}
+            >
+              Set your code visibility and share the link
+              <Tooltip.Arrow className="fill-[var(--color-bg-inverse,#F3F5F8)] translate-x-[-30px]" />
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      )}
 
       {isModalOpen &&
         createPortal(
           <div
             className={classNames(
               'fixed inset-0 bg-black bg-opacity-50 flex z-50',
-              isMobileView ? 'items-end justify-center' : 'items-center justify-center',
+              isSmallViewport ? 'items-end justify-center' : 'items-center justify-center',
             )}
-            onClick={() => setIsModalOpen(false)}
+            onClick={handleCloseModal}
           >
             <div
               className={classNames(
                 'flex flex-col items-start gap-[12px] border border-[rgba(255,255,255,0.22)] bg-[#111315] shadow-[0_2px_8px_2px_rgba(26,220,217,0.12),0_12px_80px_16px_rgba(148,250,239,0.20)]',
-                isMobileView
+                isSmallViewport
                   ? 'w-full pt-[28px] pb-[28px] px-[20px] rounded-t-[16px]'
                   : 'w-[500px] p-[32px] rounded-[16px]',
               )}
@@ -150,7 +174,7 @@ export function HeaderVisibilityButton() {
                 <span className="text-primary text-[20px] font-semibold leading-[140%] flex-[1_0_0]">
                   Set the code visibility and share the link
                 </span>
-                <button onClick={() => setIsModalOpen(false)} className="bg-transparent">
+                <button onClick={handleCloseModal} className="bg-transparent">
                   <CloseIcon width={20} height={20} />
                 </button>
               </div>

@@ -5,11 +5,16 @@ import { repoStore } from '~/lib/stores/repo';
 import {
   getProjectCommits,
   fetchProjectFiles,
-  getTaskBranches,
   revertBranch,
+  getRestorePoint,
+  getRestoreHistory,
 } from '~/lib/persistenceGitbase/api.client';
+import { isCommitHash } from '~/lib/persistenceGitbase/utils';
 import { createScopedLogger } from '~/utils/logger';
 import { lastActionStore } from '~/lib/stores/lastAction';
+import type { RestoreHistoryEntry } from '~/lib/persistenceGitbase/gitlabService';
+import { restoreEventStore } from '~/lib/stores/restore';
+import { MESSAGE_ANNOTATIONS } from '~/utils/constants';
 
 const logger = createScopedLogger('useGitbaseChatHistory');
 
@@ -39,6 +44,7 @@ interface CommitResponse {
       id: string;
       name: string;
       description: string;
+      created_at?: string;
     };
     commits: Commit[];
     pagination: PaginationInfo;
@@ -52,15 +58,14 @@ export function useGitbaseChatHistory() {
     id: string;
     name: string;
     description: string;
+    created_at?: string;
   }>({
     id: '',
     name: '',
     description: '',
   });
   const [chats, setChats] = useState<UIMessage[]>([]);
-  const [enabledTaskMode, setEnabledTaskMode] = useState(true);
   const [files, setFiles] = useState<FileMap>({});
-  const [taskBranches, setTaskBranches] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingBefore, setLoadingBefore] = useState(false);
@@ -69,12 +74,8 @@ export function useGitbaseChatHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
+  const [cachedRestoreHistory, setCachedRestoreHistory] = useState<RestoreHistoryEntry[]>([]);
   const prevRequestParams = useRef<{ [key: string]: any }>({});
-
-  const loadTaskBranches = useCallback(async (projectPath: string) => {
-    const { data } = await getTaskBranches(projectPath);
-    setTaskBranches(data);
-  }, []);
 
   const loadFiles = useCallback(
     async (projectPath: string, commitSha?: string) => {
@@ -103,13 +104,13 @@ export function useGitbaseChatHistory() {
   const load = useCallback(
     async ({
       page = 1,
-      taskBranch,
       untilCommit,
+      fileCommit,
       force,
     }: {
       page?: number;
-      taskBranch?: string;
       untilCommit?: string;
+      fileCommit?: string;
       force?: boolean;
     }) => {
       if (!projectPath) {
@@ -121,8 +122,6 @@ export function useGitbaseChatHistory() {
         return;
       }
 
-      logger.debug(`loaded, page: ${page}, taskBranch: ${taskBranch}, untilCommit: ${untilCommit}`);
-
       if (!force) {
         // 이미 로딩 중이면 종료
         if (loading) {
@@ -132,7 +131,6 @@ export function useGitbaseChatHistory() {
         if (
           projectPath === prevRequestParams.current.projectPath &&
           page === prevRequestParams.current.page &&
-          taskBranch === prevRequestParams.current.taskBranch &&
           untilCommit === prevRequestParams.current.untilCommit
         ) {
           return;
@@ -148,23 +146,9 @@ export function useGitbaseChatHistory() {
       }
 
       try {
-        const queryParams = new URLSearchParams({
-          projectPath,
-          page: page.toString(),
-        });
-
-        if (taskBranch) {
-          queryParams.append('branch', taskBranch);
-        }
-
-        if (untilCommit) {
-          queryParams.append('untilCommit', untilCommit);
-        }
-
         prevRequestParams.current = {
           projectPath,
           page,
-          taskBranch,
           untilCommit,
         };
 
@@ -173,16 +157,14 @@ export function useGitbaseChatHistory() {
             lastActionStore.set({ action: 'LOAD' });
           }
 
-          await Promise.all([
-            loadFiles(projectPath, untilCommit || taskBranch || undefined),
-            loadTaskBranches(projectPath),
-          ]);
+          await loadFiles(projectPath, fileCommit || untilCommit || undefined);
         }
 
         const data = (await getProjectCommits(projectPath, {
-          branch: taskBranch,
+          branch: 'develop',
           untilCommit,
           page,
+          all: true, // 모든 브랜치의 커밋을 포함
         })) as CommitResponse;
 
         if (!data.success) {
@@ -198,12 +180,141 @@ export function useGitbaseChatHistory() {
 
         setProject(data.data.project);
 
-        const newMessages = parseCommitMessages(data.data.commits);
+        // Sort commits by time (most recent first) since we're getting from all branches
+        const sortedCommits = data.data.commits.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+
+        // Set latest commit hash from the first commit (most recent)
+        if (sortedCommits.length > 0) {
+          repoStore.setKey('latestCommitHash', sortedCommits[0].id);
+        }
+
+        const newMessages = parseCommitMessages(sortedCommits);
+
+        // Get restore history and filter by commit time range
+        let restoreMessages: UIMessage[] = [];
+
+        try {
+          // Fetch restore history only on first page load, then use cache
+          let restoreHistory = cachedRestoreHistory;
+
+          if (page === 1) {
+            restoreHistory = await getRestoreHistory(projectPath);
+            setCachedRestoreHistory(restoreHistory);
+          }
+
+          // Calculate time range of loaded messages
+          if (newMessages.length > 0) {
+            const messageTimes = newMessages
+              .map((msg) => {
+                const metadata = msg.metadata as any;
+                return metadata?.createdAt ? new Date(metadata.createdAt).getTime() : 0;
+              })
+              .filter((time) => time > 0);
+
+            if (messageTimes.length > 0) {
+              const minTime = Math.min(...messageTimes);
+
+              // Filter restore messages: include all restores from the earliest commit onwards
+              const filteredHistory = restoreHistory.filter((entry: RestoreHistoryEntry) => {
+                const restoreTime = new Date(entry.restoredAt).getTime();
+                return restoreTime >= minTime; // Include all restores from minTime onwards
+              });
+
+              restoreMessages = filteredHistory.map((entry: RestoreHistoryEntry) => {
+                return {
+                  id: `restore-${entry.commitHash}`,
+                  role: 'assistant' as const,
+                  parts: [
+                    {
+                      type: 'text' as const,
+                      text: `${entry.commitTitle}`,
+                    },
+                  ],
+                  metadata: {
+                    createdAt: new Date(entry.restoredAt),
+                    annotations: [MESSAGE_ANNOTATIONS.RESTORE_MESSAGE],
+                  },
+                };
+              });
+            }
+          }
+        } catch (err) {
+          logger.warn('Failed to load restore history:', err);
+        }
 
         if (page > 1) {
-          setChats((prevChats) => [...newMessages.reverse(), ...prevChats]);
+          /*
+           * Load More: Merge new messages with restore messages and existing chats, then sort
+           * Filter restore messages to avoid duplicates with existing ones
+           */
+          //
+          setChats((prevChats) => {
+            // Get existing restore message IDs to avoid duplicates
+            const existingRestoreIds = new Set(
+              prevChats
+                .filter((msg) => (msg.metadata as any)?.annotations?.includes(MESSAGE_ANNOTATIONS.RESTORE_MESSAGE))
+                .map((msg) => msg.id),
+            );
+
+            // Filter out already added restore messages
+            const newRestoreMessages = restoreMessages.filter((msg) => !existingRestoreIds.has(msg.id));
+
+            const allMessages = [...newMessages, ...newRestoreMessages, ...prevChats];
+
+            allMessages.sort((a, b) => {
+              const metadataA = a.metadata as any;
+              const metadataB = b.metadata as any;
+              const timeA = metadataA?.createdAt ? new Date(metadataA.createdAt).getTime() : 0;
+              const timeB = metadataB?.createdAt ? new Date(metadataB.createdAt).getTime() : 0;
+
+              // Sort by timestamp first
+              if (timeA !== timeB) {
+                return timeA - timeB;
+              }
+
+              // If same timestamp, user messages come before assistant messages
+              if (a.role === 'user' && b.role === 'assistant') {
+                return -1;
+              }
+
+              if (a.role === 'assistant' && b.role === 'user') {
+                return 1;
+              }
+
+              return 0;
+            });
+
+            return allMessages;
+          });
         } else {
-          setChats(newMessages.reverse());
+          // First load: Combine restore messages with regular messages and sort by timestamp
+          const allMessages = [...newMessages, ...restoreMessages];
+          allMessages.sort((a, b) => {
+            const metadataA = a.metadata as any;
+            const metadataB = b.metadata as any;
+            const timeA = metadataA?.createdAt ? new Date(metadataA.createdAt).getTime() : 0;
+            const timeB = metadataB?.createdAt ? new Date(metadataB.createdAt).getTime() : 0;
+
+            // Sort by timestamp first
+            if (timeA !== timeB) {
+              return timeA - timeB;
+            }
+
+            // If same timestamp, user messages come before assistant messages
+            if (a.role === 'user' && b.role === 'assistant') {
+              return -1;
+            }
+
+            if (a.role === 'assistant' && b.role === 'user') {
+              return 1;
+            }
+
+            return 0;
+          });
+
+          setChats(allMessages);
         }
 
         setLoaded(true);
@@ -254,22 +365,147 @@ export function useGitbaseChatHistory() {
 
     await load({
       page: currentPage + 1,
-      taskBranch: prevRequestParams.current.taskBranch,
       untilCommit: prevRequestParams.current.untilCommit,
     });
   }, [loading, hasMore, currentPage, load]);
 
   useEffect(() => {
-    const unsubscribe = repoStore.subscribe((state) => {
-      if (
-        projectPath !== prevRequestParams.current.projectPath ||
-        state.taskBranch !== prevRequestParams.current.taskBranch
-      ) {
-        load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
+    const initializeLoad = async () => {
+      // Read revertTo from URL query parameters (priority 1)
+      const url = new URL(window.location.href);
+      const revertToParam = url.searchParams.get('revertTo');
+      let revertToCommit = revertToParam && isCommitHash(revertToParam) ? revertToParam : undefined;
+
+      // If no URL parameter, try to get from GitLab (priority 2)
+      if (!revertToCommit && projectPath) {
+        try {
+          const savedRestorePoint = await getRestorePoint(projectPath);
+
+          if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
+            /*
+             * Check if a new commit was created after the restore.
+             * If so, ignore the restore point and load latest files.
+             */
+            const [latestCommitData, restoreHistory] = await Promise.all([
+              getProjectCommits(projectPath, { branch: 'develop', page: 1 }),
+              getRestoreHistory(projectPath),
+            ]);
+
+            if (latestCommitData.success && latestCommitData.data.commits.length > 0) {
+              const latestCommit = latestCommitData.data.commits[0];
+              const latestCommitTime = new Date(latestCommit.created_at).getTime();
+
+              const restoreEntry = restoreHistory.find(
+                (entry: RestoreHistoryEntry) => entry.commitHash === savedRestorePoint,
+              );
+
+              if (restoreEntry) {
+                const restoredAt = new Date(restoreEntry.restoredAt).getTime();
+
+                // Only use restore point if no new commit after restore
+                if (latestCommitTime <= restoredAt) {
+                  revertToCommit = savedRestorePoint;
+                } else {
+                  logger.info('New commit found after restore, ignoring saved restore point');
+                }
+              } else {
+                // No restore entry found, use the saved restore point
+                revertToCommit = savedRestorePoint;
+              }
+            } else {
+              // Couldn't fetch commits, use the saved restore point as fallback
+              revertToCommit = savedRestorePoint;
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to get restore point from GitLab:', err);
+        }
+      }
+
+      // Initial load on mount or projectPath change
+      if (projectPath && projectPath !== prevRequestParams.current.projectPath) {
+        // Always load all chat history (don't filter by untilCommit)
+        load({ page: 1, fileCommit: revertToCommit, untilCommit: undefined });
+      }
+    };
+
+    initializeLoad();
+
+    const unsubscribe = repoStore.subscribe(async () => {
+      if (projectPath !== prevRequestParams.current.projectPath) {
+        // Read revertTo from URL or GitLab
+        const url = new URL(window.location.href);
+        const revertToParam = url.searchParams.get('revertTo');
+        let revertToCommit = revertToParam && isCommitHash(revertToParam) ? revertToParam : undefined;
+
+        if (!revertToCommit && projectPath) {
+          try {
+            const savedRestorePoint = await getRestorePoint(projectPath);
+
+            if (savedRestorePoint && isCommitHash(savedRestorePoint)) {
+              // Check if a new commit was created after the restore
+              const [latestCommitData, restoreHistory] = await Promise.all([
+                getProjectCommits(projectPath, { branch: 'develop', page: 1 }),
+                getRestoreHistory(projectPath),
+              ]);
+
+              if (latestCommitData.success && latestCommitData.data.commits.length > 0) {
+                const latestCommit = latestCommitData.data.commits[0];
+                const latestCommitTime = new Date(latestCommit.created_at).getTime();
+
+                const restoreEntry = restoreHistory.find(
+                  (entry: RestoreHistoryEntry) => entry.commitHash === savedRestorePoint,
+                );
+
+                if (restoreEntry) {
+                  const restoredAt = new Date(restoreEntry.restoredAt).getTime();
+
+                  if (latestCommitTime <= restoredAt) {
+                    revertToCommit = savedRestorePoint;
+                  } else {
+                    logger.info('New commit found after restore, ignoring saved restore point');
+                  }
+                } else {
+                  revertToCommit = savedRestorePoint;
+                }
+              } else {
+                revertToCommit = savedRestorePoint;
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to get restore point from GitLab:', err);
+          }
+        }
+
+        load({ page: 1, fileCommit: revertToCommit, untilCommit: undefined });
       }
     });
+
     return () => unsubscribe();
   }, [load, projectPath]);
+
+  // Subscribe to restore events - only update cached history (Chat component handles UI)
+  useEffect(() => {
+    const unsubscribe = restoreEventStore.subscribe((event) => {
+      if (event && loaded) {
+        // Update cached restore history with new entry (for future page loads)
+        const newEntry: RestoreHistoryEntry = {
+          commitHash: event.commitHash,
+          commitTitle: event.commitTitle,
+          restoredAt: new Date().toISOString(),
+        };
+
+        setCachedRestoreHistory((prevHistory) => [newEntry, ...prevHistory].slice(0, 200));
+
+        /*
+         * Note: We don't update chats here because it would overwrite current session messages.
+         * The Chat component handles adding restore message to initialMessages directly.
+         */
+      }
+    });
+
+    return () => unsubscribe();
+  }, [loaded]);
 
   return {
     loaded: loaded && filesLoaded,
@@ -278,18 +514,14 @@ export function useGitbaseChatHistory() {
       setLoading(true);
 
       try {
-        await revertBranch(projectPath, repoStore.get().taskBranch, hash);
-        await load({ page: 1, taskBranch: repoStore.get().taskBranch, untilCommit: hash, force: true });
+        await revertBranch(projectPath, 'develop', hash);
+        await load({ page: 1, untilCommit: hash, force: true });
       } finally {
         setLoading(false);
       }
     },
     project,
     files,
-    taskBranches,
-    reloadTaskBranches: loadTaskBranches,
-    enabledTaskMode,
-    setEnabledTaskMode,
     loading: loading || loadingFiles,
     loadingBefore,
     error,
@@ -365,7 +597,7 @@ const parseCommitMessages = (commits: Commit[]): UIMessage[] => {
         ],
         metadata: {
           createdAt: new Date(commit.created_at),
-          annotations: isInitialCommit(commit.message) ? ['hidden'] : [],
+          annotations: isInitialCommit(commit.message) ? [MESSAGE_ANNOTATIONS.HIDDEN] : [],
         },
       });
     }

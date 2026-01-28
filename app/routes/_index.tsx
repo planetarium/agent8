@@ -8,11 +8,14 @@ import { BaseChat } from '~/components/chat/BaseChat';
 import { Chat } from '~/components/chat/Chat.client';
 import { Header } from '~/components/header/Header';
 
-import { DEFAULT_TASK_BRANCH, repoStore } from '~/lib/stores/repo';
+import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
 import { VERSE8_BASE_URL } from '~/utils/constants';
+import { chatStore } from '~/lib/stores/chat';
+import { useStore } from '@nanostores/react';
+import { classNames } from '~/utils/classNames';
 
 export const meta: MetaFunction = () => {
   return [{ title: 'Agent8' }, { name: 'description', content: 'AI Game Maker' }];
@@ -24,6 +27,8 @@ export const loader = () => json({});
  * 접근 제어 없이 바로 채팅 UI를 렌더링하는 단순 컴포넌트
  */
 function DirectChatAccess() {
+  const chat = useStore(chatStore);
+
   useEffect(() => {
     // we don't await here because we want to wait in the workbench
     const token = localStorage.getItem(V8_ACCESS_TOKEN_KEY);
@@ -34,7 +39,12 @@ function DirectChatAccess() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+    <div
+      className={classNames(
+        'flex flex-col h-full w-full ',
+        chat.started ? 'bg-bolt-elements-background-depth-1' : 'bg-primary',
+      )}
+    >
       <Header />
       <ClientOnly fallback={<BaseChat />}>{() => <Chat />}</ClientOnly>
     </div>
@@ -64,6 +74,7 @@ function AccessControlledChat() {
       window.parent.postMessage(message, targetOrigin);
     }
   };
+  const chat = useStore(chatStore);
 
   useEffect(() => {
     if (accessToken) {
@@ -236,7 +247,12 @@ function AccessControlledChat() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-bolt-elements-background-depth-1">
+    <div
+      className={classNames(
+        'flex flex-col h-full w-full ',
+        chat.started ? 'bg-bolt-elements-background-depth-1' : 'bg-primary',
+      )}
+    >
       <Header />
 
       {!loadedContainer ? (
@@ -266,7 +282,8 @@ export default function Index() {
         name: repoName,
         path: repoPath,
         title: repoName,
-        taskBranch: DEFAULT_TASK_BRANCH,
+        latestCommitHash: '', // Will be set by useGitbaseChatHistory when commits are loaded
+        createdAt: '',
       });
     }
   }, [repoPath, repoName]);

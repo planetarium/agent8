@@ -1,9 +1,32 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { IconButton } from '~/components/ui/IconButton';
-import { useWorkbenchPreviews, useWorkbenchCurrentView } from '~/lib/hooks/useWorkbenchStore';
+import {
+  useWorkbenchPreviews,
+  useWorkbenchCurrentView,
+  useWorkbenchConnectionState,
+  useWorkbenchIsRunningPreview,
+  useWorkbenchMobilePreviewMode,
+  useWorkbenchStore,
+} from '~/lib/hooks/useWorkbenchStore';
+import useViewport from '~/lib/hooks';
+import { MOBILE_BREAKPOINT } from '~/lib/constants/viewport';
+import { classNames } from '~/utils/classNames';
 import { PortDropdown } from './PortDropdown';
 import { shouldIgnoreError } from '~/utils/errorFilters';
 import type { ActionAlert } from '~/types/actions';
+import CustomButton from '~/components/ui/CustomButton';
+import {
+  CodeGenLoadingIcon,
+  ConnectionLostIcon,
+  NoPreviewAvailableIcon,
+  PlayIcon,
+  PreviewRunningLoadingIcon,
+  RightLineIcon,
+} from '~/components/ui/Icons';
+import { sendMessageToParent } from '~/utils/postMessage';
+import PreviewQrCode from '~/components/workbench/PreviewQrCode';
+import { gameCreationTips } from '~/constants/gameCreationTips';
 
 type ResizeSide = 'left' | 'right' | null;
 
@@ -31,19 +54,74 @@ const WINDOW_SIZES: WindowSize[] = [
   { name: 'Nest Hub Max', width: 1280, height: 800, icon: 'i-ph:monitor' },
 ];
 
-export const Preview = memo(() => {
+interface PreviewProps {
+  isStreaming?: boolean;
+  workbenchState?: 'disconnected' | 'failed' | 'reconnecting' | 'preparing' | 'ready';
+}
+
+export const Preview = memo(({ isStreaming = false, workbenchState }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+
+  // Random game creation tips that change every 5 seconds
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTipIndex((prev) => (prev + 1) % gameCreationTips.length);
+    }, 5000); // Change every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const randomTip = gameCreationTips[currentTipIndex];
   const [isPortDropdownOpen, setIsPortDropdownOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPreviewOnly, setIsPreviewOnly] = useState(false);
   const hasSelectedPreview = useRef(false);
   const previews = useWorkbenchPreviews();
   const selectedView = useWorkbenchCurrentView();
+  const connectionState = useWorkbenchConnectionState();
+  const isRunningPreview = useWorkbenchIsRunningPreview();
+  const mobilePreviewMode = useWorkbenchMobilePreviewMode();
+  const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
   const activePreview = previews[activePreviewIndex];
+  const workbenchStore = useWorkbenchStore();
+  const mobilePreviewModeRef = useRef(mobilePreviewMode);
+  const isSmallViewportRef = useRef(isSmallViewport);
+
+  // Keep refs updated
+  useEffect(() => {
+    mobilePreviewModeRef.current = mobilePreviewMode;
+    isSmallViewportRef.current = isSmallViewport;
+  }, [mobilePreviewMode, isSmallViewport]);
+
+  const onRun = useCallback(async () => {
+    setUrl('');
+    setIframeUrl(undefined);
+
+    await workbenchStore.runPreview({ force: true });
+  }, []);
+
+  // Reset preview URLs when requested (prevents mobile download prompts)
+  useEffect(() => {
+    const unsubscribe = workbenchStore.shouldResetPreviewUrls.subscribe((shouldReset) => {
+      if (shouldReset) {
+        setUrl('');
+        setIframeUrl(undefined);
+      }
+    });
+
+    return unsubscribe;
+  }, [workbenchStore]);
+
+  // Reset loading state when preview becomes available
+  useEffect(() => {
+    if (activePreview) {
+      workbenchStore.isRunningPreview.set(false);
+    }
+  }, [activePreview]);
 
   const [url, setUrl] = useState('');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
@@ -169,33 +247,52 @@ export const Preview = memo(() => {
     }
   }, []);
 
+  // Track previous isStreaming state to detect when streaming ends
+  const prevIsStreamingRef = useRef(isStreaming);
+  const reloadTimeoutRef = useRef<NodeJS.Timeout>();
+  const RELOAD_DELAY_MS = 300;
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (selectedView === 'preview') {
-      setTimeout(() => {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+
+      reloadTimeoutRef.current = setTimeout(() => {
         reloadPreview();
-      }, 300);
+        reloadTimeoutRef.current = undefined;
+      }, RELOAD_DELAY_MS);
     }
   }, [selectedView, reloadPreview]);
 
-  const toggleFullscreen = async () => {
-    if (!isFullscreen && containerRef.current) {
-      await containerRef.current.requestFullscreen();
-    } else if (document.fullscreenElement) {
-      await document.exitFullscreen();
-    }
-  };
-
+  // Reload preview when streaming ends (isStreaming: true → false)
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    // If streaming just ended and we're on the preview tab, reload the preview
+    if (wasStreaming && !isStreaming && selectedView === 'preview') {
+      // Clear previous timeout if exists
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
 
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
+      reloadTimeoutRef.current = setTimeout(() => {
+        reloadPreview();
+        reloadTimeoutRef.current = undefined;
+      }, RELOAD_DELAY_MS);
+    }
+  }, [isStreaming, selectedView, reloadPreview]);
 
   const toggleDeviceMode = () => {
     setIsDeviceModeOn((prev) => !prev);
@@ -335,6 +432,11 @@ export const Preview = memo(() => {
 
           if (!shouldIgnoreError(alert)) {
             workbenchStore.alert.set(alert);
+
+            // Switch to Chat tab on mobile when preview error occurs
+            if (isSmallViewportRef.current && mobilePreviewModeRef.current) {
+              workbenchStore.mobilePreviewMode.set(false);
+            }
           }
         }
       }
@@ -394,125 +496,158 @@ export const Preview = memo(() => {
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={`w-full h-full flex flex-col relative ${isPreviewOnly ? 'fixed inset-0 z-50 bg-white' : ''}`}
-    >
+    <div ref={containerRef} className="w-full h-full flex flex-col relative">
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
-      <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-2">
-        <div className="flex items-center gap-2">
-          <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
-        </div>
+      <div
+        className={classNames('flex items-center', {
+          'px-4 py-1 justify-between self-stretch': isSmallViewport && mobilePreviewMode,
+          'py-3 gap-3': !(isSmallViewport && mobilePreviewMode),
+        })}
+      >
+        {/* Mobile Preview Mode: Group reload, device, and utility buttons together */}
+        {isSmallViewport && mobilePreviewMode ? (
+          <>
+            <div className="flex items-center gap-2">
+              <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
+              <IconButton
+                icon="i-ph:arrow-square-out"
+                onClick={() => openInNewWindow(isDeviceModeOn ? selectedDeviceSize : WINDOW_SIZES[0])}
+                title="Open Preview in New Window"
+              />
+            </div>
+            <CustomButton
+              variant="secondary"
+              size="md"
+              onClick={onRun}
+              disabled={connectionState !== 'connected'}
+              data-track="editor-workbench-runpreview"
+            >
+              <PlayIcon color="currentColor" size={20} />
+              Run
+            </CustomButton>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
+            </div>
 
-        <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive">
-          <input
-            title="URL"
-            ref={inputRef}
-            className="w-full bg-transparent outline-none"
-            type="text"
-            value={url}
-            onChange={(event) => {
-              setUrl(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && validateUrl(url)) {
-                setIframeUrl(url);
+            <div className="flex-grow flex items-center gap-1 bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive">
+              <input
+                title="URL"
+                ref={inputRef}
+                className="w-full bg-transparent outline-none"
+                type="text"
+                value={url}
+                onChange={(event) => {
+                  setUrl(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && validateUrl(url)) {
+                    setIframeUrl(url);
 
-                if (inputRef.current) {
-                  inputRef.current.blur();
-                }
-              }
-            }}
-          />
-        </div>
+                    if (inputRef.current) {
+                      inputRef.current.blur();
+                    }
+                  }
+                }}
+              />
+            </div>
 
-        <div className="flex items-center gap-2">
-          {previews.length > 1 && (
-            <PortDropdown
-              activePreviewIndex={activePreviewIndex}
-              setActivePreviewIndex={setActivePreviewIndex}
-              isDropdownOpen={isPortDropdownOpen}
-              setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
-              setIsDropdownOpen={setIsPortDropdownOpen}
-              previews={previews}
-            />
-          )}
+            <div className="flex items-center gap-2">
+              {previews.length > 1 && (
+                <PortDropdown
+                  activePreviewIndex={activePreviewIndex}
+                  setActivePreviewIndex={setActivePreviewIndex}
+                  isDropdownOpen={isPortDropdownOpen}
+                  setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
+                  setIsDropdownOpen={setIsPortDropdownOpen}
+                  previews={previews}
+                />
+              )}
 
-          <div className="flex items-center relative">
-            <IconButton
-              icon="i-ph:devices"
-              onClick={toggleDeviceMode}
-              title={isDeviceModeOn ? 'Switch to Responsive Mode' : 'Switch to Device Mode'}
-              className={isDeviceModeOn ? 'bg-blue-500 text-white hover:bg-blue-600' : 'hover:bg-gray-100'}
-            />
-
-            {isDeviceModeOn && (
-              <>
+              <div className="flex items-center relative">
                 <IconButton
-                  icon="i-ph:caret-down"
-                  onClick={() => setIsWindowSizeDropdownOpen(!isWindowSizeDropdownOpen)}
-                  className="ml-1"
-                  title="Select Device Size"
+                  icon="i-ph:devices"
+                  onClick={toggleDeviceMode}
+                  title={isDeviceModeOn ? 'Switch to Responsive Mode' : 'Switch to Device Mode'}
+                  className={isDeviceModeOn ? 'bg-blue-500 text-white hover:bg-blue-600' : 'hover:bg-gray-100'}
                 />
 
-                {isWindowSizeDropdownOpen && (
+                {isDeviceModeOn && (
                   <>
-                    <div className="fixed inset-0 z-50" onClick={() => setIsWindowSizeDropdownOpen(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 min-w-[240px] max-h-[400px] bg-white dark:bg-black rounded-xl shadow-2xl border border-[#E5E7EB] dark:border-[rgba(255,255,255,0.1)] overflow-hidden overflow-y-auto">
-                      {WINDOW_SIZES.map((size) => (
-                        <button
-                          key={size.name}
-                          className={`w-full px-4 py-3.5 text-left text-[#111827] dark:text-gray-300 text-sm whitespace-nowrap flex items-center gap-3 group hover:bg-[#F5EEFF] dark:hover:bg-gray-900 bg-white dark:bg-black ${
-                            selectedDeviceSize.name === size.name ? 'bg-[#F5EEFF] dark:bg-gray-900' : ''
-                          }`}
-                          onClick={() => {
-                            selectDeviceSize(size);
-                            setIsWindowSizeDropdownOpen(false);
-                          }}
-                        >
-                          <div
-                            className={`${size.icon} w-5 h-5 text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200`}
-                          />
-                          <div className="flex flex-col">
-                            <span className="font-medium group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
-                              {size.name}
-                            </span>
-                            <span className="text-xs text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
-                              {size.width} × {size.height}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                    <IconButton
+                      icon="i-ph:caret-down"
+                      onClick={() => setIsWindowSizeDropdownOpen(!isWindowSizeDropdownOpen)}
+                      className="ml-1"
+                      title="Select Device Size"
+                    />
+
+                    {isWindowSizeDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-50" onClick={() => setIsWindowSizeDropdownOpen(false)} />
+                        <div className="absolute right-0 top-full mt-2 z-50 min-w-[240px] max-h-[400px] bg-white dark:bg-black rounded-xl shadow-2xl border border-[#E5E7EB] dark:border-[rgba(255,255,255,0.1)] overflow-hidden overflow-y-auto">
+                          {WINDOW_SIZES.map((size) => (
+                            <button
+                              key={size.name}
+                              className={`w-full px-4 py-3.5 text-left text-[#111827] dark:text-gray-300 text-sm whitespace-nowrap flex items-center gap-3 group hover:bg-[#F5EEFF] dark:hover:bg-gray-900 bg-white dark:bg-black ${
+                                selectedDeviceSize.name === size.name ? 'bg-[#F5EEFF] dark:bg-gray-900' : ''
+                              }`}
+                              onClick={() => {
+                                selectDeviceSize(size);
+                                setIsWindowSizeDropdownOpen(false);
+                              }}
+                            >
+                              <div
+                                className={`${size.icon} w-5 h-5 text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200`}
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-medium group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
+                                  {size.name}
+                                </span>
+                                <span className="text-xs text-[#6B7280] dark:text-gray-400 group-hover:text-[#6D28D9] dark:group-hover:text-[#6D28D9] transition-colors duration-200">
+                                  {size.width} × {size.height}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
-              </>
-            )}
-          </div>
+              </div>
 
-          <IconButton
-            icon="i-ph:layout-light"
-            onClick={() => setIsPreviewOnly(!isPreviewOnly)}
-            title={isPreviewOnly ? 'Show Full Interface' : 'Show Preview Only'}
-          />
+              <IconButton
+                icon="i-ph:arrow-square-out"
+                onClick={() => openInNewWindow(isDeviceModeOn ? selectedDeviceSize : WINDOW_SIZES[0])}
+                title="Open Preview in New Window"
+              />
 
-          <IconButton
-            icon={isFullscreen ? 'i-ph:arrows-in' : 'i-ph:arrows-out'}
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
-          />
-
-          <IconButton
-            icon="i-ph:arrow-square-out"
-            onClick={() => openInNewWindow(isDeviceModeOn ? selectedDeviceSize : WINDOW_SIZES[0])}
-            title={`Open Preview in New Window`}
-          />
-        </div>
+              <CustomButton
+                className="ml-2"
+                variant="secondary-outlined"
+                size="md"
+                onClick={onRun}
+                disabled={connectionState !== 'connected'}
+                data-track="editor-workbench-runpreview"
+              >
+                <PlayIcon color="currentColor" size={20} />
+                Run Preview
+              </CustomButton>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 border-t border-bolt-elements-borderColor flex justify-center items-center overflow-auto preview-container">
+      <div
+        className={`relative flex-1 flex justify-center items-center overflow-hidden preview-container ${!(isSmallViewport && mobilePreviewMode) ? 'rounded-2xl' : ''}`}
+      >
+        <div className="hidden xl:block absolute top-3 right-3 z-1">
+          <PreviewQrCode value={url} />
+        </div>
         <div
           style={{
             width: isDeviceModeOn ? `${selectedDeviceSize.width}px` : '100%',
@@ -569,9 +704,104 @@ export const Preview = memo(() => {
                 sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin allow-pointer-lock allow-downloads"
               />
             </>
+          ) : isStreaming ||
+            isRunningPreview ||
+            (isSmallViewport &&
+              mobilePreviewMode &&
+              (workbenchState === 'preparing' || workbenchState === 'reconnecting')) ? (
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex-1 flex flex-col justify-center items-center gap-6 px-8">
+                <div className="relative">
+                  {isStreaming ||
+                  (isSmallViewport &&
+                    mobilePreviewMode &&
+                    (workbenchState === 'preparing' || workbenchState === 'reconnecting')) ? (
+                    <CodeGenLoadingIcon size={256} />
+                  ) : (
+                    <PreviewRunningLoadingIcon size={256} />
+                  )}
+                </div>
+
+                <div className="flex flex-col items-center justify-start py-2 max-w-md">
+                  <div className="flex flex-col justify-start items-center self-stretch">
+                    <span className={`${isSmallViewport ? 'text-body-sm' : 'text-body-lg-regular'} text-subtle mb-2`}>
+                      Tip
+                    </span>
+                    <div
+                      className={`${isSmallViewport ? 'min-h-[48px]' : 'min-h-[3.5rem]'} flex items-start justify-center`}
+                    >
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={currentTipIndex}
+                          className={`${isSmallViewport ? 'text-body-md-regular' : 'text-body-lg-regular'} text-secondary text-center leading-relaxed`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        >
+                          {randomTip}
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {!(isSmallViewport && mobilePreviewMode) && (
+                <div className="flex py-5 justify-center items-center gap-3">
+                  <span className="text-body-md-regular text-subtle">
+                    We&apos;ll play a sound when it&apos;s done. Want to play some Verse8 games while you wait?
+                  </span>
+                  <CustomButton
+                    variant="secondary-outlined"
+                    size="md"
+                    onClick={() => {
+                      sendMessageToParent({ type: 'NAVIGATE', path: '/explore' });
+                    }}
+                    data-track="editor-workbench-playgames"
+                  >
+                    Play Games
+                    <RightLineIcon color="currentColor" size={20} />
+                  </CustomButton>
+                </div>
+              )}
+            </div>
+          ) : workbenchState === 'disconnected' || workbenchState === 'failed' ? (
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col w-full h-full justify-center gap-5 items-center">
+                <div className="relative">
+                  <ConnectionLostIcon size={256} />
+                  <span className="absolute left-1/2 bottom-[28px] -translate-x-1/2 text-body-lg-medium text-subtle text-center whitespace-nowrap">
+                    Session disconnected
+                  </span>
+                </div>
+                <div className="flex flex-col items-center justify-center gap-4 self-stretch">
+                  <CustomButton
+                    variant="primary-filled"
+                    size="sm"
+                    onClick={async () => {
+                      /*
+                       * FIXME: After stabilizing reconnecting, we can replace this with a proper reconnecting mechanism.
+                       * See also: https://github.com/planetarium/agent8/issues/269
+                       */
+                      window.location.reload();
+                    }}
+                  >
+                    Reconnect
+                  </CustomButton>
+                </div>
+              </div>
+              <div className="h-20" />
+            </div>
           ) : (
-            <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
-              No preview available
+            <div className="flex flex-col w-full h-full bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col w-full h-full justify-center items-center gap-5">
+                <NoPreviewAvailableIcon size={256} />
+                <div className="flex flex-col items-center justify-center gap-1 self-stretch">
+                  <span className="text-body-md-medium text-tertiary">No available preview</span>
+                  <span className="text-body-lg-regular text-secondary">Please run the preview again</span>
+                </div>
+              </div>
+              <div className="h-20" />
             </div>
           )}
 
