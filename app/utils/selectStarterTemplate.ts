@@ -7,6 +7,7 @@ import type { FileMap } from '~/lib/stores/files';
 import { TEMPLATE_BASIC, TEMPLATE_MAP } from '~/constants/template';
 import { fetchWithCache, type FetchWithCacheOptions } from '~/lib/utils';
 import { FetchError } from './errors';
+import { getTurnstileHeaders } from '~/lib/turnstile/client';
 
 // Zod schema for template selection - API 검증용
 export const TEMPLATE_SELECTION_SCHEMA = z.object({
@@ -30,8 +31,14 @@ export const selectStarterTemplate = async (options: { message: string; signal?:
     message,
   };
 
+  const turnstileHeaders = await getTurnstileHeaders();
+
   const response = await fetch('/api/startcall', {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...turnstileHeaders,
+    },
     body: JSON.stringify(requestBody),
     signal,
   });

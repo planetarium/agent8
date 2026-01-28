@@ -190,3 +190,6 @@ export const ATTACHMENT_EXTS = [
   '.csv',
   '.xml',
 ];
+
+// Verse8 URLs
+export const VERSE8_BASE_URL = 'https://verse8.io';

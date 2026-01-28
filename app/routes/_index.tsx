@@ -12,7 +12,7 @@ import { repoStore } from '~/lib/stores/repo';
 import { updateV8AccessToken, V8_ACCESS_TOKEN_KEY, verifyV8AccessToken } from '~/lib/verse8/userAuth';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { v8UserStore } from '~/lib/stores/v8User';
-import { sendMessageToParent } from '~/utils/postMessage';
+import { VERSE8_BASE_URL } from '~/utils/constants';
 import { chatStore } from '~/lib/stores/chat';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
@@ -60,6 +60,20 @@ function AccessControlledChat() {
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
   const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
   const handleStopRef = useRef<(() => void) | null>(null);
+
+  // Helper function to send postMessage to allowed parent origins
+  const sendMessageToParent = (message: any) => {
+    if (window.parent && window.parent !== window) {
+      const allowedOriginsEnv = import.meta.env.VITE_ALLOWED_PARENT_ORIGINS;
+      const allowedOrigins = allowedOriginsEnv
+        ? allowedOriginsEnv.split(',').map((origin: string) => origin.trim())
+        : [VERSE8_BASE_URL]; // fallback
+      const parentOrigin = document.referrer ? new URL(document.referrer).origin : null;
+      const targetOrigin = parentOrigin && allowedOrigins.includes(parentOrigin) ? parentOrigin : allowedOrigins[0];
+
+      window.parent.postMessage(message, targetOrigin);
+    }
+  };
   const chat = useStore(chatStore);
 
   useEffect(() => {

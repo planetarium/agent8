@@ -47,9 +47,14 @@ export async function sendErrorNotification(options: ErrorNotificationOptions): 
       };
     }
 
+    const now = new Date();
+    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+
     // Create a plain object with all Error properties for better serialization
     errorObj = {
       ...errorObj,
+      version: '1',
+      time: timeString,
       prompt: lastUserPrompt,
       elapsedTime: options.elapsedTime,
       process: options.process,
@@ -152,10 +157,10 @@ export function handleChatError(message: string, options?: HandleChatErrorOption
   }
 
   // Send Slack notification only if error is not filtered and sendChatError is true (don't await to avoid blocking UI)
-  if (!filter && sendChatError) {
-    sendChatErrorWithToastMessage(message, error, context, prompt, elapsedTime, process, metadata).catch(
+  if (!filter?.skipReport && sendChatError) {
+    sendChatErrorWithToastMessage(displayMessage, error, context, prompt, elapsedTime, process, metadata).catch(
       (notificationError) => {
-        logger.error('Failed to send error notification for:', message, notificationError);
+        logger.error('Failed to send error notification for:', displayMessage, notificationError);
       },
     );
   }
