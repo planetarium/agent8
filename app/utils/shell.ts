@@ -2,7 +2,6 @@ import type { Container, ExecutionResult, ShellSession } from '~/lib/container/i
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 import { createScopedLogger } from '~/utils/logger';
-import { SHELL_COMMANDS } from './constants';
 
 const logger = createScopedLogger('BoltShell');
 
@@ -14,7 +13,6 @@ export class BoltShell {
   #container: Container | undefined;
   #terminal: ITerminal | undefined;
   #shellSession: ShellSession | undefined;
-  #devServerRunning: boolean = false;
 
   executionState = atom<
     | { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void; noInterrupt?: boolean }
@@ -121,38 +119,17 @@ export class BoltShell {
     sessionId: string,
     command: string,
     abort?: () => void,
-    options?: { noInterrupt?: boolean },
+    options?: { noInterrupt?: boolean; signal?: AbortSignal },
   ): Promise<ExecutionResult | undefined> {
     if (!this.process || !this.terminal) {
       return undefined;
     }
 
-    const state = this.executionState.get();
-
-    if (state?.active) {
-      // previous command has noInterrupt flag set, wait until it completes
-      if (state.noInterrupt && state.executionPrms) {
-        logger.debug('BoltShell: Waiting for noInterrupt command to complete...');
-        await state.executionPrms;
-      } else {
-        if (state.abort) {
-          state.abort();
-        }
-
-        this.interruptCurrentCommand();
-      }
-    }
-
     // Utilize advanced features from container API
     if (this.#container && this.#terminal) {
       if (this.#shellSession?.executeCommand) {
-        if (this.#devServerRunning) {
-          this.#devServerRunning = false;
-          this.interruptCurrentCommand();
-        }
-
-        // Use the pre-implemented executeCommand function
-        const executionPromise = this.#shellSession.executeCommand(command);
+        // Use the pre-implemented executeCommand function with signal
+        const executionPromise = this.#shellSession.executeCommand(command, options?.signal);
         this.executionState.set({
           sessionId,
           active: true,
@@ -160,10 +137,6 @@ export class BoltShell {
           abort,
           noInterrupt: options?.noInterrupt,
         });
-
-        if (command.includes(SHELL_COMMANDS.START_DEV_SERVER)) {
-          this.#devServerRunning = true;
-        }
 
         const resp = await executionPromise;
         this.executionState.set({ sessionId, active: false });
