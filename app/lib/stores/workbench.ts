@@ -36,6 +36,7 @@ import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { DeployError, isAbortError, StatusCodeError } from '~/utils/errors';
 
+const WORKBENCH_ACTION_ABORT_DELAY_MS = 150;
 const { saveAs } = fileSaver;
 
 const logger = createScopedLogger('workbench');
@@ -642,7 +643,7 @@ export class WorkbenchStore {
     this.#shellAbortController?.abort();
 
     // Abort stabilization time
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, WORKBENCH_ACTION_ABORT_DELAY_MS));
 
     this.#runPreviewAbortController = null;
     this.#publishAbortController = null;
