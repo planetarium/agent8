@@ -81,6 +81,11 @@ export function useWorkbenchIsDeploying() {
   return useStore(workbenchStore.isDeploying);
 }
 
+export function useWorkbenchIsRunningPreview() {
+  useStore(reinitCounterAtom);
+  return useStore(workbenchStore.isRunningPreview);
+}
+
 export function useWorkbenchContainer() {
   useStore(reinitCounterAtom);
   return useStore(workbenchStore.containerAtom);
