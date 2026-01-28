@@ -1342,17 +1342,20 @@ export class WorkbenchStore {
 
       // Run development server
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        await this.#runShellCommand(
-          shell,
-          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && ${SHELL_COMMANDS.START_DEV_SERVER}`,
-          signal,
-        );
+        await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
+        checkAborted();
+
+        await this.#runShellCommand(shell, SHELL_COMMANDS.START_DEV_SERVER, signal);
+        checkAborted();
       } else {
-        await this.#runShellCommand(
-          shell,
-          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx -y @agent8/deploy --preview && ${SHELL_COMMANDS.START_DEV_SERVER}`,
-          signal,
-        );
+        await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
+        checkAborted();
+
+        await this.#runShellCommand(shell, `npx -y @agent8/deploy --preview`, signal);
+        checkAborted();
+
+        await this.#runShellCommand(shell, SHELL_COMMANDS.START_DEV_SERVER, signal);
+        checkAborted();
       }
 
       checkAborted();
