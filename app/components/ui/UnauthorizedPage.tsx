@@ -136,7 +136,10 @@ export function UnauthorizedPage({
           <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-lg backdrop-blur-sm">
             <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
               <div className="i-ph:info text-lg" />
-              <span>If you continue to see this message after signing in, please contact support</span>
+              <span>
+                If you've already registered an email, please sign out and sign in again. If the issue persists after
+                signing in again, please contact support.
+              </span>
             </div>
           </div>
         </div>
