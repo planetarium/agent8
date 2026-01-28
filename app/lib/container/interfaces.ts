@@ -97,7 +97,7 @@ export interface ShellSession {
   ready: Promise<void>;
 
   executeCommand?(command: string, signal?: AbortSignal): Promise<ExecutionResult>;
-  waitTillOscCode?(code: string): Promise<{ output: string; exitCode: number }>;
+  waitTillOscCode?(code: string, signal?: AbortSignal): Promise<{ output: string; exitCode: number }>;
   detachTerminal?(): void;
   attachTerminal?(terminal: ITerminal): Promise<void>;
 }

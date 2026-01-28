@@ -2,6 +2,7 @@ import type { Container, ExecutionResult, ShellSession } from '~/lib/container/i
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 import { createScopedLogger } from '~/utils/logger';
+import { ERROR_NAMES } from './constants';
 
 const logger = createScopedLogger('BoltShell');
 
@@ -164,9 +165,13 @@ export class BoltShell {
     return { output, exitCode };
   }
 
-  async waitTillOscCode(waitCode: string) {
+  async waitTillOscCode(waitCode: string, signal?: AbortSignal) {
+    if (signal?.aborted) {
+      throw new DOMException('Wait till OSC code aborted by user', ERROR_NAMES.ABORT);
+    }
+
     if (this.#shellSession && this.#shellSession.waitTillOscCode) {
-      return await this.#shellSession.waitTillOscCode(waitCode);
+      return await this.#shellSession.waitTillOscCode(waitCode, signal);
     } else {
       throw new Error('BoltShell does not support waitTillOscCode');
     }

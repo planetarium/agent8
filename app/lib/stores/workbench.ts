@@ -36,7 +36,6 @@ import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
 import { DeployError, isAbortError, StatusCodeError } from '~/utils/errors';
 
-const WORKBENCH_ACTION_ABORT_DELAY_MS = 150;
 const { saveAs } = fileSaver;
 
 const logger = createScopedLogger('workbench');
@@ -595,7 +594,7 @@ export class WorkbenchStore {
     this.#filesStore.resetFileModifications();
   }
 
-  async abortAllActions() {
+  abortAllActions() {
     // Process and clear all message action queues
     const queueSnapshot = new Map(this.#messageToActionQueue);
     this.#messageToActionQueue.clear();
@@ -641,9 +640,6 @@ export class WorkbenchStore {
     this.#runPreviewAbortController?.abort();
     this.#publishAbortController?.abort();
     this.#shellAbortController?.abort();
-
-    // Abort stabilization time
-    await new Promise((resolve) => setTimeout(resolve, WORKBENCH_ACTION_ABORT_DELAY_MS));
 
     this.#runPreviewAbortController = null;
     this.#publishAbortController = null;
@@ -1191,8 +1187,6 @@ export class WorkbenchStore {
 
     let envFile = (files[`${WORK_DIR}/.env`] as File)?.content || '';
 
-    checkAborted();
-
     try {
       if (!envFile) {
         envFile = await wc.fs.readFile('.env', 'utf-8');
@@ -1216,8 +1210,6 @@ export class WorkbenchStore {
     ) {
       return currentVerse;
     }
-
-    checkAborted();
 
     envVars.VITE_AGENT8_ACCOUNT = user.walletAddress || user.userUid;
 
@@ -1314,7 +1306,7 @@ export class WorkbenchStore {
     try {
       this.isRunningPreview.set(true);
 
-      await this.abortAllActions();
+      this.abortAllActions();
 
       this.#runPreviewAbortController = new AbortController();
 
@@ -1329,8 +1321,6 @@ export class WorkbenchStore {
       checkAborted();
 
       this.currentView.set('code');
-
-      checkAborted();
 
       const shell = this.boltTerminal;
       await shell.ready;
@@ -1352,16 +1342,20 @@ export class WorkbenchStore {
 
       // Run development server
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
-        checkAborted();
-        await this.#runShellCommand(shell, SHELL_COMMANDS.START_DEV_SERVER, signal);
+        await this.#runShellCommand(
+          shell,
+          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+          signal,
+        );
       } else {
-        await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
-        checkAborted();
-        await this.#runShellCommand(shell, 'npx -y @agent8/deploy --preview', signal);
-        checkAborted();
-        await this.#runShellCommand(shell, SHELL_COMMANDS.START_DEV_SERVER, signal);
+        await this.#runShellCommand(
+          shell,
+          `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx -y @agent8/deploy --preview && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+          signal,
+        );
       }
+
+      checkAborted();
     } catch (error) {
       if (isAbortError(error)) {
         logger.info('runPreview aborted by user');
@@ -1386,7 +1380,7 @@ export class WorkbenchStore {
     try {
       this.isDeploying.set(true);
 
-      await this.abortAllActions();
+      this.abortAllActions();
 
       this.#publishAbortController = new AbortController();
 
@@ -1461,7 +1455,7 @@ export class WorkbenchStore {
       }
 
       // Deploy project
-      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
+      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod', signal);
       checkAborted();
 
       if (deployResult?.exitCode !== 0) {
@@ -1480,14 +1474,15 @@ export class WorkbenchStore {
       checkAborted();
 
       const { tags } = await getTags(repoStore.get().path);
+
+      checkAborted();
+
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
 
       if (spinTag) {
         parentVerseId = spinTag.name.replace('verse-from-', '').trim();
       }
-
-      checkAborted();
 
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
@@ -1507,9 +1502,9 @@ export class WorkbenchStore {
   }
 
   // Helper methods for publish
-  async #runShellCommand(shell: BoltShell, command: string, parentSignal?: AbortSignal) {
+  async #runShellCommand(shell: BoltShell, command: string, signal?: AbortSignal) {
     const checkAborted = () => {
-      if (parentSignal?.aborted) {
+      if (signal?.aborted) {
         throw new DOMException('Run shell command aborted by user', ERROR_NAMES.ABORT);
       }
     };
@@ -1517,12 +1512,11 @@ export class WorkbenchStore {
     this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
       checkAborted();
 
-      // executeCommand가 signal을 처리하므로 race 불필요
-      const result = await shell.executeCommand(Date.now().toString(), command, undefined, { signal: parentSignal });
+      const result = await shell.executeCommand(Date.now().toString(), command, undefined, { signal });
 
       checkAborted();
 
-      await shell.waitTillOscCode('prompt');
+      await shell.waitTillOscCode('prompt', signal);
 
       checkAborted();
 

@@ -30,6 +30,7 @@ import { createScopedLogger } from '~/utils/logger';
 import { debounce } from '~/utils/debounce';
 import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
 import { toast } from 'react-toastify';
+import { ERROR_NAMES } from '~/utils/constants';
 
 // Constants for OSC parsing
 const OSC_PATTERNS = {
@@ -1260,7 +1261,15 @@ export class RemoteContainer implements Container {
 
     let isWaitingForOscCode = false;
 
-    const waitTillOscCode = async (waitCode: string) => {
+    const waitTillOscCode = async (waitCode: string, signal?: AbortSignal) => {
+      const checkAborted = () => {
+        if (signal?.aborted) {
+          throw new DOMException('Wait till OSC code aborted by user', ERROR_NAMES.ABORT);
+        }
+      };
+
+      checkAborted();
+
       let fullOutput = '';
       let exitCode = 0;
 
@@ -1279,6 +1288,8 @@ export class RemoteContainer implements Container {
        * Do not move this awaiting after existing buffer check, as there may be existing awaiters.
        */
       await waitInternalOutputLock();
+
+      checkAborted();
 
       if (bufferMatches.length > 0) {
         // Found the OSC code in the buffer, extract output up to this code
@@ -1313,6 +1324,8 @@ export class RemoteContainer implements Container {
 
         while (true) {
           const { value, done } = await reader.read();
+
+          checkAborted();
 
           if (streamReadTimeoutId) {
             clearTimeout(streamReadTimeoutId);
