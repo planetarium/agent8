@@ -33,6 +33,7 @@ interface ConfirmButtonProps {
   disabled?: boolean;
   type?: 'button' | 'submit';
   size?: 'sm' | 'md' | 'lg';
+  'data-track'?: string;
 }
 
 // Actions container component
@@ -70,7 +71,14 @@ function CancelButton({ children = 'Cancel', onClick, size = 'md' }: CancelButto
 }
 
 // Confirm button component
-function ConfirmButton({ children, onClick, disabled, type = 'button', size = 'md' }: ConfirmButtonProps) {
+function ConfirmButton({
+  children,
+  onClick,
+  disabled,
+  type = 'button',
+  size = 'md',
+  'data-track': dataTrack,
+}: ConfirmButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
@@ -81,6 +89,7 @@ function ConfirmButton({ children, onClick, disabled, type = 'button', size = 'm
       type={type}
       onClick={onClick}
       disabled={disabled}
+      data-track={dataTrack}
     >
       {children}
     </CustomButton>
@@ -88,7 +97,14 @@ function ConfirmButton({ children, onClick, disabled, type = 'button', size = 'm
 }
 
 // Destructive button component (for delete actions)
-function DestructiveButton({ children, onClick, disabled, type = 'button', size = 'md' }: ConfirmButtonProps) {
+function DestructiveButton({
+  children,
+  onClick,
+  disabled,
+  type = 'button',
+  size = 'md',
+  'data-track': dataTrack,
+}: ConfirmButtonProps) {
   const isSmallViewport = useViewport(MOBILE_BREAKPOINT);
 
   return (
@@ -99,6 +115,7 @@ function DestructiveButton({ children, onClick, disabled, type = 'button', size 
       type={type}
       onClick={onClick}
       disabled={disabled}
+      data-track={dataTrack}
     >
       {children}
     </CustomButton>

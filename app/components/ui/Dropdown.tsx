@@ -16,9 +16,17 @@ interface DropdownItemProps {
   className?: string;
   disabled?: boolean;
   size?: 'default' | 'compact';
+  'data-track'?: string;
 }
 
-export const DropdownItem = ({ children, onClick, className, disabled, size = 'default' }: DropdownItemProps) => (
+export const DropdownItem = ({
+  children,
+  onClick,
+  className,
+  disabled,
+  size = 'default',
+  'data-track': dataTrack,
+}: DropdownItemProps) => (
   <div
     className={classNames(
       'flex items-center gap-4 self-stretch',
@@ -33,6 +41,7 @@ export const DropdownItem = ({ children, onClick, className, disabled, size = 'd
       className,
     )}
     onClick={!disabled ? onClick : undefined}
+    data-track={dataTrack}
   >
     {children}
   </div>

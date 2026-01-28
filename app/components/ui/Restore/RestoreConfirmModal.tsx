@@ -5,9 +5,10 @@ export interface RestoreConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  'data-track'?: string;
 }
 
-export function RestoreConfirmModal({ isOpen, onClose, onConfirm }: RestoreConfirmModalProps) {
+export function RestoreConfirmModal({ isOpen, onClose, onConfirm, 'data-track': dataTrack }: RestoreConfirmModalProps) {
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} title="Restore this version?">
       <BaseModal.Description>
@@ -15,7 +16,7 @@ export function RestoreConfirmModal({ isOpen, onClose, onConfirm }: RestoreConfi
       </BaseModal.Description>
       <BaseModal.Actions gap="gap-2" layout="horizontal">
         <BaseModal.CancelButton onClick={onClose} size="md" />
-        <BaseModal.ConfirmButton onClick={onConfirm} size="md">
+        <BaseModal.ConfirmButton onClick={onConfirm} size="md" data-track={dataTrack}>
           <RestoreIcon size={20} color="#f3f5f8" />
           Restore
         </BaseModal.ConfirmButton>

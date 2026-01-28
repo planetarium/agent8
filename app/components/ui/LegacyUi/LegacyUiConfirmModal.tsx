@@ -26,7 +26,9 @@ export function LegacyUiConfirmModal({ isOpen, onClose, onConfirm }: LegacyUiCon
       </div>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose}>Stay on New UI</BaseModal.CancelButton>
-        <BaseModal.ConfirmButton onClick={onConfirm}>Switch to Old UI</BaseModal.ConfirmButton>
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-switcholdui-confirm">
+          Switch to Old UI
+        </BaseModal.ConfirmButton>
       </BaseModal.Actions>
     </BaseModal>
   );

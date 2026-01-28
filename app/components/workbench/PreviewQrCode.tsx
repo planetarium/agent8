@@ -20,6 +20,7 @@ export default function PreviewQrCode({ className, value }: PreviewQrCodeProps) 
               disabled={!value}
               className="p-2 rounded-[4px] border border-interactive-neutral bg-interactive-neutral hover:border-interactive-neutral-hover hover:bg-interactive-neutral-hover active:border-interactive-neutral-pressed active:bg-interactive-neutral-pressed disabled:border-disabled disabled:bg-disabled"
               onClick={() => setIsOpen(true)}
+              data-track="editor-previewqr"
             >
               <QrCodeIcon color={value ? '#F3F5F8' : 'rgba(255, 255, 255, 0.18)'} />
             </button>

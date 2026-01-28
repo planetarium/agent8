@@ -74,7 +74,7 @@ function RestoreConfirmModal({ isOpen, onClose, onConfirm, commit }: RestoreConf
       </BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
-        <BaseModal.ConfirmButton onClick={onConfirm}>
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-commits-restore-confirm">
           <RestoreIcon size={20} color="#f3f5f8" />
           Restore
         </BaseModal.ConfirmButton>
@@ -103,7 +103,9 @@ function ForkConfirmModal({ isOpen, onClose, onConfirm, commit }: ForkConfirmMod
       </BaseModal.Description>
       <BaseModal.Actions>
         <BaseModal.CancelButton onClick={onClose} />
-        <BaseModal.ConfirmButton onClick={onConfirm}>Create copy</BaseModal.ConfirmButton>
+        <BaseModal.ConfirmButton onClick={onConfirm} data-track="editor-commits-fork-confirm">
+          Create copy
+        </BaseModal.ConfirmButton>
       </BaseModal.Actions>
     </BaseModal>
   );
@@ -422,7 +424,12 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
       ) : (
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
-            <CustomButton variant="secondary-outlined" size="md" onClick={() => handleOpenChange(true)}>
+            <CustomButton
+              variant="secondary-outlined"
+              size="md"
+              onClick={() => handleOpenChange(true)}
+              data-track="editor-commits"
+            >
               <HistoryIcon width={20} height={20} />
               Commits
             </CustomButton>
@@ -607,6 +614,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     title="View in GitLab"
+                                    data-track="editor-commits-gitlab"
                                   >
                                     <span>Gitlab</span>
                                     <OutLinkIcon size={20} />
@@ -618,6 +626,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 variant="secondary-ghost"
                                 size="md"
                                 onClick={() => handleForkClick(commit)}
+                                data-track="editor-commits-fork"
                               >
                                 <span>Create a Copy</span>
                               </CustomButton>
@@ -627,6 +636,7 @@ export function HeaderCommitHistoryButton({ asMenuItem = false, onClose }: Heade
                                 size="md"
                                 onClick={() => handleRestoreClick(commit)}
                                 disabled={index === 0}
+                                data-track="editor-commits-restore"
                               >
                                 <RestoreIcon size={20} />
                                 <span className="text-interactive-primary">Restore</span>
