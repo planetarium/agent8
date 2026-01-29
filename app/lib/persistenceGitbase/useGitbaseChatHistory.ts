@@ -46,7 +46,7 @@ interface CommitResponse {
   error?: string;
 }
 
-export function useGitbaseChatHistory() {
+export function useGitbaseChatHistory(hasReceivedInit: boolean = true) {
   const projectPath = repoStore.get().path;
   const [project, setProject] = useState<{
     id: string;
@@ -260,6 +260,17 @@ export function useGitbaseChatHistory() {
   }, [loading, hasMore, currentPage, load]);
 
   useEffect(() => {
+    // Skip API calls if not ready
+    if (!hasReceivedInit || !projectPath) {
+      // Set default state
+      setLoaded(true);
+      setFilesLoaded(true);
+      setChats([]);
+      setFiles({});
+
+      return undefined;
+    }
+
     const unsubscribe = repoStore.subscribe((state) => {
       if (
         projectPath !== prevRequestParams.current.projectPath ||
@@ -268,8 +279,9 @@ export function useGitbaseChatHistory() {
         load({ page: 1, taskBranch: state.taskBranch, untilCommit: undefined });
       }
     });
+
     return () => unsubscribe();
-  }, [load, projectPath]);
+  }, [load, projectPath, hasReceivedInit]);
 
   return {
     loaded: loaded && filesLoaded,

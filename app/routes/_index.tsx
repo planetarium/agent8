@@ -50,6 +50,10 @@ function AccessControlledChat() {
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
   const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
   const handleStopRef = useRef<(() => void) | null>(null);
+  const [hasReceivedInit, setHasReceivedInit] = useState<boolean>(false);
+
+  // Start immediately if token exists in localStorage
+  const [isReady, setIsReady] = useState<boolean>(!!accessToken);
 
   // Helper function to send postMessage to allowed parent origins
   const sendMessageToParent = (message: any) => {
@@ -121,6 +125,10 @@ function AccessControlledChat() {
           hasToken: !!token,
         });
 
+        // Mark as ready after receiving INIT message
+        setHasReceivedInit(true);
+        setIsReady(true);
+
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
@@ -156,11 +164,16 @@ function AccessControlledChat() {
 
     window.addEventListener('message', handleMessage);
 
-    // 일정 시간 후에도 메시지가 오지 않으면 로딩 상태 해제
+    // Start after 5 second timeout even if INIT is not received
     const timeout = setTimeout(() => {
       if (isLoading && !accessToken) {
         setIsLoading(false);
         setIsActivated(false);
+      }
+
+      // Mark as ready after timeout even without INIT
+      if (!hasReceivedInit) {
+        setIsReady(true);
       }
     }, 5000);
 
@@ -168,7 +181,7 @@ function AccessControlledChat() {
       window.removeEventListener('message', handleMessage);
       clearTimeout(timeout);
     };
-  }, [isLoading, accessToken]);
+  }, [isLoading, accessToken, hasReceivedInit]);
 
   const handleAuthRequired = () => {
     sendMessageToParent({
@@ -249,6 +262,7 @@ function AccessControlledChat() {
                 isAuthenticated={isActivated === true}
                 onAuthRequired={handleAuthRequired}
                 handleStopRef={handleStopRef}
+                hasReceivedInit={isReady}
               />
             );
           }}

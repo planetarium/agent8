@@ -209,9 +209,15 @@ interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
   handleStopRef?: React.MutableRefObject<(() => void) | null>;
+  hasReceivedInit?: boolean;
 }
 
-export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatComponentProps = {}) {
+export function Chat({
+  isAuthenticated,
+  onAuthRequired,
+  handleStopRef,
+  hasReceivedInit = true,
+}: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
   const {
@@ -229,7 +235,7 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
     loadBefore,
     loadingBefore,
     error: gitbaseError,
-  } = useGitbaseChatHistory();
+  } = useGitbaseChatHistory(hasReceivedInit);
 
   const [componentError, setComponentError] = useState<{
     message: string;
