@@ -50,6 +50,10 @@ function AccessControlledChat() {
   const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem(V8_ACCESS_TOKEN_KEY));
   const [loadedContainer, setLoadedContainer] = useState<boolean>(false);
   const handleStopRef = useRef<(() => void) | null>(null);
+  const [hasReceivedInit, setHasReceivedInit] = useState<boolean>(false);
+
+  // localStorage에 토큰이 있으면 바로 준비 완료 상태로 시작
+  const [isReady, setIsReady] = useState<boolean>(!!accessToken);
 
   // Helper function to send postMessage to allowed parent origins
   const sendMessageToParent = (message: any) => {
@@ -121,6 +125,10 @@ function AccessControlledChat() {
           hasToken: !!token,
         });
 
+        // INIT 메시지를 받았으므로 준비 완료
+        setHasReceivedInit(true);
+        setIsReady(true);
+
         if (token) {
           updateV8AccessToken(token);
           setAccessToken(token);
@@ -156,11 +164,16 @@ function AccessControlledChat() {
 
     window.addEventListener('message', handleMessage);
 
-    // 일정 시간 후에도 메시지가 오지 않으면 로딩 상태 해제
+    // 5초 타임아웃 후에도 INIT이 안 오면 준비 완료 상태로 진행
     const timeout = setTimeout(() => {
       if (isLoading && !accessToken) {
         setIsLoading(false);
         setIsActivated(false);
+      }
+
+      // INIT을 받지 못했더라도 타임아웃 후 준비 완료
+      if (!hasReceivedInit) {
+        setIsReady(true);
       }
     }, 5000);
 
@@ -168,7 +181,7 @@ function AccessControlledChat() {
       window.removeEventListener('message', handleMessage);
       clearTimeout(timeout);
     };
-  }, [isLoading, accessToken]);
+  }, [isLoading, accessToken, hasReceivedInit]);
 
   const handleAuthRequired = () => {
     sendMessageToParent({
@@ -249,6 +262,7 @@ function AccessControlledChat() {
                 isAuthenticated={isActivated === true}
                 onAuthRequired={handleAuthRequired}
                 handleStopRef={handleStopRef}
+                hasReceivedInit={isReady}
               />
             );
           }}

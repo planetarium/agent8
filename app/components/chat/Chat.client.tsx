@@ -209,11 +209,21 @@ interface ChatComponentProps {
   isAuthenticated?: boolean;
   onAuthRequired?: () => void;
   handleStopRef?: React.MutableRefObject<(() => void) | null>;
+  hasReceivedInit?: boolean;
 }
 
-export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatComponentProps = {}) {
+export function Chat({
+  isAuthenticated,
+  onAuthRequired,
+  handleStopRef,
+  hasReceivedInit = true,
+}: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
+  /*
+   * useGitbaseChatHistory는 항상 호출 (React 훅 규칙)
+   * hasReceivedInit을 전달하여 내부에서 조건 처리
+   */
   const {
     loaded,
     loading,
@@ -229,7 +239,7 @@ export function Chat({ isAuthenticated, onAuthRequired, handleStopRef }: ChatCom
     loadBefore,
     loadingBefore,
     error: gitbaseError,
-  } = useGitbaseChatHistory();
+  } = useGitbaseChatHistory(hasReceivedInit);
 
   const [componentError, setComponentError] = useState<{
     message: string;
