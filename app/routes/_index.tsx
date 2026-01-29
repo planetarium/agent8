@@ -52,7 +52,7 @@ function AccessControlledChat() {
   const handleStopRef = useRef<(() => void) | null>(null);
   const [hasReceivedInit, setHasReceivedInit] = useState<boolean>(false);
 
-  // localStorage에 토큰이 있으면 바로 준비 완료 상태로 시작
+  // Start immediately if token exists in localStorage
   const [isReady, setIsReady] = useState<boolean>(!!accessToken);
 
   // Helper function to send postMessage to allowed parent origins
@@ -125,7 +125,7 @@ function AccessControlledChat() {
           hasToken: !!token,
         });
 
-        // INIT 메시지를 받았으므로 준비 완료
+        // Mark as ready after receiving INIT message
         setHasReceivedInit(true);
         setIsReady(true);
 
@@ -164,14 +164,14 @@ function AccessControlledChat() {
 
     window.addEventListener('message', handleMessage);
 
-    // 5초 타임아웃 후에도 INIT이 안 오면 준비 완료 상태로 진행
+    // Start after 5 second timeout even if INIT is not received
     const timeout = setTimeout(() => {
       if (isLoading && !accessToken) {
         setIsLoading(false);
         setIsActivated(false);
       }
 
-      // INIT을 받지 못했더라도 타임아웃 후 준비 완료
+      // Mark as ready after timeout even without INIT
       if (!hasReceivedInit) {
         setIsReady(true);
       }

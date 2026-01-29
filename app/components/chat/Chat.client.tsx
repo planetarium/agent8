@@ -220,10 +220,6 @@ export function Chat({
 }: ChatComponentProps = {}) {
   renderLogger.trace('Chat');
 
-  /*
-   * useGitbaseChatHistory는 항상 호출 (React 훅 규칙)
-   * hasReceivedInit을 전달하여 내부에서 조건 처리
-   */
   const {
     loaded,
     loading,

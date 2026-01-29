@@ -260,9 +260,9 @@ export function useGitbaseChatHistory(hasReceivedInit: boolean = true) {
   }, [loading, hasMore, currentPage, load]);
 
   useEffect(() => {
-    // hasReceivedInit이 false면 API 호출 스킵
+    // Skip API calls if not ready
     if (!hasReceivedInit || !projectPath) {
-      // 기본 상태로 설정
+      // Set default state
       setLoaded(true);
       setFilesLoaded(true);
       setChats([]);
