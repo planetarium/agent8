@@ -17,7 +17,7 @@ jobs:
           stale-issue-message: 'This issue has been marked as stale due to inactivity. If no further activity occurs, it will be closed in 7 days.'
           stale-pr-message: 'This pull request has been marked as stale due to inactivity. If no further activity occurs, it will be closed in 7 days.'
           days-before-stale: 10 # Number of days before marking an issue or PR as stale
-          days-before-close: 4 # Number of days after being marked stale before closing
+          days-before-close: -1 # Number of days after being marked stale before closing
           stale-issue-label: 'stale' # Label to apply to stale issues
           stale-pr-label: 'stale' # Label to apply to stale pull requests
           exempt-issue-labels: 'pinned,important' # Issues with these labels won't be marked stale
