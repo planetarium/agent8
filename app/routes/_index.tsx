@@ -274,12 +274,33 @@ function AccessControlledChat() {
 
 export default function Index() {
   const { repoName, repoPath } = useLoaderData<{ repoName?: string; repoPath?: string }>();
+
   useEffect(() => {
+    // First, try to use loader data (normal navigation)
     if (repoPath && repoName) {
       repoStore.set({
         name: repoName,
         path: repoPath,
         title: repoName,
+        taskBranch: DEFAULT_TASK_BRANCH,
+      });
+      return;
+    }
+
+    /*
+     * Fallback: Parse URL directly (for iframe remount/switch scenarios)
+     * Match: /chat/user/repo or /chat/user/repo?params
+     */
+    const pathMatch = window.location.pathname.match(/^\/chat\/([^\/]+)\/([^\/]+)/);
+
+    if (pathMatch) {
+      const [, user, repo] = pathMatch;
+      const path = `${user}/${repo}`;
+
+      repoStore.set({
+        name: repo,
+        path,
+        title: repo,
         taskBranch: DEFAULT_TASK_BRANCH,
       });
     }
