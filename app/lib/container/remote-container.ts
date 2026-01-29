@@ -1316,6 +1316,9 @@ export class RemoteContainer implements Container {
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
       let streamReadTimeoutId: NodeJS.Timeout | null = null;
+      let readSetTimeoutId: NodeJS.Timeout | null = null;
+
+      let abortHandler: (() => void) | null = null;
 
       try {
         isWaitingForOscCode = true;
@@ -1324,34 +1327,36 @@ export class RemoteContainer implements Container {
           currentTerminal?.input(':' + '\n');
         }, STREAM_READ_IDLE_TIMEOUT_MS);
 
+        // Create abort promise once, outside the loop
+        const abortPromise = new Promise<never>((_, reject) => {
+          if (signal) {
+            abortHandler = () => {
+              reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
+            };
+            signal.addEventListener('abort', abortHandler, { once: true });
+          }
+        });
+
         while (true) {
           const readPromise = reader.read();
           const timeoutPromise = new Promise<{ value: undefined; done: true }>((_, reject) => {
-            setTimeout(() => {
+            readSetTimeoutId = setTimeout(() => {
               if (this._nonTerminatingProcessRunning) {
                 reject(new NoneError('read timeout'));
               }
             }, STREAM_READ_IDLE_TIMEOUT_MS);
           });
 
-          // Create abort promise that rejects when signal is aborted
-          const abortPromise = new Promise<never>((_, reject) => {
-            if (signal?.aborted) {
-              reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
-            }
-
-            signal?.addEventListener(
-              'abort',
-              () => {
-                reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
-              },
-              { once: true },
-            );
-          });
+          checkAborted();
 
           const { value, done } = await Promise.race([readPromise, timeoutPromise, abortPromise]);
 
           checkAborted();
+
+          if (readSetTimeoutId) {
+            clearTimeout(readSetTimeoutId);
+            readSetTimeoutId = null;
+          }
 
           if (streamReadTimeoutId) {
             clearTimeout(streamReadTimeoutId);
@@ -1412,9 +1417,19 @@ export class RemoteContainer implements Container {
           logger.debug(`NoneError: ${error.message}`);
         }
       } finally {
+        if (readSetTimeoutId) {
+          clearTimeout(readSetTimeoutId);
+          readSetTimeoutId = null;
+        }
+
         if (streamReadTimeoutId) {
           clearTimeout(streamReadTimeoutId);
           streamReadTimeoutId = null;
+        }
+
+        // Remove abort event listener if it wasn't triggered
+        if (signal && abortHandler) {
+          signal.removeEventListener('abort', abortHandler);
         }
 
         isWaitingForOscCode = false;
