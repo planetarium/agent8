@@ -80,6 +80,13 @@ export function isAbortError(error: unknown): boolean {
   return false;
 }
 
+export class NoneError extends Error {
+  constructor(message: string = 'None error') {
+    super(message);
+    this.name = 'NoneError';
+  }
+}
+
 /**
  * Helper function to check if an error is an API key related error
  */
