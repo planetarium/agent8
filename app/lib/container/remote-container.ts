@@ -1318,6 +1318,18 @@ export class RemoteContainer implements Container {
       try {
         isWaitingForOscCode = true;
 
+        const abortHandler = () => {
+          reader
+            .cancel('Operation aborted by user')
+            .then(() => {
+              logger.debug('stream reader cancelled by user');
+            })
+            .catch(() => {
+              // stream reader is already closed, ignore error
+            });
+        };
+        signal?.addEventListener('abort', abortHandler);
+
         streamReadTimeoutId = setTimeout(() => {
           currentTerminal?.input(':' + '\n');
         }, STREAM_READ_IDLE_TIMEOUT_MS);
