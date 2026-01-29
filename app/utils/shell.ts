@@ -2,7 +2,7 @@ import type { Container, ExecutionResult, ShellSession } from '~/lib/container/i
 import type { ITerminal } from '~/types/terminal';
 import { atom } from 'nanostores';
 import { createScopedLogger } from '~/utils/logger';
-import { SHELL_COMMANDS } from './constants';
+import { ERROR_NAMES } from './constants';
 
 const logger = createScopedLogger('BoltShell');
 
@@ -14,7 +14,6 @@ export class BoltShell {
   #container: Container | undefined;
   #terminal: ITerminal | undefined;
   #shellSession: ShellSession | undefined;
-  #devServerRunning: boolean = false;
 
   executionState = atom<
     | { sessionId: string; active: boolean; executionPrms?: Promise<any>; abort?: () => void; noInterrupt?: boolean }
@@ -121,38 +120,17 @@ export class BoltShell {
     sessionId: string,
     command: string,
     abort?: () => void,
-    options?: { noInterrupt?: boolean },
+    options?: { noInterrupt?: boolean; signal?: AbortSignal },
   ): Promise<ExecutionResult | undefined> {
     if (!this.process || !this.terminal) {
       return undefined;
     }
 
-    const state = this.executionState.get();
-
-    if (state?.active) {
-      // previous command has noInterrupt flag set, wait until it completes
-      if (state.noInterrupt && state.executionPrms) {
-        logger.debug('BoltShell: Waiting for noInterrupt command to complete...');
-        await state.executionPrms;
-      } else {
-        if (state.abort) {
-          state.abort();
-        }
-
-        this.interruptCurrentCommand();
-      }
-    }
-
     // Utilize advanced features from container API
     if (this.#container && this.#terminal) {
       if (this.#shellSession?.executeCommand) {
-        if (this.#devServerRunning) {
-          this.#devServerRunning = false;
-          this.interruptCurrentCommand();
-        }
-
-        // Use the pre-implemented executeCommand function
-        const executionPromise = this.#shellSession.executeCommand(command);
+        // Use the pre-implemented executeCommand function with signal
+        const executionPromise = this.#shellSession.executeCommand(command, options?.signal);
         this.executionState.set({
           sessionId,
           active: true,
@@ -160,10 +138,6 @@ export class BoltShell {
           abort,
           noInterrupt: options?.noInterrupt,
         });
-
-        if (command.includes(SHELL_COMMANDS.START_DEV_SERVER)) {
-          this.#devServerRunning = true;
-        }
 
         const resp = await executionPromise;
         this.executionState.set({ sessionId, active: false });
@@ -191,9 +165,13 @@ export class BoltShell {
     return { output, exitCode };
   }
 
-  async waitTillOscCode(waitCode: string) {
+  async waitTillOscCode(waitCode: string, signal?: AbortSignal) {
+    if (signal?.aborted) {
+      throw new DOMException('Wait till OSC code aborted by user', ERROR_NAMES.ABORT);
+    }
+
     if (this.#shellSession && this.#shellSession.waitTillOscCode) {
-      return await this.#shellSession.waitTillOscCode(waitCode);
+      return await this.#shellSession.waitTillOscCode(waitCode, signal);
     } else {
       throw new Error('BoltShell does not support waitTillOscCode');
     }
@@ -241,6 +219,41 @@ export class BoltShell {
       return false;
     }
   }
+}
+
+/**
+ * Checks if a command is a non-terminating process that runs indefinitely
+ * @param command - The shell command to check
+ * @returns true if the command runs indefinitely without manual interruption
+ */
+export function isNonTerminatingCommand(command: string): boolean {
+  const patterns = [
+    // Development servers - never exit until manually stopped
+    /\b(npm|yarn|pnpm|bun)\s+(?:run\s+)?dev\b/i,
+    /\b(vite|next|remix)\s+dev\b/i,
+    /\bwebpack(?:-dev-server)?\s+serve\b/i,
+
+    // Preview/static servers - serve files indefinitely
+    /\b(npm|yarn|pnpm|bun)\s+(?:run\s+)?preview\b/i,
+    /\bvite\s+preview\b/i,
+    /\b(http-server|serve)\b/i,
+    /python3?\s+-m\s+http\.server/i,
+
+    // Watch modes - continuously watch for changes
+    /\b(?:--watch|-w)\b/,
+    /\bvitest\b/i, // vitest runs in watch mode by default
+
+    // Process managers - keep processes running
+    /\b(nodemon|pm2|forever)\b/i,
+
+    // Monitoring commands - continuously monitor output
+    /\btail\s+-f\b/,
+    /\bwatch\s+/,
+  ];
+
+  const lastCommand = command.split('&&').pop()?.trim() ?? command;
+
+  return patterns.some((pattern) => pattern.test(lastCommand));
 }
 
 /**
