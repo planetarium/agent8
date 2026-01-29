@@ -11,7 +11,7 @@ import type {
 } from './interfaces';
 import type { ITerminal, IDisposable } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
-import { cleanTerminalOutput } from '~/utils/shell';
+import { cleanTerminalOutput, isNonTerminatingCommand } from '~/utils/shell';
 import type {
   BufferEncoding,
   ContainerRequest,
@@ -30,6 +30,8 @@ import { createScopedLogger } from '~/utils/logger';
 import { debounce } from '~/utils/debounce';
 import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
 import { toast } from 'react-toastify';
+import { ERROR_NAMES } from '~/utils/constants';
+import { isAbortError, NoneError } from '~/utils/errors';
 
 // Constants for OSC parsing
 const OSC_PATTERNS = {
@@ -955,6 +957,7 @@ export class RemoteContainer implements Container {
 
   private _connection: RemoteContainerConnection;
   private _connectionStateListeners = new Set<ConnectionStateListener>();
+  private _nonTerminatingProcessRunning = false;
 
   constructor(serverUrl: string, workdir: string, token: string) {
     this._connection = new RemoteContainerConnection(serverUrl, token);
@@ -1260,7 +1263,15 @@ export class RemoteContainer implements Container {
 
     let isWaitingForOscCode = false;
 
-    const waitTillOscCode = async (waitCode: string) => {
+    const waitTillOscCode = async (waitCode: string, signal?: AbortSignal) => {
+      const checkAborted = () => {
+        if (isAbortError(signal)) {
+          throw new DOMException('Wait Till Osc code aborted by user', ERROR_NAMES.ABORT);
+        }
+      };
+
+      checkAborted();
+
       let fullOutput = '';
       let exitCode = 0;
 
@@ -1279,6 +1290,8 @@ export class RemoteContainer implements Container {
        * Do not move this awaiting after existing buffer check, as there may be existing awaiters.
        */
       await waitInternalOutputLock();
+
+      checkAborted();
 
       if (bufferMatches.length > 0) {
         // Found the OSC code in the buffer, extract output up to this code
@@ -1303,6 +1316,8 @@ export class RemoteContainer implements Container {
       const reader = internalOutput.getReader();
       let localBuffer = _globalOutputBuffer; // Start with existing buffer content
       let streamReadTimeoutId: NodeJS.Timeout | null = null;
+      let readSetTimeoutId: NodeJS.Timeout | null = null;
+      let abortHandler: (() => void) | null = null;
 
       try {
         isWaitingForOscCode = true;
@@ -1311,8 +1326,35 @@ export class RemoteContainer implements Container {
           currentTerminal?.input(':' + '\n');
         }, STREAM_READ_IDLE_TIMEOUT_MS);
 
+        const abortPromise = new Promise<never>((_, reject) => {
+          if (signal) {
+            abortHandler = () => {
+              reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
+            };
+            signal.addEventListener('abort', abortHandler, { once: true });
+          }
+        });
+
         while (true) {
-          const { value, done } = await reader.read();
+          const readPromise = reader.read();
+          const timeoutPromise = new Promise<{ value: undefined; done: true }>((_, reject) => {
+            readSetTimeoutId = setTimeout(() => {
+              if (this._nonTerminatingProcessRunning) {
+                reject(new NoneError('read timeout'));
+              }
+            }, STREAM_READ_IDLE_TIMEOUT_MS);
+          });
+
+          checkAborted();
+
+          const { value, done } = await Promise.race([readPromise, timeoutPromise, abortPromise]);
+
+          checkAborted();
+
+          if (readSetTimeoutId) {
+            clearTimeout(readSetTimeoutId);
+            readSetTimeoutId = null;
+          }
 
           if (streamReadTimeoutId) {
             clearTimeout(streamReadTimeoutId);
@@ -1363,10 +1405,28 @@ export class RemoteContainer implements Container {
             localBuffer = localBuffer.slice(lastMatchIndex + lastMatch.length);
           }
         }
+      } catch (error: any) {
+        if (isAbortError(error)) {
+          logger.debug(`AbortError: ${error.message}`);
+        }
+
+        if (error instanceof NoneError) {
+          logger.debug(`NoneError: ${error.message}`);
+        }
       } finally {
+        if (readSetTimeoutId) {
+          clearTimeout(readSetTimeoutId);
+          readSetTimeoutId = null;
+        }
+
         if (streamReadTimeoutId) {
           clearTimeout(streamReadTimeoutId);
           streamReadTimeoutId = null;
+        }
+
+        // Remove abort event listener if it wasn't triggered
+        if (signal && abortHandler) {
+          signal.removeEventListener('abort', abortHandler);
         }
 
         isWaitingForOscCode = false;
@@ -1384,6 +1444,10 @@ export class RemoteContainer implements Container {
 
       // Command execution implementation
       executeCommand = async (command: string): Promise<ExecutionResult> => {
+        if (isNonTerminatingCommand(command)) {
+          this._nonTerminatingProcessRunning = true;
+        }
+
         const sessionId = v4().slice(0, 8);
 
         logger.debug(`[${sessionId}] executeCommand`, command);

@@ -35,7 +35,7 @@ import { SETTINGS_KEYS } from './settings';
 import { toast } from 'react-toastify';
 import { isCommitedMessage } from '~/lib/persistenceGitbase/utils';
 import { convertFileMapToFileSystemTree } from '~/utils/fileUtils';
-import { DeployError, StatusCodeError } from '~/utils/errors';
+import { DeployError, isAbortError, StatusCodeError } from '~/utils/errors';
 
 const { saveAs } = fileSaver;
 
@@ -91,6 +91,8 @@ export class WorkbenchStore {
   #messageIdleCallbacks: Map<string, Array<() => void>> = new Map();
   #reinitCounter = atom(0);
   #currentContainerAtom: WritableAtom<Container | null> = atom<Container | null>(null);
+  #runPreviewAbortController: AbortController | null = null;
+  #publishAbortController: AbortController | null = null;
 
   artifacts: Artifacts = import.meta.hot?.data.artifacts ?? map({});
 
@@ -107,8 +109,8 @@ export class WorkbenchStore {
   connectionState: WritableAtom<'connected' | 'disconnected' | 'reconnecting' | 'failed'> =
     import.meta.hot?.data.connectionState ??
     atom<'connected' | 'disconnected' | 'reconnecting' | 'failed'>('disconnected');
-  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   isRunningPreview: WritableAtom<boolean> = import.meta.hot?.data.isRunningPreview ?? atom(false);
+  isDeploying: WritableAtom<boolean> = import.meta.hot?.data.isDeploying ?? atom(false);
   shouldResetPreviewUrls: WritableAtom<boolean> = import.meta.hot?.data.shouldResetPreviewUrls ?? atom(false);
   modifiedFiles = new Set<string>();
   artifactIdList: string[] = [];
@@ -598,8 +600,11 @@ export class WorkbenchStore {
   }
 
   abortAllActions() {
-    // 1. Process and clear all message action queues
-    for (const queueItem of this.#messageToActionQueue.values()) {
+    // Process and clear all message action queues
+    const queueSnapshot = new Map(this.#messageToActionQueue);
+    this.#messageToActionQueue.clear();
+
+    for (const queueItem of queueSnapshot.values()) {
       if (queueItem) {
         // Traverse the linked list and abort all actions
         let current: ActionQueueItem | undefined = queueItem;
@@ -637,13 +642,14 @@ export class WorkbenchStore {
       }
     }
 
-    this.#messageToActionQueue.clear();
-
-    // 2. Abort shell commands
+    this.#runPreviewAbortController?.abort();
+    this.#publishAbortController?.abort();
     this.#shellAbortController?.abort();
+
+    this.#runPreviewAbortController = null;
+    this.#publishAbortController = null;
     this.#shellAbortController = null;
 
-    // 3. Reset shell command queue
     this.#shellCommandQueue = Promise.resolve();
   }
 
@@ -900,9 +906,6 @@ export class WorkbenchStore {
       return;
     }
 
-    // Wait for any ongoing shell commands (setupDeployConfig, publish, etc.) to complete
-    await this.#shellCommandQueue;
-
     if (data.action.type === 'file') {
       const wc = await this.container;
       const fullPath = path.join(wc.workdir, data.action.filePath);
@@ -1127,26 +1130,52 @@ export class WorkbenchStore {
     return result;
   }
 
-  async injectTokenEnvironment(shell: BoltShell, accessToken: string) {
+  async injectTokenEnvironment(shell: BoltShell, accessToken: string, signal?: AbortSignal) {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        throw new DOMException('Inject token environment aborted by user', ERROR_NAMES.ABORT);
+      }
+    };
+
+    checkAborted();
+
     const wc = await this.container;
+
+    checkAborted();
 
     try {
       const setupScript = '#!/bin/sh\n\nexport V8_ACCESS_TOKEN="' + accessToken + '"';
       await wc.fs.writeFile('.secret', setupScript);
-      await this.#runShellCommand(shell, 'source ./.secret && rm -f ./.secret');
-    } catch {
+      checkAborted();
+
+      await this.#runShellCommand(shell, 'source ./.secret && rm -f ./.secret', signal);
+    } catch (error) {
+      if (isAbortError(error)) {
+        logger.debug('inject token environment aborted by user');
+        return;
+      }
+
       throw new Error('Failed to inject user data into the shell.');
     } finally {
-      try {
-        await wc.fs.rm('.secret');
-      } catch {
-        // File might not exist yet, continue with empty content
-      }
+      await wc.fs.rm('.secret').catch(() => {
+        // File might not exist or removal failed, ignore the error
+      });
     }
   }
 
-  async setupEnvFile(user: V8User, reset: boolean = false) {
+  async setupEnvFile(user: V8User, reset: boolean = false, signal?: AbortSignal) {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        throw new DOMException('Setup env file aborted by user', ERROR_NAMES.ABORT);
+      }
+    };
+
+    checkAborted();
+
     const wc = await this.container;
+
+    checkAborted();
+
     const files = this.files.get();
 
     if (!files || Object.keys(files).length === 0) {
@@ -1162,6 +1191,8 @@ export class WorkbenchStore {
     } catch {
       // File might not exist yet, continue with empty content
     }
+
+    checkAborted();
 
     // Parse existing environment variables
     const envVars = this.#parseEnvFile(envFile);
@@ -1187,6 +1218,7 @@ export class WorkbenchStore {
       .join('\n');
 
     await this.#filesStore.saveFile('.env', updatedEnvContent);
+    checkAborted();
 
     return verseId;
   }
@@ -1239,7 +1271,7 @@ export class WorkbenchStore {
     checkAborted();
 
     // Verify user
-    const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken);
+    const user = await verifyV8AccessToken(import.meta.env.VITE_V8_AUTH_API_ENDPOINT, accessToken, signal);
 
     checkAborted();
 
@@ -1250,11 +1282,11 @@ export class WorkbenchStore {
     checkAborted();
 
     // Setup environment
-    await this.injectTokenEnvironment(shell, accessToken);
+    await this.injectTokenEnvironment(shell, accessToken, signal);
 
     checkAborted();
 
-    const verseId = await this.setupEnvFile(user, options.reset);
+    const verseId = await this.setupEnvFile(user, options.reset, signal);
 
     checkAborted();
 
@@ -1276,34 +1308,69 @@ export class WorkbenchStore {
       return;
     }
 
-    this.isRunningPreview.set(true);
-
-    const shell = this.boltTerminal;
-    await shell.ready;
+    if (this.isRunningPreview.get()) {
+      logger.info('Preview already running');
+      return;
+    }
 
     try {
-      await this.setupDeployConfig(shell);
+      this.isRunningPreview.set(true);
+
+      this.abortAllActions();
+
+      this.#runPreviewAbortController = new AbortController();
+
+      const signal = this.#runPreviewAbortController.signal;
+
+      const checkAborted = () => {
+        if (signal?.aborted) {
+          throw new DOMException('Run preview aborted by user', ERROR_NAMES.ABORT);
+        }
+      };
+
+      checkAborted();
+
+      const shell = this.boltTerminal;
+      await shell.ready;
+      checkAborted();
+
+      await this.setupDeployConfig(shell, signal);
+      checkAborted();
 
       // Navigate to working directory
       const container = await this.container;
+      checkAborted();
 
-      await this.#runShellCommand(shell, `cd ${container.workdir}`);
+      await this.#runShellCommand(shell, `cd ${container.workdir}`, signal);
+      checkAborted();
 
       // Run development server
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
-        shell.executeCommand(
-          Date.now().toString(),
+        await this.#runShellCommand(
+          shell,
           `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+          signal,
         );
+        checkAborted();
       } else {
-        shell.executeCommand(
-          Date.now().toString(),
+        await this.#runShellCommand(
+          shell,
           `${SHELL_COMMANDS.UPDATE_DEPENDENCIES} && npx -y @agent8/deploy --preview && ${SHELL_COMMANDS.START_DEV_SERVER}`,
+          signal,
         );
+        checkAborted();
       }
     } catch (error) {
+      if (isAbortError(error)) {
+        logger.info('Run preview aborted by user');
+        return;
+      }
+
       logger.error('[RunPreview] Error:', error);
       throw error;
+    } finally {
+      this.#runPreviewAbortController = null;
+      this.isRunningPreview.set(false);
     }
   }
 
@@ -1316,28 +1383,50 @@ export class WorkbenchStore {
 
     try {
       this.isDeploying.set(true);
+
+      this.abortAllActions();
+
+      this.#publishAbortController = new AbortController();
+
+      const signal = this.#publishAbortController.signal;
+
+      const checkAborted = () => {
+        if (signal?.aborted) {
+          throw new DOMException('Publish aborted by user', ERROR_NAMES.ABORT);
+        }
+      };
+
+      checkAborted();
+
       this.currentView.set('code');
 
       const shell = this.boltTerminal;
       await shell.ready;
+      checkAborted();
 
       // Install dependencies
-      await this.#runShellCommand(shell, 'rm -rf dist');
-      await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES);
+      await this.#runShellCommand(shell, 'rm -rf dist', signal);
+      checkAborted();
+      await this.#runShellCommand(shell, SHELL_COMMANDS.UPDATE_DEPENDENCIES, signal);
+      checkAborted();
 
       if (localStorage.getItem(SETTINGS_KEYS.AGENT8_DEPLOY) === 'false') {
         toast.error('Agent8 deploy is disabled. Please enable it in the settings.');
         return;
       }
 
-      const { verseId } = await this.setupDeployConfig(shell);
-      await this.commitModifiedFiles();
+      const { verseId } = await this.setupDeployConfig(shell, signal);
+      checkAborted();
+      await this.commitModifiedFiles(signal);
+      checkAborted();
 
       const container = await this.container;
-      await this.#runShellCommand(shell, `cd ${container.workdir}`);
+      await this.#runShellCommand(shell, `cd ${container.workdir}`, signal);
+      checkAborted();
 
       // Build project
-      const buildResult = await this.#runShellCommand(shell, `${SHELL_COMMANDS.BUILD_PROJECT} --base ./`);
+      const buildResult = await this.#runShellCommand(shell, `${SHELL_COMMANDS.BUILD_PROJECT} --base ./`, signal);
+      checkAborted();
 
       if (buildResult?.exitCode === 2) {
         this.#handleBuildError(buildResult.output);
@@ -1345,6 +1434,7 @@ export class WorkbenchStore {
       }
 
       const wc = await this.container;
+      checkAborted();
 
       let buildFile = '';
 
@@ -1354,6 +1444,7 @@ export class WorkbenchStore {
         failedReason = 'read build file';
         console.error('Failed to read build file', error);
       }
+      checkAborted();
 
       if (!buildFile) {
         failedReason = 'no build file';
@@ -1361,14 +1452,26 @@ export class WorkbenchStore {
       }
 
       // Deploy project
-      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod');
+      const deployResult = await this.#runShellCommand(shell, 'npx -y @agent8/deploy --prod', signal);
+      checkAborted();
 
       if (deployResult?.exitCode !== 0) {
         throw new Error();
       }
 
-      const lastCommitHash = await getLastCommitHash(repoStore.get().path, 'develop');
+      let lastCommitHash = '';
+
+      try {
+        lastCommitHash = await getLastCommitHash(repoStore.get().path, 'develop');
+      } catch (error) {
+        failedReason = 'task not found';
+        throw error;
+      }
+      checkAborted();
+
       const { tags } = await getTags(repoStore.get().path);
+      checkAborted();
+
       const spinTag = tags.find((tag: any) => tag.name.startsWith('verse-from'));
       let parentVerseId;
 
@@ -1379,6 +1482,11 @@ export class WorkbenchStore {
       // Handle successful deployment
       this.#handleSuccessfulDeployment(verseId, chatId, title, lastCommitHash, parentVerseId);
     } catch (error) {
+      if (isAbortError(error)) {
+        logger.info('publish aborted by user');
+        return;
+      }
+
       const errorMessage = 'Failed to publish';
       logger.error('[Publish] Error:', error);
       throw new DeployError(failedReason ? `${errorMessage}: ${failedReason}` : errorMessage);
@@ -1388,20 +1496,23 @@ export class WorkbenchStore {
   }
 
   // Helper methods for publish
-  async #runShellCommand(shell: BoltShell, command: string) {
-    // Create abort controller for this command
-    this.#shellAbortController = new AbortController();
+  async #runShellCommand(shell: BoltShell, command: string, signal?: AbortSignal) {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        throw new DOMException('Run shell command aborted by user', ERROR_NAMES.ABORT);
+      }
+    };
 
-    const signal = this.#shellAbortController.signal;
-
-    // Queue all shell commands to prevent interference
     this.#shellCommandQueue = this.#shellCommandQueue.then(async () => {
-      const abortPromise = new Promise<never>((_, reject) => {
-        signal.addEventListener('abort', () => reject(new DOMException('Aborted', ERROR_NAMES.ABORT)), { once: true });
-      });
+      checkAborted();
 
-      const result = await Promise.race([shell.executeCommand(Date.now().toString(), command), abortPromise]);
-      await Promise.race([shell.waitTillOscCode('prompt'), abortPromise]);
+      const result = await shell.executeCommand(Date.now().toString(), command, undefined, { signal });
+
+      checkAborted();
+
+      await shell.waitTillOscCode('prompt', signal);
+
+      checkAborted();
 
       return result;
     });
