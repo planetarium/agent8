@@ -11,7 +11,7 @@ import type {
 } from './interfaces';
 import type { ITerminal, IDisposable } from '~/types/terminal';
 import { withResolvers } from '~/utils/promises';
-import { cleanTerminalOutput } from '~/utils/shell';
+import { cleanTerminalOutput, isNonTerminatingCommand } from '~/utils/shell';
 import type {
   BufferEncoding,
   ContainerRequest,
@@ -31,6 +31,7 @@ import { debounce } from '~/utils/debounce';
 import { WebsocketBuilder, Websocket, RingQueue, ExponentialBackoff } from 'websocket-ts';
 import { toast } from 'react-toastify';
 import { ERROR_NAMES } from '~/utils/constants';
+import { isAbortError, NoneError } from '~/utils/errors';
 
 // Constants for OSC parsing
 const OSC_PATTERNS = {
@@ -956,6 +957,7 @@ export class RemoteContainer implements Container {
 
   private _connection: RemoteContainerConnection;
   private _connectionStateListeners = new Set<ConnectionStateListener>();
+  private _nonTerminatingProcessRunning = false;
 
   constructor(serverUrl: string, workdir: string, token: string) {
     this._connection = new RemoteContainerConnection(serverUrl, token);
@@ -1318,24 +1320,36 @@ export class RemoteContainer implements Container {
       try {
         isWaitingForOscCode = true;
 
-        const abortHandler = () => {
-          reader
-            .cancel('Operation aborted by user')
-            .then(() => {
-              logger.debug('stream reader cancelled by user');
-            })
-            .catch(() => {
-              // stream reader is already closed, ignore error
-            });
-        };
-        signal?.addEventListener('abort', abortHandler);
-
         streamReadTimeoutId = setTimeout(() => {
           currentTerminal?.input(':' + '\n');
         }, STREAM_READ_IDLE_TIMEOUT_MS);
 
         while (true) {
-          const { value, done } = await reader.read();
+          const readPromise = reader.read();
+          const timeoutPromise = new Promise<{ value: undefined; done: true }>((_, reject) => {
+            setTimeout(() => {
+              if (this._nonTerminatingProcessRunning) {
+                reject(new NoneError('read timeout'));
+              }
+            }, STREAM_READ_IDLE_TIMEOUT_MS);
+          });
+
+          // Create abort promise that rejects when signal is aborted
+          const abortPromise = new Promise<never>((_, reject) => {
+            if (signal?.aborted) {
+              reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
+            }
+
+            signal?.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('stream read aborted by user', ERROR_NAMES.ABORT));
+              },
+              { once: true },
+            );
+          });
+
+          const { value, done } = await Promise.race([readPromise, timeoutPromise, abortPromise]);
 
           checkAborted();
 
@@ -1349,6 +1363,7 @@ export class RemoteContainer implements Container {
           }
 
           const text = value || '';
+
           fullOutput += text;
           localBuffer += text;
           _globalOutputBuffer += text; // Add to global buffer
@@ -1388,6 +1403,14 @@ export class RemoteContainer implements Container {
             localBuffer = localBuffer.slice(lastMatchIndex + lastMatch.length);
           }
         }
+      } catch (error: any) {
+        if (isAbortError(error)) {
+          logger.debug(`AbortError: ${error.message}`);
+        }
+
+        if (error instanceof NoneError) {
+          logger.debug(`NoneError: ${error.message}`);
+        }
       } finally {
         if (streamReadTimeoutId) {
           clearTimeout(streamReadTimeoutId);
@@ -1409,6 +1432,10 @@ export class RemoteContainer implements Container {
 
       // Command execution implementation
       executeCommand = async (command: string): Promise<ExecutionResult> => {
+        if (isNonTerminatingCommand(command)) {
+          this._nonTerminatingProcessRunning = true;
+        }
+
         const sessionId = v4().slice(0, 8);
 
         logger.debug(`[${sessionId}] executeCommand`, command);

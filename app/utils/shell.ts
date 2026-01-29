@@ -222,6 +222,41 @@ export class BoltShell {
 }
 
 /**
+ * Checks if a command is a non-terminating process that runs indefinitely
+ * @param command - The shell command to check
+ * @returns true if the command runs indefinitely without manual interruption
+ */
+export function isNonTerminatingCommand(command: string): boolean {
+  const patterns = [
+    // Development servers - never exit until manually stopped
+    /\b(npm|yarn|pnpm|bun)\s+(?:run\s+)?dev\b/i,
+    /\b(vite|next|remix)\s+dev\b/i,
+    /\bwebpack(?:-dev-server)?\s+serve\b/i,
+
+    // Preview/static servers - serve files indefinitely
+    /\b(npm|yarn|pnpm|bun)\s+(?:run\s+)?preview\b/i,
+    /\bvite\s+preview\b/i,
+    /\b(http-server|serve)\b/i,
+    /python3?\s+-m\s+http\.server/i,
+
+    // Watch modes - continuously watch for changes
+    /\b(?:--watch|-w)\b/,
+    /\bvitest\b/i, // vitest runs in watch mode by default
+
+    // Process managers - keep processes running
+    /\b(nodemon|pm2|forever)\b/i,
+
+    // Monitoring commands - continuously monitor output
+    /\btail\s+-f\b/,
+    /\bwatch\s+/,
+  ];
+
+  const lastCommand = command.split('&&').pop()?.trim() ?? command;
+
+  return patterns.some((pattern) => pattern.test(lastCommand));
+}
+
+/**
  * Cleans and formats terminal output while preserving structure and paths
  * Handles ANSI, OSC, and various terminal control sequences
  */

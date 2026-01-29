@@ -62,6 +62,13 @@ export class MachineAPIError extends StatusCodeError {
   }
 }
 
+export class NoneError extends Error {
+  constructor(message: string = 'None error') {
+    super(message);
+    this.name = 'NoneError';
+  }
+}
+
 /**
  * Helper function to check if an error is an abort/cancel error
  * Supports: DOMException (fetch), CanceledError (axios)
