@@ -1220,8 +1220,6 @@ export class WorkbenchStore {
       .map(([key, value]) => `${key}=${value}`)
       .join('\n');
 
-    checkAborted();
-
     await this.#filesStore.saveFile('.env', updatedEnvContent);
     checkAborted();
 
@@ -1283,8 +1281,6 @@ export class WorkbenchStore {
     if (!user.isActivated) {
       throw new Error('Account is not activated');
     }
-
-    checkAborted();
 
     // Setup environment
     await this.injectTokenEnvironment(shell, accessToken, signal);
